@@ -86,6 +86,14 @@ function normalizeOptionalText(value: string | null | undefined) {
   return normalized ? normalized : null;
 }
 
+function isManualProductSku(value: unknown) {
+  return /^manual(?:[-_]|$)/i.test(String(value ?? "").trim());
+}
+
+function hasWebsiteImage(mainImageUrl: unknown, shopImageUrl: unknown) {
+  return Boolean(String(mainImageUrl ?? "").trim() || String(shopImageUrl ?? "").trim());
+}
+
 function normalizeSpecifications(value: string | string[] | null | undefined) {
   if (Array.isArray(value)) {
     const list = value.map((entry) => entry.trim()).filter(Boolean);
@@ -462,8 +470,6 @@ export async function POST(req: Request) {
   const data = auth.isBrendah ? sanitizeBrendahProductCreate(parsed.data) : parsed.data;
   const canonicalBrand = await resolveCanonicalProductBrand(prisma, capabilities, data.brand);
   const canonicalShopBrand = await resolveCanonicalProductBrand(prisma, capabilities, data.brand ?? data.shopBrand);
-  const normalizedStatus = data.status ?? (data.isActive ? "ACTIVE" : "INACTIVE");
-  const normalizedIsActive = normalizedStatus === "ACTIVE" && Boolean(data.isActive);
   const skuBase = slugifySku(data.sku || data.name);
 
   let sku = skuBase;
@@ -473,7 +479,18 @@ export async function POST(req: Request) {
     suffix += 1;
   }
 
-  const shopFragments = buildShopInsertFragments(capabilities, data, {
+  const websiteEligible = !isManualProductSku(sku) && hasWebsiteImage(data.mainImageUrl, data.shopImageUrl);
+  const publicationData: z.infer<typeof productSchema> = {
+    ...data,
+    isActive: true,
+    status: "ACTIVE",
+    posEnabled: true,
+    ecommerceVisible: websiteEligible,
+    showInShop: websiteEligible,
+    isFeatured: websiteEligible && Boolean(data.isFeatured),
+  };
+
+  const shopFragments = buildShopInsertFragments(capabilities, publicationData, {
     brand: canonicalBrand,
     shopBrand: canonicalShopBrand,
   });
@@ -521,7 +538,7 @@ export async function POST(req: Request) {
         data.variableCost ? null : data.lastBuyingPrice ?? null,
         normalizeOptionalText(data.defaultWarranty),
         Boolean(data.variableCost),
-        normalizedIsActive,
+        true,
         false,
         null,
         false,
@@ -547,7 +564,7 @@ export async function POST(req: Request) {
         data.name,
         data.category,
         data.sellingPrice,
-        normalizedIsActive,
+        true,
         ...shopFragments.values,
       ))[0];
 

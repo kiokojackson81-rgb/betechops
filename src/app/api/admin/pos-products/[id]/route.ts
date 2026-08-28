@@ -84,6 +84,14 @@ function normalizeOptionalText(value: string | null | undefined) {
   return normalized ? normalized : null;
 }
 
+function isManualProductSku(value: unknown) {
+  return /^manual(?:[-_]|$)/i.test(String(value ?? "").trim());
+}
+
+function hasWebsiteImage(mainImageUrl: unknown, shopImageUrl: unknown) {
+  return Boolean(String(mainImageUrl ?? "").trim() || String(shopImageUrl ?? "").trim());
+}
+
 function normalizeSpecifications(value: string | string[] | null | undefined) {
   if (Array.isArray(value)) {
     const list = value.map((entry) => entry.trim()).filter(Boolean);
@@ -299,7 +307,6 @@ export async function PATCH(req: Request, context: ParamsContext) {
       : undefined;
   const nextVariableCost = data.variableCost ?? Boolean(existing.variableCost);
   const nextLastBuyingPrice = data.lastBuyingPrice !== undefined ? data.lastBuyingPrice : Number(existing.lastBuyingPrice ?? 0) || null;
-  const nextStatus = data.status ?? String(existing.status || (Boolean(existing.isActive) ? "ACTIVE" : "INACTIVE")).toUpperCase();
   const normalizedAvailabilityType = data.availabilityType ?? String(existing.availabilityType || "SHOP").toUpperCase();
   const normalizedPickupDelayDays = normalizedAvailabilityType === "WAREHOUSE" ? 1 : 0;
   const nextSku = data.sku ? normalizeSku(data.sku) : undefined;
@@ -307,6 +314,10 @@ export async function PATCH(req: Request, context: ParamsContext) {
     const duplicate = await findDuplicateSku(id, nextSku, capabilities);
     if (duplicate) return noStoreJson({ error: "SKU already exists" }, { status: 409 });
   }
+  const publicationSku = nextSku ?? String(existing.sku || "");
+  const publicationMainImage = data.mainImageUrl !== undefined ? data.mainImageUrl : existing.mainImageUrl;
+  const publicationShopImage = data.shopImageUrl !== undefined ? data.shopImageUrl : existing.shopImageUrl;
+  const websiteEligible = !isManualProductSku(publicationSku) && hasWebsiteImage(publicationMainImage, publicationShopImage);
 
   const setClauses: string[] = [];
   const values: unknown[] = [];
@@ -326,7 +337,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
     }
     if (data.defaultWarranty !== undefined) pushSet("defaultWarranty", normalizeOptionalText(data.defaultWarranty));
     if (data.variableCost !== undefined) pushSet("variableCost", data.variableCost);
-    if (data.isActive !== undefined || data.status !== undefined) pushSet("isActive", nextStatus === "ACTIVE" && Boolean(data.isActive ?? existing.isActive));
+    pushSet("isActive", true);
     // Product-level commission has been retired. Keep the columns disabled for
     // backwards compatibility while historical commission ledgers remain intact.
     pushSet("commissionEnabled", false);
@@ -337,7 +348,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
     if (data.name !== undefined) pushSet("name", data.name);
     if (data.category !== undefined) pushSet("unit", data.category);
     if (data.sellingPrice !== undefined) pushSet("sellPrice", data.sellingPrice);
-    if (data.isActive !== undefined || data.status !== undefined) pushSet("active", nextStatus === "ACTIVE" && Boolean(data.isActive ?? existing.isActive));
+    pushSet("active", true);
   }
 
   if (capabilities.brand && data.brand !== undefined) pushSet("brand", canonicalBrand ?? null);
@@ -351,22 +362,22 @@ export async function PATCH(req: Request, context: ParamsContext) {
   if (capabilities.galleryImageUrls && data.galleryImageUrls !== undefined) pushSet("galleryImageUrls", normalizeJsonStringArray(data.galleryImageUrls));
   if (capabilities.brandImageUrl && data.brandImageUrl !== undefined) pushSet("brandImageUrl", normalizeOptionalText(data.brandImageUrl));
   if (capabilities.tiktokVideoUrl && data.tiktokVideoUrl !== undefined) pushSet("tiktokVideoUrl", normalizeOptionalText(data.tiktokVideoUrl));
-  if (capabilities.ecommerceVisible && data.ecommerceVisible !== undefined) pushSet("ecommerceVisible", data.ecommerceVisible);
-  if (capabilities.isFeatured && data.isFeatured !== undefined) pushSet("isFeatured", data.isFeatured);
-  if (capabilities.status && data.status !== undefined) pushSet("status", nextStatus);
+  if (capabilities.ecommerceVisible) pushSet("ecommerceVisible", websiteEligible);
+  if (capabilities.isFeatured && (!websiteEligible || data.isFeatured !== undefined)) {
+    pushSet("isFeatured", websiteEligible && Boolean(data.isFeatured ?? existing.isFeatured));
+  }
+  if (capabilities.status) pushSet("status", "ACTIVE");
   if (capabilities.availabilityType && data.availabilityType !== undefined) pushSet("availabilityType", normalizedAvailabilityType);
   if (capabilities.pickupDelayDays && (data.pickupDelayDays !== undefined || data.availabilityType !== undefined)) {
     pushSet("pickupDelayDays", normalizedPickupDelayDays);
   }
   if (capabilities.productType && data.productType !== undefined) pushSet("productType", normalizeOptionalText(data.productType));
-  if (capabilities.posEnabled && data.posEnabled !== undefined) pushSet("posEnabled", data.posEnabled);
+  if (capabilities.posEnabled) pushSet("posEnabled", true);
   if (capabilities.catalogueConfiguration && data.catalogueConfiguration !== undefined) {
     pushSet("catalogueConfiguration", data.catalogueConfiguration ? JSON.stringify(data.catalogueConfiguration) : null);
   }
 
-  if (capabilities.showInShop && (data.showInShop !== undefined || data.ecommerceVisible !== undefined)) {
-    pushSet("showInShop", Boolean(data.ecommerceVisible ?? data.showInShop));
-  }
+  if (capabilities.showInShop) pushSet("showInShop", websiteEligible);
   if (capabilities.shopCategory && data.shopCategory !== undefined) pushSet("shopCategory", normalizeOptionalText(data.shopCategory));
   if (capabilities.shopSubcategory && data.shopSubcategory !== undefined) pushSet("shopSubcategory", normalizeOptionalText(data.shopSubcategory));
   if (capabilities.shopShortDescription && (data.shopShortDescription !== undefined || data.shortDescription !== undefined)) {

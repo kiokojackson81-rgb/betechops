@@ -208,7 +208,7 @@ const emptyDraft: ProductDraft = {
   shopBrand: "",
   productType: "",
   posEnabled: true,
-  policyConfigured: false,
+  policyConfigured: true,
   catalogueConfiguration: {
     installationType: "NOT_REQUIRED",
     installationFeeMode: "UNAVAILABLE",
@@ -288,6 +288,14 @@ function getAvailabilityPreviewMessage(type: ProductAvailabilityType) {
   if (type === "ORDER_ON_REQUEST") return "Customer will see: Order on request. Our team will confirm availability.";
   if (type === "OUT_OF_STOCK") return "Customer will see: Out of stock.";
   return "Customer will see: Available at shop for immediate pickup.";
+}
+
+function isManualProductSku(value: string | null | undefined) {
+  return /^manual(?:[-_]|$)/i.test(String(value || "").trim());
+}
+
+function hasProductWebsiteImage(product: Pick<PosProduct, "mainImageUrl" | "shopImageUrl"> | Pick<ProductDraft, "mainImageUrl" | "shopImageUrl">) {
+  return Boolean(String(product.mainImageUrl || product.shopImageUrl || "").trim());
 }
 
 function detectShopCategoryAndSubcategory(input: Pick<ProductDraft, "name" | "category" | "brand" | "specifications" | "shopCategory">) {
@@ -372,7 +380,7 @@ function createDraftFromProduct(product: PosProduct): ProductDraft {
     shopBrand: product.shopBrand ?? "",
     productType: product.productType ?? "",
     posEnabled: product.posEnabled !== false,
-    policyConfigured: Boolean(product.catalogueConfiguration),
+    policyConfigured: true,
     catalogueConfiguration: product.catalogueConfiguration ?? emptyDraft.catalogueConfiguration,
   };
 }
@@ -457,7 +465,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const isProductDeskMode = mode === "product-desk";
   const canManagePricing = !isProductDeskMode;
   const canManageCommissions = false;
-  const canManageActivation = !isProductDeskMode;
   const canDeleteProducts = !isProductDeskMode;
   const canUseBulkActions = !isProductDeskMode;
   const canManageFeaturedStatus = !isProductDeskMode;
@@ -679,6 +686,9 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     [brandOptions, normalizedDraftBrand],
   );
   const canAddBrand = Boolean(normalizedDraftBrand) && !exactBrandMatch;
+  const draftIsManualProduct = isManualProductSku(draft.sku);
+  const draftWebsiteImageReady = hasProductWebsiteImage(draft);
+  const draftWebsiteEligible = !draftIsManualProduct && draftWebsiteImageReady;
   const suggestedShopTaxonomy = useMemo(
     () =>
       detectShopCategoryAndSubcategory({
@@ -869,8 +879,8 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
 
       return {
         ...current,
-        ecommerceVisible: true,
-        showInShop: true,
+        ecommerceVisible: !isManualProductSku(current.sku) && hasProductWebsiteImage(current),
+        showInShop: !isManualProductSku(current.sku) && hasProductWebsiteImage(current),
         shopCategory: taxonomy.shopCategory || current.shopCategory,
         shopSubcategory: taxonomy.shopSubcategory,
         shopBrand: current.shopBrand || current.brand,
@@ -882,22 +892,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     });
     setEditorOpen(true);
   }, []);
-
-  const quickPatchProduct = useCallback(async (product: PosProduct, patch: Record<string, unknown>, successMessage: string) => {
-    try {
-      const res = await fetch(`${productApiBase}/${product.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to update product"));
-      showToast(successMessage, "success");
-      await loadData(query);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to update product", "error");
-    }
-  }, [loadData, productApiBase, query]);
 
   const persistImageFields = useCallback(
     async (patch: Partial<Pick<ProductDraft, "mainImageUrl" | "galleryImageUrls" | "brandImageUrl" | "shopImageUrl">>) => {
@@ -1133,7 +1127,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     const transportIncluded = draft.catalogueConfiguration.transportMode === "INCLUDED"
       || draft.catalogueConfiguration.transportMode === "FREE"
       || draft.catalogueConfiguration.priceIncludes.includes("TRANSPORT");
-    if (draft.policyConfigured && !transportIncluded && [
+    if (!transportIncluded && [
       draft.catalogueConfiguration.zone1TransportFee,
       draft.catalogueConfiguration.zone2TransportFee,
       draft.catalogueConfiguration.zone3TransportFee,
@@ -1148,6 +1142,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
           useDefaultTransportRates: false,
           priceIncludes: draft.catalogueConfiguration.priceIncludes.filter((item) => item !== "TRANSPORT"),
         };
+    const websiteEligible = !isManualProductSku(draft.sku) && hasProductWebsiteImage(draft);
     setSaving(true);
     try {
       const canSetBuyingPriceOnThisSave = canManagePricing || (isProductDeskMode && !draft.id);
@@ -1167,7 +1162,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
               variableCost: canManagePricing ? draft.variableCost : false,
             }
           : {}),
-        isActive: isProductDeskMode ? true : draft.status === "ACTIVE" && draft.isActive,
+        isActive: true,
         commissionEnabled: false,
         commissionAmount: null,
         commissionRequiresApproval: false,
@@ -1181,12 +1176,12 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         ...(capabilities.imageExtractedText ? { imageExtractedText: draft.imageExtractedText.trim() || null } : {}),
         ...(capabilities.galleryImageUrls ? { galleryImageUrls: draft.galleryImageUrls } : {}),
         ...(capabilities.tiktokVideoUrl ? { tiktokVideoUrl: draft.tiktokVideoUrl.trim() || null } : {}),
-        ...(capabilities.ecommerceVisible ? { ecommerceVisible: draft.id ? draft.ecommerceVisible : true } : {}),
-        ...(capabilities.isFeatured ? { isFeatured: canManageFeaturedStatus ? draft.isFeatured : false } : {}),
-        ...(capabilities.status ? { status: isProductDeskMode ? "ACTIVE" : draft.status } : {}),
+        ...(capabilities.ecommerceVisible ? { ecommerceVisible: websiteEligible } : {}),
+        ...(capabilities.isFeatured ? { isFeatured: websiteEligible && canManageFeaturedStatus ? draft.isFeatured : false } : {}),
+        ...(capabilities.status ? { status: "ACTIVE" } : {}),
         ...(capabilities.availabilityType ? { availabilityType: draft.availabilityType } : {}),
         ...(capabilities.pickupDelayDays ? { pickupDelayDays: draft.pickupDelayDays } : {}),
-        ...(capabilities.showInShop ? { showInShop: draft.id ? draft.showInShop : true } : {}),
+        ...(capabilities.showInShop ? { showInShop: websiteEligible } : {}),
         ...(capabilities.shopCategory ? { shopCategory: draft.shopCategory || null } : {}),
         ...(capabilities.shopSubcategory ? { shopSubcategory: draft.shopSubcategory || null } : {}),
         ...(capabilities.shopShortDescription ? { shopShortDescription: draft.shopShortDescription.trim() || null } : {}),
@@ -1195,9 +1190,9 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         ...(capabilities.shopImageUrl ? { shopImageUrl: draft.shopImageUrl.trim() || null } : {}),
         ...(capabilities.shopBrand ? { shopBrand: draft.shopBrand.trim() || null } : {}),
         ...(capabilities.productType ? { productType: draft.productType.trim() || null } : {}),
-        ...(capabilities.posEnabled ? { posEnabled: draft.posEnabled } : {}),
+        ...(capabilities.posEnabled ? { posEnabled: true } : {}),
         ...(capabilities.catalogueConfiguration
-          ? { catalogueConfiguration: draft.policyConfigured ? catalogueConfiguration : null }
+          ? { catalogueConfiguration }
           : {}),
       };
 
@@ -1477,24 +1472,31 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     installation: draft.policyConfigured,
     details: Boolean(draft.shortDescription.trim() || draft.description.trim()),
     images: Boolean(draft.mainImageUrl || draft.shopImageUrl),
-    website: !draft.ecommerceVisible || Boolean(draft.shopCategory && (draft.mainImageUrl || draft.shopImageUrl)),
+    website: isManualProductSku(draft.sku) || Boolean(draft.shopCategory && hasProductWebsiteImage(draft)),
     review: Boolean(draft.name.trim() && draft.sellingPrice.trim()),
   };
 
   const renderStructuredSection = () => {
     const policy = draft.catalogueConfiguration;
     if (editorSection === "basic") {
-      return <div className="grid gap-4 md:grid-cols-2">
-        <label className="text-sm text-slate-300">Product type
+      return <div className="space-y-4">
+        <label className="block max-w-xl text-sm font-semibold text-slate-200">What type of product is this?
           <select className={`${fieldClass} mt-1`} value={draft.productType} onChange={(event) => setDraft((current) => ({ ...current, productType: event.target.value }))}>
-            <option value="">Select product type</option>
+            <option value="">Choose product type</option>
             {["Solar System", "Solar Panel", "Inverter", "Battery", "Solar Water Heater", "Water Pump", "Power Station", "Solar Lighting", "Installation Accessory", "Electrical Accessory", "Service", "Other"].map((value) => <option key={value}>{value}</option>)}
           </select>
         </label>
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <div className="text-sm font-semibold text-white">Sales channels</div>
-          <label className="mt-3 flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={draft.posEnabled} onChange={(event) => setDraft((current) => ({ ...current, posEnabled: event.target.checked }))} /> POS and receipts</label>
-          <label className="mt-2 flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={draft.ecommerceVisible} onChange={(event) => setDraft((current) => ({ ...current, ecommerceVisible: event.target.checked, showInShop: event.target.checked }))} /> Online shop</label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">POS & receipts</div>
+            <div className="mt-2 font-semibold text-white">Always active</div>
+            <p className="mt-1 text-sm leading-6 text-slate-300">Every saved catalogue product is automatically available to receipts, quotations, and POS.</p>
+          </div>
+          <div className={`rounded-2xl border p-4 ${draftWebsiteEligible ? "border-cyan-400/25 bg-cyan-500/10" : "border-amber-400/25 bg-amber-500/10"}`}>
+            <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${draftWebsiteEligible ? "text-cyan-200" : "text-amber-200"}`}>Online shop</div>
+            <div className="mt-2 font-semibold text-white">{draftWebsiteEligible ? "Will publish automatically" : "Will remain hidden"}</div>
+            <p className="mt-1 text-sm leading-6 text-slate-300">{draftIsManualProduct ? "Manual receipt products are never published online." : draftWebsiteImageReady ? "This product has an image and will be shown on the website after saving." : "Add a product image to make this product eligible for the website."}</p>
+          </div>
         </div>
       </div>;
     }
@@ -1539,7 +1541,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     }
     if (editorSection === "review") {
       return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[
-        ["Product", draft.name || "Not named"], ["Price", formatMoney(draft.sellingPrice)], ["Installation", draft.policyConfigured ? policy.installationType.replaceAll("_", " ") : "Not configured"], ["Transport", draft.policyConfigured ? policy.transportMode.replaceAll("_", " ") : "Not configured"], ["Availability", draft.availabilityType.replaceAll("_", " ")], ["Website", draft.ecommerceVisible ? "Visible" : "Hidden"], ["Warranty", draft.warrantyPeriod || "Not set"],
+        ["Product", draft.name || "Not named"], ["Price", formatMoney(draft.sellingPrice)], ["Installation", policy.installationType.replaceAll("_", " ")], ["Transport", policy.transportMode.replaceAll("_", " ")], ["Availability", draft.availabilityType.replaceAll("_", " ")], ["Website", draftWebsiteEligible ? "Publishes automatically" : "Hidden until eligible"], ["Warranty", draft.warrantyPeriod || "Not set"],
       ].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"><div className="text-[11px] uppercase tracking-widest text-slate-500">{label}</div><div className="mt-2 font-semibold text-white">{value}</div></div>)}</div>;
     }
     return <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">Use the detailed controls below for {editorSection}. Your entries remain available while moving between sections.</div>;
@@ -1704,7 +1706,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                       {editorSections.map(([key, label]) => <option key={key} value={key}>{label}{sectionComplete[key] ? " - Complete" : ""}</option>)}
                     </select>
                   </label> : null}
-                  <label className="flex items-center gap-2 rounded-full border border-amber-400/25 px-3 py-2 text-xs font-semibold text-amber-100"><input type="checkbox" checked={draft.policyConfigured} onChange={(event) => setDraft((current) => ({ ...current, policyConfigured: event.target.checked }))} /> Structured pricing configured</label>
+                  <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100">Settings save automatically with the product</span>
                 </div>
               </div>
               {renderStructuredSection()}
@@ -1814,24 +1816,17 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                       <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} placeholder="Optional" />
                     </label>
                   </div>
-                  <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                    <label className="flex items-center gap-2 text-sm text-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={draft.isActive}
-                        onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked, status: e.target.checked ? "ACTIVE" : "INACTIVE" }))}
-                      />
-                      Active in POS catalog
-                    </label>
+                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-100">
+                    POS activation is automatic when this product is saved.
                   </div>
                 </>
               ) : null}
             </div>
 
             <div className={`mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Online Shop Controls</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Website details</div>
               <p className="mt-2 text-sm text-slate-300">
-                These controls feed the Betech Solar online shop from the existing POS Catalogue. Unsupported fields stay disabled until the Product table is upgraded safely.
+                Website publishing is automatic. Add an image and category; manual receipt products remain POS-only.
               </p>
               {!(capabilities.showInShop || capabilities.shopCategory || capabilities.shopSubcategory || capabilities.shopShortDescription || capabilities.shopWarranty || capabilities.shopSpecs || capabilities.shopImageUrl || capabilities.shopBrand) ? (
                 <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
@@ -1841,57 +1836,19 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                  {isProductDeskMode ? (
-                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-3 py-3 text-sm text-emerald-100">
-                      Products from this desk save as <span className="font-semibold">Active</span> and <span className="font-semibold">visible in shop</span> by default.
-                    </div>
-                  ) : (
-                    <>
-                      <label className="flex items-center gap-2 text-sm text-slate-200">
-                        <input
-                          type="checkbox"
-                          checked={draft.ecommerceVisible}
-                          disabled={!(capabilities.ecommerceVisible || capabilities.showInShop)}
-                          onChange={(e) =>
-                            setDraft((s) => ({
-                              ...s,
-                              ecommerceVisible: e.target.checked,
-                              showInShop: e.target.checked,
-                            }))
-                          }
-                        />
-                        Visible on website
-                      </label>
-                      <div className="text-xs text-slate-500">Products are visible by default. Turn this off only when you want to hide one from the website.</div>
-                      <label className="flex items-center gap-2 text-sm text-slate-200">
-                        <input
-                          type="checkbox"
-                          checked={draft.isFeatured}
-                          disabled={!capabilities.isFeatured}
-                          onChange={(e) => setDraft((s) => ({ ...s, isFeatured: e.target.checked }))}
-                        />
-                        Featured product
-                      </label>
-                      <label className="text-sm text-slate-300">
-                        Product status
-                        <select
-                          className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                          value={draft.status}
-                          disabled={!capabilities.status}
-                          onChange={(e) =>
-                            setDraft((s) => ({
-                              ...s,
-                              status: e.target.value === "INACTIVE" ? "INACTIVE" : "ACTIVE",
-                              isActive: e.target.value !== "INACTIVE",
-                            }))
-                          }
-                        >
-                          <option value="ACTIVE">Active</option>
-                          <option value="INACTIVE">Inactive</option>
-                        </select>
-                      </label>
-                    </>
-                  )}
+                  <div className={`rounded-xl border px-3 py-3 text-sm ${draftWebsiteEligible ? "border-emerald-400/20 bg-emerald-500/5 text-emerald-100" : "border-amber-400/20 bg-amber-500/5 text-amber-100"}`}>
+                    <div className="font-semibold">{draftWebsiteEligible ? "Ready for automatic website publishing" : "Website publishing paused"}</div>
+                    <div className="mt-1 text-xs leading-5 opacity-80">{draftIsManualProduct ? "Manual receipt products remain POS-only." : draftWebsiteImageReady ? "The product will be active in POS and visible online after saving." : "Upload a product image. Until then, the product remains active in POS but hidden online."}</div>
+                  </div>
+                  {!isProductDeskMode ? <label className="flex items-center gap-2 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={draft.isFeatured}
+                      disabled={!capabilities.isFeatured || !draftWebsiteEligible}
+                      onChange={(event) => setDraft((current) => ({ ...current, isFeatured: event.target.checked }))}
+                    />
+                    Feature this product on the website
+                  </label> : null}
                 </div>
 
                 <label className="text-sm text-slate-300">
@@ -2631,14 +2588,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
             </button>
             <button
               type="button"
-              className="rounded-xl border border-amber-400/40 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => void bulkUpdateState(false)}
-              disabled={!selectedCount || !!bulkBusy}
-            >
-              {bulkBusy === "archive" ? "Archiving..." : "Disable selected"}
-            </button>
-            <button
-              type="button"
               className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => void bulkDeleteProducts()}
               disabled={!selectedCount || !!bulkBusy}
@@ -2673,6 +2622,14 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
               ) : filteredProducts.length ? (
                 filteredProducts.map((product) => {
                   const visibleInShop = Boolean(product.ecommerceVisible ?? product.showInShop);
+                  const automaticWebsiteEligible = !isManualProductSku(product.sku) && hasProductWebsiteImage(product);
+                  const websiteStatusDetail = isManualProductSku(product.sku)
+                    ? "Manual receipt product"
+                    : !hasProductWebsiteImage(product)
+                      ? "Add an image to publish"
+                      : visibleInShop
+                        ? "Published automatically"
+                        : "Save to publish automatically";
                   const availabilityType = normalizeAvailabilityType(product.availabilityType);
                   const displayImage = product.mainImageUrl || product.shopImageUrl || "";
                   const shopHref = `/shop/product/${slugifyShopProductName(product.name)}`;
@@ -2756,39 +2713,18 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                     </td>
                     <td className={`${compactCellClass} align-top`}>
                       <div className="space-y-2">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${visibleInShop ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
-                          {visibleInShop ? "Visible online" : "Hidden online"}
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${visibleInShop ? "bg-emerald-500/15 text-emerald-200" : automaticWebsiteEligible ? "bg-cyan-500/15 text-cyan-100" : "bg-slate-800 text-slate-400"}`}>
+                          {visibleInShop ? "Visible online" : automaticWebsiteEligible ? "Ready for website" : "POS only"}
                         </span>
-                        <button
-                          type="button"
-                          className="block rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => void quickPatchProduct(
-                            product,
-                            { ecommerceVisible: !visibleInShop, showInShop: !visibleInShop },
-                            visibleInShop ? "Removed from online shop" : "Published to online shop",
-                          )}
-                          disabled={!(capabilities.ecommerceVisible || capabilities.showInShop)}
-                        >
-                          {visibleInShop ? "Hide" : "Show"} in shop
-                        </button>
+                        <div className="max-w-[150px] text-[10px] leading-4 text-slate-400">{websiteStatusDetail}</div>
                       </div>
                     </td>
                     <td className={`${compactCellClass} align-top`}>
                       <div className="space-y-2">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
-                          {product.isActive ? "Active" : "Inactive"}
+                          {product.isActive ? "Active in POS" : "Inactive legacy record"}
                         </span>
-                        {canManageActivation ? <button
-                          type="button"
-                          className="block rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
-                          onClick={() => void quickPatchProduct(
-                            product,
-                            { isActive: !product.isActive, status: product.isActive ? "INACTIVE" : "ACTIVE" },
-                            product.isActive ? "Product archived" : "Product activated",
-                          )}
-                        >
-                          Set {product.isActive ? "inactive" : "active"}
-                        </button> : null}
+                        {!product.isActive ? <div className="max-w-[150px] text-[10px] leading-4 text-slate-400">Edit and save to restore this product to POS.</div> : null}
                       </div>
                     </td>
                     <td className={`${compactCellClass} text-right align-top`}>
