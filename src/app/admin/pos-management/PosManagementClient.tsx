@@ -14,7 +14,10 @@ import {
   PRODUCT_GALLERY_AI_WIDTH,
 } from "@/lib/images/productGalleryAi";
 import { getShopSubcategoryOptions, SHOP_CATEGORY_DEFINITIONS, SHOP_CATEGORY_OPTIONS, resolveShopSubcategory } from "@/app/shop/shopCatalogConfig";
+import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import type { ProductCatalogueConfiguration } from "@/lib/productCataloguePolicy";
+
+const PUBLIC_SHOP_ORIGIN = "https://www.betech.co.ke";
 
 type PosProduct = {
   id: string;
@@ -2486,7 +2489,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                         : "Save to publish automatically";
                   const availabilityType = normalizeAvailabilityType(product.availabilityType);
                   const displayImage = product.mainImageUrl || product.shopImageUrl || "";
-                  const shopHref = `/shop/product/${slugifyShopProductName(product.name)}`;
+                  const shopHref = `${PUBLIC_SHOP_ORIGIN}${getShopProductHref(slugifyShopProductName(product.name))}`;
                   const policy = product.catalogueConfiguration;
                   const fulfilment = getFulfilmentSetup(product);
                   const expanded = expandedProductId === product.id;

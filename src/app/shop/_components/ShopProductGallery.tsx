@@ -116,13 +116,6 @@ export default function ShopProductGallery({ images, productName, visualType, vi
         : activeOrientation === "square"
           ? "h-[15rem] sm:h-[18rem] lg:h-[20rem] xl:h-[22rem]"
           : "h-[13.5rem] sm:h-[16rem] lg:h-[18rem] xl:h-[20rem]";
-    const imageShellWidth = expanded
-      ? "max-w-[96vw]"
-      : activeOrientation === "portrait"
-        ? "max-w-[18rem] sm:max-w-[21rem] lg:max-w-[23rem] xl:max-w-[25rem]"
-        : activeOrientation === "square"
-          ? "max-w-[21rem] sm:max-w-[24rem] lg:max-w-[28rem] xl:max-w-[30rem]"
-          : "max-w-[23rem] sm:max-w-[28rem] md:max-w-[34rem] lg:max-w-[38rem] xl:max-w-[42rem]";
     const videoShellWidth = expanded ? "max-w-[26rem] sm:max-w-[30rem] md:max-w-[34rem]" : "max-w-[18rem] sm:max-w-[21rem] lg:max-w-[24rem] xl:max-w-[26rem]";
 
     return (
@@ -158,14 +151,24 @@ export default function ShopProductGallery({ images, productName, visualType, vi
         ) : activeItem.src ? (
           <>
             <div className="absolute inset-0 bg-[linear-gradient(180deg,#fffaf3_0%,#fffefe_100%)]" />
-            <div className={`relative z-10 w-full ${imageShellWidth} overflow-hidden rounded-[24px] bg-white shadow-[0_16px_34px_rgba(15,23,42,0.08)]`}>
-              <div className="relative h-full min-h-[13.5rem] w-full max-h-[88vh]">
+            <div className="absolute inset-0 overflow-hidden rounded-[24px] bg-white">
+              <Image
+                src={activeItem.src}
+                alt=""
+                fill
+                sizes={expanded ? "96vw" : "50vw"}
+                aria-hidden="true"
+                className="scale-110 object-cover opacity-[0.09] blur-2xl"
+              />
+            </div>
+            <div className="relative z-10 h-full w-full overflow-hidden rounded-[24px] bg-white/72 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+              <div className="relative h-full w-full max-h-[88vh]">
                 <Image
                   src={activeItem.src}
                   alt={productName}
                   fill
                   sizes={expanded ? "92vw" : "(max-width: 640px) 95vw, (max-width: 1024px) 70vw, 50vw"}
-                  className="object-contain"
+                  className="object-contain p-1 sm:p-2"
                   priority
                   onLoad={(event) => handleImageLoad(activeItem.src, event as unknown as SyntheticEvent<HTMLImageElement>)}
                 />
