@@ -865,32 +865,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     }
   }, [applyBrandValue, canAddBrand, normalizedDraftBrand]);
 
-  const applyQuickEcommerceDefaults = useCallback(() => {
-    setDraft((current) => {
-      const taxonomy = detectShopCategoryAndSubcategory({
-        name: current.name,
-        category: current.category,
-        brand: current.brand,
-        specifications: current.specifications,
-        shopCategory: current.shopCategory,
-      });
-
-      return {
-        ...current,
-        ecommerceVisible: !isManualProductSku(current.sku) && hasProductWebsiteImage(current),
-        showInShop: !isManualProductSku(current.sku) && hasProductWebsiteImage(current),
-        shopCategory: taxonomy.shopCategory || current.shopCategory,
-        shopSubcategory: taxonomy.shopSubcategory,
-        shopBrand: current.shopBrand || current.brand,
-        shopShortDescription: current.shopShortDescription || current.shortDescription,
-        shopWarranty: current.shopWarranty || current.warrantyPeriod,
-        shopSpecs: current.shopSpecs || current.specifications,
-        shopImageUrl: current.shopImageUrl || current.mainImageUrl,
-      };
-    });
-    setEditorOpen(true);
-  }, []);
-
   const persistImageFields = useCallback(
     async (patch: Partial<Pick<ProductDraft, "mainImageUrl" | "galleryImageUrls" | "brandImageUrl" | "shopImageUrl">>) => {
       if (!draft.id) return;
@@ -1450,30 +1424,8 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     });
   };
 
-  const renderStructuredSection = (section: "basic" | "pricing" | "installation" | "details" | "review") => {
+  const renderStructuredSection = (section: "pricing" | "installation" | "details" | "review") => {
     const policy = draft.catalogueConfiguration;
-    if (section === "basic") {
-      return <div className="space-y-4">
-        <label className="block max-w-xl text-sm font-semibold text-slate-200">What type of product is this?
-          <select className={`${fieldClass} mt-1`} value={draft.productType} onChange={(event) => setDraft((current) => ({ ...current, productType: event.target.value }))}>
-            <option value="">Choose product type</option>
-            {["Solar System", "Solar Panel", "Inverter", "Battery", "Solar Water Heater", "Water Pump", "Power Station", "Solar Lighting", "Installation Accessory", "Electrical Accessory", "Service", "Other"].map((value) => <option key={value}>{value}</option>)}
-          </select>
-        </label>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">POS & receipts</div>
-            <div className="mt-2 font-semibold text-white">Always active</div>
-            <p className="mt-1 text-sm leading-6 text-slate-300">Every saved catalogue product is automatically available to receipts, quotations, and POS.</p>
-          </div>
-          <div className={`rounded-2xl border p-4 ${draftWebsiteEligible ? "border-cyan-400/25 bg-cyan-500/10" : "border-amber-400/25 bg-amber-500/10"}`}>
-            <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${draftWebsiteEligible ? "text-cyan-200" : "text-amber-200"}`}>Online shop</div>
-            <div className="mt-2 font-semibold text-white">{draftWebsiteEligible ? "Will publish automatically" : "Will remain hidden"}</div>
-            <p className="mt-1 text-sm leading-6 text-slate-300">{draftIsManualProduct ? "Manual receipt products are never published online." : draftWebsiteImageReady ? "This product has an image and will be shown on the website after saving." : "Add a product image to make this product eligible for the website."}</p>
-          </div>
-        </div>
-      </div>;
-    }
     if (section === "pricing") {
       const includes = ["EQUIPMENT", "ACCESSORIES", "COMMISSIONING", "REMOTE_SUPPORT"] as const;
       return <div>
@@ -1488,10 +1440,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       const transportIncluded = policy.transportMode === "INCLUDED" || policy.transportMode === "FREE" || policy.priceIncludes.includes("TRANSPORT");
       const choiceClass = "flex min-h-20 cursor-pointer items-start gap-3 rounded-2xl border border-slate-700 bg-slate-950/60 p-4 text-sm text-slate-200 transition hover:border-emerald-400/50";
       return <div className="space-y-5">
-        <div>
-          <h3 className="text-lg font-semibold text-white">Installation and transport</h3>
-          <p className="mt-1 text-sm text-slate-400">Use these simple settings to tell customers exactly what the product price covers.</p>
-        </div>
         <div className="grid gap-3 lg:grid-cols-3">
           <label className={choiceClass}><input className="mt-1 size-5" type="checkbox" checked={installationRequired} onChange={(event) => setInstallationRequired(event.target.checked)} /><span><strong className="block text-white">Requires installation</strong><span className="mt-1 block text-slate-400">The product or system must be installed by a technician.</span></span></label>
           <label className={`${choiceClass} ${!installationRequired ? "opacity-50" : ""}`}><input className="mt-1 size-5" type="checkbox" disabled={!installationRequired} checked={installationIncluded} onChange={(event) => setInstallationIncluded(event.target.checked)} /><span><strong className="block text-white">Installation included</strong><span className="mt-1 block text-slate-400">The selling price already covers installation.</span></span></label>
@@ -1549,13 +1497,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
             >
               Add Product
             </button>
-            <button
-              type="button"
-              className="rounded-xl border border-emerald-400/30 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
-              onClick={applyQuickEcommerceDefaults}
-            >
-              Quick Shop Setup
-            </button>
           </div>
         </div>
 
@@ -1592,34 +1533,12 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       </section>
 
       <section ref={formSectionRef} className={editorOpen ? "fixed inset-2 z-[100] overflow-y-auto rounded-[28px] border border-cyan-400/20 bg-slate-950 p-4 shadow-2xl shadow-black/70 sm:inset-4 sm:p-6" : sectionClass}>
-        {editorOpen && draft.id ? (
-          <button
-            type="button"
-            aria-label="Close product editor"
-            className="fixed right-5 top-5 z-[110] flex h-11 w-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/95 text-2xl text-slate-200 shadow-xl shadow-black/40 hover:bg-slate-900"
-            onClick={() => setEditorOpen(false)}
-          >
-            ×
-          </button>
-        ) : null}
-        {editorOpen && !draft.id ? <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-5 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6">
-          <div className="flex items-center justify-between gap-4">
-            <div><div className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">Product workspace</div><div className="mt-1 text-lg font-semibold text-white">{draft.id ? `Edit ${draft.name || "product"}` : "Create product"}</div></div>
-            <button type="button" aria-label="Close product editor" className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-700 text-2xl text-slate-200 hover:bg-white/5" onClick={() => setEditorOpen(false)}>×</button>
-          </div>
-          <div className="mt-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-xs font-medium text-cyan-100">One continuous form · complete each section below · save once at the end</div>
-        </div> : null}
         <div className={`grid ${isProductDeskMode ? "gap-4 xl:grid-cols-[1.45fr_0.55fr]" : "gap-6 xl:grid-cols-[1.25fr_0.75fr]"}`}>
           <div>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Product creation</p>
                 <h2 className={compactTitleClass}>{draft.id ? "Edit catalogue product" : "Create catalogue product"}</h2>
-                <p className={`mt-2 max-w-2xl ${isProductDeskMode ? "text-[13px] leading-6 text-slate-400" : "text-sm text-slate-400"}`}>
-                  {isProductDeskMode
-                    ? "Complete the sections below once. Eligible products publish to the shop automatically when saved."
-                    : "Enter the product, pricing, category, fulfilment, details, images, and website settings in one form, then save once."}
-                </p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -1646,38 +1565,9 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
 
             {editorOpen ? (
             <>
-            <div className={`mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 ${isProductDeskMode ? "px-3 py-2.5 text-[13px]" : "px-4 py-3 text-sm"} text-slate-300`}>
-              <span className="font-semibold text-emerald-200">Quick setup:</span>
-              <button
-                type="button"
-                className="rounded-full border border-emerald-400/30 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/10"
-                onClick={applyQuickEcommerceDefaults}
-              >
-                Fill online shop defaults
-              </button>
-              <button
-                type="button"
-                className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/5"
-                onClick={applySuggestedShopTaxonomy}
-              >
-                Detect category & subcategory
-              </button>
-              {suggestedShopTaxonomy.shopCategory ? (
-                <span className="text-xs text-slate-400">
-                  Suggested: <span className="text-white">{SHOP_CATEGORY_OPTIONS.find((option) => option.value === suggestedShopTaxonomy.shopCategory)?.label}</span>
-                  {suggestedShopTaxonomy.shopSubcategory
-                    ? ` · ${shopSubcategoryOptions.find((option) => option.value === suggestedShopTaxonomy.shopSubcategory)?.label || suggestedShopTaxonomy.shopSubcategory}`
-                    : ""}
-                </span>
-              ) : null}
-            </div>
             <div className="mt-4 rounded-3xl border border-cyan-400/20 bg-cyan-400/[0.04] p-4 sm:p-5">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div><div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">1 Basic</div><div className="mt-1 text-sm text-slate-400">Identify the product once. It will be available to POS, receipts, quotations, and checkout.</div></div>
-                <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100">One form · one save</span>
-              </div>
-              {renderStructuredSection("basic")}
-            <div className={`mt-5 grid ${isProductDeskMode ? "gap-3 md:grid-cols-2" : "gap-4 md:grid-cols-2"}`}>
+              <div className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">1 Basic</div>
+            <div className={`grid ${isProductDeskMode ? "gap-3 md:grid-cols-2" : "gap-4 md:grid-cols-2"}`}>
               <div className="text-sm text-slate-300">
                 <div className="flex items-center justify-between gap-3">
                   <span>Product name</span>
@@ -1740,7 +1630,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
               </label>
               <div className="md:col-span-2 border-t border-slate-800 pt-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">2 Pricing</div>
-                <div className="mt-1 text-sm text-slate-400">Enter the selling and buying price, then specify what the selling price covers.</div>
               </div>
               <label className="text-sm text-slate-300">
                 Selling price
@@ -1786,9 +1675,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                       <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} placeholder="Optional" />
                     </label>
                   </div>
-                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-100">
-                    POS activation is automatic when this product is saved.
-                  </div>
                 </>
               ) : null}
               <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
@@ -1799,9 +1685,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
 
             <div className={`mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">3 Category</div>
-              <p className="mt-2 text-sm text-slate-300">
-                Select the website category, subcategory, and brand. Publishing remains automatic.
-              </p>
               {!(capabilities.showInShop || capabilities.shopCategory || capabilities.shopSubcategory || capabilities.shopShortDescription || capabilities.shopWarranty || capabilities.shopSpecs || capabilities.shopImageUrl || capabilities.shopBrand) ? (
                 <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
                   Live Product table is currently in <span className="font-semibold uppercase">{capabilities.schemaMode}</span> compatibility mode. `showInShop`, `shopCategory`, `shopSubcategory`, and the ecommerce display fields are planned but not yet fully persisted in this database shape.
@@ -1926,18 +1809,12 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
             </div>
 
             <div className="mt-4 rounded-3xl border border-amber-400/20 bg-amber-400/[0.04] p-4 sm:p-5">
-              <div className="mb-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">4 Installation & transport</div>
-                <div className="mt-1 text-sm text-slate-400">Set what is required, what is included, and any customer delivery fees.</div>
-              </div>
+              <div className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">4 Installation & transport</div>
               {renderStructuredSection("installation")}
             </div>
 
             <div className="mt-4 rounded-3xl border border-slate-700 bg-slate-900/60 p-4 sm:p-5">
-              <div className="mb-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">5 Details</div>
-                <div className="mt-1 text-sm text-slate-400">Add the customer-facing description, specifications, warranty, video, and availability.</div>
-              </div>
+              <div className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">5 Details</div>
               <div className="grid gap-4 md:grid-cols-2">
 
                 <label className="text-sm text-slate-300 md:col-span-2">
@@ -2237,8 +2114,8 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
             <div className="mt-4 rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.04] p-4 sm:p-5">
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">7 Website</div>
               <div className={`mt-3 rounded-2xl border px-4 py-3 ${draftWebsiteEligible ? "border-emerald-400/20 bg-emerald-500/5" : "border-amber-400/20 bg-amber-500/5"}`}>
-                <div className="font-semibold text-white">{draftWebsiteEligible ? "Ready to publish automatically" : "Website publishing paused"}</div>
-                <div className="mt-1 text-sm text-slate-300">{draftIsManualProduct ? "This is a manual receipt product and will remain POS-only." : draftWebsiteImageReady ? "The product has an image and will be visible online after saving." : "Add a main image to publish this product online. It will remain active in POS meanwhile."}</div>
+                <div className="font-semibold text-white">{draftIsManualProduct ? "POS only" : draftWebsiteEligible ? "Ready for website" : "Website hidden"}</div>
+                {!draftIsManualProduct && !draftWebsiteImageReady ? <div className="mt-1 text-sm text-slate-300">Add a main image to show this product online.</div> : null}
               </div>
               {!isProductDeskMode ? (
                 <label className="mt-3 flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-200">
@@ -2287,20 +2164,11 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
             <div className={`rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog size</div>
               <div className={`mt-3 font-semibold text-white ${isProductDeskMode ? "text-2xl" : "text-3xl"}`}>{filteredProducts.length}</div>
-              <div className={`${isProductDeskMode ? "mt-1 text-[13px]" : "mt-1 text-sm"} text-slate-400`}>Products currently loaded in the POS catalog view.</div>
             </div>
             <div className={`rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Active products</div>
               <div className={`mt-3 font-semibold text-emerald-300 ${isProductDeskMode ? "text-2xl" : "text-3xl"}`}>{filteredProducts.filter((product) => product.isActive).length}</div>
-              <div className={`${isProductDeskMode ? "mt-1 text-[13px]" : "mt-1 text-sm"} text-slate-400`}>Available for product selection at the receipts desk.</div>
             </div>
-            {isProductDeskMode ? (
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-3.5">
-                <div className="text-xs uppercase tracking-[0.2em] text-emerald-200">Publishing defaults</div>
-                <div className="mt-2 text-sm font-medium text-white">Products from this desk save active and visible in shop.</div>
-                <div className="mt-1 text-[13px] text-emerald-100/80">Keep focus on content quality, images, and correct shop classification.</div>
-              </div>
-            ) : null}
             {canManageCommissions ? (
               <>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
