@@ -21,6 +21,7 @@ export const productCatalogueConfigurationSchema = z.object({
   installationFeeMode: z.enum(["STANDARD", "CUSTOM", "INCLUDED", "UNAVAILABLE"]).default("STANDARD"),
   customInstallationFee: z.coerce.number().min(0).nullable().default(null),
   accessoriesMode: z.enum(ACCESSORIES_MODES).default("NOT_INCLUDED"),
+  preliminaryAccessoriesFee: z.coerce.number().min(0).nullable().default(null),
   includedAccessories: z.string().trim().max(2000).default(""),
   installationNotes: z.string().trim().max(2000).default(""),
   transportMode: z.enum(TRANSPORT_MODES),
@@ -75,4 +76,31 @@ export function calculateTransportFee(zone: "ZONE_1" | "ZONE_2" | "ZONE_3", poli
   const key = zone === "ZONE_1" ? "zone1TransportFee" : zone === "ZONE_2" ? "zone2TransportFee" : "zone3TransportFee";
   const amount = policy.useDefaultTransportRates ? settings[key] : policy[key] ?? settings[key];
   return { status: "PRICED" as const, amount };
+}
+
+function roundEstimate(value: number) {
+  return Math.max(0, Math.round(value / 500) * 500);
+}
+
+export function calculateAccessoriesEstimate(price: number, policy: ProductCatalogueConfiguration) {
+  if (policy.accessoriesMode === "INCLUDED" || policy.priceIncludes.includes("ACCESSORIES")) {
+    return { status: "INCLUDED" as const, amount: 0, minimum: 0, maximum: 0 };
+  }
+  if (policy.preliminaryAccessoriesFee != null) {
+    return {
+      status: "ESTIMATED" as const,
+      amount: policy.preliminaryAccessoriesFee,
+      minimum: policy.preliminaryAccessoriesFee,
+      maximum: policy.preliminaryAccessoriesFee,
+    };
+  }
+  const factor = policy.accessoriesMode === "PARTIAL" ? 0.5 : 1;
+  const minimum = roundEstimate(Math.max(2_000, price * 0.03) * factor);
+  const maximum = roundEstimate(Math.max(5_000, price * 0.07) * factor);
+  return {
+    status: "ESTIMATED" as const,
+    amount: roundEstimate((minimum + maximum) / 2),
+    minimum,
+    maximum: Math.max(minimum, maximum),
+  };
 }

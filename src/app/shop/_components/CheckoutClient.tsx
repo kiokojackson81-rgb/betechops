@@ -47,6 +47,14 @@ type CheckoutFieldErrors = {
   cart?: string;
 };
 
+type InstallationPricing = {
+  productId: string;
+  quantity: number;
+  installation: { status: string; amount: number | null } | null;
+  transport: { status: string; amount: number | null } | null;
+  accessories: { status: string; amount: number | null; minimum?: number; maximum?: number } | null;
+};
+
 const inputBaseClass = "min-h-[3rem] rounded-[16px] border bg-white px-4 outline-none transition";
 
 export default function CheckoutClient({ products, isSignedIn, initialProfile }: CheckoutClientProps) {
@@ -54,6 +62,8 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const items = useShopCartItems();
   const detailedItems = useMemo(() => buildDetailedCart(items, products), [items, products]);
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const installationItems = useMemo(() => detailedItems.filter((item) => item.bookingType === "INSTALLATION"), [detailedItems]);
+  const hasInstallationBooking = installationItems.length > 0;
   const hasWarehouseItems = detailedItems.some((item) => item.product.availabilityType === "WAREHOUSE");
   const availabilityNotice = hasWarehouseItems
     ? "Some items in your order are available from warehouse. Pickup or delivery will be available after 1 day."
@@ -62,6 +72,8 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
   const [hydrated, setHydrated] = useState(false);
+  const [installationPricing, setInstallationPricing] = useState<InstallationPricing[]>([]);
+  const [pricingLoading, setPricingLoading] = useState(false);
   const [form, setForm] = useState({
     fullName: initialProfile.fullName,
     phoneNumber: initialProfile.phoneNumber,
@@ -75,7 +87,15 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     locationNotes: initialProfile.locationNotes,
   });
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
-  const deliveryZone = getDeliveryZone(form.county, form.town);
+  const deliveryZone = useMemo(() => getDeliveryZone(form.county, form.town), [form.county, form.town]);
+  const installationFee = installationPricing.reduce((sum, item) => sum + (item.installation?.amount ?? 0) * item.quantity, 0);
+  const accessoriesFee = installationPricing.reduce((sum, item) => sum + (item.accessories?.amount ?? 0) * item.quantity, 0);
+  const transportFee = installationPricing.reduce((highest, item) => Math.max(highest, item.transport?.amount ?? 0), 0);
+  const accessoriesPendingAssessment = installationPricing.some((item) => item.accessories?.status === "ASSESSMENT");
+  const installationPendingAssessment = installationPricing.some((item) => item.installation?.status === "ASSESSMENT");
+  const projectTotal = subtotal + installationFee + accessoriesFee + transportFee;
+  const depositAmount = Math.round(projectTotal * 0.3);
+  const paymentDueNow = form.paymentPreference.startsWith("30%") ? depositAmount : projectTotal;
 
   useEffect(() => {
     setHydrated(true);
@@ -98,6 +118,40 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   }, [initialProfile]);
 
   useEffect(() => {
+    if (!hasInstallationBooking || !deliveryZone) {
+      setInstallationPricing([]);
+      return;
+    }
+    const controller = new AbortController();
+    setPricingLoading(true);
+    Promise.all(installationItems.map(async (item) => {
+      const productId = item.product.opsProductId;
+      if (!productId) throw new Error(`${item.product.name} is missing its catalogue pricing link.`);
+      const response = await fetch(`/api/shop/products/${encodeURIComponent(productId)}/pricing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zone: deliveryZone.id, includeInstallation: true }),
+        signal: controller.signal,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(String(payload?.error || `Unable to price ${item.product.name}.`));
+      return { productId: item.product.id, quantity: item.quantity, ...payload } as InstallationPricing;
+    }))
+      .then(setInstallationPricing)
+      .catch((pricingError) => {
+        if (pricingError instanceof DOMException && pricingError.name === "AbortError") return;
+        setError(pricingError instanceof Error ? pricingError.message : "Unable to calculate installation pricing.");
+      })
+      .finally(() => setPricingLoading(false));
+    return () => controller.abort();
+  }, [deliveryZone, hasInstallationBooking, installationItems]);
+
+  useEffect(() => {
+    if (!hasInstallationBooking) return;
+    setForm((current) => current.paymentPreference ? current : { ...current, paymentPreference: "30% deposit, balance after installation" });
+  }, [hasInstallationBooking]);
+
+  useEffect(() => {
     if (!detailedItems.length) return;
     trackCheckoutStarted({
       itemCount: detailedItems.length,
@@ -118,6 +172,9 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     if (!form.town.trim()) nextErrors.town = "Please select the customer town.";
     if (!form.deliveryMethod.trim()) nextErrors.deliveryMethod = "Please choose how you want Betech Solar to deliver or prepare pickup.";
     if (!form.paymentPreference.trim()) nextErrors.paymentPreference = "Please choose your preferred payment arrangement.";
+    if (hasInstallationBooking && (!deliveryZone || pricingLoading)) nextErrors.deliveryMethod = pricingLoading
+      ? "Please wait while installation pricing is calculated."
+      : "Select a valid county and town to calculate the project transport fee.";
     if (!detailedItems.length) nextErrors.cart = "Your cart is empty. Add products before submitting this order.";
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -191,6 +248,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               items: detailedItems.map((item) => ({
                 productId: item.product.id,
                 quantity: item.quantity,
+                bookingType: item.bookingType,
               })),
               customerName: form.fullName,
               customerPhone: form.phoneNumber,
@@ -201,6 +259,10 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               notes: [form.locationNotes.trim(), `WhatsApp: ${form.whatsappNumber.trim()}`, form.email.trim() ? `Email: ${form.email.trim()}` : ""]
                 .filter(Boolean)
                 .join(" | "),
+              projectBooking: hasInstallationBooking && deliveryZone ? {
+                zone: deliveryZone.id,
+                paymentStructure: form.paymentPreference.startsWith("30%") ? "DEPOSIT_30" : "FULL_UPFRONT",
+              } : undefined,
             });
 
             saveShopCustomerProfile({
@@ -226,7 +288,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               deliveryMethod: form.deliveryMethod,
               paymentPreference: form.paymentPreference,
               notes: form.locationNotes.trim() || undefined,
-              subtotal,
+              subtotal: hasInstallationBooking ? projectTotal : subtotal,
               source: "website",
               status: "PENDING",
               items: buildStoredOrderItems(
@@ -363,9 +425,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 Choose payment arrangement
                 <select value={form.paymentPreference} onChange={(event) => setForm((current) => ({ ...current, paymentPreference: event.target.value }))} className={resolveFieldClass(fieldErrors.paymentPreference)}>
                   <option value="">Select payment preference</option>
-                  <option>Pay on delivery where available</option>
-                  <option>Pay transport fee first</option>
-                  <option>Pay deposit</option>
+                  {hasInstallationBooking ? <option>30% deposit, balance after installation</option> : <><option>Pay on delivery where available</option><option>Pay transport fee first</option><option>Pay deposit</option></>}
                   <option>Pay full amount</option>
                 </select>
                 {fieldErrors.paymentPreference ? <span className="text-xs font-semibold text-red-600">{fieldErrors.paymentPreference}</span> : null}
@@ -430,12 +490,21 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           </div>
           <div className="flex items-center justify-between">
             <span>Delivery</span>
-            <span>Confirmed by team</span>
+            <span>{hasInstallationBooking ? deliveryZone ? formatCurrency(transportFee) : "Select location" : "Confirmed by team"}</span>
           </div>
+          {hasInstallationBooking ? <>
+            <div className="flex items-center justify-between"><span>Installation</span><span>{installationPendingAssessment ? "Site assessment required" : formatCurrency(installationFee)}</span></div>
+            <div className="flex items-center justify-between"><span>Accessories</span><span>{accessoriesPendingAssessment ? "Confirmed after assessment" : `${formatCurrency(accessoriesFee)} preliminary`}</span></div>
+          </> : null}
           <div className="flex items-center justify-between">
-            <span>Estimated total</span>
-            <span className="text-lg font-black text-slate-950">{formatCurrency(subtotal)}</span>
+            <span>{hasInstallationBooking ? "Project total" : "Estimated total"}</span>
+            <span className="text-lg font-black text-slate-950">{pricingLoading ? "Calculating..." : formatCurrency(hasInstallationBooking ? projectTotal : subtotal)}</span>
           </div>
+          {hasInstallationBooking ? <div className="mt-1 rounded-xl border border-[#7a0000]/10 bg-white p-3">
+            <div className="flex items-center justify-between font-bold text-[#7a0000]"><span>Amount due before scheduling</span><span>{formatCurrency(paymentDueNow)}</span></div>
+            {form.paymentPreference.startsWith("30%") ? <div className="mt-1 flex items-center justify-between text-xs"><span>Balance after installation</span><span>{formatCurrency(projectTotal - depositAmount)}</span></div> : null}
+            <div className="mt-2 border-t border-[#7a0000]/10 pt-2 text-xs leading-5 text-slate-600">Accessories are preliminary and the final materials scope is confirmed before installation.</div>
+          </div> : null}
         </div>
         <div className="mt-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
           {availabilityNotice}

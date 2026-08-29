@@ -217,6 +217,7 @@ const emptyDraft: ProductDraft = {
     installationFeeMode: "UNAVAILABLE",
     customInstallationFee: null,
     accessoriesMode: "NOT_INCLUDED",
+    preliminaryAccessoriesFee: null,
     includedAccessories: "",
     installationNotes: "",
     transportMode: "ZONE",
@@ -1459,6 +1460,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
           <p className="mt-1 text-sm text-slate-400">These fees are shown on the storefront and used when the customer selects a delivery zone.</p>
           <div className="mt-4 grid gap-4 md:grid-cols-3">{([1, 2, 3] as const).map((zone) => <label key={zone} className="text-sm text-slate-300">Zone {zone} fee (KES)<input className={`${fieldClass} mt-1`} type="number" min="0" required value={policy[`zone${zone}TransportFee`] ?? ""} onChange={(event) => updatePolicy(`zone${zone}TransportFee`, event.target.value ? Number(event.target.value) : null)} /></label>)}</div>
         </div> : null}
+        {policy.accessoriesMode !== "INCLUDED" ? <label className="block text-sm text-slate-300">Preliminary installation accessories estimate (KES)<input className={`${fieldClass} mt-1`} type="number" min="0" value={policy.preliminaryAccessoriesFee ?? ""} onChange={(event) => updatePolicy("preliminaryAccessoriesFee", event.target.value ? Number(event.target.value) : null)} placeholder="Confirmed before installation" /><span className="mt-1 block text-xs text-slate-500">Shown in the installation booking summary. Leave blank when a site assessment is required.</span></label> : null}
         <label className="block text-sm text-slate-300">Customer-facing installation or transport notes<textarea className={`${fieldClass} mt-1 min-h-24`} value={policy.installationNotes} onChange={(event) => updatePolicy("installationNotes", event.target.value)} placeholder="Optional: special installation requirements, access limits, or delivery guidance." /></label>
       </div>;
     }

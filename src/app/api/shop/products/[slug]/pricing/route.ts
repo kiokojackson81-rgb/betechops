@@ -2,6 +2,7 @@ import { noStoreJson } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import {
   calculateInstallationFee,
+  calculateAccessoriesEstimate,
   calculateTransportFee,
   productCatalogueConfigurationSchema,
 } from "@/lib/productCataloguePolicy";
@@ -55,13 +56,15 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
     ? calculateTransportFee(input.data.zone, parsedPolicy.data, settings)
     : null;
   const estimatedTotal = product.sellingPrice + (installation?.amount ?? 0) + (transport?.amount ?? 0);
+  const accessories = calculateAccessoriesEstimate(product.sellingPrice, parsedPolicy.data);
+  const bookingTotal = estimatedTotal + (accessories.amount ?? 0);
 
   return noStoreJson({
     configured: true,
     product: product.sellingPrice,
     installation,
     transport,
-    estimatedTotal,
-    accessories: parsedPolicy.data.accessoriesMode,
+    estimatedTotal: bookingTotal,
+    accessories,
   });
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import AddToCartButton from "@/app/shop/_components/AddToCartButton";
+import BookInstallationButton from "@/app/shop/_components/BookInstallationButton";
 import ShopLipaPolePoleStarter from "@/app/shop/_components/ShopLipaPolePoleStarter";
 import ProductSiteVisitStarter from "@/app/shop/_components/ProductSiteVisitStarter";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
@@ -40,15 +41,21 @@ export default function ShopProductDetailActions({
     `Hello Betech Solar, I want to order ${product.name} at ${formatCurrency(product.price)}.`,
   )}`;
   const quoteHref = getShopRequestQuoteHref(product.name);
+  const policy = product.catalogueConfiguration;
+  const installationRequired = Boolean(policy && policy.installationType !== "NOT_REQUIRED" && policy.installationFeeMode !== "UNAVAILABLE");
 
   return (
     <div className="grid gap-3">
-      <AddToCartButton
+      {installationRequired ? <BookInstallationButton
         productId={product.id}
         productName={product.name}
         className="inline-flex min-h-[3.55rem] items-center justify-center gap-2 rounded-[20px] bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_20px_36px_rgba(122,0,0,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#660000] hover:shadow-[0_24px_42px_rgba(122,0,0,0.24)]"
-      />
-      <div className={`grid gap-3 sm:grid-cols-2 ${product.price > 100_000 ? "lg:grid-cols-3" : ""}`}>
+      /> : <AddToCartButton
+        productId={product.id}
+        productName={product.name}
+        className="inline-flex min-h-[3.55rem] items-center justify-center gap-2 rounded-[20px] bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_20px_36px_rgba(122,0,0,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#660000] hover:shadow-[0_24px_42px_rgba(122,0,0,0.24)]"
+      />}
+      <div className={`grid gap-3 sm:grid-cols-2 ${installationRequired ? "lg:grid-cols-3" : ""}`}>
         <TrackedWhatsAppLink
           href={whatsappHref}
           className="inline-flex min-h-[3.35rem] items-center justify-center gap-2 rounded-[20px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-4 py-3 text-sm font-bold text-white shadow-[0_18px_34px_rgba(15,157,88,0.22)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_40px_rgba(15,157,88,0.28)]"
@@ -65,7 +72,7 @@ export default function ShopProductDetailActions({
         >
           Request Quote
         </Link>
-        {product.price > 100_000 ? (
+        {installationRequired ? (
           <ProductSiteVisitStarter product={product} customer={customer} loginHref={siteVisitLoginHref} autoOpen={openSiteVisit} />
         ) : null}
       </div>

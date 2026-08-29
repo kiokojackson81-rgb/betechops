@@ -162,6 +162,7 @@ export const websiteOrderCreateSchema = z.object({
     z.object({
       productId: z.string().trim().min(1),
       quantity: z.number().int().positive(),
+      bookingType: z.enum(["INSTALLATION"]).optional(),
     }),
   ).min(1),
   customerName: z.string().trim().min(2),
@@ -171,6 +172,10 @@ export const websiteOrderCreateSchema = z.object({
   deliveryMethod: z.string().trim().min(2),
   paymentMethod: z.string().trim().min(2),
   notes: z.string().trim().max(4000).optional(),
+  projectBooking: z.object({
+    zone: z.enum(["ZONE_1", "ZONE_2", "ZONE_3"]),
+    paymentStructure: z.enum(["FULL_UPFRONT", "DEPOSIT_30"]),
+  }).optional(),
 });
 
 export type WebsiteOrderCreateInput = z.infer<typeof websiteOrderCreateSchema>;

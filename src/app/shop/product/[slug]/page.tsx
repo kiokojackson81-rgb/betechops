@@ -23,6 +23,7 @@ import { getShopCategoryHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths"
 import { getPublishedProductReviews } from "@/lib/reviewsReferrals";
 import { auth } from "@/lib/auth";
 import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
+import { calculateAccessoriesEstimate } from "@/lib/productCataloguePolicy";
 
 function normalizeProductText(value: string) {
   return value
@@ -349,6 +350,7 @@ export default async function ShopProductDetailPage({
                       const installationRequired = policy.installationType !== "NOT_REQUIRED" && policy.installationFeeMode !== "UNAVAILABLE";
                       const installationIncluded = installationRequired && (policy.installationType === "INCLUDED" || policy.installationFeeMode === "INCLUDED" || policy.priceIncludes.includes("INSTALLATION"));
                       const transportIncluded = policy.transportMode === "INCLUDED" || policy.transportMode === "FREE" || policy.priceIncludes.includes("TRANSPORT");
+                      const accessoriesEstimate = calculateAccessoriesEstimate(product.price, policy);
                       return <div className="rounded-[22px] border border-amber-300/40 bg-amber-50 px-4 py-4 text-sm text-slate-800">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div><span className="font-black text-[#7a0000]">Installation:</span> {!installationRequired ? "Not required" : installationIncluded ? "Required and included in price" : "Required and charged separately"}</div>
@@ -361,7 +363,8 @@ export default async function ShopProductDetailPage({
                           })}
                         </div> : null}
                         {policy.installationNotes ? <div className="mt-3 border-t border-amber-300/50 pt-3 text-xs leading-5 text-slate-600">{policy.installationNotes}</div> : null}
-                        {policy.accessoriesMode !== "INCLUDED" ? <div className="mt-2 text-xs leading-5 text-slate-600"><span className="font-bold">Installation accessories:</span> Additional site-specific materials may be confirmed before installation.</div> : null}
+                        {installationRequired && !installationIncluded ? <div className="mt-2 text-xs leading-5 text-slate-600"><span className="font-bold">Preliminary installation fee:</span> Calculated from the system price and confirmed in the booking summary.</div> : null}
+                        <div className="mt-2 text-xs leading-5 text-slate-600"><span className="font-bold">Installation accessories:</span> {accessoriesEstimate.status === "INCLUDED" ? "Included in the product price." : accessoriesEstimate.minimum === accessoriesEstimate.maximum ? `Preliminary estimate ${formatCurrency(accessoriesEstimate.amount)}.` : `Preliminary range ${formatCurrency(accessoriesEstimate.minimum)} - ${formatCurrency(accessoriesEstimate.maximum)}; confirmed after site verification.`}</div>
                       </div>;
                     })() : null}
                     <ShopProductDetailActions

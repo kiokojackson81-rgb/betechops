@@ -6,6 +6,7 @@ import type { ShopProduct } from "@/app/shop/shopData";
 export type ShopCartItem = {
   productId: string;
   quantity: number;
+  bookingType?: "INSTALLATION";
 };
 
 const SHOP_CART_KEY = "betech-shop-cart";
@@ -21,6 +22,7 @@ function normalizeCart(items: ShopCartItem[]) {
     .map((item) => ({
       productId: item.productId,
       quantity: Math.max(1, Math.floor(item.quantity)),
+      ...(item.bookingType === "INSTALLATION" ? { bookingType: item.bookingType } : {}),
     }));
 }
 
@@ -60,6 +62,18 @@ export function addShopCartItem(productId: string, quantity = 1) {
   writeShopCart([...current, { productId, quantity: Math.max(1, quantity) }]);
 }
 
+export function addShopInstallationBooking(productId: string, quantity = 1) {
+  const current = readShopCart();
+  const existing = current.find((item) => item.productId === productId);
+  if (existing) {
+    writeShopCart(current.map((item) => item.productId === productId
+      ? { ...item, quantity: Math.max(1, quantity), bookingType: "INSTALLATION" as const }
+      : item));
+    return;
+  }
+  writeShopCart([...current, { productId, quantity: Math.max(1, quantity), bookingType: "INSTALLATION" }]);
+}
+
 export function updateShopCartQuantity(productId: string, quantity: number) {
   const current = readShopCart();
   if (quantity <= 0) {
@@ -95,6 +109,7 @@ export function buildDetailedCart(items: ShopCartItem[], products: ShopProduct[]
         product,
         quantity: item.quantity,
         lineTotal: product.price * item.quantity,
+        bookingType: item.bookingType,
       };
     })
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));

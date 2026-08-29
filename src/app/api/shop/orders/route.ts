@@ -15,6 +15,7 @@ import {
 } from "@/lib/websiteOrders";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { getShopOrderSuccessHref } from "@/app/shop/storefrontPaths";
+import { calculateAccessoriesEstimate, calculateInstallationFee, calculateTransportFee, productCatalogueConfigurationSchema } from "@/lib/productCataloguePolicy";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
     const quantity = Math.max(1, item.quantity);
     const unitPrice = Number(product.price || 0);
     return {
+      cartProductId: item.productId,
       productId: product.opsProductId ?? (product.source === "mock" ? null : product.id),
       productName: product.name,
       quantity,
@@ -73,9 +75,40 @@ export async function POST(request: NextRequest) {
       total: unitPrice * quantity,
       sku: null,
       category: product.category ?? null,
+      bookingType: item.bookingType,
     };
   });
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const bookingItems = items.filter((item) => item.bookingType === "INSTALLATION");
+  let installationFee = 0;
+  let transportFee = 0;
+  let accessoriesFee = 0;
+  const accessoriesPendingAssessment = false;
+
+  if (bookingItems.length) {
+    if (!data.projectBooking) {
+      return NextResponse.json({ ok: false, error: "Select a project delivery zone and payment structure." }, { status: 400 });
+    }
+    const settings = await prisma.productCatalogueSettings.upsert({ where: { id: "default" }, create: { id: "default" }, update: {} });
+    for (const item of bookingItems) {
+      const product = productMap.get(item.cartProductId)!;
+      const parsedPolicy = productCatalogueConfigurationSchema.safeParse(product.catalogueConfiguration);
+      if (!parsedPolicy.success) {
+        return NextResponse.json({ ok: false, error: `${product.name} needs installation pricing configuration.` }, { status: 400 });
+      }
+      const installation = calculateInstallationFee(product.price, parsedPolicy.data, settings);
+      const transport = calculateTransportFee(data.projectBooking.zone, parsedPolicy.data, settings);
+      installationFee += (installation.amount ?? 0) * item.quantity;
+      transportFee = Math.max(transportFee, transport.amount ?? 0);
+      const accessories = calculateAccessoriesEstimate(product.price, parsedPolicy.data);
+      accessoriesFee += accessories.amount * item.quantity;
+    }
+  }
+
+  const projectTotal = subtotal + installationFee + transportFee + accessoriesFee;
+  const depositRequired = data.projectBooking?.paymentStructure === "DEPOSIT_30"
+    ? Math.round(projectTotal * 0.3)
+    : projectTotal;
   const customerIdentity = await findOrCreateCustomerIdentityUser({
     customerName: data.customerName.trim(),
     customerPhone: data.customerPhone.trim(),
@@ -100,7 +133,8 @@ export async function POST(request: NextRequest) {
       orderType,
       status: "PENDING",
       subtotal,
-      total: subtotal,
+      deliveryFee: transportFee || null,
+      total: projectTotal,
       notes: data.notes?.trim() || null,
       source: "WEBSITE",
       referredByAgentId: resolvedReferral?.agentUserId ?? null,
@@ -114,6 +148,18 @@ export async function POST(request: NextRequest) {
         referredByAgentEmail: resolvedReferral?.agentEmail ?? null,
         attributionCodeUsed: resolvedReferral?.referralCode ?? null,
         customerReferralCode: customerReferralCode || null,
+        orderIntent: bookingItems.length ? "INSTALLATION_PROJECT" : "PRODUCT_ORDER",
+        projectBooking: data.projectBooking ?? null,
+        projectPricing: bookingItems.length ? {
+          productTotal: subtotal,
+          installationFee,
+          transportFee,
+          accessoriesFee,
+          accessoriesPendingAssessment,
+          total: projectTotal,
+          depositRequired,
+          balanceAfterDeposit: projectTotal - depositRequired,
+        } : null,
       },
       items: {
         create: items.map((item) => ({

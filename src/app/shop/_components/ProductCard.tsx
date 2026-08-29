@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CalendarCheck2, MessageCircle, WalletCards } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
 import AddToCartButton from "@/app/shop/_components/AddToCartButton";
+import BookInstallationButton from "@/app/shop/_components/BookInstallationButton";
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
@@ -32,6 +33,9 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const whatsappHref = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(product.whatsappMessage)}`;
   const availabilityBadge = getProductAvailabilityBadge(product);
+  const installationRequired = Boolean(product.catalogueConfiguration
+    && product.catalogueConfiguration.installationType !== "NOT_REQUIRED"
+    && product.catalogueConfiguration.installationFeeMode !== "UNAVAILABLE");
   const discountPercent =
     product.oldPrice && product.oldPrice > product.price
       ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
@@ -79,7 +83,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         </div>
 
-        <div className={`mt-2 ${product.price > 100_000 ? "grid grid-cols-2 gap-1.5" : "flex"}`}>
+        <div className={`mt-2 ${installationRequired ? "grid grid-cols-2 gap-1.5" : "flex"}`}>
           {product.stockStatus === "quote_only" ? (
             <Link
               href={getShopRequestQuoteHref(product.name)}
@@ -93,7 +97,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               {stockLabelMap[product.stockStatus]}
             </div>
           )}
-          {product.price > 100_000 ? (
+          {installationRequired ? (
             <Link
               href={getShopSiteVisitProductHref(product.slug, product.opsProductId)}
               className="inline-flex min-h-7 items-center justify-center gap-1 rounded-full border border-amber-500/35 bg-amber-50 px-2 py-1 text-center text-[8px] font-black uppercase tracking-[0.04em] text-[#7a0000] transition hover:border-amber-500/60 hover:bg-amber-100 sm:text-[9px] sm:tracking-[0.06em]"
@@ -109,11 +113,15 @@ export default function ProductCard({ product }: ProductCardProps) {
         </div>
 
         <div className="mt-auto grid grid-cols-[1fr_auto] gap-2 pt-3 sm:grid-cols-1 sm:pt-4">
-          <AddToCartButton
+          {installationRequired ? <BookInstallationButton
+            productId={product.id}
+            productName={product.name}
+            className="inline-flex min-h-[2.7rem] items-center justify-center gap-1.5 rounded-[14px] bg-[#7a0000] px-3 py-2 text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(122,0,0,0.12)] transition hover:-translate-y-0.5 sm:rounded-[16px] sm:text-[12px]"
+          /> : <AddToCartButton
             productId={product.id}
             productName={product.name}
             className="inline-flex min-h-[2.7rem] items-center justify-center rounded-[14px] bg-[#7a0000] px-3 py-2 text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(122,0,0,0.12)] transition hover:-translate-y-0.5 sm:rounded-[16px] sm:text-[12px]"
-          />
+          />}
           <TrackedWhatsAppLink
             href={whatsappHref}
             className="inline-flex min-h-[2.7rem] min-w-[2.7rem] items-center justify-center gap-1.5 rounded-[14px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-3 py-2 text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(15,157,88,0.16)] transition hover:-translate-y-0.5 sm:rounded-[16px] sm:text-[12px]"

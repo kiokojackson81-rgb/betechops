@@ -9,6 +9,7 @@ export type ShopOrderInput = {
   items: Array<{
     productId: string;
     quantity: number;
+    bookingType?: "INSTALLATION";
   }>;
   customerName: string;
   customerPhone: string;
@@ -17,6 +18,10 @@ export type ShopOrderInput = {
   deliveryMethod: string;
   paymentMethod: string;
   notes?: string;
+  projectBooking?: {
+    zone: "ZONE_1" | "ZONE_2" | "ZONE_3";
+    paymentStructure: "FULL_UPFRONT" | "DEPOSIT_30";
+  };
 };
 
 export type QuoteRequestInput = {
