@@ -67,10 +67,12 @@ export async function POST(req: Request, context: ParamsContext) {
       serial,
       docType: "RECEIPT",
       shopId: parsed.data.shopId ?? undefined,
+      // Credit the staff member who owns the LPP sale. The receipt API reserves
+      // issuedById for the logged-in converter so the audit trail remains intact.
+      attendantId: receiptOwnerId ?? undefined,
       customerName: customerName?.name || "LPP Customer",
       customerPhone: customerName?.phone ?? null,
       customerEmail: customerName?.email ?? null,
-      issuedById: receiptOwnerId ?? undefined,
       notes: `Converted from Lipa Pole Pole ${summary.lpp.reference}`,
       paymentDetailsShown: true,
       items: summary.items.map((item) => ({
@@ -90,6 +92,7 @@ export async function POST(req: Request, context: ParamsContext) {
         lppCustomerId: summary.lpp.customerId,
         lppSalespersonId: summary.lpp.salespersonId,
         lppAssignedToId: summary.lpp.assignedToId,
+        lppReceiptOwnerId: receiptOwnerId,
         lppConvertedById: actorId,
         lppPaymentTotal: completionSafeNumber(summary.summary.totalPaid),
         lppAgreedTotal: completionSafeNumber(summary.summary.agreedTotal),

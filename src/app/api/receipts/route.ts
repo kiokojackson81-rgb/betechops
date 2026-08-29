@@ -1638,28 +1638,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite.
-      // POD receipts must only enter commission recordings after delivery is finalized.
-      if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
-        try {
-          if (!isPodDelivery) {
-            await tx.commissionEarning.createMany({
-              data: createdOrderItems.map((it) => ({
-                staffId: attendantId,
-                orderItemId: it.id,
-                basis: "gross",
-                qty: it.quantity,
-                amount: 0,
-                status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
-                calcDetail: { reason: "receipt_seed", total },
-              })),
-            });
-          }
-        } catch (e) {
-          // ignore if tx mock doesn't implement commissionEarning
-        }
-      }
-
       // Record support daily entry + receipt so support commission ledger can include this sale
       if (attendantId && !isPodDelivery) {
         const startOfDay = new Date(entryDate);

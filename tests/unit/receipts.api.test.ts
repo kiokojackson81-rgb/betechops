@@ -91,6 +91,35 @@ describe('receipts API', () => {
     expect(body.ok).toBeTruthy();
   });
 
+  it('creates only one gross commission seed per receipt item', async () => {
+    const createMany = jest.fn(async () => ({ count: 1 }));
+    (prisma as any).$transaction.mockImplementation(async (fn: any) =>
+      fn(buildTx({
+        orderItem: {
+          deleteMany: async () => {},
+          create: async (args: any) => ({ id: 'item-1', ...args.data }),
+        },
+        commissionEarning: { createMany, updateMany: async () => ({ count: 1 }) },
+      })),
+    );
+
+    const req = {
+      json: async () => ({
+        items: [{ title: 'A', quantity: 1, unitPrice: 100 }],
+        attendantId: 'u1',
+      }),
+      url: 'http://localhost/api/receipts',
+    } as unknown as Request;
+
+    const res = await POST(req as any);
+
+    expect(res.status).toBe(200);
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ staffId: 'u1', basis: 'gross', amount: 100 })],
+    });
+  });
+
   it('treats paymentMethod=POD as POD delivery (sends POD internal alerts, skips normal internal)', async () => {
     const receiptCreateCalls: any[] = [];
     (prisma as any).$transaction.mockImplementation(async (fn: any) =>
