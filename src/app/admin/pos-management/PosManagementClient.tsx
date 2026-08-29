@@ -512,8 +512,10 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   useEffect(() => {
     if (!editorOpen) return;
     const previous = document.body.style.overflow;
+    document.body.classList.add("product-editor-open");
     document.body.style.overflow = "hidden";
     return () => {
+      document.body.classList.remove("product-editor-open");
       document.body.style.overflow = previous;
     };
   }, [editorOpen]);

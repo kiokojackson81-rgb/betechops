@@ -20,6 +20,9 @@
 /* mobile drawer body lock (toggle added via JS) */
 body.overflow-hidden { overflow: hidden; }
 
+/* Give the full-screen product editor the complete viewport. */
+body.product-editor-open [data-admin-header] { display: none; }
+
 /* focus styles for accessibility */
 .nav-link:focus-visible, .nav-link:focus {
   outline: 3px solid rgba(99,102,241,0.12);
