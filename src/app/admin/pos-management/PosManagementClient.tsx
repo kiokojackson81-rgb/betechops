@@ -1523,17 +1523,11 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
               <div className={`mt-2 font-semibold text-white ${isProductDeskMode ? "text-xl" : "text-2xl"}`}>{card.value}</div>
             </button>
           ))}
-          {isProductDeskMode ? (
-            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-3.5 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Desk flow</div>
-              <div className="mt-2 text-sm font-semibold text-white">Add product, fill shop fields, save, then fine-tune from the table.</div>
-            </div>
-          ) : null}
         </div>
       </section>
 
       <section ref={formSectionRef} className={editorOpen ? "fixed inset-2 z-[100] overflow-y-auto rounded-[28px] border border-cyan-400/20 bg-slate-950 p-4 shadow-2xl shadow-black/70 sm:inset-4 sm:p-6" : sectionClass}>
-        <div className={`grid ${isProductDeskMode ? "gap-4 xl:grid-cols-[1.45fr_0.55fr]" : "gap-6 xl:grid-cols-[1.25fr_0.75fr]"}`}>
+        <div className={`grid ${!editorOpen && canManageCommissions ? "gap-6 xl:grid-cols-[1.25fr_0.75fr]" : "grid-cols-1"}`}>
           <div>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -2151,26 +2145,11 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
               ) : null}
             </div>
             </>
-            ) : (
-              <div className={`mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "px-3.5 py-3 text-[13px]" : "px-4 py-4 text-sm"} text-slate-300`}>
-                {isProductDeskMode
-                  ? "Open the editor only when needed, then keep routine publishing and corrections moving from the catalog below."
-                  : "Open the editor when you want to add a new product, update ecommerce details, or fix pricing and fulfilment data."}
-              </div>
-            )}
+            ) : null}
           </div>
 
-            <div className={`grid gap-3 ${isProductDeskMode ? "sm:grid-cols-2 xl:grid-cols-1 xl:content-start" : "sm:grid-cols-3 xl:grid-cols-1"}`}>
-            <div className={`rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog size</div>
-              <div className={`mt-3 font-semibold text-white ${isProductDeskMode ? "text-2xl" : "text-3xl"}`}>{filteredProducts.length}</div>
-            </div>
-            <div className={`rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Active products</div>
-              <div className={`mt-3 font-semibold text-emerald-300 ${isProductDeskMode ? "text-2xl" : "text-3xl"}`}>{filteredProducts.filter((product) => product.isActive).length}</div>
-            </div>
-            {canManageCommissions ? (
-              <>
+          {!editorOpen && canManageCommissions ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 xl:content-start">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                   <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Pending approvals</div>
                   <div className="mt-3 text-3xl font-semibold text-amber-200">{approvals.length}</div>
@@ -2181,9 +2160,8 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                   <div className="mt-3 text-lg font-semibold text-white">Price variable-cost sales</div>
                   <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit reporting updates accurately.</div>
                 </Link>
-              </>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
