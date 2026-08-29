@@ -4,6 +4,8 @@ import {
   normalizeQuotePdfData,
   type QuotePdfInput,
 } from "@/lib/normalizeQuotePdfData";
+import { TERMS_DISPLAY_URL, TERMS_URL } from "@/lib/publicLinks";
+import * as QRCode from "qrcode";
 
 type IconName =
   | "shield"
@@ -33,6 +35,26 @@ type IconName =
   | "settings"
   | "book"
   | "clipboard";
+
+function createTermsQrSvg(size = 116) {
+  const qr = QRCode.create(TERMS_URL, { errorCorrectionLevel: "M" });
+  const cells = qr.modules.size;
+  const margin = 2;
+  const cellSize = Math.max(2, Math.floor(size / (cells + margin * 2)));
+  const dimension = (cells + margin * 2) * cellSize;
+  const rects: string[] = [];
+
+  for (let row = 0; row < cells; row += 1) {
+    for (let col = 0; col < cells; col += 1) {
+      if (!qr.modules.get(row, col)) continue;
+      rects.push(
+        `<rect x="${(col + margin) * cellSize}" y="${(row + margin) * cellSize}" width="${cellSize}" height="${cellSize}" fill="#171717" />`,
+      );
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${dimension}" height="${dimension}" viewBox="0 0 ${dimension} ${dimension}" role="img" aria-label="QR code linking to the full Betech Solar Terms and Conditions"><rect width="${dimension}" height="${dimension}" fill="#ffffff" />${rects.join("")}</svg>`;
+}
 
 function iconSvg(name: IconName, className = "icon-svg") {
   const attrs = `viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="${className}"`;
@@ -473,6 +495,7 @@ export function buildQuotationHtml(
   const featuredProjectUrl = data.similarProjectUrl || data.company.projectsUrl;
   const projectQrCopy = getProjectQrCopy(featuredProjectUrl);
   const featuredProjectQr = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(featuredProjectUrl)}`;
+  const termsQrSvg = createTermsQrSvg();
   const feeStateNotes = [
     data.deliveryMode === "INCLUDED"
       ? "Delivery included."
@@ -741,8 +764,26 @@ export function buildQuotationHtml(
             <div class="section-head-title">Terms &amp; Conditions</div>
           </div>
           <div class="section-body">
+            <div class="terms-notice">
+              <div class="terms-notice-copy">
+                <div class="terms-notice-lead">This quotation should be read together with Betech Solar Solutions' Solar System Installation, Performance, Warranty &amp; After-Sales Terms &amp; Conditions.</div>
+                <p>Please review the quoted equipment, model numbers, quantities, price, installation scope and payment terms before proceeding. If anything differs from what was agreed or expected, request clarification or correction before payment, dispatch or installation.</p>
+                <div class="terms-full-link"><strong>Full Terms &amp; Conditions:</strong> <a href="${TERMS_URL}">${TERMS_DISPLAY_URL}</a></div>
+                <p>By accepting this quotation and proceeding with the transaction after being given reasonable access to the Terms, the customer acknowledges the quotation and applicable Terms &amp; Conditions, subject to applicable Kenyan law.</p>
+                <p>Nothing in this quotation or the Terms excludes or restricts any statutory right that cannot lawfully be excluded.</p>
+              </div>
+              <a class="terms-qr" href="${TERMS_URL}" aria-label="View the full Betech Solar Terms and Conditions">
+                ${termsQrSvg}
+                <span>Scan QR Code to<br />View Full Terms</span>
+              </a>
+            </div>
             <div class="terms-stack">
               ${renderTermsCards(data.termsAndConditions)}
+            </div>
+            <div class="terms-footer-notice">
+              <strong>Full Terms Apply</strong> &mdash; View at
+              <a href="${TERMS_URL}">${TERMS_DISPLAY_URL}</a>
+              <span>|</span> Scan QR Code
             </div>
           </div>
         </div>
@@ -1648,7 +1689,80 @@ export function buildQuotationHtml(
   }
   .terms-stack {
     display: grid;
-    gap: 2mm;
+    gap: 1.4mm;
+  }
+  .terms-notice {
+    display: grid;
+    grid-template-columns: 1fr 28mm;
+    gap: 3mm;
+    align-items: center;
+    margin-bottom: 1.8mm;
+    padding: 2.4mm 2.8mm;
+    border: 1px solid #ead4d4;
+    border-left: 1.5mm solid #9b1111;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fffafa, #ffffff 70%);
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .terms-notice-copy {
+    color: #353535;
+    font-size: 7.6px;
+    line-height: 1.28;
+  }
+  .terms-notice-copy p { margin: 1mm 0 0; }
+  .terms-notice-lead {
+    color: #202833;
+    font-size: 8px;
+    line-height: 1.3;
+    font-weight: 800;
+  }
+  .terms-full-link {
+    margin-top: 1mm;
+    color: #9b1111;
+  }
+  .terms-full-link a,
+  .terms-footer-notice a {
+    color: #9b1111;
+    font-weight: 800;
+    text-decoration: underline;
+  }
+  .terms-qr {
+    display: grid;
+    justify-items: center;
+    gap: .8mm;
+    color: #9b1111;
+    font-size: 6.8px;
+    line-height: 1.2;
+    font-weight: 900;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  .terms-qr svg {
+    display: block;
+    width: 22mm;
+    height: 22mm;
+    border: 1px solid #e5d5d5;
+    border-radius: 5px;
+  }
+  .terms-footer-notice {
+    margin-top: 1.5mm;
+    padding: 1.7mm 2mm;
+    border-radius: 8px;
+    background: #9b1111;
+    color: #ffffff;
+    font-size: 7.5px;
+    line-height: 1.25;
+    text-align: center;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .terms-footer-notice a { color: #ffffff; }
+  .terms-footer-notice span { margin: 0 1mm; opacity: .8; }
+  .compact-quotation .terms-notice {
+    padding-top: 1.8mm;
+    padding-bottom: 1.8mm;
   }
   .terms-card {
     position: relative;
