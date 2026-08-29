@@ -11,8 +11,8 @@ export type PublicTermsSection = {
   }>;
 };
 
-export const TERMS_EFFECTIVE_DATE = "22 August 2026";
-export const TERMS_VERSION = "1.2";
+export const TERMS_EFFECTIVE_DATE = "29 August 2026";
+export const TERMS_VERSION = "1.3";
 
 export const TERMS_TITLE =
   "Betech Solar Solutions Solar System Installation, Performance, Warranty & After-Sales Terms & Conditions";
@@ -1044,7 +1044,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     paragraphs: [
       "For the purpose of determining the final agreed transaction and System specification, the applicable System may be identified from the quotation, invoice, receipt, approved load assessment, System design, approved variation, WhatsApp or other written agreement, payment description, delivery and Installation records, Commissioning or completion documentation, Warranty documentation, delivered Equipment and installed Equipment.",
       "A formal quotation is not required in every case.",
-      "Specific technical performance commitments should be recorded in the quotation, System design or another written confirmation issued or approved by Betech. General marketing information, demonstrations and preliminary estimates must be read together with the final Customer-specific transaction records.",
+      "Specific technical performance commitments should be recorded in the quotation, System design or another written confirmation issued or approved by Betech. General marketing information, advertisements, demonstrations and preliminary communications must comply with applicable law and must be read together with the final Customer-specific transaction records. They do not, by themselves, establish that Betech has accepted a particular Customer-specific Installation project; acceptance of proposed work is further governed by Section 63 – Order Acceptance and Right to Decline Proposed Work.",
       "Nothing in this section excludes liability for fraudulent or otherwise legally actionable misrepresentation.",
     ],
   },
@@ -1055,6 +1055,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "A preliminary discussion or recommendation does not necessarily mean the customer purchased that system.",
       "The relevant system is generally the equipment ultimately agreed, paid for, supplied and installed.",
       "However, if Betech recommended a larger system and the customer chose smaller capacity, that recommendation may still be relevant in understanding later capacity limitations.",
+      "Preliminary discussions, estimates, quotations and recommendations remain subject to Betech accepting the proposed transaction in accordance with Section 63 – Order Acceptance and Right to Decline Proposed Work.",
     ],
   },
   {
@@ -1085,6 +1086,55 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
   },
   {
     number: 63,
+    title: "Order Acceptance and Right to Decline Proposed Work",
+    paragraphs: [
+      "An advertisement, product listing, preliminary recommendation, estimate, quotation, Customer enquiry, site discussion, negotiation or other pre-contract communication does not, by itself, require Betech Solar Solutions to accept an order, undertake an Installation or enter into a continuing commercial relationship with a prospective Customer. Any such communication and representation remains subject to applicable Kenyan consumer-protection and other laws.",
+      "Unless otherwise required by applicable law or an existing binding agreement, Betech may decline a proposed order, Installation, site visit, supply arrangement or other proposed work before the transaction has been finally accepted.",
+      "Betech may make that decision for a legitimate commercial, technical, safety, compliance or operational reason, including the matters listed below.",
+    ],
+    subsections: [
+      {
+        title: "Legitimate Reasons",
+        bullets: [
+          "Technical suitability of the proposed project",
+          "Electrical or Installation safety concerns",
+          "Project complexity or site conditions",
+          "Equipment availability",
+          "Installation capacity or technician availability",
+          "Logistics or location constraints",
+          "Inability to agree on the scope, specification, price or contractual terms",
+          "Inability to obtain information reasonably necessary to design or safely undertake the project",
+          "Material disagreement concerning the proposed Equipment or services",
+          "Breakdown of the confidence or trust reasonably necessary for an Installation and continuing after-sales relationship",
+          "Abusive, threatening or seriously disruptive conduct",
+          "Credit or payment risk where legitimately applicable",
+          "Regulatory or compliance considerations",
+          "Another legitimate commercial, technical, safety or operational reason",
+        ],
+      },
+      {
+        title: "Lawful Exercise of Discretion",
+        paragraphs: [
+          "A decision not to accept a proposed transaction does not prevent a prospective Customer from exercising any consumer, statutory or legal right available under Kenyan law. Betech shall not base such a decision on unlawful discrimination or another prohibited ground.",
+        ],
+      },
+      {
+        title: "Existing Obligations Remain",
+        paragraphs: [
+          "Where Betech has already entered into a binding agreement, accepted payment, undertaken delivery, commenced Installation or otherwise incurred an enforceable obligation toward the Customer, this section does not permit Betech to disregard that obligation.",
+          "This section does not remove liability for a fraudulent, misleading or otherwise legally actionable representation and does not permit Betech to avoid a remedy to which a Customer is entitled under applicable Kenyan law.",
+        ],
+      },
+      {
+        title: "Communication of a Decision",
+        paragraphs: [
+          "Where reasonably appropriate, Betech may communicate that it is unable or unwilling to proceed with a proposed transaction without being required to disclose confidential internal deliberations, commercially sensitive information or personal information concerning employees, except where disclosure is required by applicable law or a competent authority.",
+        ],
+      },
+    ],
+  },
+  {
+    number: 64,
     title: "Terms Version and Updates",
     paragraphs: [
       "The Effective Date and Version Number displayed on this page identify the current version of these Terms and Conditions.",
@@ -1094,12 +1144,13 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     ],
   },
   {
-    number: 64,
+    number: 65,
     title: "Customer Acceptance",
     paragraphs: [
       "The Customer should read these Terms together with the applicable quotation, invoice, receipt, load assessment, System design, approved variations, delivery and Installation records, Commissioning or completion documentation, Warranty documentation and other applicable transaction records.",
       "By engaging Betech Solar Solutions and proceeding with the transaction after these Terms have been made reasonably available, the Customer acknowledges and accepts the applicable Terms, subject to applicable Kenyan law.",
       "Acceptance may be evidenced by conduct including requesting a system, agreeing to the price, making a deposit or full/partial payment, requesting delivery, booking installation, providing access to the installation premises, allowing installation to commence or continue, accepting commissioning, accepting handover or using the installed system.",
+      "Customer acceptance or willingness to proceed does not, by itself, constitute Betech’s acceptance of proposed work where Betech has expressly declined the order before accepting payment, dispatching Equipment, undertaking delivery or commencing Installation. Betech’s acceptance of a proposed transaction is governed by Section 63 – Order Acceptance and Right to Decline Proposed Work and the applicable transaction records.",
       "A physical site assessment, formal quotation or physical signature is not required in every transaction for these Terms to apply where the Customer has otherwise agreed to the system and transaction and proceeded with payment, delivery or installation.",
       "Where Betech has recommended a larger or different system and the Customer elects to purchase a smaller or alternative system because of budget, available installation space, preference or another reason, the Customer acknowledges that the selected system may have reduced generation, shorter backup, continued grid use or require future expansion.",
       "A Customer who does not agree with these Terms should not make payment, request dispatch, accept delivery or authorize Installation to commence.",
