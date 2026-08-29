@@ -4,6 +4,7 @@ import {
   calculateInstallationFee,
   calculateAccessoriesEstimate,
   calculateTransportFee,
+  inferLegacyProductCataloguePolicy,
   productCatalogueConfigurationSchema,
 } from "@/lib/productCataloguePolicy";
 import { z } from "zod";
@@ -26,6 +27,10 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
     select: {
       id: true,
       name: true,
+      category: true,
+      shortDescription: true,
+      description: true,
+      specifications: true,
       sellingPrice: true,
       catalogueConfiguration: true,
       isActive: true,
@@ -34,7 +39,8 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
   if (!product?.isActive) return noStoreJson({ error: "Product not found" }, { status: 404 });
 
   const parsedPolicy = productCatalogueConfigurationSchema.safeParse(product.catalogueConfiguration);
-  if (!parsedPolicy.success) {
+  const policy = parsedPolicy.success ? parsedPolicy.data : inferLegacyProductCataloguePolicy(product);
+  if (!policy) {
     return noStoreJson({
       configured: false,
       product: product.sellingPrice,
@@ -50,13 +56,13 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
     update: {},
   });
   const installation = input.data.includeInstallation
-    ? calculateInstallationFee(product.sellingPrice, parsedPolicy.data, settings)
+    ? calculateInstallationFee(product.sellingPrice, policy, settings)
     : null;
   const transport = input.data.zone
-    ? calculateTransportFee(input.data.zone, parsedPolicy.data, settings)
+    ? calculateTransportFee(input.data.zone, policy, settings)
     : null;
   const estimatedTotal = product.sellingPrice + (installation?.amount ?? 0) + (transport?.amount ?? 0);
-  const accessories = calculateAccessoriesEstimate(product.sellingPrice, parsedPolicy.data);
+  const accessories = calculateAccessoriesEstimate(product.sellingPrice, policy);
   const bookingTotal = estimatedTotal + (accessories.amount ?? 0);
 
   return noStoreJson({

@@ -58,6 +58,68 @@ export type ProductCatalogueSettings = {
   zone3TransportFee: number;
 };
 
+type LegacyCatalogueProduct = {
+  name?: string | null;
+  category?: string | null;
+  shortDescription?: string | null;
+  description?: string | null;
+  specifications?: unknown;
+  sellingPrice?: number | null;
+};
+
+function searchableLegacyProductText(product: LegacyCatalogueProduct) {
+  const specifications = Array.isArray(product.specifications)
+    ? product.specifications.join(" ")
+    : typeof product.specifications === "string"
+      ? product.specifications
+      : product.specifications && typeof product.specifications === "object"
+        ? JSON.stringify(product.specifications)
+        : "";
+  return [product.name, product.category, product.shortDescription, product.description, specifications]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+export function inferLegacyProductCataloguePolicy(product: LegacyCatalogueProduct): ProductCatalogueConfiguration | null {
+  const text = searchableLegacyProductText(product);
+  const isSolarSystem = /solar\s+(full\s+)?(kit|system)/.test(text);
+  const mentionsInstallation = /installation|installed|commissioning/.test(text);
+  const highValueSystem = isSolarSystem && Number(product.sellingPrice || 0) >= 100_000;
+  if (!mentionsInstallation && !highValueSystem) return null;
+
+  const allInclusive = /all[\s-]*inclusive|complete\s+(solar\s+)?package/.test(text);
+  const installationIncluded = allInclusive
+    || /installation\s+(is\s+)?included|includes?\s+(professional\s+)?installation|professional\s+installation/.test(text);
+  const transportIncluded = allInclusive
+    || /transport(ation)?\s+(is\s+)?included|includes?\s+(countrywide\s+)?transport|countrywide\s+(transport|delivery)/.test(text);
+  const accessoriesIncluded = allInclusive
+    || /all\s+installation\s+accessories|installation\s+accessories\s+included|includes?\s+installation\s+accessories/.test(text);
+  const priceIncludes = [
+    "EQUIPMENT",
+    ...(installationIncluded ? ["INSTALLATION"] : []),
+    ...(transportIncluded ? ["TRANSPORT"] : []),
+    ...(accessoriesIncluded ? ["ACCESSORIES"] : []),
+  ] as ProductCatalogueConfiguration["priceIncludes"];
+
+  return productCatalogueConfigurationSchema.parse({
+    installationType: installationIncluded ? "INCLUDED" : "LOCAL_RECOMMENDED",
+    installationFeeMode: installationIncluded ? "INCLUDED" : "STANDARD",
+    accessoriesMode: accessoriesIncluded ? "INCLUDED" : "NOT_INCLUDED",
+    includedAccessories: accessoriesIncluded ? "Installation accessories included in the advertised package." : "",
+    installationNotes: "Legacy catalogue details detected. Confirm the final installation scope before scheduling.",
+    transportMode: transportIncluded ? "INCLUDED" : "ZONE",
+    useDefaultTransportRates: true,
+    priceIncludes,
+    allInclusive,
+    allInclusiveItems: [],
+    structuredSpecifications: [],
+    componentWarranties: [],
+    projectImageUrls: [],
+    requiresSiteAssessment: highValueSystem && !installationIncluded,
+  });
+}
+
 export function calculateInstallationFee(price: number, policy: ProductCatalogueConfiguration, settings: ProductCatalogueSettings) {
   if (policy.installationType === "INCLUDED" || policy.installationFeeMode === "INCLUDED") return { status: "INCLUDED" as const, amount: 0 };
   if (policy.installationType === "NOT_REQUIRED" || policy.installationFeeMode === "UNAVAILABLE") return { status: "UNAVAILABLE" as const, amount: null };

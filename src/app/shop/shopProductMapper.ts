@@ -16,7 +16,11 @@ import {
   normalizeAvailabilityType,
 } from "@/app/shop/shopAvailability";
 import { sanitizeProductDescription, sanitizeProductSpecificationLines } from "@/lib/productDescriptionFormatting";
-import { productCatalogueConfigurationSchema, type ProductCatalogueConfiguration } from "@/lib/productCataloguePolicy";
+import {
+  inferLegacyProductCataloguePolicy,
+  productCatalogueConfigurationSchema,
+  type ProductCatalogueConfiguration,
+} from "@/lib/productCataloguePolicy";
 
 type OpsCatalogueProduct = {
   id: string;
@@ -692,7 +696,7 @@ function mapOpsProduct(
         productType: normalizeOptionalText(product.productType),
         catalogueConfiguration: productCatalogueConfigurationSchema.safeParse(product.catalogueConfiguration).success
           ? productCatalogueConfigurationSchema.parse(product.catalogueConfiguration)
-          : null,
+          : inferLegacyProductCataloguePolicy(product),
       }
     : null;
 
