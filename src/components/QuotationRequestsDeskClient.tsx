@@ -74,6 +74,7 @@ type AdminQuotationView =
   | "WEBSITE_PENDING"
   | "MANUAL"
   | "PENDING"
+  | "CONTACTED"
   | "QUOTED"
   | "CONVERTED";
 
@@ -140,6 +141,7 @@ type Props = {
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
   "PENDING",
+  "CONTACTED",
   "QUOTED",
   "FOLLOW_UP",
   "REVISED",
@@ -324,6 +326,8 @@ function getAdminViewLabel(view: AdminQuotationView) {
       return "Manual / Desk";
     case "PENDING":
       return "Needs Action";
+    case "CONTACTED":
+      return "Contacted";
     case "QUOTED":
       return "Quoted";
     case "CONVERTED":
@@ -343,6 +347,8 @@ function matchesAdminView(request: SerializedQuoteRequest, view: AdminQuotationV
       return !isWebsiteRequest(request);
     case "PENDING":
       return isPendingQuotationStatus(request.status);
+    case "CONTACTED":
+      return request.status === "CONTACTED";
     case "QUOTED":
       return request.status === "QUOTED";
     case "CONVERTED":
@@ -1764,6 +1770,7 @@ export default function QuotationRequestsDeskClient({
     return {
       total: requests.length,
       pending: requests.filter((request) => pendingStatuses.has(request.status)).length,
+      contacted: requests.filter((request) => request.status === "CONTACTED").length,
       quoted: requests.filter((request) => request.status === "QUOTED").length,
       converted: requests.filter((request) => request.status === "CONVERTED").length,
       websiteRequests: requests.filter((request) => request.source === "WEBSITE_REQUEST").length,
@@ -2948,6 +2955,7 @@ export default function QuotationRequestsDeskClient({
     try {
       const payload = {
         ...buildQuoteRequestPayload(formState),
+        issueQuotation: true,
         ...(typeof channelOverrides?.sendEmail === "boolean"
           ? { sendEmail: channelOverrides.sendEmail }
           : {}),
@@ -2977,11 +2985,39 @@ export default function QuotationRequestsDeskClient({
         .join(" + ");
       setMessage(
         delivered
-          ? `Quotation saved and customer notified via ${delivered}.`
-          : "Quotation saved successfully.",
+          ? `Quotation issued and customer notified via ${delivered}.`
+          : "Quotation issued successfully.",
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save quotation response.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function handleMarkContacted(request: SerializedQuoteRequest) {
+    setSaving(request.id);
+    setMessage(null);
+    try {
+      const response = await fetch(
+        buildApiUrl(apiBasePath, apiQueryParams, `${request.id}/status`),
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "CONTACTED" }),
+        },
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok || !data.request) {
+        throw new Error(data?.error || "Failed to mark the customer as contacted.");
+      }
+
+      setRequests((current) =>
+        current.map((row) => (row.id === request.id ? data.request : row)),
+      );
+      setMessage("Customer marked as contacted. This request is no longer pending a quotation.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to update quotation status.");
     } finally {
       setSaving(null);
     }
@@ -3203,6 +3239,7 @@ export default function QuotationRequestsDeskClient({
                   {[
                     { label: "All activities", value: String(requestSummary.total), tone: "text-white" },
                     { label: "Needs action", value: String(requestSummary.pending), tone: "text-amber-200" },
+                    { label: "Contacted", value: String(requestSummary.contacted), tone: "text-blue-200" },
                     { label: "Quoted", value: String(requestSummary.quoted), tone: "text-emerald-200" },
                     { label: "Converted", value: String(requestSummary.converted), tone: "text-cyan-200" },
                     { label: "Website quote rate", value: conversionAnalytics.websiteQuoteRate, tone: "text-fuchsia-200" },
@@ -3331,6 +3368,7 @@ export default function QuotationRequestsDeskClient({
                   { view: "WEBSITE_PENDING", count: requestSummary.websitePending },
                   { view: "MANUAL", count: requestSummary.manualRequests },
                   { view: "PENDING", count: requestSummary.pending },
+                  { view: "CONTACTED", count: requestSummary.contacted },
                   { view: "QUOTED", count: requestSummary.quoted },
                   { view: "CONVERTED", count: requestSummary.converted },
                 ] as Array<{ view: AdminQuotationView; count: number }>).map((item) => (
@@ -4658,9 +4696,20 @@ export default function QuotationRequestsDeskClient({
                               href={`/admin/quotation-center/site-visits?quoteRef=${encodeURIComponent(request.quoteRef || "")}`}
                               className="inline-flex items-center gap-2 rounded-lg border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-sm font-medium text-sky-100 transition hover:border-sky-300/30 hover:bg-sky-400/15"
                             >
-                              Schedule site visit
+                              Create / open linked site visit
                               <ExternalLink className="h-4 w-4" />
                             </Link>
+                            {request.status === "PENDING" ? (
+                              <button
+                                type="button"
+                                disabled={saving === request.id}
+                                onClick={() => void handleMarkContacted(request)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-300/30 hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {saving === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                Mark contacted, no quote needed
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               disabled={!canOpenReceiptDraft || draftOpening === `${request.id}:quotation`}
@@ -5318,7 +5367,7 @@ export default function QuotationRequestsDeskClient({
                               className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-70"
                             >
                               {saving === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                              Save quotation
+                              Issue quotation
                             </button>
                             <button
                               type="button"

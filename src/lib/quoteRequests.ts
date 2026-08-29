@@ -126,8 +126,14 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "secondFollowUpSentAt" TIMESTAMP(3)`,
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "followUpCancelledAt" TIMESTAMP(3)`,
   `ALTER TABLE "QuoteRequest" ALTER COLUMN "status" SET DEFAULT 'PENDING'`,
-  `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" IN ('NEW', 'PENDING_APPROVAL', 'DRAFT', 'CONTACTED', 'VIEWED')`,
+  `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" IN ('NEW', 'PENDING_APPROVAL', 'DRAFT', 'VIEWED')`,
   `UPDATE "QuoteRequest" SET "status" = 'QUOTED' WHERE "status" = 'SENT'`,
+  `UPDATE "QuoteRequest"
+    SET "status" = 'QUOTED', "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "status" = 'PENDING'
+      AND "respondedAt" IS NOT NULL
+      AND jsonb_typeof("quotationData"->'items') = 'array'
+      AND jsonb_array_length("quotationData"->'items') > 0`,
   `UPDATE "QuoteRequest" SET "status" = 'APPROVED' WHERE "status" = 'ACCEPTED'`,
   `UPDATE "QuoteRequest" SET "status" = 'FOLLOW_UP' WHERE "status" = 'AMOUNT_PENDING'`,
   `UPDATE "QuoteRequest" SET "status" = 'CLOSED' WHERE "status" IN ('REJECTED', 'EXPIRED')`,
@@ -424,6 +430,7 @@ export type QuoteRequestCreateInput = z.infer<typeof quoteRequestCreateSchema> &
 
 export const quoteRequestResponseSchema = z.object({
   status: z.enum(QUOTE_REQUEST_STATUSES),
+  issueQuotation: z.boolean().optional(),
   quoteTitle: z.string().trim().max(200).optional(),
   quoteMessage: z.string().trim().max(12000).optional(),
   quoteItems: z.array(quoteLineItemSchema).default([]),
@@ -1710,7 +1717,10 @@ export async function updateQuoteRequestResponse(
     lastRespondedByName: user.name ?? user.email ?? "Quotation attendant",
     lastRespondedAt: new Date().toISOString(),
   } satisfies Record<string, unknown>;
-  const nextStatus = input.status;
+  const nextStatus =
+    input.issueQuotation && ["PENDING", "CONTACTED"].includes(input.status)
+      ? "QUOTED"
+      : input.status;
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "QuoteRequest"
@@ -1727,9 +1737,9 @@ export async function updateQuoteRequestResponse(
       "approvedAt" = null,
       "approvedById" = null,
       "approvedByName" = null,
-      "assignedAttendantId" = ${user.id},
-      "assignedAttendantEmail" = ${user.email ?? null},
-      "assignedAttendantName" = ${user.name ?? user.email ?? null},
+      "assignedAttendantId" = COALESCE("assignedAttendantId", ${user.id}),
+      "assignedAttendantEmail" = COALESCE("assignedAttendantEmail", ${user.email ?? null}),
+      "assignedAttendantName" = COALESCE("assignedAttendantName", ${user.name ?? user.email ?? null}),
       "respondedAt" = CURRENT_TIMESTAMP,
       "respondedById" = ${user.id},
       "updatedAt" = CURRENT_TIMESTAMP
@@ -1750,7 +1760,7 @@ export async function updateQuoteRequestResponse(
       eventType: nextStatus,
       eventLabel:
         nextStatus === "QUOTED"
-          ? "Quotation saved"
+          ? "Quotation issued"
           : "Quotation updated",
       eventDetail: input.quoteTitle?.trim() || input.followUpNotes?.trim() || null,
       actorUserId: user.id,
@@ -1763,6 +1773,37 @@ export async function updateQuoteRequestResponse(
       },
     });
   }
+
+  return updated;
+}
+
+export async function updateQuoteRequestStatus(
+  id: string,
+  status: QuoteRequestStatus,
+  actor: { id: string; name: string | null; email: string | null },
+) {
+  await ensureQuoteRequestsSchema();
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "QuoteRequest"
+    SET "status" = ${status}, "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${id}
+  `);
+
+  const updated = await getQuoteRequestById(id);
+  if (!updated) return null;
+
+  await appendQuotationEvent({
+    quoteRequestId: updated.id,
+    eventType: "STATUS_UPDATED",
+    eventLabel: status === "CONTACTED" ? "Customer contacted" : "Quotation status updated",
+    eventDetail:
+      status === "CONTACTED"
+        ? "Customer was contacted; no quotation is currently required."
+        : `Status changed to ${status.replace(/_/g, " ").toLowerCase()}.`,
+    actorUserId: actor.id,
+    actorName: actor.name ?? actor.email ?? "Quotation staff",
+    metadata: { status },
+  });
 
   return updated;
 }

@@ -15,5 +15,15 @@ describe("quoteRequestResponseSchema", () => {
       expect(parsed.data.quoteItems).toEqual([]);
     }
   });
+
+  it("accepts contacted status and explicit quotation issuance", () => {
+    expect(
+      quoteRequestResponseSchema.safeParse({
+        status: "CONTACTED",
+        issueQuotation: true,
+        quoteItems: [],
+      }).success,
+    ).toBe(true);
+  });
 });
 
