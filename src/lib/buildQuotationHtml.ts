@@ -399,7 +399,7 @@ function renderTermsCards(terms: readonly string[]) {
     [
       "package",
       "Returns & Refunds",
-      "Returns, exchanges, and product upgrades may be accommodated within a reasonable time after installation, subject to inspection and approval. Refunds are not available once installation has been completed.",
+      "Returns, exchanges and product upgrades may be accommodated subject to inspection, applicable warranty terms and Betech's full Terms & Conditions. Refunds are not ordinarily available after completed installation, except where otherwise required by applicable Kenyan law.",
     ],
   ] as const;
 
@@ -660,7 +660,7 @@ export function buildQuotationHtml(
           <div class="section-card">
             <div class="section-head">
               <div class="section-head-icon">${iconSvg("wallet")}</div>
-              <div class="section-head-title">Payment Terms</div>
+              <div class="section-head-title">Available Payment Structures</div>
             </div>
             <div class="section-body">
               <div class="payment-option">
@@ -675,6 +675,7 @@ export function buildQuotationHtml(
                 <div class="payment-option-icon">${iconSvg("shield")}</div>
                 <div class="payment-option-text">Full payment after installation where approved by management.</div>
               </div>
+              <div class="payment-structure-note">The payment structure applicable to this quotation is the one shown under &lsquo;At a Glance&rsquo;.</div>
             </div>
           </div>
 
@@ -1444,6 +1445,13 @@ export function buildQuotationHtml(
     font-size: 8.2px;
     font-weight: 600;
     line-height: 1.3;
+  }
+  .payment-structure-note {
+    margin-top: 1mm;
+    color: #6f2525;
+    font-size: 7.4px;
+    font-weight: 700;
+    line-height: 1.28;
   }
   .timeline {
     display: grid;
