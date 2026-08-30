@@ -134,7 +134,7 @@ export default function PublicTermsPage() {
           </header>
 
           <main className="mt-6 grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
-            <aside className="lg:sticky lg:top-4 lg:self-start print:hidden">
+            <aside className="hidden lg:sticky lg:top-4 lg:block lg:self-start print:hidden">
               <div className="terms-print-card rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(7,11,21,0.96),rgba(8,12,23,0.92))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
                 <div className="flex items-center gap-2 text-sm font-semibold text-cyan-200">
                   <FileText className="h-4 w-4" />
@@ -169,21 +169,6 @@ export default function PublicTermsPage() {
                 <div className="mt-6 space-y-4 text-[15px] leading-8 text-slate-200 sm:text-base">
                   {TERMS_INTRODUCTION.map((paragraph) => (
                     <p key={paragraph}>{paragraph}</p>
-                  ))}
-                </div>
-              </section>
-
-              <section className="terms-print-card rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(5,8,17,0.96),rgba(6,9,18,0.92))] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.32)] sm:p-8 lg:hidden print:hidden">
-                <div className="text-[11px] uppercase tracking-[0.32em] text-cyan-300">Contents</div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  {PUBLIC_TERMS_SECTIONS.map((section) => (
-                    <a
-                      key={section.number}
-                      href={`#section-${section.number}`}
-                      className="rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-3 text-sm text-slate-200 transition hover:border-violet-400/30 hover:bg-violet-500/8"
-                    >
-                      {section.number}. {section.title}
-                    </a>
                   ))}
                 </div>
               </section>

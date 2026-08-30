@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { BadgeCheck, CreditCard, Headphones, MapPin, Truck } from "lucide-react";
+import { BadgeCheck, CreditCard, ExternalLink, Headphones, MapPin, Music2, Play, Truck } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
@@ -269,18 +269,50 @@ export default async function ShopProductDetailPage({
     {
       title: "Key specifications",
       content: (
-        <div className="grid max-w-5xl gap-3 sm:grid-cols-2">
-          {detailBullets.map((spec) => {
-            const labelMatch = spec.match(/^([^:]{2,42}):\s*(.+)$/);
-            return (
-              <div key={spec} className="flex min-w-0 items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] p-3.5 sm:p-4">
-                <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
-                <div className="min-w-0 break-words text-sm leading-6 text-slate-700 [overflow-wrap:anywhere]">
-                  {labelMatch ? <><span className="font-extrabold text-slate-950">{labelMatch[1]}:</span> {labelMatch[2]}</> : spec}
+        <div className="max-w-5xl">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {detailBullets.map((spec) => {
+              const labelMatch = spec.match(/^([^:]{2,42}):\s*(.+)$/);
+              return (
+                <div key={spec} className="flex min-w-0 items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] p-3.5 sm:p-4">
+                  <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
+                  <div className="min-w-0 break-words text-sm leading-6 text-slate-700 [overflow-wrap:anywhere]">
+                    {labelMatch ? <><span className="font-extrabold text-slate-950">{labelMatch[1]}:</span> {labelMatch[2]}</> : spec}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 border-t border-[#7a0000]/10 pt-5 sm:flex-row sm:flex-wrap">
+            <a
+              href="https://www.tiktok.com/@betechsolarprojects"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-14 items-center gap-3 rounded-2xl bg-[#10131c] px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-black"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-black">
+                <Music2 className="size-5" aria-hidden="true" />
+              </span>
+              <span className="flex-1">View our recent solar installations</span>
+              <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
+            </a>
+
+            {product.tiktokVideoUrl ? (
+              <a
+                href={product.tiktokVideoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-14 items-center gap-3 rounded-2xl border border-[#dfd4d0] bg-white px-5 py-3 text-sm font-black text-[#820000] transition hover:-translate-y-0.5 hover:border-[#820000]"
+              >
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#fff2e0] text-[#820000]">
+                  <Play className="size-5 fill-current" aria-hidden="true" />
+                </span>
+                <span className="flex-1">Watch this product video on TikTok</span>
+                <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
+              </a>
+            ) : null}
+          </div>
         </div>
       ),
     },
@@ -395,7 +427,7 @@ export default async function ShopProductDetailPage({
                     />
                   </div>
 
-                  <div className="rounded-[24px] border border-[#7a0000]/8 bg-white p-4 sm:rounded-[28px] sm:p-5">
+                  <div className="hidden rounded-[24px] border border-[#7a0000]/8 bg-white p-4 sm:rounded-[28px] sm:p-5 md:block">
                     <div className="border-b border-[#7a0000]/8 pb-4">
                       <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Delivery & support</div>
                       <div className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
