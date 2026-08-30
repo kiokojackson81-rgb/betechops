@@ -52,6 +52,45 @@ const emptyCustomer: InstallationCustomer = {
 
 const fieldClass = "min-h-12 w-full rounded-[16px] border border-[#7a0000]/12 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-[#7a0000]/45 focus:ring-4 focus:ring-[#7a0000]/5";
 
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getNextWorkingDay() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const date = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day) + 1));
+  while (date.getUTCDay() === 0 || date.getUTCDay() === 6) date.setUTCDate(date.getUTCDate() + 1);
+  return formatLocalDate(new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function cleanSavedLocation(value: string | null | undefined) {
+  const location = String(value || "")
+    .replace(/preferred\s+installation\s+date\s*:\s*\d{4}-\d{2}-\d{2}/gi, "")
+    .replace(/\s*[-|,]\s*$/, "")
+    .trim();
+  if (!location) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(location)) return "";
+  return location;
+}
+
+function resolveExactLocation(customer: InstallationCustomer, stored?: { estateLandmark?: string; locationNotes?: string } | null) {
+  return [
+    customer.estateLandmark,
+    customer.locationNotes,
+    stored?.estateLandmark,
+    stored?.locationNotes,
+  ].map(cleanSavedLocation).find(Boolean) || "";
+}
+
 export default function BookInstallationButton({ product, customer = emptyCustomer, className, autoOpen = false }: BookInstallationButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -67,18 +106,14 @@ export default function BookInstallationButton({ product, customer = emptyCustom
     phone: customer.phone,
     county: customer.county,
     town: customer.town,
-    exactLocation: customer.locationNotes || customer.estateLandmark,
-    installationDate: "",
+    exactLocation: resolveExactLocation(customer),
+    installationDate: getNextWorkingDay(),
     paymentStructure: "DEPOSIT_30" as "DEPOSIT_30" | "FULL_UPFRONT",
   });
 
   const towns = useMemo(() => getTownsForCounty(form.county), [form.county]);
   const zone = useMemo(() => getDeliveryZone(form.county, form.town), [form.county, form.town]);
-  const minimumDate = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 2);
-    return date.toISOString().slice(0, 10);
-  }, []);
+  const minimumDate = useMemo(() => getNextWorkingDay(), []);
   const amountDue = form.paymentStructure === "DEPOSIT_30"
     ? Math.round((pricing?.estimatedTotal ?? 0) * 0.3)
     : pricing?.estimatedTotal ?? 0;
@@ -101,7 +136,8 @@ export default function BookInstallationButton({ product, customer = emptyCustom
       phone: customer.phone || profile?.phone || current.phone,
       county: customer.county || savedCounty || current.county,
       town: customer.town || savedTown || current.town,
-      exactLocation: customer.locationNotes || customer.estateLandmark || profile?.locationNotes || profile?.estateLandmark || current.exactLocation,
+      exactLocation: resolveExactLocation(customer, profile) || cleanSavedLocation(current.exactLocation),
+      installationDate: current.installationDate || minimumDate,
     }));
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -111,7 +147,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [customer, open]);
+  }, [customer, minimumDate, open]);
 
   useEffect(() => {
     if (!open || !zone || !product.opsProductId) {
@@ -239,17 +275,17 @@ export default function BookInstallationButton({ product, customer = emptyCustom
                 </div>
               </section>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-[18px] border border-[#7a0000]/12 bg-[#fffaf3] p-4 text-sm leading-6 text-slate-700">
-                <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#7a0000]" />
-                <span>By proceeding, I agree to Betech Solar Solutions&apos; <a href="https://www.betech.co.ke/p/terms" target="_blank" rel="noreferrer" className="font-black text-[#7a0000] underline underline-offset-4">Solar Installation Terms &amp; Conditions</a>.</span>
-              </label>
-
               <section>
                 <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Payment procedure</div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {([{"value":"DEPOSIT_30","title":"Pay 30% deposit","copy":"Clear the balance after installation."},{"value":"FULL_UPFRONT","title":"Pay in full","copy":"Pay the complete booking total."}] as const).map((option) => <button key={option.value} type="button" onClick={() => setForm((current) => ({ ...current, paymentStructure: option.value }))} className={`rounded-[18px] border p-4 text-left transition ${form.paymentStructure === option.value ? "border-[#7a0000] bg-[#fff3d8] shadow-sm" : "border-[#7a0000]/10 bg-white"}`}><span className="flex items-center gap-2 font-black text-slate-950">{form.paymentStructure === option.value ? <CheckCircle2 className="h-4 w-4 text-[#7a0000]" /> : null}{option.title}</span><span className="mt-1 block text-xs leading-5 text-slate-600">{option.copy}</span></button>)}
                 </div>
               </section>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-[18px] border border-[#7a0000]/12 bg-[#fffaf3] p-4 text-sm leading-6 text-slate-700">
+                <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#7a0000]" />
+                <span>By proceeding, I agree to Betech Solar Solutions&apos; <a href="https://www.betech.co.ke/p/terms" target="_blank" rel="noreferrer" className="font-black text-[#7a0000] underline underline-offset-4">Solar Installation Terms &amp; Conditions</a>.</span>
+              </label>
             </div>
 
             <aside className="h-fit rounded-[22px] bg-[linear-gradient(155deg,#280000_0%,#650000_100%)] p-5 text-white lg:sticky lg:top-4">
