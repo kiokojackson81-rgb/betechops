@@ -27,6 +27,7 @@ type ShopProductDetailActionsProps = {
   siteVisitLoginHref: string;
   openLipaPolePole?: boolean;
   openSiteVisit?: boolean;
+  openInstallation?: boolean;
 };
 
 export default function ShopProductDetailActions({
@@ -36,6 +37,7 @@ export default function ShopProductDetailActions({
   siteVisitLoginHref,
   openLipaPolePole = false,
   openSiteVisit = false,
+  openInstallation = false,
 }: ShopProductDetailActionsProps) {
   const whatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(
     `Hello Betech Solar, I want to order ${product.name} at ${formatCurrency(product.price)}.`,
@@ -54,6 +56,7 @@ export default function ShopProductDetailActions({
       {installationRequired ? <BookInstallationButton
         product={product}
         customer={customer}
+        autoOpen={openInstallation}
         className="inline-flex min-h-[3.55rem] items-center justify-center gap-2 rounded-[20px] bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_20px_36px_rgba(122,0,0,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#660000] hover:shadow-[0_24px_42px_rgba(122,0,0,0.24)]"
       /> : <AddToCartButton
         productId={product.id}

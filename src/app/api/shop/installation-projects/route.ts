@@ -2,7 +2,9 @@ import { DocType, OrderStatus, PaymentStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getShopProducts } from "@/app/shop/shopApi";
-import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
+import { auth } from "@/lib/auth";
+import { findSafeUserById } from "@/lib/customerIdentity";
+import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import {
   calculateAccessoriesEstimate,
@@ -26,7 +28,10 @@ const createSchema = z.object({
   zone: z.enum(["ZONE_1", "ZONE_2", "ZONE_3"]),
   paymentStructure: z.enum(["FULL_UPFRONT", "DEPOSIT_30"]),
   preferredInstallationDate: z.coerce.date(),
+  termsAccepted: z.literal(true),
 });
+
+const INSTALLATION_TERMS_URL = "https://www.betech.co.ke/p/terms";
 
 async function buildUniqueProjectRef() {
   const date = new Date();
@@ -41,6 +46,15 @@ async function buildUniqueProjectRef() {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  const sessionUser = session?.user as { id?: string | null } | undefined;
+  if (!sessionUser?.id) {
+    return NextResponse.json(
+      { ok: false, error: "Sign in with OTP before booking installation.", code: "AUTH_REQUIRED" },
+      { status: 401 },
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
@@ -51,6 +65,28 @@ export async function POST(request: NextRequest) {
   }
 
   const input = parsed.data;
+  const customerIdentity = await findSafeUserById(sessionUser.id);
+  const accountPhone = normalizeKenyanPhone(customerIdentity?.phone || "");
+  const submittedPhone = normalizeKenyanPhone(input.customerPhone);
+  const accountEmail = String(customerIdentity?.email || "").trim().toLowerCase();
+  const submittedEmail = input.customerEmail.trim().toLowerCase();
+  const hasUsableEmail = Boolean(accountEmail && !accountEmail.endsWith("@placeholder.betech.local"));
+  if (!customerIdentity || !accountPhone || !hasUsableEmail || !String(customerIdentity.name || "").trim()) {
+    return NextResponse.json(
+      { ok: false, error: "Complete your name, phone number, and email in your Betech account before booking installation." },
+      { status: 409 },
+    );
+  }
+  if (submittedPhone !== accountPhone || submittedEmail !== accountEmail) {
+    return NextResponse.json(
+      { ok: false, error: "The booking contact details must match your authenticated Betech account." },
+      { status: 409 },
+    );
+  }
+  const customerName = String(customerIdentity.name).trim();
+  const customerPhone = accountPhone;
+  const customerEmail = accountEmail;
+  const termsAcceptedAt = new Date();
   const products = await getShopProducts();
   const storefrontProduct = products.find((product) => product.id === input.productId);
   if (!storefrontProduct?.opsProductId) {
@@ -94,12 +130,6 @@ export async function POST(request: NextRequest) {
     : "FULL_BEFORE_INSTALLATION";
   const projectRef = await buildUniqueProjectRef();
   const location = [input.exactLocation, input.town, input.county].join(", ");
-  const customerIdentity = await findOrCreateCustomerIdentityUser({
-    customerName: input.customerName,
-    customerPhone: input.customerPhone,
-    customerEmail: input.customerEmail,
-    locationNotes: input.exactLocation,
-  });
   const projectFlow = buildReceiptProjectFlow({
     stage: "RECEIPT_CREATED",
     paymentTerm,
@@ -124,16 +154,16 @@ export async function POST(request: NextRequest) {
     const order = await tx.order.create({
       data: {
         orderNumber: projectRef,
-        customerName: input.customerName,
-        customerPhone: input.customerPhone,
-        customerEmail: input.customerEmail,
+        customerName,
+        customerPhone,
+        customerEmail,
         shopId: shop.id,
         status: OrderStatus.PENDING,
         paymentStatus: PaymentStatus.UNPAID,
         totalAmount,
         paidAmount: 0,
         metadata: {
-          customerUserId: customerIdentity.user.id,
+          customerUserId: customerIdentity.id,
           customerType: "project",
           deliveryAddress: location,
           bookingSource: "WEBSITE_INSTALLATION",
@@ -141,6 +171,9 @@ export async function POST(request: NextRequest) {
           town: input.town,
           exactLocation: input.exactLocation,
           zone: input.zone,
+          termsAccepted: true,
+          termsAcceptedAt: termsAcceptedAt.toISOString(),
+          termsUrl: INSTALLATION_TERMS_URL,
           projectFlow,
         },
         items: {
@@ -173,14 +206,18 @@ export async function POST(request: NextRequest) {
         data: {
           customerType: "project",
           orderRef: projectRef,
-          customerName: input.customerName,
-          customerPhone: input.customerPhone,
-          customerEmail: input.customerEmail,
+          customerName,
+          customerPhone,
+          customerEmail,
           deliveryAddress: location,
           paymentMethod: input.paymentStructure === "DEPOSIT_30"
             ? "30% deposit, balance after installation"
             : "Full payment before installation",
           source: "WEBSITE_INSTALLATION",
+          customerUserId: customerIdentity.id,
+          termsAccepted: true,
+          termsAcceptedAt: termsAcceptedAt.toISOString(),
+          termsUrl: INSTALLATION_TERMS_URL,
           projectFlow,
           items: [{
             productId: product.id,

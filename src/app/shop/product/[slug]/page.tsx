@@ -173,7 +173,7 @@ export default async function ShopProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ opsProductId?: string; ref?: string; lpp?: string; siteVisit?: string }> | { opsProductId?: string; ref?: string; lpp?: string; siteVisit?: string };
+  searchParams?: Promise<{ opsProductId?: string; ref?: string; lpp?: string; siteVisit?: string; installation?: string }> | { opsProductId?: string; ref?: string; lpp?: string; siteVisit?: string; installation?: string };
 }) {
   const { slug } = await params;
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
@@ -218,8 +218,16 @@ export default async function ShopProductDetailPage({
     siteVisit: "1",
   }).toString()}`;
   const siteVisitLoginHref = `/login/phone?callbackUrl=${encodeURIComponent(siteVisitReturnHref)}`;
+  const installationReturnHref = `/${product.slug}?${new URLSearchParams({
+    ...(product.opsProductId ? { opsProductId: product.opsProductId } : {}),
+    installation: "1",
+  }).toString()}`;
+  const installationLoginHref = `/login/phone?callbackUrl=${encodeURIComponent(installationReturnHref)}`;
   if (resolvedSearchParams.siteVisit === "1" && !sessionUser?.id) {
     redirect(siteVisitLoginHref);
+  }
+  if (resolvedSearchParams.installation === "1" && !sessionUser?.id) {
+    redirect(installationLoginHref);
   }
   const supportItems = [
     {
@@ -371,6 +379,7 @@ export default async function ShopProductDetailPage({
                       product={product}
                       openLipaPolePole={resolvedSearchParams.lpp === "1"}
                       openSiteVisit={resolvedSearchParams.siteVisit === "1"}
+                      openInstallation={resolvedSearchParams.installation === "1"}
                       customer={{
                         isAuthenticated: Boolean(sessionUser?.id),
                         name: viewerProfile?.name || sessionUser?.name || "",

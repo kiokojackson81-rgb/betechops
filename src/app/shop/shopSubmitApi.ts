@@ -74,6 +74,7 @@ export type InstallationProjectInput = {
   zone: "ZONE_1" | "ZONE_2" | "ZONE_3";
   paymentStructure: "FULL_UPFRONT" | "DEPOSIT_30";
   preferredInstallationDate: string;
+  termsAccepted: true;
 };
 
 export type InstallationProjectResponse = {

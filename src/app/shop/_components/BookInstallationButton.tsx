@@ -5,10 +5,11 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { CalendarCheck2, CheckCircle2, LoaderCircle, MapPin, X } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
-import { createInstallationProject } from "@/app/shop/shopSubmitApi";
+import { createInstallationProject, type ShopApiError } from "@/app/shop/shopSubmitApi";
 import { trackOrderSubmitted } from "@/app/shop/shopAnalytics";
 import { getShopCustomerProfile, saveShopCustomerProfile } from "@/app/shop/shopStorage";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
+import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import { getDeliveryZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
 type InstallationCustomer = {
@@ -35,6 +36,7 @@ type BookInstallationButtonProps = {
   product: ShopProduct;
   customer?: InstallationCustomer;
   className?: string;
+  autoOpen?: boolean;
 };
 
 const emptyCustomer: InstallationCustomer = {
@@ -50,7 +52,7 @@ const emptyCustomer: InstallationCustomer = {
 
 const fieldClass = "min-h-12 w-full rounded-[16px] border border-[#7a0000]/12 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-[#7a0000]/45 focus:ring-4 focus:ring-[#7a0000]/5";
 
-export default function BookInstallationButton({ product, customer = emptyCustomer, className }: BookInstallationButtonProps) {
+export default function BookInstallationButton({ product, customer = emptyCustomer, className, autoOpen = false }: BookInstallationButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
@@ -58,6 +60,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricing, setPricing] = useState<InstallationPricing | null>(null);
   const [error, setError] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [form, setForm] = useState({
     name: customer.name,
     email: customer.email,
@@ -82,6 +85,10 @@ export default function BookInstallationButton({ product, customer = emptyCustom
   const requiresAssessment = pricing?.installation?.status === "ASSESSMENT";
 
   useEffect(() => setPortalReady(true), []);
+
+  useEffect(() => {
+    if (autoOpen && customer.isAuthenticated) setOpen(true);
+  }, [autoOpen, customer.isAuthenticated]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,6 +155,10 @@ export default function BookInstallationButton({ product, customer = emptyCustom
       setError(requiresAssessment ? "This system requires a site assessment before installation can be booked." : "Wait for the installation total to be calculated.");
       return;
     }
+    if (!termsAccepted) {
+      setError("Accept the Solar Installation Terms & Conditions to continue.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -163,6 +174,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
         zone: zone.id,
         paymentStructure: form.paymentStructure,
         preferredInstallationDate: form.installationDate,
+        termsAccepted: true,
       });
 
       saveShopCustomerProfile({
@@ -183,6 +195,10 @@ export default function BookInstallationButton({ product, customer = emptyCustom
       });
       router.push(response.successUrl);
     } catch (submissionError) {
+      if ((submissionError as ShopApiError)?.status === 401) {
+        router.push(buildInstallationLoginHref(product));
+        return;
+      }
       setError(submissionError instanceof Error ? submissionError.message : "Unable to create the installation booking.");
     } finally {
       setSubmitting(false);
@@ -201,12 +217,16 @@ export default function BookInstallationButton({ product, customer = emptyCustom
           <div className="grid gap-5 p-4 sm:p-7 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
             <div className="grid gap-5">
               <section>
-                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Customer details</div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1.5 text-sm font-bold text-slate-700">Full name<input className={fieldClass} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} autoComplete="name" /></label>
-                  <label className="grid gap-1.5 text-sm font-bold text-slate-700">Phone number<input className={fieldClass} value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} autoComplete="tel" /></label>
-                  <label className="grid gap-1.5 text-sm font-bold text-slate-700 sm:col-span-2">Email address<input type="email" className={fieldClass} value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} autoComplete="email" /></label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Customer details</div>
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Verified account</div>
                 </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-sm font-bold text-slate-700">Full name<input readOnly className={`${fieldClass} cursor-not-allowed bg-slate-50 text-slate-600`} value={form.name} autoComplete="name" /></label>
+                  <label className="grid gap-1.5 text-sm font-bold text-slate-700">Phone number<input readOnly className={`${fieldClass} cursor-not-allowed bg-slate-50 text-slate-600`} value={form.phone} autoComplete="tel" /></label>
+                  <label className="grid gap-1.5 text-sm font-bold text-slate-700 sm:col-span-2">Email address<input readOnly type="email" className={`${fieldClass} cursor-not-allowed bg-slate-50 text-slate-600`} value={form.email} autoComplete="email" /></label>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">These details come from your authenticated Betech account and cannot be changed during booking.</p>
               </section>
 
               <section>
@@ -218,6 +238,11 @@ export default function BookInstallationButton({ product, customer = emptyCustom
                   <label className="grid gap-1.5 text-sm font-bold text-slate-700 sm:col-span-2">Preferred installation date<input type="date" min={minimumDate} className={fieldClass} value={form.installationDate} onChange={(event) => setForm((current) => ({ ...current, installationDate: event.target.value }))} /></label>
                 </div>
               </section>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-[18px] border border-[#7a0000]/12 bg-[#fffaf3] p-4 text-sm leading-6 text-slate-700">
+                <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#7a0000]" />
+                <span>By proceeding, I agree to Betech Solar Solutions&apos; <a href="https://www.betech.co.ke/p/terms" target="_blank" rel="noreferrer" className="font-black text-[#7a0000] underline underline-offset-4">Solar Installation Terms &amp; Conditions</a>.</span>
+              </label>
 
               <section>
                 <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Payment procedure</div>
@@ -247,7 +272,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
 
           <div className="sticky bottom-0 flex flex-col gap-3 border-t border-[#7a0000]/10 bg-white/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <div className="min-h-5 text-sm font-semibold text-red-700">{error || (requiresAssessment ? "A site assessment and custom quotation are required for this system." : "")}</div>
-            <button type="submit" disabled={submitting || pricingLoading || !pricing || requiresAssessment} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[16px] bg-[#7a0000] px-7 font-black text-white transition hover:bg-[#620000] disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}{submitting ? "Creating booking..." : "Book & Pay"}</button>
+            <button type="submit" disabled={submitting || pricingLoading || !pricing || requiresAssessment || !termsAccepted} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[16px] bg-[#7a0000] px-7 font-black text-white transition hover:bg-[#620000] disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}{submitting ? "Creating booking..." : "Book & Pay"}</button>
           </div>
         </form>
       </div>
@@ -255,9 +280,15 @@ export default function BookInstallationButton({ product, customer = emptyCustom
   ) : null;
 
   return <>
-    <button type="button" aria-label={`Book installation for ${product.name}`} className={className} onClick={() => setOpen(true)}><CalendarCheck2 className="h-4 w-4" />Book Installation</button>
+    <button type="button" aria-label={`Book installation for ${product.name}`} className={className} onClick={() => customer.isAuthenticated ? setOpen(true) : router.push(buildInstallationLoginHref(product))}><CalendarCheck2 className="h-4 w-4" />Book Installation</button>
     {portalReady && modal ? createPortal(modal, document.body) : null}
   </>;
+}
+
+function buildInstallationLoginHref(product: ShopProduct) {
+  const productHref = getShopProductHref(product.slug, product.opsProductId);
+  const returnHref = `${productHref}${productHref.includes("?") ? "&" : "?"}installation=1`;
+  return `/login/phone?callbackUrl=${encodeURIComponent(returnHref)}`;
 }
 
 function SummaryLine({ label, value }: { label: string; value: string }) {
