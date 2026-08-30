@@ -15,6 +15,7 @@ import {
 } from "@/lib/websiteOrders";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { getShopOrderSuccessHref } from "@/app/shop/storefrontPaths";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 export const dynamic = "force-dynamic";
 
@@ -156,6 +157,21 @@ export async function POST(request: NextRequest) {
       orderId: created.id,
       error: error instanceof Error ? error.message : String(error),
     });
+  });
+
+  await notifyAdminCriticalSms({
+    eventType: "WEB_ORDER_CREATED",
+    entityId: created.id,
+    title: `New web order ${createdRow.orderRef}`,
+    details: [
+      `Customer: ${createdRow.customerName}`,
+      `Total: KSh ${Number(createdRow.total).toLocaleString("en-KE")}`,
+      `Payment: ${createdRow.paymentMethod}`,
+      `Delivery: ${createdRow.deliveryMethod}`,
+      `Location: ${createdRow.customerLocation}`,
+    ],
+    actionPath: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(created.id)}`,
+    payload: { orderRef: createdRow.orderRef, status: createdRow.status },
   });
 
   return NextResponse.json({

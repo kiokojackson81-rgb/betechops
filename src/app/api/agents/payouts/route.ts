@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAgentSession } from "@/lib/agents/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyAgentPayoutRequested } from "@/services/agent-notifications/agent-notification.service";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 function isAgentSalesSchemaError(error: unknown) {
   if (!error || typeof error !== "object") return false;
@@ -139,6 +140,24 @@ export async function POST(req: NextRequest) {
       payoutId: payout.id,
       error: error instanceof Error ? error.message : String(error),
     });
+  });
+
+  const agent = await prisma.user.findUnique({
+    where: { id: agentSession.userId },
+    select: { name: true, email: true, agentProfile: { select: { phone: true } } },
+  }).catch(() => null);
+  await notifyAdminCriticalSms({
+    eventType: "AGENT_PAYOUT_REQUESTED",
+    entityId: payout.id,
+    title: "New agent payout request",
+    details: [
+      `Agent: ${agent?.name || agent?.email || agentSession.userId}`,
+      `Amount: KSh ${amount.toLocaleString("en-KE")}`,
+      `Method: ${method || "Not provided"}`,
+      `Phone: ${phone || agent?.agentProfile?.phone || "Not provided"}`,
+    ],
+    actionPath: `/admin/agents/payouts?status=pending&payoutId=${encodeURIComponent(payout.id)}`,
+    payload: { payoutId: payout.id, agentId: agentSession.userId },
   });
 
   return NextResponse.json({ ok: true, payout });

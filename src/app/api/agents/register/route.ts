@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateUniqueReferralCode } from "@/lib/agents/service";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 export async function POST(req: NextRequest) {
   try {
@@ -84,6 +85,20 @@ export async function POST(req: NextRequest) {
       }
 
       return { user, profile };
+    });
+
+    await notifyAdminCriticalSms({
+      eventType: "AGENT_APPLICATION_CREATED",
+      entityId: created.profile.id,
+      title: "New agent application",
+      details: [
+        `Applicant: ${firstName} ${lastName}`,
+        `Phone: ${phone}`,
+        `County: ${county || "Not provided"}`,
+        `City: ${city || "Not provided"}`,
+      ],
+      actionPath: "/admin/agents?status=pending",
+      payload: { userId: created.user.id, profileId: created.profile.id },
     });
 
     return NextResponse.json({

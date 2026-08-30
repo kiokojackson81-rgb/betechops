@@ -12,6 +12,7 @@ import {
 } from "@/lib/wellness";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { notifyCashAdvanceApproved } from "@/lib/wellnessNotifications";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 export const dynamic = "force-dynamic";
 
@@ -188,6 +189,26 @@ export async function POST(req: Request) {
         approvedAmount: requestedAmount,
         repaymentPeriod: created.repaymentPeriod,
         hrComment: "Created and approved by admin.",
+      });
+    }
+
+    if (!isAdminCreatingForStaff) {
+      const employee = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true },
+      }).catch(() => null);
+      await notifyAdminCriticalSms({
+        eventType: "WELLNESS_CASH_ADVANCE_REQUESTED",
+        entityId: created.id,
+        title: "New employee cash advance request",
+        details: [
+          `Employee: ${employee?.name || employee?.email || userId}`,
+          `Amount: KSh ${requestedAmount.toLocaleString("en-KE")}`,
+          `Repayment: ${normalizedRepaymentPeriod || "Not selected"} period(s)`,
+          `Reason: ${reason}`,
+        ],
+        actionPath: "/admin/wellness",
+        payload: { cashAdvanceId: created.id, employeeId: userId },
       });
     }
 

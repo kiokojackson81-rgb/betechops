@@ -1373,6 +1373,28 @@ model ActionLog {
   @@index([entity, entityId])
 }
 
+model AdminCriticalSmsLog {
+  id                String   @id @default(cuid())
+  eventType         String
+  entityId          String
+  recipientPhone    String
+  idempotencyKey    String   @unique
+  status            String   @default("PROCESSING")
+  messageBody       String
+  actionUrl         String?
+  providerMessageId String?
+  errorMessage      String?
+  payloadSnapshot   Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  sentAt            DateTime?
+  failedAt          DateTime?
+
+  @@index([eventType, createdAt])
+  @@index([entityId, createdAt])
+  @@index([status, createdAt])
+}
+
 model UserShop {
   id         String         @id @default(cuid())
   userId     String

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { getOpsBaseUrl } from "@/lib/runtimeUrls";
 import { getCustomerAccountOrderDetail, type CustomerAccountIdentity } from "@/lib/shopCustomerOrders";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 export const COMPLAINT_CATEGORIES = [
   "PRODUCT_NOT_WORKING",
@@ -188,6 +189,23 @@ export async function createCustomerComplaint(args: {
     return created;
   });
   await notifyComplaintQueue(complaint);
+  const customer = await prisma.user.findUnique({
+    where: { id: args.identity.userId },
+    select: { name: true, phone: true, email: true },
+  }).catch(() => null);
+  await notifyAdminCriticalSms({
+    eventType: "COMPLAINT_CREATED",
+    entityId: complaint.id,
+    title: `New complaint ${complaint.reference}`,
+    details: [
+      `Customer: ${customer?.name || customer?.phone || customer?.email || "Customer"}`,
+      `Category: ${complaintCategoryLabels[data.category]}`,
+      `Priority: ${complaint.priority}`,
+      `Issue: ${complaint.title}`,
+    ],
+    actionPath: `/admin/complaints/${encodeURIComponent(complaint.reference)}`,
+    payload: { reference: complaint.reference, category: complaint.category },
+  });
   return { complaint } as const;
 }
 

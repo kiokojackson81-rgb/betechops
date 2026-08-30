@@ -8,6 +8,7 @@ import { notifySiteVisitCustomer } from "@/lib/siteVisitNotifications";
 import { getShopProductBySlugOrOpsProductId } from "@/app/shop/shopApi";
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import { isProductLinkedSiteVisitEligible } from "@/lib/siteVisitPolicy";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 export async function GET() {
   try {
@@ -92,6 +93,20 @@ export async function POST(request: Request) {
     });
     if (!visit) return NextResponse.json({ ok: false, error: "Unable to create the site visit request." }, { status: 500 });
     void notifySiteVisitCustomer({ event: "REQUEST_RECEIVED", customerName, phone: customerPhone, email: visit.customerEmail, visitRef: visit.visitRef, detail: `Total KES ${visit.totalPayable.toLocaleString("en-KE")} is awaiting payment verification.` });
+    await notifyAdminCriticalSms({
+      eventType: "SITE_VISIT_REQUESTED",
+      entityId: visit.id,
+      title: `New site visit request ${visit.visitRef}`,
+      details: [
+        `Customer: ${customerName}`,
+        `Location: ${parsed.data.town}, ${parsed.data.county}`,
+        `Fee: KSh ${visit.totalPayable.toLocaleString("en-KE")}`,
+        `Product: ${product?.name || "General assessment"}`,
+        `Preferred date: ${parsed.data.preferredDate || "Not specified"}`,
+      ],
+      actionPath: `/admin/quotation-center/site-visits/${encodeURIComponent(visit.id)}`,
+      payload: { visitRef: visit.visitRef, paymentStatus: visit.paymentStatus },
+    });
     return NextResponse.json({ ok: true, visit: toCustomerSiteVisit(visit) }, { status: 201 });
   } catch (error) {
     console.error("[shop.site-visits] POST failed", error);

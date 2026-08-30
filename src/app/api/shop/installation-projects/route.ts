@@ -15,6 +15,7 @@ import {
   productCatalogueConfigurationSchema,
 } from "@/lib/productCataloguePolicy";
 import { buildReceiptProjectFlow } from "@/lib/receiptProjects";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 export const dynamic = "force-dynamic";
 
@@ -243,6 +244,22 @@ export async function POST(request: NextRequest) {
       receiptId: receipt.id,
       error: error instanceof Error ? error.message : String(error),
     });
+  });
+
+  await notifyAdminCriticalSms({
+    eventType: "WEB_PROJECT_BOOKED",
+    entityId: receipt.id,
+    title: `New web installation project ${projectRef}`,
+    details: [
+      `Customer: ${customerName}`,
+      `Product: ${product.name}`,
+      `Total: KSh ${totalAmount.toLocaleString("en-KE")}`,
+      `Payment: ${input.paymentStructure === "DEPOSIT_30" ? "30% deposit" : "full upfront"}`,
+      `Location: ${input.town}, ${input.county}`,
+      `Preferred date: ${input.preferredInstallationDate.toISOString().slice(0, 10)}`,
+    ],
+    actionPath: "/admin/returns?status=RECEIPT_CREATED",
+    payload: { projectRef, receiptId: receipt.id },
   });
 
   return NextResponse.json({

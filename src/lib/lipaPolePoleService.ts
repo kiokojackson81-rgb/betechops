@@ -17,6 +17,7 @@ import {
 } from "@/lib/mpesaReference";
 import { getLipaPolePoleMaxInstallments } from "@/lib/lipaPolePoleConfig";
 import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import {
   sendLppLifecycleChannelNotification,
   sendLppReminderChannelNotification,
@@ -1309,6 +1310,14 @@ export async function createLipaPolePole(
       lipaPolePoleId: created.id,
       event: "ACCOUNT_CREATED",
     });
+    if (input.initialPayment && (input.initialPayment.status ?? "SUCCESS") === "PENDING") {
+      await notifyAdminOfPendingLppPayment(created.id).catch((error) => {
+        console.error("[admin-critical-sms] failed to load pending LPP payment", {
+          lipaPolePoleId: created.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
   }
   return created;
 }
@@ -1470,6 +1479,18 @@ export async function recordLppPayment(
             : "PAYMENT_RECEIVED"
           : "PAYMENT_SUBMITTED",
     });
+    if (paymentStatus === "PENDING") {
+      await notifyAdminOfPendingLppPayment(
+        input.lipaPolePoleId,
+        result.paymentId,
+      ).catch((error) => {
+        console.error("[admin-critical-sms] failed to load pending LPP payment", {
+          lipaPolePoleId: input.lipaPolePoleId,
+          paymentId: result.paymentId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
   }
   return result;
 }
@@ -2107,6 +2128,57 @@ type LppLifecycleDispatchInput = {
   event: LppLifecycleEvent;
   paymentId?: string | null;
 };
+
+async function notifyAdminOfPendingLppPayment(
+  lipaPolePoleId: string,
+  paymentId?: string | null,
+) {
+  const rows = await prisma.$queryRaw<Array<{
+    paymentId: string;
+    amount: Prisma.Decimal;
+    method: string;
+    paymentReference: string | null;
+    lppReference: string;
+    customerName: string | null;
+  }>>(Prisma.sql`
+    SELECT
+      payment."id" AS "paymentId",
+      payment."amount",
+      payment."method"::text AS "method",
+      payment."reference" AS "paymentReference",
+      lpp."reference" AS "lppReference",
+      customer."name" AS "customerName"
+    FROM "LipaPolePolePayment" payment
+    INNER JOIN "LipaPolePole" lpp ON lpp."id" = payment."lipaPolePoleId"
+    INNER JOIN "User" customer ON customer."id" = lpp."customerId"
+    WHERE payment."lipaPolePoleId" = ${lipaPolePoleId}
+      AND payment."status" = 'PENDING'
+      ${paymentId ? Prisma.sql`AND payment."id" = ${paymentId}` : Prisma.empty}
+    ORDER BY payment."createdAt" DESC
+    LIMIT 1
+  `);
+  const payment = rows[0];
+  if (!payment) return;
+
+  await notifyAdminCriticalSms({
+    eventType: "LPP_PAYMENT_PENDING",
+    entityId: payment.paymentId,
+    title: "Lipa Pole Pole payment pending approval",
+    details: [
+      `Account: ${payment.lppReference}`,
+      `Customer: ${payment.customerName || "Customer"}`,
+      `Amount: KSh ${Number(payment.amount).toLocaleString("en-KE")}`,
+      `Method: ${payment.method}`,
+      `Reference: ${payment.paymentReference || "Not provided"}`,
+    ],
+    actionPath: `/admin/lipa-pole-pole?id=${encodeURIComponent(lipaPolePoleId)}`,
+    payload: {
+      lipaPolePoleId,
+      paymentId: payment.paymentId,
+      reference: payment.lppReference,
+    },
+  });
+}
 
 async function dispatchLppLifecycleNotifications(
   input: LppLifecycleDispatchInput,

@@ -10,6 +10,7 @@ import {
   ensureLeaveBalance,
 } from "@/lib/wellness";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 export const dynamic = "force-dynamic";
 const leaveTypeValues = ["ANNUAL", "SICK", "EMERGENCY", "UNPAID", "OTHER"] as const;
@@ -94,6 +95,24 @@ export async function POST(req: Request) {
         action: "CREATE",
         after: created as unknown as Prisma.InputJsonValue,
       },
+    });
+
+    const employee = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    }).catch(() => null);
+    await notifyAdminCriticalSms({
+      eventType: "WELLNESS_LEAVE_REQUESTED",
+      entityId: created.id,
+      title: "New employee leave request",
+      details: [
+        `Employee: ${employee?.name || employee?.email || userId}`,
+        `Type: ${leaveType.replace(/_/g, " ")}`,
+        `Dates: ${startDate} to ${endDate}`,
+        `Days: ${daysRequested}`,
+      ],
+      actionPath: "/admin/wellness",
+      payload: { leaveRequestId: created.id, employeeId: userId },
     });
 
     return NextResponse.json({ created }, { status: 201 });
