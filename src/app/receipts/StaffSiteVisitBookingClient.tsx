@@ -179,7 +179,6 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
             <Field title="Nearby landmark (optional)"><input className={inputClass} value={form.landmark} onChange={(event) => setForm({ ...form, landmark: event.target.value })} /></Field>
             <Field title="Preferred date"><input required type="date" min={new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })} className={inputClass} value={form.preferredDate} onChange={(event) => setForm({ ...form, preferredDate: event.target.value })} /></Field>
             <Field title="Preferred time"><select className={inputClass} value={form.preferredTimeLabel} onChange={(event) => setForm({ ...form, preferredTimeLabel: event.target.value })}><option value="MORNING">Morning</option><option value="AFTERNOON">Afternoon</option></select></Field>
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100 md:col-span-2">Technician assignment is completed by admin after this request reaches the Site Visit queue.</div>
           </div>
         </section>
 
