@@ -50,7 +50,7 @@ export function validateSiteVisitLifecycle(input: {
 }
 
 export function deriveSiteVisitCreditStatus(input: {
-  paymentStatus: "UNPAID" | "PAID" | "WAIVED";
+  paymentStatus: "UNPAID" | "COLLECT_ON_SITE" | "PAID" | "WAIVED";
   currentStatus?: SiteVisitCreditStatus | null;
 }) {
   if (input.currentStatus === "APPLIED") return "APPLIED" as const;

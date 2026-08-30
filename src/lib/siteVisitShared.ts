@@ -10,7 +10,7 @@ export const SITE_VISIT_OUTCOMES = [
 ] as const;
 export type SiteVisitOutcome = (typeof SITE_VISIT_OUTCOMES)[number];
 
-export const SITE_VISIT_PAYMENT_STATUSES = ["UNPAID", "PAID", "WAIVED"] as const;
+export const SITE_VISIT_PAYMENT_STATUSES = ["UNPAID", "COLLECT_ON_SITE", "PAID", "WAIVED"] as const;
 export type SiteVisitPaymentStatus = (typeof SITE_VISIT_PAYMENT_STATUSES)[number];
 
 export const SITE_VISIT_SOURCES = ["STAFF", "CUSTOMER_REQUEST"] as const;

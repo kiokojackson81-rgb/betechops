@@ -10,6 +10,7 @@ export type SiteVisitAccessActor = {
   attendantCategory: string | null;
   canViewAll: boolean;
   canManageCommercials: boolean;
+  canAssignTechnicians: boolean;
 };
 
 export async function getSiteVisitAccessActor(sessionUser: {
@@ -34,14 +35,17 @@ export async function getSiteVisitAccessActor(sessionUser: {
   const roleLabel = String(profile.teamRole || profile.positionTitle || "").toLowerCase();
   const permissionScope = String(profile.permissionScope || "").toUpperCase();
   const technicalManager = technical && (roleLabel.includes("manager") || permissionScope === "FULL_TECHNICAL_ACCESS");
+  const identityLabel = `${user.name || ""} ${user.email || ""}`.trim().toLowerCase();
+  const isJonathanDispatcher = technical && identityLabel.includes("jonathan");
   return {
     id: user.id,
     role: user.role,
     name: user.name,
     email: user.email,
     attendantCategory: user.attendantCategory,
-    canViewAll: isAdmin || technicalManager,
+    canViewAll: isAdmin || technicalManager || isJonathanDispatcher,
     canManageCommercials: isAdmin,
+    canAssignTechnicians: user.role === "ADMIN",
   };
 }
 

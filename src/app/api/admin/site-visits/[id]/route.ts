@@ -66,6 +66,17 @@ export async function PATCH(
       parsed.data.feeOverrideReason !== undefined || parsed.data.waiverReason !== undefined;
     if (commercialChanged) return NextResponse.json({ ok: false, error: "Only administrators or supervisors can change visit fees and payments." }, { status: 403 });
   }
+  const assignmentChanged =
+    (parsed.data.assignedStaffId !== undefined && (parsed.data.assignedStaffId || null) !== existing.assignedStaffId) ||
+    (parsed.data.assignedTechnicianId !== undefined && (parsed.data.assignedTechnicianId || null) !== existing.assignedTechnicianId);
+  if (assignmentChanged && !actor.canAssignTechnicians) {
+    return NextResponse.json({ ok: false, error: "Only an administrator can assign the visit owner or technician." }, { status: 403 });
+  }
+  if (parsed.data.assignedTechnicianId?.startsWith("external:")) {
+    const externalId = parsed.data.assignedTechnicianId.slice("external:".length);
+    const external = await (await import("@/lib/prisma")).prisma.projectExternalAgent.findFirst({ where: { id: externalId, isActive: true }, select: { id: true } });
+    if (!external) return NextResponse.json({ ok: false, error: "Select an active external technician." }, { status: 400 });
+  }
 
   const visit = await updateSiteVisit(id, parsed.data, {
     id: actor.id,
@@ -86,14 +97,20 @@ export async function PATCH(
       detail: `KES ${visit.visitFee.toLocaleString("en-KE")} confirmed.`,
     });
   }
-  if (existing.scheduledAt !== visit.scheduledAt && visit.scheduledAt) {
+  const technicianChanged = existing.assignedTechnicianId !== visit.assignedTechnicianId;
+  if ((existing.scheduledAt !== visit.scheduledAt || technicianChanged) && visit.scheduledAt && visit.assignedTechnicianName) {
+    const paymentInstruction = visit.paymentStatus === "COLLECT_ON_SITE"
+      ? "Payment will be collected on site."
+      : visit.paymentStatus === "PAID"
+        ? "Your payment is confirmed."
+        : `Please pay KES ${visit.totalPayable.toLocaleString("en-KE")} before the visit.`;
     void notifySiteVisitCustomer({
       event: "SCHEDULE_CONFIRMED",
       customerName: visit.customerName,
       phone: visit.customerPhone,
       email: visit.customerEmail,
       visitRef: visit.visitRef,
-      detail: `Confirmed for ${new Date(visit.scheduledAt).toLocaleString("en-KE")}.`,
+      detail: `Scheduled for ${new Date(visit.scheduledAt).toLocaleString("en-KE")} with ${visit.assignedTechnicianName}. Site visit fee: KES ${visit.visitFee.toLocaleString("en-KE")}. ${paymentInstruction} The paid site visit fee is deducted from the final project cost if you proceed with Betech for installation.`,
     });
   }
   if (existing.status !== "VISITED" && visit.status === "VISITED") {

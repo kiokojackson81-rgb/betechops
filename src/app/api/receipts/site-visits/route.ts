@@ -4,7 +4,6 @@ import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
-import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { notifySiteVisitCustomer } from "@/lib/siteVisitNotifications";
 import { DATA_LOGGER_DAILY_RATE, getStandardSiteVisitFee } from "@/lib/siteVisitPolicy";
 import {
@@ -77,16 +76,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Only management can waive a site visit payment." }, { status: 403 });
   }
 
-  let assignedTechnicianId: string | undefined;
-  if (input.assignedTechnicianId?.trim()) {
-    const technician = await prisma.user.findUnique({
-      where: { id: input.assignedTechnicianId.trim() },
-      select: { id: true, isActive: true, attendantCategory: true },
-    });
-    if (!technician?.isActive || !isTechnicalTeamCategory(technician.attendantCategory)) {
-      return NextResponse.json({ ok: false, error: "Select an active technical team member." }, { status: 400 });
-    }
-    assignedTechnicianId = technician.id;
+  const requestedOwnerId = input.assignedStaffId?.trim();
+  if (!requestedOwnerId) {
+    return NextResponse.json({ ok: false, error: "Select the staff member requesting this site visit." }, { status: 400 });
+  }
+  const requestedOwner = await prisma.user.findFirst({
+    where: { id: requestedOwnerId, isActive: true, role: { in: ["ADMIN", "SUPERVISOR", "ATTENDANT"] } },
+    select: { id: true, name: true, email: true },
+  });
+  if (!requestedOwner) {
+    return NextResponse.json({ ok: false, error: "Select an active staff owner." }, { status: 400 });
   }
 
   const loggerDays = input.dataLoggerRequested ? Math.max(1, Math.min(3, Number(input.dataLoggerDays || 1))) : undefined;
@@ -108,8 +107,8 @@ export async function POST(request: NextRequest) {
         ...input,
         customerPhone,
         customerEmail: input.customerEmail || undefined,
-        assignedStaffId: actor.id,
-        assignedTechnicianId,
+        assignedStaffId: requestedOwner.id,
+        assignedTechnicianId: undefined,
         visitFee,
         source: "STAFF",
         dataLoggerDays: loggerDays,
@@ -134,7 +133,7 @@ export async function POST(request: NextRequest) {
       phone: visit.customerPhone,
       email: visit.customerEmail,
       visitRef: visit.visitRef,
-      detail: `${visit.assignedStaffName || actor.name || "Betech staff"} is your contact. Total payable: KES ${visit.totalPayable.toLocaleString("en-KE")}.`,
+      detail: `${visit.assignedStaffName || requestedOwner.name || "Betech staff"} is your contact. Admin will confirm the technician and schedule. Site visit fee: KES ${visit.totalPayable.toLocaleString("en-KE")}.`,
     });
     await notifyAdminCriticalSms({
       eventType: "SITE_VISIT_REQUESTED",
@@ -142,14 +141,14 @@ export async function POST(request: NextRequest) {
       title: `Staff site visit booking ${visit.visitRef}`,
       details: [
         `Customer: ${visit.customerName}`,
-        `Owner: ${visit.assignedStaffName || actor.name || actor.email || "Staff"}`,
+        `Requested by: ${visit.assignedStaffName || requestedOwner.name || requestedOwner.email || "Staff"}`,
         `Technician: ${visit.assignedTechnicianName || "Awaiting assignment"}`,
         `Location: ${visit.town}, ${visit.county}`,
         `Payment: ${visit.paymentStatus} · KSh ${visit.totalPayable.toLocaleString("en-KE")}`,
         visit.dataLoggerRequested ? `Data logger: ${visit.dataLoggerDays} day(s)` : "Data logger: Not requested",
       ],
       actionPath: `/admin/quotation-center/site-visits/${encodeURIComponent(visit.id)}`,
-      payload: { visitRef: visit.visitRef, ownerId: actor.id, technicianId: assignedTechnicianId || null },
+      payload: { visitRef: visit.visitRef, ownerId: requestedOwner.id, createdById: actor.id },
     });
 
     return NextResponse.json({ ok: true, visit }, { status: 201 });

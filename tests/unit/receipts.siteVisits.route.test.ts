@@ -9,9 +9,10 @@ const findOrCreateCustomerIdentityUser = jest.fn();
 const notifySiteVisitCustomer = jest.fn();
 const notifyAdminCriticalSms = jest.fn();
 const userFindUnique = jest.fn();
+const userFindFirst = jest.fn();
 
 jest.mock("@/lib/auth", () => ({ requireAttendant }));
-jest.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: userFindUnique } } }));
+jest.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: userFindUnique, findFirst: userFindFirst } } }));
 jest.mock("@/lib/customerIdentity", () => ({ findOrCreateCustomerIdentityUser }));
 jest.mock("@/lib/siteVisitNotifications", () => ({ notifySiteVisitCustomer }));
 jest.mock("@/lib/adminCriticalSms", () => ({ notifyAdminCriticalSms }));
@@ -50,6 +51,7 @@ describe("receipts site visit API", () => {
       role: "ATTENDANT",
     });
     userFindUnique.mockResolvedValue(actor);
+    userFindFirst.mockResolvedValue(actor);
     findOrCreateCustomerIdentityUser.mockResolvedValue({
       user: { id: "customer-1" },
       matchedBy: "phone",
@@ -61,7 +63,7 @@ describe("receipts site visit API", () => {
     notifyAdminCriticalSms.mockResolvedValue({ sent: 1, failed: 0, skipped: 0 });
   });
 
-  it("forces ownership to the current staff member and calculates logger payment", async () => {
+  it("allows receipts staff to choose the owning staff member and leaves technician assignment for admin", async () => {
     createSiteVisit.mockImplementation(async (input: any) => ({
       id: "visit-1",
       visitRef: "SV-2026-000001",
@@ -93,7 +95,7 @@ describe("receipts site visit API", () => {
       projectType: "SOLAR_HOME_SYSTEM",
       visitReason: "LOAD_ASSESSMENT",
       customerRequirements: "Assess the customer's full load",
-      assignedStaffId: "malicious-owner",
+      assignedStaffId: "staff-1",
       dataLoggerRequested: true,
       dataLoggerDays: 2,
       paymentStatus: "PAID",
@@ -106,9 +108,14 @@ describe("receipts site visit API", () => {
       customerPhone: "+254722000111",
       county: "Nairobi",
     }));
+    expect(userFindFirst).toHaveBeenCalledWith({
+      where: { id: "staff-1", isActive: true, role: { in: ["ADMIN", "SUPERVISOR", "ATTENDANT"] } },
+      select: { id: true, name: true, email: true },
+    });
     expect(createSiteVisit).toHaveBeenCalledWith(
       expect.objectContaining({
         assignedStaffId: "staff-1",
+        assignedTechnicianId: undefined,
         visitFee: 2_000,
         dataLoggerDays: 2,
         paymentAmount: 12_000,
@@ -120,6 +127,24 @@ describe("receipts site visit API", () => {
       eventType: "SITE_VISIT_REQUESTED",
       entityId: "visit-1",
     }));
+  });
+
+  it("rejects an unknown or inactive selected owner", async () => {
+    userFindFirst.mockResolvedValueOnce(null);
+
+    const response = await POST(request({
+      customerName: "Customer One",
+      customerPhone: "0722 000 111",
+      county: "Nairobi",
+      town: "Nairobi CBD",
+      location: "Moi Avenue",
+      preferredDate: "2026-09-02",
+      assignedStaffId: "missing-owner",
+      paymentStatus: "UNPAID",
+    }));
+
+    expect(response.status).toBe(400);
+    expect(createSiteVisit).not.toHaveBeenCalled();
   });
 
   it("prevents ordinary staff from waiving payment", async () => {

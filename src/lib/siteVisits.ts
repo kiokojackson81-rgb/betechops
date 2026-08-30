@@ -819,21 +819,29 @@ async function recordSiteVisitAttachmentEvent(input: {
 }
 
 async function resolveUserLabels(input: { assignedStaffId?: string | null; assignedTechnicianId?: string | null }) {
-  const ids = [input.assignedStaffId, input.assignedTechnicianId].filter(Boolean) as string[];
+  const ids = [input.assignedStaffId, input.assignedTechnicianId]
+    .filter((id): id is string => Boolean(id) && !String(id).startsWith("external:"));
+  const externalTechnicianId = input.assignedTechnicianId?.startsWith("external:")
+    ? input.assignedTechnicianId.slice("external:".length)
+    : null;
   if (!ids.length) {
-    return {
-      assignedStaffName: null,
-      assignedTechnicianName: null,
-    };
+    const externalTechnician = externalTechnicianId
+      ? await prisma.projectExternalAgent.findFirst({ where: { id: externalTechnicianId, isActive: true }, select: { name: true } })
+      : null;
+    return { assignedStaffName: null, assignedTechnicianName: externalTechnician?.name || null };
   }
-  const users = await prisma.user.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, name: true, email: true },
-  });
+  const [users, externalTechnician] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true } }),
+    externalTechnicianId
+      ? prisma.projectExternalAgent.findFirst({ where: { id: externalTechnicianId, isActive: true }, select: { name: true } })
+      : Promise.resolve(null),
+  ]);
   const byId = new Map(users.map((user) => [user.id, user.name || user.email || "Staff"]));
   return {
     assignedStaffName: input.assignedStaffId ? byId.get(input.assignedStaffId) || null : null,
-    assignedTechnicianName: input.assignedTechnicianId ? byId.get(input.assignedTechnicianId) || null : null,
+    assignedTechnicianName: externalTechnicianId
+      ? externalTechnician?.name || null
+      : input.assignedTechnicianId ? byId.get(input.assignedTechnicianId) || null : null,
   };
 }
 
@@ -1194,9 +1202,15 @@ export async function updateSiteVisit(
   if (!existing) return null;
 
   const linkedQuote = input.quoteRef?.trim() ? await getQuoteRequestByRef(input.quoteRef.trim()) : null;
+  const nextAssignedStaffId = input.assignedStaffId !== undefined
+    ? input.assignedStaffId.trim() || null
+    : existing.assignedStaffId;
+  const nextAssignedTechnicianId = input.assignedTechnicianId !== undefined
+    ? input.assignedTechnicianId.trim() || null
+    : existing.assignedTechnicianId;
   const userLabels = await resolveUserLabels({
-    assignedStaffId: input.assignedStaffId !== undefined ? input.assignedStaffId || null : existing.assignedStaffId,
-    assignedTechnicianId: input.assignedTechnicianId !== undefined ? input.assignedTechnicianId || null : existing.assignedTechnicianId,
+    assignedStaffId: nextAssignedStaffId,
+    assignedTechnicianId: nextAssignedTechnicianId,
   });
 
   const nextStatus = input.status || existing.status;
@@ -1291,10 +1305,10 @@ export async function updateSiteVisit(
       "preferredTimeLabel" = ${input.preferredTimeLabel?.trim() || existing.preferredTimeLabel},
       "scheduledAt" = ${scheduledAt},
       "estimatedDurationMinutes" = ${input.estimatedDurationMinutes ?? existing.estimatedDurationMinutes},
-      "assignedStaffId" = ${input.assignedStaffId?.trim() || existing.assignedStaffId},
-      "assignedStaffName" = ${userLabels.assignedStaffName || existing.assignedStaffName},
-      "assignedTechnicianId" = ${input.assignedTechnicianId?.trim() || existing.assignedTechnicianId},
-      "assignedTechnicianName" = ${userLabels.assignedTechnicianName || existing.assignedTechnicianName},
+      "assignedStaffId" = ${nextAssignedStaffId},
+      "assignedStaffName" = ${nextAssignedStaffId ? userLabels.assignedStaffName : null},
+      "assignedTechnicianId" = ${nextAssignedTechnicianId},
+      "assignedTechnicianName" = ${nextAssignedTechnicianId ? userLabels.assignedTechnicianName : null},
       "transportMethod" = ${input.transportMethod?.trim() || existing.transportMethod},
       "visitFee" = ${input.visitFee ?? existing.visitFee},
       "paymentStatus" = ${input.paymentStatus || existing.paymentStatus},
@@ -1533,14 +1547,15 @@ export async function recordCustomerSiteVisitAction(
     const zone = getServiceZone(input.county, input.town);
     if (!zone) throw new Error("Select a recognized county and town before updating the location.");
     const fee = zone.siteVisitFee;
+    const canReprice = visit.paymentStatus === "UNPAID" || visit.paymentStatus === "COLLECT_ON_SITE";
     await prisma.$executeRaw(Prisma.sql`
       UPDATE "SiteVisit" SET "county" = ${input.county}, "town" = ${input.town}, "location" = ${input.location},
         "landmark" = ${input.landmark?.trim() || null}, "mapUrl" = ${input.mapUrl?.trim() || null},
         "feeRegion" = ${zone.id}, "serviceZone" = ${zone.id}, "serviceZoneLabel" = ${zone.name},
         "locationCounty" = ${input.county}, "locationTown" = ${input.town}, "standardVisitFee" = ${fee},
-        "visitFee" = ${visit.paymentStatus === "UNPAID" ? fee : visit.visitFee},
-        "appliedFee" = ${visit.paymentStatus === "UNPAID" ? fee : visit.appliedFee},
-        "totalPayable" = ${(visit.paymentStatus === "UNPAID" ? fee : visit.visitFee) + visit.dataLoggerFee},
+        "visitFee" = ${canReprice ? fee : visit.visitFee},
+        "appliedFee" = ${canReprice ? fee : visit.appliedFee},
+        "totalPayable" = ${(canReprice ? fee : visit.visitFee) + visit.dataLoggerFee},
         "updatedAt" = CURRENT_TIMESTAMP
       WHERE "id" = ${visit.id}
     `);

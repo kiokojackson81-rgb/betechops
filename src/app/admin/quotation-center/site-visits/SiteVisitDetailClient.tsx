@@ -19,6 +19,7 @@ import type {
 } from "@/lib/siteVisitShared";
 
 type StaffOption = { id: string; name: string | null; email: string | null };
+type ExternalTechnicianOption = { id: string; name: string; whatsappNumber: string };
 type Tab = "overview" | "assessment" | "attachments" | "timeline" | "internal";
 const tabs: Tab[] = [
   "overview",
@@ -59,6 +60,8 @@ export default function SiteVisitDetailClient({
   initialAttachments,
   staffOptions,
   canManageCommercials,
+  canAssignTechnicians,
+  externalTechnicians,
   backPath,
 }: {
   initialVisit: SerializedSiteVisit;
@@ -66,6 +69,8 @@ export default function SiteVisitDetailClient({
   initialAttachments: SerializedSiteVisitAttachment[];
   staffOptions: StaffOption[];
   canManageCommercials: boolean;
+  canAssignTechnicians: boolean;
+  externalTechnicians: ExternalTechnicianOption[];
   backPath: string;
 }) {
   const [visit, setVisit] = useState(initialVisit);
@@ -486,6 +491,7 @@ export default function SiteVisitDetailClient({
                 </Field>
                 <Field name="Assigned staff">
                   <select
+                    disabled={!canAssignTechnicians}
                     className={input}
                     value={draft.assignedStaffId || ""}
                     onChange={(e) =>
@@ -502,6 +508,7 @@ export default function SiteVisitDetailClient({
                 </Field>
                 <Field name="Assigned technician">
                   <select
+                    disabled={!canAssignTechnicians}
                     className={input}
                     value={draft.assignedTechnicianId || ""}
                     onChange={(e) =>
@@ -514,6 +521,13 @@ export default function SiteVisitDetailClient({
                         {item.name || item.email}
                       </option>
                     ))}
+                    <optgroup label="External technicians">
+                      {externalTechnicians.map((item) => (
+                        <option key={item.id} value={`external:${item.id}`}>
+                          {item.name} · {item.whatsappNumber}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </Field>
               </div>
@@ -548,6 +562,7 @@ export default function SiteVisitDetailClient({
                     }
                   >
                     <option>UNPAID</option>
+                    <option>COLLECT_ON_SITE</option>
                     <option>PAID</option>
                     <option>WAIVED</option>
                   </select>

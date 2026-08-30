@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { canAccessSiteVisit, getSiteVisitAccessActor } from "@/lib/siteVisitAccess";
 import { getOrderedQuoteStaffUsers } from "@/lib/quoteRequests";
 import { getSiteVisitById, listSiteVisitAttachments, listSiteVisitEvents } from "@/lib/siteVisits";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 export default async function SiteVisitDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,6 +13,6 @@ export default async function SiteVisitDetailPage({ params }: { params: Promise<
   const { id } = await params;
   const visit = actor ? await getSiteVisitById(id) : null;
   if (!actor || !visit || !canAccessSiteVisit(actor, visit)) notFound();
-  const [events, attachments, staffOptions] = await Promise.all([listSiteVisitEvents(id), listSiteVisitAttachments(id), getOrderedQuoteStaffUsers()]);
-  return <main className="min-h-screen bg-slate-950 px-4 py-4 lg:px-6"><div className="mx-auto max-w-[1600px]"><SiteVisitDetailClient initialVisit={visit} initialEvents={events} initialAttachments={attachments} staffOptions={staffOptions} canManageCommercials={actor.canManageCommercials} backPath="/admin/quotation-center/site-visits" /></div></main>;
+  const [events, attachments, staffOptions, externalTechnicians] = await Promise.all([listSiteVisitEvents(id), listSiteVisitAttachments(id), getOrderedQuoteStaffUsers(), prisma.projectExternalAgent.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, whatsappNumber: true } })]);
+  return <main className="min-h-screen bg-slate-950 px-4 py-4 lg:px-6"><div className="mx-auto max-w-[1600px]"><SiteVisitDetailClient initialVisit={visit} initialEvents={events} initialAttachments={attachments} staffOptions={staffOptions} externalTechnicians={externalTechnicians} canManageCommercials={actor.canManageCommercials} canAssignTechnicians={actor.canAssignTechnicians} backPath="/admin/quotation-center/site-visits" /></div></main>;
 }
