@@ -5,9 +5,9 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { CalendarCheck2, CheckCircle2, LoaderCircle, MapPin, X } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
-import { createShopOrder } from "@/app/shop/shopSubmitApi";
+import { createInstallationProject } from "@/app/shop/shopSubmitApi";
 import { trackOrderSubmitted } from "@/app/shop/shopAnalytics";
-import { getShopCustomerProfile, saveMockOrder, saveShopCustomerProfile } from "@/app/shop/shopStorage";
+import { getShopCustomerProfile, saveShopCustomerProfile } from "@/app/shop/shopStorage";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { getDeliveryZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
@@ -151,18 +151,18 @@ export default function BookInstallationButton({ product, customer = emptyCustom
 
     setSubmitting(true);
     try {
-      const location = [form.exactLocation.trim(), form.town, form.county].filter(Boolean).join(", ");
       const paymentLabel = form.paymentStructure === "DEPOSIT_30" ? "30% deposit, balance after installation" : "Full payment before installation";
-      const response = await createShopOrder({
-        items: [{ productId: product.id, quantity: 1, bookingType: "INSTALLATION" }],
+      const response = await createInstallationProject({
+        productId: product.id,
         customerName: form.name.trim(),
         customerPhone: form.phone.trim(),
         customerEmail: form.email.trim(),
-        customerLocation: location,
-        deliveryMethod: "Betech installation and delivery",
-        paymentMethod: paymentLabel,
-        notes: `Preferred installation date: ${form.installationDate}`,
-        projectBooking: { zone: zone.id, paymentStructure: form.paymentStructure, preferredInstallationDate: form.installationDate },
+        county: form.county,
+        town: form.town,
+        exactLocation: form.exactLocation.trim(),
+        zone: zone.id,
+        paymentStructure: form.paymentStructure,
+        preferredInstallationDate: form.installationDate,
       });
 
       saveShopCustomerProfile({
@@ -173,28 +173,12 @@ export default function BookInstallationButton({ product, customer = emptyCustom
         estateLandmark: form.exactLocation.trim(),
         locationNotes: form.exactLocation.trim(),
       });
-      const savedOrder = saveMockOrder({
-        orderRef: response.orderRef,
-        customerName: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        location,
-        countyTown: `${form.county} / ${form.town}`,
-        estateLandmark: form.exactLocation.trim(),
-        deliveryMethod: "Betech installation and delivery",
-        paymentPreference: paymentLabel,
-        notes: `Preferred installation date: ${form.installationDate}`,
-        subtotal: pricing.estimatedTotal,
-        source: "website",
-        status: "PENDING",
-        items: [{ productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price, lineTotal: product.price }],
-      });
       trackOrderSubmitted({
-        orderRef: savedOrder.orderRef,
+        orderRef: response.projectRef,
         itemCount: 1,
         subtotal: pricing.estimatedTotal,
-        deliveryMethod: savedOrder.deliveryMethod,
-        paymentPreference: savedOrder.paymentPreference,
+        deliveryMethod: "Betech installation and delivery",
+        paymentPreference: paymentLabel,
         orderIntent: "INSTALLATION_PROJECT",
       });
       router.push(response.successUrl);

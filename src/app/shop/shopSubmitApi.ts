@@ -63,6 +63,27 @@ export type ShopOrderResponse = {
   order: unknown;
 };
 
+export type InstallationProjectInput = {
+  productId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  county: string;
+  town: string;
+  exactLocation: string;
+  zone: "ZONE_1" | "ZONE_2" | "ZONE_3";
+  paymentStructure: "FULL_UPFRONT" | "DEPOSIT_30";
+  preferredInstallationDate: string;
+};
+
+export type InstallationProjectResponse = {
+  ok: true;
+  source: "project";
+  projectRef: string;
+  receiptId: string;
+  successUrl: string;
+};
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(path, {
     method: "POST",
@@ -87,6 +108,12 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 
 export async function createShopOrder(input: ShopOrderInput): Promise<ShopOrderResponse> {
   return postJson("/api/shop/orders", input);
+}
+
+export async function createInstallationProject(
+  input: InstallationProjectInput,
+): Promise<InstallationProjectResponse> {
+  return postJson("/api/shop/installation-projects", input);
 }
 
 export async function createQuoteRequest(input: QuoteRequestInput) {
