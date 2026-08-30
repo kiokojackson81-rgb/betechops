@@ -36,6 +36,11 @@ export default function ProductCard({ product }: ProductCardProps) {
   const installationRequired = Boolean(product.catalogueConfiguration
     && product.catalogueConfiguration.installationType !== "NOT_REQUIRED"
     && product.catalogueConfiguration.installationFeeMode !== "UNAVAILABLE");
+  const installationIncluded = Boolean(product.catalogueConfiguration && installationRequired && (
+    product.catalogueConfiguration.installationType === "INCLUDED"
+    || product.catalogueConfiguration.installationFeeMode === "INCLUDED"
+    || product.catalogueConfiguration.priceIncludes.includes("INSTALLATION")
+  ));
   const discountPercent =
     product.oldPrice && product.oldPrice > product.price
       ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
@@ -114,14 +119,18 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         <div className="mt-auto grid grid-cols-[1fr_auto] gap-2 pt-3 sm:grid-cols-1 sm:pt-4">
           {installationRequired ? <BookInstallationButton
-            productId={product.id}
-            productName={product.name}
+            product={product}
             className="inline-flex min-h-[2.7rem] items-center justify-center gap-1.5 rounded-[14px] bg-[#7a0000] px-3 py-2 text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(122,0,0,0.12)] transition hover:-translate-y-0.5 sm:rounded-[16px] sm:text-[12px]"
           /> : <AddToCartButton
             productId={product.id}
             productName={product.name}
             className="inline-flex min-h-[2.7rem] items-center justify-center rounded-[14px] bg-[#7a0000] px-3 py-2 text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(122,0,0,0.12)] transition hover:-translate-y-0.5 sm:rounded-[16px] sm:text-[12px]"
           />}
+          {installationRequired && !installationIncluded ? <AddToCartButton
+            productId={product.id}
+            productName={product.name}
+            className="col-span-2 inline-flex min-h-[2.7rem] items-center justify-center rounded-[14px] border border-[#7a0000]/18 bg-white px-3 py-2 text-[11px] font-bold text-[#7a0000] transition hover:border-[#7a0000]/35 sm:col-span-1 sm:rounded-[16px] sm:text-[12px]"
+          /> : null}
           <TrackedWhatsAppLink
             href={whatsappHref}
             className="inline-flex min-h-[2.7rem] min-w-[2.7rem] items-center justify-center gap-1.5 rounded-[14px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-3 py-2 text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(15,157,88,0.16)] transition hover:-translate-y-0.5 sm:rounded-[16px] sm:text-[12px]"

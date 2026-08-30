@@ -43,18 +43,28 @@ export default function ShopProductDetailActions({
   const quoteHref = getShopRequestQuoteHref(product.name);
   const policy = product.catalogueConfiguration;
   const installationRequired = Boolean(policy && policy.installationType !== "NOT_REQUIRED" && policy.installationFeeMode !== "UNAVAILABLE");
+  const installationIncluded = Boolean(policy && installationRequired && (
+    policy.installationType === "INCLUDED"
+    || policy.installationFeeMode === "INCLUDED"
+    || policy.priceIncludes.includes("INSTALLATION")
+  ));
 
   return (
     <div className="grid gap-3">
       {installationRequired ? <BookInstallationButton
-        productId={product.id}
-        productName={product.name}
+        product={product}
+        customer={customer}
         className="inline-flex min-h-[3.55rem] items-center justify-center gap-2 rounded-[20px] bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_20px_36px_rgba(122,0,0,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#660000] hover:shadow-[0_24px_42px_rgba(122,0,0,0.24)]"
       /> : <AddToCartButton
         productId={product.id}
         productName={product.name}
         className="inline-flex min-h-[3.55rem] items-center justify-center gap-2 rounded-[20px] bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_20px_36px_rgba(122,0,0,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#660000] hover:shadow-[0_24px_42px_rgba(122,0,0,0.24)]"
       />}
+      {installationRequired && !installationIncluded ? <AddToCartButton
+        productId={product.id}
+        productName={product.name}
+        className="inline-flex min-h-[3.35rem] items-center justify-center gap-2 rounded-[20px] border border-[#7a0000]/18 bg-white px-5 py-3 text-sm font-bold text-[#7a0000] shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition duration-200 hover:-translate-y-0.5 hover:border-[#7a0000]/35"
+      /> : null}
       <div className={`grid gap-3 sm:grid-cols-2 ${installationRequired ? "lg:grid-cols-3" : ""}`}>
         <TrackedWhatsAppLink
           href={whatsappHref}

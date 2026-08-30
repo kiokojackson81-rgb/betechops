@@ -15,7 +15,7 @@ import {
 } from "@/lib/websiteOrders";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { getShopOrderSuccessHref } from "@/app/shop/storefrontPaths";
-import { calculateAccessoriesEstimate, calculateInstallationFee, calculateTransportFee, productCatalogueConfigurationSchema } from "@/lib/productCataloguePolicy";
+import { calculateAccessoriesEstimate, calculateInstallationFee, calculateTransportFee, inferLegacyProductCataloguePolicy, productCatalogueConfigurationSchema } from "@/lib/productCataloguePolicy";
 
 export const dynamic = "force-dynamic";
 
@@ -93,14 +93,18 @@ export async function POST(request: NextRequest) {
     for (const item of bookingItems) {
       const product = productMap.get(item.cartProductId)!;
       const parsedPolicy = productCatalogueConfigurationSchema.safeParse(product.catalogueConfiguration);
-      if (!parsedPolicy.success) {
+      const policy = parsedPolicy.success ? parsedPolicy.data : inferLegacyProductCataloguePolicy(product);
+      if (!policy) {
         return NextResponse.json({ ok: false, error: `${product.name} needs installation pricing configuration.` }, { status: 400 });
       }
-      const installation = calculateInstallationFee(product.price, parsedPolicy.data, settings);
-      const transport = calculateTransportFee(data.projectBooking.zone, parsedPolicy.data, settings);
+      const installation = calculateInstallationFee(product.price, policy, settings);
+      if (installation.status === "ASSESSMENT") {
+        return NextResponse.json({ ok: false, error: `${product.name} requires a site assessment and custom installation quotation.` }, { status: 400 });
+      }
+      const transport = calculateTransportFee(data.projectBooking.zone, policy, settings);
       installationFee += (installation.amount ?? 0) * item.quantity;
       transportFee = Math.max(transportFee, transport.amount ?? 0);
-      const accessories = calculateAccessoriesEstimate(product.price, parsedPolicy.data);
+      const accessories = calculateAccessoriesEstimate(product.price, policy);
       accessoriesFee += accessories.amount * item.quantity;
     }
   }

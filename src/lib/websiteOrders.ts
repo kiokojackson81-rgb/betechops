@@ -175,6 +175,7 @@ export const websiteOrderCreateSchema = z.object({
   projectBooking: z.object({
     zone: z.enum(["ZONE_1", "ZONE_2", "ZONE_3"]),
     paymentStructure: z.enum(["FULL_UPFRONT", "DEPOSIT_30"]),
+    preferredInstallationDate: z.string().date().optional(),
   }).optional(),
 });
 
