@@ -1608,6 +1608,8 @@ export default function QuotationRequestsDeskClient({
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<QuoteRequestStatus | "">("");
   const [bulkAssigneeId, setBulkAssigneeId] = useState<string>("");
+  const [ownerDrafts, setOwnerDrafts] = useState<Record<string, string>>({});
+  const [ownerSavingId, setOwnerSavingId] = useState<string | null>(null);
   const createPanelRef = useRef<HTMLDivElement | null>(null);
   const templateUploadInputRef = useRef<HTMLInputElement | null>(null);
   const createItemRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -2460,6 +2462,40 @@ export default function QuotationRequestsDeskClient({
       setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
+    }
+  }
+
+  async function handleOwnerReassignment(request: SerializedQuoteRequest) {
+    const assignedAttendantId = ownerDrafts[request.id] || request.assignedAttendant?.id || "";
+    if (!assignedAttendantId) {
+      setMessage("Select a quotation owner first.");
+      return;
+    }
+
+    setOwnerSavingId(request.id);
+    setMessage(null);
+    try {
+      const response = await fetch(buildApiUrl(apiBasePath, apiQueryParams, "bulk"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [request.id], assignedAttendantId }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to change quotation owner.");
+      }
+
+      await refreshRequests();
+      setOwnerDrafts((current) => {
+        const next = { ...current };
+        delete next[request.id];
+        return next;
+      });
+      setMessage("Quotation owner updated. Future follow-up and conversion remain linked to the selected staff member.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to change quotation owner.");
+    } finally {
+      setOwnerSavingId(null);
     }
   }
 
@@ -4758,6 +4794,48 @@ export default function QuotationRequestsDeskClient({
                           {!canOpenReceiptDraft ? (
                             <div className="mt-3 text-xs text-amber-200">
                               Save at least one quoted item first before opening the receipts desk.
+                            </div>
+                          ) : null}
+                          {enableAdminFilters && assigneeOptions.length ? (
+                            <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
+                                Quotation ownership
+                              </div>
+                              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                                <label className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                  Assigned staff
+                                  <select
+                                    value={ownerDrafts[request.id] ?? request.assignedAttendant?.id ?? ""}
+                                    onChange={(event) =>
+                                      setOwnerDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: event.target.value,
+                                      }))
+                                    }
+                                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60"
+                                  >
+                                    <option value="">Select staff owner</option>
+                                    {assigneeOptions.map((owner) => (
+                                      <option key={owner.id} value={owner.id}>
+                                        {owner.name || owner.email || owner.id}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <button
+                                  type="button"
+                                  disabled={
+                                    ownerSavingId === request.id ||
+                                    !ownerDrafts[request.id] ||
+                                    ownerDrafts[request.id] === request.assignedAttendant?.id
+                                  }
+                                  onClick={() => void handleOwnerReassignment(request)}
+                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {ownerSavingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                  {ownerSavingId === request.id ? "Saving..." : "Save owner"}
+                                </button>
+                              </div>
                             </div>
                           ) : null}
                           <div className="mt-3 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">

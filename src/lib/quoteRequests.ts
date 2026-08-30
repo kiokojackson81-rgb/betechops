@@ -26,6 +26,7 @@ import {
   type QuoteWarrantyMode,
 } from "@/lib/quoteProposal";
 import { applyQuotationAiEnrichment } from "@/lib/quotationAiSections";
+import { buildStaffAttendantWhere } from "@/lib/staffUsers";
 export {
   getQuoteRequestStatusAliases,
   normalizeQuoteRequestStatus,
@@ -1171,7 +1172,7 @@ function canUseQuotationDesk(input: {
   role?: string | null;
 }) {
   if (input.role === "ADMIN" || input.role === "SUPERVISOR") return true;
-  return isQuoteRequestsStaffEmail(input.email);
+  return input.role === "ATTENDANT" || isQuoteRequestsStaffEmail(input.email);
 }
 
 export async function requireQuoteRequestsStaffActor(options?: { impersonateId?: string | null }) {
@@ -1189,9 +1190,17 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
   if (hasElevatedRole && options?.impersonateId) {
     const targetUser = await prisma.user.findUnique({
       where: { id: options.impersonateId },
-      select: { id: true, name: true, email: true, attendantCategory: true },
+      select: { id: true, name: true, email: true, attendantCategory: true, role: true, isActive: true },
     });
-    if (!targetUser || !canUseQuotationDesk({ email: targetUser.email, attendantCategory: targetUser.attendantCategory })) {
+    if (
+      !targetUser ||
+      !targetUser.isActive ||
+      !canUseQuotationDesk({
+        email: targetUser.email,
+        attendantCategory: targetUser.attendantCategory,
+        role: targetUser.role,
+      })
+    ) {
       return { ok: false as const, status: 403, error: "Invalid quotation attendant target." };
     }
     return {
@@ -1226,6 +1235,14 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
 }
 
 export async function getOrderedQuoteStaffUsers() {
+  return prisma.user.findMany({
+    where: { AND: [buildStaffAttendantWhere(), { isActive: true }] },
+    orderBy: [{ name: "asc" }],
+    select: { id: true, name: true, email: true },
+  });
+}
+
+async function getAutomaticQuoteAssignmentUsers() {
   const staffUsers = await prisma.user.findMany({
     where: {
       email: { in: [...QUOTE_REQUEST_STAFF_EMAILS] },
@@ -1235,10 +1252,9 @@ export async function getOrderedQuoteStaffUsers() {
     select: { id: true, name: true, email: true },
   });
 
-  const preferredUsers = QUOTE_REQUEST_STAFF_EMAILS.map((value) =>
+  return QUOTE_REQUEST_STAFF_EMAILS.map((value) =>
     staffUsers.find((user) => normalizeEmail(user.email) === value),
   ).filter((user): user is { id: string; name: string | null; email: string | null } => Boolean(user?.id));
-  return preferredUsers;
 }
 
 export async function getQuoteStaffUserById(userId: string | null | undefined) {
@@ -1248,7 +1264,7 @@ export async function getQuoteStaffUserById(userId: string | null | undefined) {
 }
 
 async function pickQuoteAssignee() {
-  const orderedStaff = await getOrderedQuoteStaffUsers();
+  const orderedStaff = await getAutomaticQuoteAssignmentUsers();
   if (!orderedStaff.length) return null;
 
   const counts = new Map<string, number>(orderedStaff.map((user) => [user.id, 0]));
@@ -1277,7 +1293,7 @@ async function pickQuoteAssignee() {
 
 export async function ensureQuoteRequestAssignments() {
   await ensureQuoteRequestsSchema();
-  const orderedStaff = await getOrderedQuoteStaffUsers();
+  const orderedStaff = await getAutomaticQuoteAssignmentUsers();
   if (!orderedStaff.length) return orderedStaff;
 
   const unassignedRows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -2085,7 +2101,7 @@ export async function createManualQuotation(
     status: input.status || "QUOTED",
     source: input.source || "MANUAL",
     requiresApproval: false,
-    assignedAttendantId: actor.id,
+    assignedAttendantId: input.assignedAttendantId || actor.id,
     projectType,
     quoteTitle: input.quoteTitle || input.preferredProducts || projectType.replace(/_/g, " "),
     quoteMessage: input.quoteMessage,

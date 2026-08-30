@@ -422,7 +422,7 @@ export default function ReceiptsPageClient({
                   initialCreateOpen
                   allowTemplateSelection
                   allowTemplateManager={false}
-                  createApiPath="/api/public/quotation-center/create"
+                  createApiPath="/api/attendant/quotation-center/create"
                   createActionLabel="Save quotation and notify customer"
                   createSuccessMessage="Quotation saved and customer notification has been triggered."
                   assigneeOptions={quotationStaffOptions}
