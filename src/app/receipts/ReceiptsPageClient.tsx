@@ -5,6 +5,7 @@ import ReceiptFormClient from "./ReceiptFormClient";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClient";
 import LipaPolePoleAdminClient from "@/app/admin/lipa-pole-pole/LipaPolePoleAdminClient";
+import StaffSiteVisitBookingClient from "./StaffSiteVisitBookingClient";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRow = {
@@ -61,7 +62,7 @@ export default function ReceiptsPageClient({
   });
   const [historyCommission, setHistoryCommission] = useState(0);
   const [historyCommissionLoading, setHistoryCommissionLoading] = useState(false);
-  const [createDocumentType, setCreateDocumentType] = useState<"RECEIPT" | "QUOTATION" | "LPP">("RECEIPT");
+  const [createDocumentType, setCreateDocumentType] = useState<"RECEIPT" | "QUOTATION" | "LPP" | "SITE_VISIT">("RECEIPT");
   const [quotationStaffOptions, setQuotationStaffOptions] = useState<PublicStaffOption[]>([]);
   const [quotationStaffLoading, setQuotationStaffLoading] = useState(false);
 
@@ -132,7 +133,7 @@ export default function ReceiptsPageClient({
   }, [historyEnd, historyStart, view]);
 
   useEffect(() => {
-    if (view !== "create" || createDocumentType !== "QUOTATION" || quotationStaffOptions.length) return;
+    if (view !== "create" || !["QUOTATION", "SITE_VISIT"].includes(createDocumentType) || quotationStaffOptions.length) return;
     let cancelled = false;
     setQuotationStaffLoading(true);
     fetch("/api/receipts/staff", { cache: "no-store" })
@@ -371,8 +372,8 @@ export default function ReceiptsPageClient({
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Operations Desk</p>
-              <h1 className="text-2xl font-semibold text-white">Receipts, PODs &amp; Quotations</h1>
-              <p className="text-sm text-slate-400">Create, save, print, and manage customer documents.</p>
+              <h1 className="text-2xl font-semibold text-white">Receipts, quotations &amp; customer bookings</h1>
+              <p className="text-sm text-slate-400">Create documents and operational requests from one customer desk.</p>
             </div>
             <button
               onClick={openListView}
@@ -389,6 +390,7 @@ export default function ReceiptsPageClient({
                 ["RECEIPT", "Receipt / POD flow"],
                 ["QUOTATION", "Quotation flow"],
                 ["LPP", "Lipa Pole Pole"],
+                ["SITE_VISIT", "Site visit"],
               ] as const).map(([type, label]) => (
                 <button
                   key={type}
@@ -430,6 +432,11 @@ export default function ReceiptsPageClient({
                   requireAssigneeSelection
                 />
               </div>
+            ) : createDocumentType === "SITE_VISIT" ? (
+              <StaffSiteVisitBookingClient
+                staffOptions={quotationStaffOptions}
+                staffLoading={quotationStaffLoading}
+              />
             ) : createDocumentType === "LPP" ? (
               <div>
                 <LipaPolePoleAdminClient
