@@ -16,6 +16,7 @@ import {
   normalizeLppPaymentReference,
 } from "@/lib/mpesaReference";
 import { getLipaPolePoleMaxInstallments } from "@/lib/lipaPolePoleConfig";
+import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
 import {
   sendLppLifecycleChannelNotification,
   sendLppReminderChannelNotification,
@@ -2128,8 +2129,6 @@ async function dispatchLppLifecycleNotifications(
       paymentAmount: Prisma.Decimal | null;
       paymentReference: string | null;
       paymentReason: string | null;
-      nextInstallmentDate: Date | null;
-      nextInstallmentAmount: Prisma.Decimal | null;
     }>
   >(Prisma.sql`
     SELECT
@@ -2148,9 +2147,7 @@ async function dispatchLppLifecycleNotifications(
       COALESCE(payment_totals."totalPaid", 0)::numeric AS "totalPaid",
       event_payment."amount" AS "paymentAmount",
       event_payment."reference" AS "paymentReference",
-      COALESCE(event_payment."rejectionReason", event_payment."reversalReason") AS "paymentReason",
-      next_installment."dueDate" AS "nextInstallmentDate",
-      next_installment."expectedAmount" AS "nextInstallmentAmount"
+      COALESCE(event_payment."rejectionReason", event_payment."reversalReason") AS "paymentReason"
     FROM "LipaPolePole" lpp
     INNER JOIN "User" customer ON customer."id" = lpp."customerId"
     LEFT JOIN "User" agent ON agent."id" = lpp."assignedToId"
@@ -2163,14 +2160,6 @@ async function dispatchLppLifecycleNotifications(
     LEFT JOIN "LipaPolePolePayment" event_payment
       ON event_payment."id" = ${trimToNull(input.paymentId ?? null)}
       AND event_payment."lipaPolePoleId" = lpp."id"
-    LEFT JOIN LATERAL (
-      SELECT installment."dueDate", installment."expectedAmount"
-      FROM "LipaPolePoleInstallment" installment
-      WHERE installment."lipaPolePoleId" = lpp."id"
-        AND installment."dueDate" >= CURRENT_DATE
-      ORDER BY installment."dueDate" ASC
-      LIMIT 1
-    ) next_installment ON TRUE
     WHERE lpp."id" = ${input.lipaPolePoleId}
     LIMIT 1
   `);
@@ -2178,6 +2167,21 @@ async function dispatchLppLifecycleNotifications(
   if (!row) return;
 
   const totalPaid = Number(row.totalPaid ?? 0);
+  const installments = await prisma.$queryRaw<
+    Array<{ dueDate: Date; expectedAmount: Prisma.Decimal }>
+  >(Prisma.sql`
+    SELECT installment."dueDate", installment."expectedAmount"
+    FROM "LipaPolePoleInstallment" installment
+    WHERE installment."lipaPolePoleId" = ${input.lipaPolePoleId}
+    ORDER BY installment."dueDate" ASC
+  `);
+  const nextInstallment = getNextLppInstallment(
+    installments.map((installment) => ({
+      dueDate: installment.dueDate.toISOString(),
+      expectedAmount: Number(installment.expectedAmount),
+    })),
+    totalPaid,
+  );
   const agreedTotal = Number(row.agreedTotal ?? 0);
   const baseUrl = String(
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -2209,11 +2213,10 @@ async function dispatchLppLifecycleNotifications(
         : (extractMpesaTransactionCode(row.paymentReference) ??
           row.paymentReference),
     reason: row.paymentReason,
-    nextInstallmentDate: row.nextInstallmentDate,
-    nextInstallmentAmount:
-      row.nextInstallmentAmount == null
-        ? null
-        : Number(row.nextInstallmentAmount),
+    nextInstallmentDate: nextInstallment
+      ? new Date(nextInstallment.dueDate)
+      : null,
+    nextInstallmentAmount: nextInstallment?.amount ?? null,
     accountUrl: `${baseUrl}/shop/account/lipa-pole-pole/${encodeURIComponent(input.lipaPolePoleId)}`,
     adminUrl: `${opsUrl}/admin/lipa-pole-pole?id=${encodeURIComponent(input.lipaPolePoleId)}`,
   };

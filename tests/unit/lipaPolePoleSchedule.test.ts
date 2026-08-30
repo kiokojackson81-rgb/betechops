@@ -19,4 +19,16 @@ describe("Lipa Pole Pole installment schedule", () => {
       amount: 750,
     });
   });
+
+  it("returns the outstanding part of a partially paid installment", () => {
+    expect(
+      getNextLppInstallment(
+        [{ dueDate: "2026-09-30T00:00:00.000Z", expectedAmount: 3667 }],
+        500,
+      ),
+    ).toEqual({
+      dueDate: "2026-09-30T00:00:00.000Z",
+      amount: 3167,
+    });
+  });
 });
