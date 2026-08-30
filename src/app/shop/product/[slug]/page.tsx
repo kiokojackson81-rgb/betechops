@@ -269,50 +269,18 @@ export default async function ShopProductDetailPage({
     {
       title: "Key specifications",
       content: (
-        <div className="max-w-5xl">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {detailBullets.map((spec) => {
-              const labelMatch = spec.match(/^([^:]{2,42}):\s*(.+)$/);
-              return (
-                <div key={spec} className="flex min-w-0 items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] p-3.5 sm:p-4">
-                  <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
-                  <div className="min-w-0 break-words text-sm leading-6 text-slate-700 [overflow-wrap:anywhere]">
-                    {labelMatch ? <><span className="font-extrabold text-slate-950">{labelMatch[1]}:</span> {labelMatch[2]}</> : spec}
-                  </div>
+        <div className="grid max-w-5xl gap-3 sm:grid-cols-2">
+          {detailBullets.map((spec) => {
+            const labelMatch = spec.match(/^([^:]{2,42}):\s*(.+)$/);
+            return (
+              <div key={spec} className="flex min-w-0 items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] p-3.5 sm:p-4">
+                <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
+                <div className="min-w-0 break-words text-sm leading-6 text-slate-700 [overflow-wrap:anywhere]">
+                  {labelMatch ? <><span className="font-extrabold text-slate-950">{labelMatch[1]}:</span> {labelMatch[2]}</> : spec}
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-5 flex flex-col gap-3 border-t border-[#7a0000]/10 pt-5 sm:flex-row sm:flex-wrap">
-            <a
-              href="https://www.tiktok.com/@betechsolarprojects"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-14 items-center gap-3 rounded-2xl bg-[#10131c] px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-black"
-            >
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-black">
-                <Music2 className="size-5" aria-hidden="true" />
-              </span>
-              <span className="flex-1">View our recent solar installations</span>
-              <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
-            </a>
-
-            {product.tiktokVideoUrl ? (
-              <a
-                href={product.tiktokVideoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-14 items-center gap-3 rounded-2xl border border-[#dfd4d0] bg-white px-5 py-3 text-sm font-black text-[#820000] transition hover:-translate-y-0.5 hover:border-[#820000]"
-              >
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#fff2e0] text-[#820000]">
-                  <Play className="size-5 fill-current" aria-hidden="true" />
-                </span>
-                <span className="flex-1">Watch this product video on TikTok</span>
-                <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
-              </a>
-            ) : null}
-          </div>
+              </div>
+            );
+          })}
         </div>
       ),
     },
@@ -462,6 +430,45 @@ export default async function ShopProductDetailPage({
           </div>
 
           <div className="mt-5 grid gap-5">
+            <section className="overflow-hidden rounded-[20px] border border-[#7a0000]/10 bg-[linear-gradient(135deg,#fffaf4_0%,#ffffff_55%,#f0fff8_100%)] p-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)] sm:rounded-[26px] sm:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#7a0000]">See it in action</div>
+                  <h2 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">Betech solar projects on TikTok</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">View completed installations and product videos before you order.</p>
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:justify-end">
+                  <a
+                    href="https://www.tiktok.com/@betechsolarprojects"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-14 items-center gap-3 rounded-2xl bg-[#10131c] px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-black"
+                  >
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-black">
+                      <Music2 className="size-5" aria-hidden="true" />
+                    </span>
+                    <span className="flex-1">View our recent solar projects</span>
+                    <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
+                  </a>
+
+                  {product.tiktokVideoUrl ? (
+                    <a
+                      href={product.tiktokVideoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-14 items-center gap-3 rounded-2xl border border-[#dfd4d0] bg-white px-5 py-3 text-sm font-black text-[#820000] transition hover:-translate-y-0.5 hover:border-[#820000]"
+                    >
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#fff2e0] text-[#820000]">
+                        <Play className="size-5 fill-current" aria-hidden="true" />
+                      </span>
+                      <span className="flex-1">Watch this product on TikTok</span>
+                      <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
             <div className="grid gap-3">
               {detailAccordions.map((section, index) => (
                 <details key={section.title} className="group overflow-hidden rounded-[20px] border border-[#7a0000]/10 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)] sm:rounded-[26px]" open={index === 0}>
