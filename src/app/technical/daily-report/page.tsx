@@ -164,7 +164,9 @@ export default async function TechnicalDailyReportPage({
     });
 
   const activeProjects = myProjectReceipts.filter(
-    (receipt) => receipt.projectFlow?.stage === "PROJECT_IN_PROGRESS",
+    (receipt) =>
+      receipt.projectFlow?.stage === "PROJECT_IN_PROGRESS" ||
+      receipt.projectFlow?.stage === "PROJECT_INSTALLED",
   ).length;
   const completedProjects = myProjectReceipts.filter(
     (receipt) => receipt.projectFlow?.stage === "COMPLETED_POSTED",

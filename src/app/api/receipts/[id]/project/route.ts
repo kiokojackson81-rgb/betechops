@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { requireRole } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import {
@@ -219,9 +220,50 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     }),
   ];
 
+  const nextScheduledDate =
+    parsed.data.scheduledDate !== undefined ? parsed.data.scheduledDate : existingProjectFlow?.scheduledDate;
+  const requestedStage = parsed.data.stage ?? existingProjectFlow?.stage ?? "RECEIPT_CREATED";
+  const effectiveStage =
+    parsed.data.stage === undefined &&
+    requestedStage === "RECEIPT_CREATED" &&
+    nextAssignedHandlers.length > 0 &&
+    nextScheduledDate
+      ? "PROJECT_SCHEDULED"
+      : requestedStage;
+
+  if (effectiveStage === "PROJECT_SCHEDULED" && (!nextScheduledDate || nextAssignedHandlers.length === 0)) {
+    return NextResponse.json(
+      { error: "Assign a technician or agent and select an installation date before confirming the project." },
+      { status: 400 },
+    );
+  }
+
+  const stageOrder = [
+    "RECEIPT_CREATED",
+    "PROJECT_SCHEDULED",
+    "PROJECT_IN_PROGRESS",
+    "PROJECT_INSTALLED",
+    "COMPLETED_POSTED",
+  ] as const;
+  const currentStageIndex = stageOrder.indexOf(existingProjectFlow?.stage ?? "RECEIPT_CREATED");
+  const nextStageIndex = stageOrder.indexOf(effectiveStage);
+  if (parsed.data.stage !== undefined && nextStageIndex > currentStageIndex + 1) {
+    return NextResponse.json(
+      { error: "Complete the current project stage before moving to the next one." },
+      { status: 409 },
+    );
+  }
+
+  if (parsed.data.stage !== undefined && nextStageIndex < currentStageIndex) {
+    return NextResponse.json(
+      { error: "Completed project stages cannot be moved backwards." },
+      { status: 409 },
+    );
+  }
+
   const nextProjectFlow = buildReceiptProjectFlow({
     existing: existingProjectFlow as unknown as Record<string, unknown> | null,
-    stage: parsed.data.stage ?? existingProjectFlow?.stage,
+    stage: effectiveStage,
     paymentTerm: parsed.data.paymentTerm ?? existingProjectFlow?.paymentTerm,
     projectValue: Number(existing.order?.totalAmount ?? existingProjectFlow?.projectValue ?? 0),
     amountPaidTotal: Number(existing.order?.paidAmount ?? existingProjectFlow?.amountPaidTotal ?? 0),
@@ -234,7 +276,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     balancePaidAmount: parsed.data.balancePaidAmount ?? existingProjectFlow?.balancePaidAmount,
     balancePaymentMethod: parsed.data.balancePaymentMethod ?? existingProjectFlow?.balancePaymentMethod,
     balanceReference: parsed.data.balanceReference ?? existingProjectFlow?.balanceReference,
-    scheduledDate: parsed.data.scheduledDate !== undefined ? parsed.data.scheduledDate : existingProjectFlow?.scheduledDate,
+    scheduledDate: nextScheduledDate,
     postedReceiptNumber: existing.order?.orderNumber ?? existingProjectFlow?.postedReceiptNumber ?? null,
     internalNotes: parsed.data.internalNotes !== undefined ? parsed.data.internalNotes : existingProjectFlow?.internalNotes,
     paymentNotes: parsed.data.paymentNotes !== undefined ? parsed.data.paymentNotes : existingProjectFlow?.paymentNotes,
@@ -345,6 +387,13 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       });
     }
   }
+  await syncPosReceiptToCustomerAccount(id).catch((error) => {
+    console.error("[PROJECT_SYNC] failed to update customer order lifecycle", {
+      receiptId: id,
+      stage: nextProjectFlow.stage,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   return NextResponse.json({
     ok: true,

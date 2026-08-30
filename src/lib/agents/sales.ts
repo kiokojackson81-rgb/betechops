@@ -270,8 +270,12 @@ function formatProjectStageLabel(value: string | null | undefined) {
   switch (String(value || "").toUpperCase()) {
     case "RECEIPT_CREATED":
       return "Project pending";
+    case "PROJECT_SCHEDULED":
+      return "Confirmed and scheduled";
     case "PROJECT_IN_PROGRESS":
       return "Project in progress";
+    case "PROJECT_INSTALLED":
+      return "Installed";
     case "COMPLETED_POSTED":
       return "Completed and posted";
     default:

@@ -7,6 +7,7 @@ import {
 } from "@/lib/customerIdentity";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { readReceiptProjectFlow, type ReceiptProjectStage } from "@/lib/receiptProjects";
 import { ensureReviewInvitationsForWebsiteOrder, syncReferralLinkForWebsiteOrder } from "@/lib/reviewsReferrals";
 import { ensureWebsiteOrdersSchema } from "@/lib/websiteOrders";
 
@@ -59,6 +60,20 @@ function readPodDeliveryState(data: Record<string, unknown>) {
       : null;
   const status = typeof podDelivery?.status === "string" ? podDelivery.status.trim().toLowerCase() : "";
   return { podDelivery, status };
+}
+
+function mapProjectStageToWebsiteStatus(stage: ReceiptProjectStage) {
+  switch (stage) {
+    case "PROJECT_SCHEDULED":
+      return WebsiteOrderStatus.CONFIRMED;
+    case "PROJECT_IN_PROGRESS":
+    case "PROJECT_INSTALLED":
+      return WebsiteOrderStatus.PROCESSING;
+    case "COMPLETED_POSTED":
+      return WebsiteOrderStatus.DELIVERED;
+    default:
+      return WebsiteOrderStatus.PENDING;
+  }
 }
 
 export async function syncPosReceiptToCustomerAccount(receiptId: string) {
@@ -121,10 +136,14 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
   const customerUser = customerResolution?.user ?? null;
 
   const customerLocation = buildCustomerLocation(metadata, data, customerUser);
+  const projectFlow = readReceiptProjectFlow(data.projectFlow ?? metadata.projectFlow);
+  const isProject = Boolean(projectFlow?.isProject || String(data.customerType || metadata.customerType || "").toLowerCase() === "project");
   const orderType = inferWebsiteOrderType(data, customerLocation);
   const { status: podDeliveryStatus } = readPodDeliveryState(data);
   const deliveryMethod =
-    orderType === WebsiteOrderType.POD
+    isProject
+      ? "Installation project"
+      : orderType === WebsiteOrderType.POD
       ? "POS Pay on Delivery"
       : orderType === WebsiteOrderType.SHOP_PICKUP
         ? "POS Walk-in"
@@ -134,13 +153,21 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
   const lifecyclePatch = {
     receiptIssuedAt: receipt.generatedAt.toISOString(),
     paymentConfirmedAt: receipt.createdAt.toISOString(),
-    deliveredAt: receipt.createdAt.toISOString(),
     paymentConfirmationMethod: paymentMethod,
-    receiptFlowMode: orderType === WebsiteOrderType.POD ? "pod" : "normal",
+    receiptFlowMode: isProject ? "project" : orderType === WebsiteOrderType.POD ? "pod" : "normal",
     posReceiptId: receipt.id,
     posOrderId: order.id,
     posReceiptNumber: receiptRef,
-  } satisfies Record<string, string>;
+    ...(isProject && projectFlow
+      ? {
+          customerType: "project",
+          projectStage: projectFlow.stage,
+          projectScheduledDate: projectFlow.scheduledDate,
+          deliveredAt: projectFlow.stage === "COMPLETED_POSTED" ? receipt.createdAt.toISOString() : null,
+        }
+      : {}),
+    ...(!isProject ? { deliveredAt: receipt.createdAt.toISOString() } : {}),
+  };
 
   const existing = await prisma.websiteOrder.findFirst({
     where: {
@@ -159,9 +186,11 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
   });
 
   const existingMetadata = readJsonObject(existing?.metadata);
-  const nextSource = existing?.source === "WEBSITE" ? "WEBSITE" : "POS";
+  const nextSource = isProject || existing?.source === "WEBSITE" ? "WEBSITE" : "POS";
   const nextStatus =
-    existing?.source === "WEBSITE"
+    isProject && projectFlow
+      ? mapProjectStageToWebsiteStatus(projectFlow.stage)
+      : existing?.source === "WEBSITE"
       ? existing.status
       : orderType === WebsiteOrderType.POD
         ? podDeliveryStatus === "delivered"
@@ -176,7 +205,7 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
     customerPhone: normalizedPhone || order.customerPhone || "",
     customerEmail: normalizedEmail || order.customerEmail || null,
     customerLocation,
-    deliveryMethod: existing?.source === "WEBSITE" ? existing.deliveryMethod : deliveryMethod,
+    deliveryMethod: isProject ? deliveryMethod : existing?.source === "WEBSITE" ? existing.deliveryMethod : deliveryMethod,
     paymentMethod: existing?.source === "WEBSITE" ? existing.paymentMethod : paymentMethod,
     orderType: existing?.source === "WEBSITE" ? existing.orderType : orderType,
     status: nextStatus,
@@ -190,7 +219,14 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
           : null,
     source: nextSource,
     receiptId: receipt.id,
-    confirmedAt: existing?.source === "WEBSITE" ? undefined : receipt.createdAt,
+    confirmedAt:
+      isProject
+        ? projectFlow?.stage !== "RECEIPT_CREATED"
+          ? receipt.createdAt
+          : null
+        : existing?.source === "WEBSITE"
+          ? undefined
+          : receipt.createdAt,
     metadata: {
       ...existingMetadata,
       ...lifecyclePatch,

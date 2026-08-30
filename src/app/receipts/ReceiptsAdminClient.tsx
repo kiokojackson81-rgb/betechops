@@ -194,8 +194,12 @@ const formatProjectStageLabel = (value?: string | null) => {
   switch (value) {
     case "RECEIPT_CREATED":
       return "Project pending";
+    case "PROJECT_SCHEDULED":
+      return "Confirmed / scheduled";
     case "PROJECT_IN_PROGRESS":
       return "Project in progress";
+    case "PROJECT_INSTALLED":
+      return "Installed";
     case "COMPLETED_POSTED":
       return "Completed";
     default:
@@ -1063,9 +1067,13 @@ export default function ReceiptsAdminClient({
       const currentStage = row.projectStage;
       const nextStage: ReceiptProjectStage | null =
         currentStage === "RECEIPT_CREATED"
-          ? "PROJECT_IN_PROGRESS"
+          ? "PROJECT_SCHEDULED"
+          : currentStage === "PROJECT_SCHEDULED"
+            ? "PROJECT_IN_PROGRESS"
           : currentStage === "PROJECT_IN_PROGRESS"
-            ? "COMPLETED_POSTED"
+            ? "PROJECT_INSTALLED"
+            : currentStage === "PROJECT_INSTALLED"
+              ? "COMPLETED_POSTED"
             : null;
       if (!nextStage) return;
       await saveProjectFlow(row.id, { stage: nextStage });
@@ -2278,10 +2286,14 @@ export default function ReceiptsAdminClient({
                         }
                         projectActionLabel={
                           row.projectStage === "RECEIPT_CREATED"
-                            ? "Start project"
-                            : row.projectStage === "PROJECT_IN_PROGRESS"
-                              ? "Complete project"
-                              : "Project saved"
+                            ? "Confirm & schedule"
+                            : row.projectStage === "PROJECT_SCHEDULED"
+                              ? "Start progress"
+                              : row.projectStage === "PROJECT_IN_PROGRESS"
+                                ? "Mark installed"
+                                : row.projectStage === "PROJECT_INSTALLED"
+                                  ? "Complete project"
+                                  : "Project saved"
                         }
                         projectActionProcessing={projectActionId === row.id}
                         podActionLabel="Mark POD delivered"
@@ -2644,7 +2656,7 @@ export default function ReceiptsAdminClient({
                             }
                             className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
                           >
-                            {(["RECEIPT_CREATED", "PROJECT_IN_PROGRESS", "COMPLETED_POSTED"] as const).map((option) => (
+                            {(["RECEIPT_CREATED", "PROJECT_SCHEDULED", "PROJECT_IN_PROGRESS", "PROJECT_INSTALLED", "COMPLETED_POSTED"] as const).map((option) => (
                               <option key={option} value={option}>
                                 {formatProjectStageLabel(option)}
                               </option>
@@ -2773,8 +2785,12 @@ export default function ReceiptsAdminClient({
                               saveProjectFlow(detail.receipt.id, {
                                 stage:
                                   projectFlow.stage === "RECEIPT_CREATED"
-                                    ? "PROJECT_IN_PROGRESS"
-                                    : "COMPLETED_POSTED",
+                                    ? "PROJECT_SCHEDULED"
+                                    : projectFlow.stage === "PROJECT_SCHEDULED"
+                                      ? "PROJECT_IN_PROGRESS"
+                                      : projectFlow.stage === "PROJECT_IN_PROGRESS"
+                                        ? "PROJECT_INSTALLED"
+                                        : "COMPLETED_POSTED",
                               })
                             }
                             disabled={projectActionId === detail.receipt.id}
@@ -2783,8 +2799,12 @@ export default function ReceiptsAdminClient({
                             {projectActionId === detail.receipt.id
                               ? "Saving..."
                               : projectFlow.stage === "RECEIPT_CREATED"
-                                ? "Mark project in progress"
-                                : "Mark project completed"}
+                                ? "Confirm and schedule"
+                                : projectFlow.stage === "PROJECT_SCHEDULED"
+                                  ? "Start project progress"
+                                  : projectFlow.stage === "PROJECT_IN_PROGRESS"
+                                    ? "Mark project installed"
+                                    : "Mark project completed"}
                           </button>
                         )}
                       </div>

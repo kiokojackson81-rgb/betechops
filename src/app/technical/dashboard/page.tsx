@@ -246,10 +246,14 @@ export default async function TechnicalDashboardPage({
     });
 
   const activeInstallations = myProjectReceipts.filter(
-    (receipt) => receipt.projectFlow?.stage === "PROJECT_IN_PROGRESS",
+    (receipt) =>
+      receipt.projectFlow?.stage === "PROJECT_IN_PROGRESS" ||
+      receipt.projectFlow?.stage === "PROJECT_INSTALLED",
   );
   const pendingProjects = myProjectReceipts.filter(
-    (receipt) => receipt.projectFlow?.stage === "RECEIPT_CREATED",
+    (receipt) =>
+      receipt.projectFlow?.stage === "RECEIPT_CREATED" ||
+      receipt.projectFlow?.stage === "PROJECT_SCHEDULED",
   );
   const completedProjectsPeriod = myProjectReceipts.filter(
     (receipt) =>
@@ -260,6 +264,7 @@ export default async function TechnicalDashboardPage({
   const todayProjects = myProjectReceipts.filter(
     (receipt) =>
       receipt.projectFlow?.stage === "PROJECT_IN_PROGRESS" ||
+      receipt.projectFlow?.stage === "PROJECT_INSTALLED" ||
       isSameDay(receipt.projectFlow?.scheduledDate, today),
   );
 

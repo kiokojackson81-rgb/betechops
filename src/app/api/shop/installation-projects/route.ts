@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { findSafeUserById } from "@/lib/customerIdentity";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import {
   calculateAccessoriesEstimate,
   calculateInstallationFee,
@@ -234,6 +235,13 @@ export async function POST(request: NextRequest) {
           },
         },
       },
+    });
+  });
+
+  await syncPosReceiptToCustomerAccount(receipt.id).catch((error) => {
+    console.error("[installation-projects] failed to sync customer project", {
+      receiptId: receipt.id,
+      error: error instanceof Error ? error.message : String(error),
     });
   });
 

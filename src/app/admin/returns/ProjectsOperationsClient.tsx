@@ -90,7 +90,14 @@ type ProjectsOperationsClientProps = {
   viewerId?: string | null;
 };
 
-type ProjectStageFilter = "ALL" | "RECEIPT_CREATED" | "PROJECT_IN_PROGRESS" | "COMPLETED_POSTED";
+type ProjectStage =
+  | "RECEIPT_CREATED"
+  | "PROJECT_SCHEDULED"
+  | "PROJECT_IN_PROGRESS"
+  | "PROJECT_INSTALLED"
+  | "COMPLETED_POSTED";
+
+type ProjectStageFilter = "ALL" | ProjectStage;
 
 type SummaryCardFilter = {
   label: string;
@@ -179,10 +186,14 @@ const getProjectStageRank = (value?: string | null) => {
   switch (value) {
     case "RECEIPT_CREATED":
       return 0;
-    case "PROJECT_IN_PROGRESS":
+    case "PROJECT_SCHEDULED":
       return 1;
-    case "COMPLETED_POSTED":
+    case "PROJECT_IN_PROGRESS":
       return 2;
+    case "PROJECT_INSTALLED":
+      return 3;
+    case "COMPLETED_POSTED":
+      return 4;
     default:
       return 0;
   }
@@ -218,6 +229,20 @@ const getDisplayStatus = (row: ProjectRow) => {
     return {
       label: "In Progress",
       tone: "border-sky-500/30 bg-sky-500/12 text-sky-200",
+    };
+  }
+
+  if (row.projectStage === "PROJECT_INSTALLED") {
+    return {
+      label: "Installed",
+      tone: "border-violet-500/30 bg-violet-500/12 text-violet-200",
+    };
+  }
+
+  if (row.projectStage === "PROJECT_SCHEDULED") {
+    return {
+      label: "Confirmed / Scheduled",
+      tone: "border-fuchsia-500/30 bg-fuchsia-500/12 text-fuchsia-200",
     };
   }
 
@@ -420,7 +445,11 @@ export default function ProjectsOperationsClient({
     const nextDate = params.get("installationDate") || "";
     setQuery(nextQuery);
     setStageFilter(
-      nextStage === "RECEIPT_CREATED" || nextStage === "PROJECT_IN_PROGRESS" || nextStage === "COMPLETED_POSTED"
+      nextStage === "RECEIPT_CREATED" ||
+      nextStage === "PROJECT_SCHEDULED" ||
+      nextStage === "PROJECT_IN_PROGRESS" ||
+      nextStage === "PROJECT_INSTALLED" ||
+      nextStage === "COMPLETED_POSTED"
         ? nextStage
         : "ALL",
     );
@@ -502,7 +531,9 @@ export default function ProjectsOperationsClient({
     () => ({
       total: scopedRows.length,
       pending: scopedRows.filter((row) => row.projectStage === "RECEIPT_CREATED" || !row.projectStage).length,
+      scheduled: scopedRows.filter((row) => row.projectStage === "PROJECT_SCHEDULED").length,
       inProgress: scopedRows.filter((row) => row.projectStage === "PROJECT_IN_PROGRESS").length,
+      installed: scopedRows.filter((row) => row.projectStage === "PROJECT_INSTALLED").length,
       completed: scopedRows.filter((row) => row.projectStage === "COMPLETED_POSTED").length,
     }),
     [scopedRows],
@@ -512,7 +543,9 @@ export default function ProjectsOperationsClient({
     () => [
       { label: "All Projects", value: summary.total, accent: "text-white", filter: "ALL" },
       { label: "Pending", value: summary.pending, accent: "text-amber-200", filter: "RECEIPT_CREATED" },
+      { label: "Scheduled", value: summary.scheduled, accent: "text-fuchsia-200", filter: "PROJECT_SCHEDULED" },
       { label: "In Progress", value: summary.inProgress, accent: "text-sky-200", filter: "PROJECT_IN_PROGRESS" },
+      { label: "Installed", value: summary.installed, accent: "text-violet-200", filter: "PROJECT_INSTALLED" },
       { label: "Completed", value: summary.completed, accent: "text-emerald-200", filter: "COMPLETED_POSTED" },
     ],
     [summary],
@@ -553,7 +586,7 @@ export default function ProjectsOperationsClient({
 
   const saveProject = async (
     receiptId: string,
-    override?: { stage?: "RECEIPT_CREATED" | "PROJECT_IN_PROGRESS" | "COMPLETED_POSTED" },
+    override?: { stage?: ProjectStage },
   ) => {
     const editor = editors[receiptId];
     if (!editor) return;
@@ -587,8 +620,12 @@ export default function ProjectsOperationsClient({
       showToast(
         override?.stage === "COMPLETED_POSTED"
           ? "Project marked complete and left in POS for normal pricing flow"
+          : override?.stage === "PROJECT_INSTALLED"
+            ? "Project marked installed"
           : override?.stage === "PROJECT_IN_PROGRESS"
             ? "Project marked in progress"
+            : override?.stage === "PROJECT_SCHEDULED"
+              ? "Project confirmed and scheduled"
             : "Project assignment updated",
         "success",
       );
@@ -866,8 +903,10 @@ export default function ProjectsOperationsClient({
             className="rounded-2xl border border-white/10 bg-[#0b1424] px-4 py-3 text-sm text-white outline-none"
           >
             <option value="ALL">All statuses</option>
-            <option value="RECEIPT_CREATED">Pending / Scheduled</option>
+            <option value="RECEIPT_CREATED">Pending</option>
+            <option value="PROJECT_SCHEDULED">Confirmed / Scheduled</option>
             <option value="PROJECT_IN_PROGRESS">In Progress</option>
+            <option value="PROJECT_INSTALLED">Installed</option>
             <option value="COMPLETED_POSTED">Completed</option>
           </select>
           <select
@@ -1145,21 +1184,33 @@ export default function ProjectsOperationsClient({
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => void saveProject(row.id, { stage: "PROJECT_IN_PROGRESS" })}
-                                      disabled={isSaving || row.projectStage === "PROJECT_IN_PROGRESS" || row.projectStage === "COMPLETED_POSTED"}
-                                      className="rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100 hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-                                      title={
-                                        row.projectStage === "COMPLETED_POSTED"
-                                          ? "Completed projects cannot move back to progress from here."
-                                          : undefined
-                                      }
+                                      onClick={() => void saveProject(row.id, { stage: "PROJECT_SCHEDULED" })}
+                                      disabled={isSaving || row.projectStage !== "RECEIPT_CREATED"}
+                                      className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/10 px-4 py-3 text-sm font-semibold text-fuchsia-100 hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                      title="Requires an assigned technician or agent and an installation date."
                                     >
-                                      Mark In Progress
+                                      Confirm & Schedule
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void saveProject(row.id, { stage: "PROJECT_IN_PROGRESS" })}
+                                      disabled={isSaving || row.projectStage !== "PROJECT_SCHEDULED"}
+                                      className="rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100 hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      Start Progress
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void saveProject(row.id, { stage: "PROJECT_INSTALLED" })}
+                                      disabled={isSaving || row.projectStage !== "PROJECT_IN_PROGRESS"}
+                                      className="rounded-2xl border border-violet-500/25 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-100 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      Mark Installed
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => void saveProject(row.id, { stage: "COMPLETED_POSTED" })}
-                                      disabled={isSaving || row.projectStage === "COMPLETED_POSTED"}
+                                      disabled={isSaving || row.projectStage !== "PROJECT_INSTALLED"}
                                       className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                       Complete and Post to POS

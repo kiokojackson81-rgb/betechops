@@ -48,7 +48,9 @@ export async function GET() {
         data: { path: ["projectFlow", "isProject"], equals: true },
         OR: [
           { data: { path: ["projectFlow", "stage"], equals: "RECEIPT_CREATED" } },
+          { data: { path: ["projectFlow", "stage"], equals: "PROJECT_SCHEDULED" } },
           { data: { path: ["projectFlow", "stage"], equals: "PROJECT_IN_PROGRESS" } },
+          { data: { path: ["projectFlow", "stage"], equals: "PROJECT_INSTALLED" } },
         ],
       },
     }),

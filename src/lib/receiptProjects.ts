@@ -1,6 +1,8 @@
 export const RECEIPT_PROJECT_STAGES = [
   "RECEIPT_CREATED",
+  "PROJECT_SCHEDULED",
   "PROJECT_IN_PROGRESS",
+  "PROJECT_INSTALLED",
   "COMPLETED_POSTED",
 ] as const;
 
@@ -566,7 +568,7 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
     : looksCompletedLegacy
       ? "COMPLETED_POSTED"
       : looksInProgressLegacy
-        ? "PROJECT_IN_PROGRESS"
+        ? "PROJECT_SCHEDULED"
         : "RECEIPT_CREATED";
 
   if (stage === "COMPLETED_POSTED") {

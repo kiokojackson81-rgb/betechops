@@ -102,6 +102,23 @@ function buildReceiptDeliveryMethod(metadata: ReceiptMetadataRecord) {
   return "Complete order";
 }
 
+function buildCustomerProjectStatus(metadata: ReceiptMetadataRecord, fallback: string) {
+  switch (String(metadata.projectStage || "").trim().toUpperCase()) {
+    case "RECEIPT_CREATED":
+      return "PENDING";
+    case "PROJECT_SCHEDULED":
+      return "CONFIRMED / SCHEDULED";
+    case "PROJECT_IN_PROGRESS":
+      return "IN PROGRESS";
+    case "PROJECT_INSTALLED":
+      return "INSTALLED";
+    case "COMPLETED_POSTED":
+      return "COMPLETE";
+    default:
+      return fallback;
+  }
+}
+
 function matchesPhoneIdentity(phoneValue: string | null | undefined, phoneVariants: string[]) {
   const normalizedPhone = normalizeKenyanPhone(phoneValue || "");
   if (!normalizedPhone) return false;
@@ -153,6 +170,7 @@ function buildSummaryFromWebsiteOrder(order: {
   customerLocation: string;
   receiptId: string | null;
   source: string;
+  metadata: unknown;
   _count: { items: number };
   items: Array<{
     productName: string;
@@ -163,10 +181,11 @@ function buildSummaryFromWebsiteOrder(order: {
     category: string | null;
   }>;
 }): CustomerAccountOrderSummary {
+  const metadata = readJsonObject(order.metadata);
   return {
     routeId: `website-${order.id}`,
     orderRef: order.orderRef,
-    status: order.status,
+    status: buildCustomerProjectStatus(metadata, order.status),
     total: toNumber(order.total),
     createdAt: order.createdAt.toISOString(),
     deliveryMethod: order.deliveryMethod,
@@ -278,6 +297,7 @@ export async function listCustomerAccountOrders(args: {
       deliveryMethod: true,
       customerLocation: true,
       source: true,
+      metadata: true,
       customerUserId: true,
       customerPhone: true,
       customerEmail: true,
@@ -502,6 +522,7 @@ export async function getCustomerAccountOrderDetail(args: {
       paymentMethod: true,
       notes: true,
       source: true,
+      metadata: true,
       customerUserId: true,
       receiptId: true,
       receipt: {
@@ -542,7 +563,7 @@ export async function getCustomerAccountOrderDetail(args: {
   return {
     routeId: args.routeId,
     orderRef: websiteOrder.orderRef,
-    status: websiteOrder.status,
+    status: buildCustomerProjectStatus(readJsonObject(websiteOrder.metadata), websiteOrder.status),
     total: toNumber(websiteOrder.total),
     subtotal: toNumber(websiteOrder.subtotal),
     createdAt: websiteOrder.createdAt.toISOString(),
