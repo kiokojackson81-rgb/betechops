@@ -35,24 +35,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     paragraphs: [
       "Betech shall supply and perform only the Equipment, quantities, services and works identified in the Customer’s accepted quotation, invoice, receipt, System design or other applicable transaction record.",
       "Any item or work not expressly included in those records is outside the agreed scope unless Betech and the Customer subsequently agree to it in writing.",
-    ],
-    bullets: [
-      "Solar panel installation",
-      "Mounting structures",
-      "PV/DC cabling",
-      "Inverter installation",
-      "Battery installation",
-      "Battery cabling",
-      "DC breakers / isolators",
-      "AC breakers / isolators",
-      "AVS where included",
-      "SPD where included",
-      "Appropriate system protection included in the purchased scope",
-      "Connection to the agreed distribution board / consumer unit",
-      "System configuration",
-      "Testing",
-      "Commissioning",
-      "Basic operating guidance where appropriate",
+      "Where included in the purchased scope, Installation may cover mounting structures, solar panels, inverter and battery Equipment, PV/DC and battery cabling, agreed AC/DC breakers, isolators and protection devices, and connection to the agreed distribution board or consumer unit. AVS, SPD and any other accessories or protection Equipment are included only where expressly stated in the applicable transaction record.",
     ],
     subsections: [
       {
@@ -87,17 +70,6 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Betech may provide operating guidance and record Equipment, serial numbers, System settings, test results, outstanding items and other relevant Commissioning information.",
       "Once Installation, testing and Commissioning are complete and the Customer accepts or begins using the System, it is considered commissioned, handed over and accepted, subject to recorded outstanding items, latent defects, applicable Warranties and rights that cannot lawfully be excluded.",
       "A later concern shall be assessed through Betech’s after-sales, workmanship, complaint or Warranty procedures according to its actual cause.",
-    ],
-    bullets: [
-      "PV input",
-      "Battery operation",
-      "Inverter operation",
-      "AC output",
-      "Grid/KPLC input where applicable",
-      "Charging/discharging",
-      "Protection equipment",
-      "Communication between compatible devices",
-      "Basic system configuration",
     ],
   },
   {
