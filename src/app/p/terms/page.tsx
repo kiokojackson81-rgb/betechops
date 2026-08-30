@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FileText, Globe, MessageCircle } from "lucide-react";
 import PrintTermsButton from "@/app/p/terms/PrintTermsButton";
+import ShopFooter from "@/app/shop/_components/ShopFooter";
 import {
   PUBLIC_TERMS_SECTIONS,
   TERMS_EFFECTIVE_DATE,
@@ -269,6 +270,10 @@ export default function PublicTermsPage() {
               </section>
             </div>
           </main>
+        </div>
+
+        <div className="relative mt-8 bg-[#fcfaf7] pb-8 print:hidden">
+          <ShopFooter />
         </div>
       </div>
     </div>
