@@ -16,6 +16,7 @@ import {
 } from "@/lib/productCataloguePolicy";
 import { buildReceiptProjectFlow } from "@/lib/receiptProjects";
 import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
+import { sendTransactionalSms } from "@/lib/africasTalking";
 
 export const dynamic = "force-dynamic";
 
@@ -139,7 +140,8 @@ export async function POST(request: NextRequest) {
     depositPercent: input.paymentStructure === "DEPOSIT_30" ? 30 : 0,
     depositPaidAmount: 0,
     amountPaidTotal: 0,
-    scheduledDate: input.preferredInstallationDate,
+    // A customer preference is not a confirmed installation appointment.
+    scheduledDate: null,
     postedReceiptNumber: projectRef,
     internalNotes: "Installation booked by customer from the website.",
     paymentNotes: input.paymentStructure === "DEPOSIT_30"
@@ -172,6 +174,7 @@ export async function POST(request: NextRequest) {
           county: input.county,
           town: input.town,
           exactLocation: input.exactLocation,
+          preferredInstallationDate: input.preferredInstallationDate.toISOString(),
           zone: input.zone,
           termsAccepted: true,
           termsAcceptedAt: termsAcceptedAt.toISOString(),
@@ -234,6 +237,7 @@ export async function POST(request: NextRequest) {
             accessoriesFee,
             totalAmount,
           },
+          preferredInstallationDate: input.preferredInstallationDate.toISOString(),
         },
       },
     });
@@ -258,15 +262,22 @@ export async function POST(request: NextRequest) {
       `Location: ${input.town}, ${input.county}`,
       `Preferred date: ${input.preferredInstallationDate.toISOString().slice(0, 10)}`,
     ],
-    actionPath: "/admin/returns?status=RECEIPT_CREATED",
+    actionPath: `/admin/returns?project=${encodeURIComponent(receipt.id)}`,
     payload: { projectRef, receiptId: receipt.id },
   });
+
+  const projectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.betech.co.ke"}/account/projects/${receipt.id}`;
+  void sendTransactionalSms(
+    customerPhone,
+    `Betech Solar: Your installation request ${projectRef} has been received. Preferred date: ${input.preferredInstallationDate.toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi", day: "numeric", month: "short", year: "numeric" })} (awaiting confirmation). Track your project: ${projectUrl}. We will notify you once your installation schedule is confirmed.`,
+  ).catch((error) => console.error("[installation-projects] customer project SMS failed", error));
 
   return NextResponse.json({
     ok: true,
     source: "project",
     projectRef,
     receiptId: receipt.id,
-    successUrl: `/project-booking-success?ref=${encodeURIComponent(projectRef)}`,
+    projectUrl: `/account/projects/${receipt.id}`,
+    successUrl: `/project-booking-success?ref=${encodeURIComponent(projectRef)}&project=${encodeURIComponent(receipt.id)}`,
   });
 }

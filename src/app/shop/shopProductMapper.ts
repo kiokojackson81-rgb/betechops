@@ -50,6 +50,9 @@ type OpsCatalogueProduct = {
   status?: string | null;
   availabilityType?: string | null;
   pickupDelayDays?: number | null;
+  warehouseFulfillmentSource?: string | null;
+  estimatedDeliveryDays?: string | null;
+  internationalShippingCharge?: Prisma.Decimal | number | null;
   showInShop?: boolean | null;
   shopCategory?: string | null;
   shopSubcategory?: string | null;
@@ -241,6 +244,9 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
         ${available.has("availabilityType") ? `"availabilityType"` : `NULL::text`} AS "availabilityType",
         ${available.has("pickupDelayDays") ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
+        ${available.has("warehouseFulfillmentSource") ? `"warehouseFulfillmentSource"` : `NULL::text`} AS "warehouseFulfillmentSource",
+        ${available.has("estimatedDeliveryDays") ? `"estimatedDeliveryDays"` : `NULL::text`} AS "estimatedDeliveryDays",
+        ${available.has("internationalShippingCharge") ? `"internationalShippingCharge"` : `NULL::numeric`} AS "internationalShippingCharge",
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
         ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
@@ -299,6 +305,9 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
         ${available.has("availabilityType") ? `"availabilityType"` : `NULL::text`} AS "availabilityType",
         ${available.has("pickupDelayDays") ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
+        ${available.has("warehouseFulfillmentSource") ? `"warehouseFulfillmentSource"` : `NULL::text`} AS "warehouseFulfillmentSource",
+        ${available.has("estimatedDeliveryDays") ? `"estimatedDeliveryDays"` : `NULL::text`} AS "estimatedDeliveryDays",
+        ${available.has("internationalShippingCharge") ? `"internationalShippingCharge"` : `NULL::numeric`} AS "internationalShippingCharge",
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
         ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
@@ -616,10 +625,14 @@ function mapOpsProduct(
   const availabilityMessage = getProductAvailabilityMessage({
     availabilityType,
     pickupDelayDays,
+    warehouseFulfillmentSource: product.warehouseFulfillmentSource,
+    estimatedDeliveryDays: product.estimatedDeliveryDays,
   });
   const checkoutAvailabilityMessage = getProductCheckoutAvailabilityMessage({
     availabilityType,
     pickupDelayDays,
+    warehouseFulfillmentSource: product.warehouseFulfillmentSource,
+    estimatedDeliveryDays: product.estimatedDeliveryDays,
   });
   const warnings = buildMappingWarnings(product, category, price, brand, specs, warranty, categoryWarning);
   const hasImage = Boolean(normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl));
@@ -671,6 +684,9 @@ function mapOpsProduct(
         warrantyNotes: warrantyNotes || undefined,
         availabilityType,
         pickupDelayDays,
+        warehouseFulfillmentSource: product.warehouseFulfillmentSource === "OVERSEAS" ? "OVERSEAS" : product.warehouseFulfillmentSource === "LOCAL_WAREHOUSE" ? "LOCAL_WAREHOUSE" : null,
+        estimatedDeliveryDays: normalizeOptionalText(product.estimatedDeliveryDays),
+        internationalShippingCharge: product.internationalShippingCharge == null ? null : Number(product.internationalShippingCharge),
         availabilityMessage,
         checkoutAvailabilityMessage,
         stockStatus: inferStockStatus(product),

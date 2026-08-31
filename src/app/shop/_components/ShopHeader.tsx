@@ -114,12 +114,16 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
         {menuOpen ? (
           <div className="absolute inset-x-0 top-full border-t border-[#7a0000]/8 bg-white/98 px-3.5 pb-4 pt-3 shadow-[0_22px_45px_rgba(15,23,42,0.16)] backdrop-blur lg:hidden sm:px-6">
             <nav aria-label="Shop navigation" className="mx-auto grid max-h-[calc(100dvh-9.5rem)] max-w-3xl gap-1.5 overflow-y-auto overscroll-contain pr-1">
-              {navLinks.map((item) => {
+              {navLinks.map((item, index) => {
                 const hasChildren = Boolean(item.children?.length);
                 const expanded = expandedItem === item.label;
+                const previousSection = navLinks[index - 1]?.section;
+                const showSection = item.section && item.section !== previousSection;
 
                 return (
-                  <div key={item.label} className="overflow-hidden rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7]">
+                  <div key={item.label}>
+                    {showSection ? <div className="px-2 pt-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#7a0000]">{item.section === "GENERAL" ? "General categories" : "Solar & energy"}</div> : null}
+                    <div className="overflow-hidden rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7]">
                     {hasChildren ? (
                       <>
                         <button
@@ -164,6 +168,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
                         {item.label}
                       </Link>
                     )}
+                    </div>
                   </div>
                 );
               })}

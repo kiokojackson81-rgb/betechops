@@ -9,7 +9,12 @@ export function normalizeAvailabilityType(value: string | null | undefined): Sho
 export function getProductAvailabilityMessage(product: {
   availabilityType?: string | null;
   pickupDelayDays?: number | null;
+  warehouseFulfillmentSource?: string | null;
+  estimatedDeliveryDays?: string | null;
 }) {
+  if (product.warehouseFulfillmentSource === "OVERSEAS") {
+    return `Ships from abroad${product.estimatedDeliveryDays ? ` - estimated delivery: ${product.estimatedDeliveryDays}.` : "."}`;
+  }
   const availabilityType = normalizeAvailabilityType(product.availabilityType);
 
   if (availabilityType === "SHOP") {
@@ -28,7 +33,12 @@ export function getProductAvailabilityMessage(product: {
 export function getProductCheckoutAvailabilityMessage(product: {
   availabilityType?: string | null;
   pickupDelayDays?: number | null;
+  warehouseFulfillmentSource?: string | null;
+  estimatedDeliveryDays?: string | null;
 }) {
+  if (product.warehouseFulfillmentSource === "OVERSEAS") {
+    return `Ships from abroad${product.estimatedDeliveryDays ? `. Estimated delivery: ${product.estimatedDeliveryDays}.` : ". Delivery timing will be confirmed before payment."}`;
+  }
   const availabilityType = normalizeAvailabilityType(product.availabilityType);
 
   if (availabilityType === "SHOP") {
@@ -46,7 +56,10 @@ export function getProductCheckoutAvailabilityMessage(product: {
 
 export function getProductAvailabilityBadge(product: {
   availabilityType?: string | null;
+  warehouseFulfillmentSource?: string | null;
+  estimatedDeliveryDays?: string | null;
 }) {
+  if (product.warehouseFulfillmentSource === "OVERSEAS") return "Ships from Abroad";
   const availabilityType = normalizeAvailabilityType(product.availabilityType);
 
   if (availabilityType === "SHOP") {

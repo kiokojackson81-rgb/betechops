@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { resolveCanonicalProductBrand } from "@/lib/productBrands";
 import { productCatalogueConfigurationSchema } from "@/lib/productCataloguePolicy";
+import { isGeneralShopCategory } from "@/app/shop/shopCatalogConfig";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { z } from "zod";
@@ -467,7 +468,10 @@ export async function POST(req: Request) {
     sessionUserId: (auth.session?.user as { id?: string } | undefined)?.id,
     fallbackActorId: await getActorId(),
   });
-  const data = auth.isBrendah ? sanitizeBrendahProductCreate(parsed.data) : parsed.data;
+  const parsedData = auth.isBrendah ? sanitizeBrendahProductCreate(parsed.data) : parsed.data;
+  const data = isGeneralShopCategory(parsedData.shopCategory)
+    ? { ...parsedData, productType: "WAREHOUSE_PRODUCT" }
+    : parsedData;
   const canonicalBrand = await resolveCanonicalProductBrand(prisma, capabilities, data.brand);
   const canonicalShopBrand = await resolveCanonicalProductBrand(prisma, capabilities, data.brand ?? data.shopBrand);
   const skuBase = slugifySku(data.sku || data.name);

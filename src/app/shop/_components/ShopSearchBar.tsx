@@ -140,7 +140,7 @@ export default function ShopSearchBar({ compact = false, onSearchStateChange, on
         }`}
       >
         <label htmlFor={inputId} className="sr-only">
-          Search solar products
+          Search products, brands & categories
         </label>
         <Search className="h-4 w-4 shrink-0 text-[#7a0000]" />
         <input
@@ -158,7 +158,7 @@ export default function ShopSearchBar({ compact = false, onSearchStateChange, on
             setOpen(Boolean(nextQuery.trim()));
             if (!nextQuery.trim() && initialQuery) clearSearch();
           }}
-          placeholder="Search solar kits, inverters, batteries, pumps..."
+          placeholder="Search products, brands & categories"
           className="h-full w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
         />
         {query ? (
@@ -173,7 +173,7 @@ export default function ShopSearchBar({ compact = false, onSearchStateChange, on
         ) : null}
         <button
           type="submit"
-          aria-label="Search solar products"
+          aria-label="Search products, brands & categories"
           className={`inline-flex shrink-0 items-center justify-center rounded-full bg-[#f59e0b] font-bold text-white shadow-[0_10px_20px_rgba(245,158,11,0.22)] ${
             compact ? "h-9 px-3 text-xs" : "h-10 px-4 text-sm"
           }`}

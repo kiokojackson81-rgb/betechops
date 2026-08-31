@@ -17,9 +17,9 @@ export const metadata: Metadata = buildShopMetadata({
 export default async function ProjectBookingSuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ref?: string }>;
+  searchParams: Promise<{ ref?: string; project?: string }>;
 }) {
-  const { ref = "Betech project" } = await searchParams;
+  const { ref = "Betech project", project } = await searchParams;
   const whatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(`Hello Betech Solar, I booked installation project ${ref}. Kindly assist with payment.`)}`;
 
   return (
@@ -38,11 +38,11 @@ export default async function ProjectBookingSuccessPage({
               <div className="mt-2 text-2xl font-black text-white">{ref}</div>
             </div>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              {project ? <Link href={`/account/projects/${encodeURIComponent(project)}`} className={shopStyles.primaryButton}>View & Track My Project</Link> : null}
               <TrackedWhatsAppLink href={whatsappHref} className={shopStyles.whatsappButton} label="Installation payment help" context="project_booking_success" ariaLabel="Contact Betech about installation payment">
-                <MessageCircle className="h-4 w-4" /> Continue Payment on WhatsApp
+                <MessageCircle className="h-4 w-4" /> Complete Payment
               </TrackedWhatsAppLink>
-              <Link href="/account" className={`${shopStyles.secondaryButton} bg-white/92`}>Open Account</Link>
-              <Link href="/" className={shopStyles.goldButton}>Continue Shopping</Link>
+              <Link href="/" className={`${shopStyles.secondaryButton} bg-white/92`}>Continue Shopping</Link>
             </div>
           </section>
         </div>

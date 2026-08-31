@@ -13,7 +13,7 @@ import {
   PRODUCT_GALLERY_AI_SOURCE_TYPES,
   PRODUCT_GALLERY_AI_WIDTH,
 } from "@/lib/images/productGalleryAi";
-import { getShopSubcategoryOptions, SHOP_CATEGORY_DEFINITIONS, SHOP_CATEGORY_OPTIONS, resolveShopSubcategory } from "@/app/shop/shopCatalogConfig";
+import { getShopSubcategoryOptions, isGeneralShopCategory, SHOP_CATEGORY_DEFINITIONS, SHOP_CATEGORY_OPTIONS, resolveShopSubcategory } from "@/app/shop/shopCatalogConfig";
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import type { ProductCatalogueConfiguration } from "@/lib/productCataloguePolicy";
 
@@ -1709,7 +1709,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                     className={`${fieldClass} mt-2 disabled:cursor-not-allowed disabled:opacity-60`}
                     value={draft.shopCategory}
                     disabled={!capabilities.shopCategory}
-                    onChange={(e) => setDraft((s) => ({ ...s, shopCategory: e.target.value, shopSubcategory: "" }))}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopCategory: e.target.value, shopSubcategory: "", productType: isGeneralShopCategory(e.target.value) ? "WAREHOUSE_PRODUCT" : s.productType }))}
                   >
                     <option value="">Select shop category</option>
                     {SHOP_CATEGORY_OPTIONS.map((option) => (
@@ -1806,6 +1806,8 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                     Select an existing brand or add a new one if it is missing.
                   </div>
                 </label>
+
+                {isGeneralShopCategory(draft.shopCategory) ? <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-xs text-emerald-100 md:col-span-2">This general category product is automatically classified as a Warehouse Product. Configure whether it is available locally or ordered from abroad in the availability section.</div> : null}
               </div>
             </div>
 

@@ -12,6 +12,7 @@ import {
 export type ShopNavigationItem = {
   label: string;
   href: string;
+  section?: "SOLAR_ENERGY" | "GENERAL";
   children?: Array<{ label: string; href: string }>;
 };
 
@@ -21,6 +22,7 @@ export type ShopCategory = {
   blurb: string;
   image: string;
   accent: "gold" | "maroon" | "green";
+  department?: "SOLAR_ENERGY" | "GENERAL";
 };
 
 export type ShopProductVisualType =
@@ -54,6 +56,9 @@ export type ShopProduct = {
   warrantyNotes?: string;
   availabilityType?: "SHOP" | "WAREHOUSE" | "ORDER_ON_REQUEST" | "OUT_OF_STOCK";
   pickupDelayDays?: number;
+  warehouseFulfillmentSource?: "LOCAL_WAREHOUSE" | "OVERSEAS" | null;
+  estimatedDeliveryDays?: string | null;
+  internationalShippingCharge?: number | null;
   availabilityMessage?: string;
   checkoutAvailabilityMessage?: string;
   imageExtractedText?: string | null;
@@ -89,6 +94,7 @@ export const shopNavLinks: ShopNavigationItem[] = [
   { label: "All Products", href: SHOP_ALL_PRODUCTS_HREF },
   ...SHOP_CATEGORY_DEFINITIONS.map((category) => ({
     label: category.label,
+    section: category.department ?? "SOLAR_ENERGY",
     href: getShopCategoryHref(category.value),
     children: category.subcategories.map((subcategory) => ({
       label: subcategory.label,
@@ -107,6 +113,7 @@ export function buildShopCategories(imageOverrides: Record<string, string> = {})
     blurb: category.blurb,
     image: imageOverrides[category.value] ?? category.image,
     accent: category.accent,
+    department: category.department ?? "SOLAR_ENERGY",
   }));
 }
 

@@ -1,6 +1,7 @@
 import type { ShopProductVisualType } from "@/app/shop/shopData";
 
 type ShopAccent = "gold" | "maroon" | "green";
+export type ShopCategoryDepartment = "SOLAR_ENERGY" | "GENERAL";
 
 export type ShopSubcategoryDefinition = {
   value: string;
@@ -9,6 +10,8 @@ export type ShopSubcategoryDefinition = {
 };
 
 export type ShopCategoryDefinition = {
+  /** Existing categories default to Solar & Energy; general entries opt in explicitly. */
+  department?: ShopCategoryDepartment;
   value: string;
   label: string;
   blurb: string;
@@ -34,6 +37,31 @@ function makeSubcategories(labels: string[], extraKeywords: Record<string, strin
     keywords: [label, ...label.split(/\s+/), ...(extraKeywords[label] || [])].map((item) => item.toLowerCase()),
   }));
 }
+
+const GENERAL_CATEGORY_DATA: Array<[string, string[]]> = [
+  ["Computers & Laptops", ["Laptops", "Desktop Computers", "Monitors", "Printers & Scanners", "Computer Accessories", "Keyboards & Mice", "Storage, HDD & SSD", "Networking & Routers", "Computer Components", "UPS Systems"]],
+  ["Phones & Tablets", ["Smartphones", "Feature Phones", "Tablets", "Smartwatches", "Power Banks", "Chargers & Cables", "Earphones & Headsets", "Cases & Screen Protectors", "Phone Accessories"]],
+  ["Electronics", ["Televisions", "Speakers", "Home Theatre", "Audio Equipment", "Projectors", "Cameras", "Electronic Accessories"]],
+  ["Power Tools & Equipment", ["Drills", "Grinders", "Saws", "Sanders", "Welding Machines", "Air Compressors", "Pressure Washers", "Hand Tools", "Tool Sets", "Measuring Tools", "Power Tool Accessories"]],
+  ["Home Appliances", ["Refrigerators", "Freezers", "Washing Machines", "Cookers & Ovens", "Microwaves", "Blenders", "Kettles", "Fans", "Air Conditioners", "Water Dispensers", "Vacuum Cleaners", "Small Kitchen Appliances"]],
+  ["Electrical & Power", ["Generators", "UPS & Backup Power", "Voltage Stabilizers", "Automatic Voltage Switches", "Electrical Cables", "Extension Cables", "Circuit Breakers", "Distribution Boards", "Surge Protection", "Switches & Sockets", "Electrical Accessories"]],
+  ["Security & Surveillance", ["CCTV Cameras", "DVR & NVR", "CCTV Kits", "Alarm Systems", "Access Control", "Smart Locks", "Video Doorbells", "Security Accessories"]],
+  ["Home & Office", ["Office Equipment", "Office Furniture", "Home Furniture", "Kitchen & Dining", "Storage & Organization", "Stationery", "Home Improvement"]],
+  ["Automotive", ["Car Batteries", "Car Electronics", "Jump Starters", "Tyre Inflators", "Car Chargers", "Car Lighting", "Car Accessories", "Motorcycle Accessories"]],
+  ["Industrial & Professional Equipment", ["Industrial Tools", "Electric Motors", "Workshop Equipment", "Test & Measurement Equipment", "Electrical Testers", "Measuring Instruments", "Safety Equipment", "Commercial Equipment"]],
+];
+
+const GENERAL_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = GENERAL_CATEGORY_DATA.map(([label, subcategories], index) => ({
+  department: "GENERAL",
+  value: slugify(label),
+  label,
+  blurb: `Browse ${label.toLowerCase()} available from Betech warehouse or overseas suppliers.`,
+  image: "/agents/product-accessories-generated.png",
+  accent: (["maroon", "gold", "green"] as ShopAccent[])[index % 3],
+  visualType: "kit",
+  keywords: [label, ...subcategories].map((item) => item.toLowerCase()),
+  subcategories: makeSubcategories(subcategories),
+}));
 
 export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
@@ -323,7 +351,17 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
       "Commercial Inverters",
     ]),
   },
+  ...GENERAL_CATEGORY_DEFINITIONS,
 ];
+
+export function getShopCategoryDepartment(category: Pick<ShopCategoryDefinition, "department">) {
+  return category.department ?? "SOLAR_ENERGY";
+}
+
+export function isGeneralShopCategory(value: string | null | undefined) {
+  const category = getShopCategoryDefinition(value);
+  return category ? getShopCategoryDepartment(category) === "GENERAL" : false;
+}
 
 export const SHOP_CATEGORY_OPTIONS: Array<{ value: ShopCategoryDefinition["value"]; label: ShopCategoryDefinition["label"] }> =
   SHOP_CATEGORY_DEFINITIONS.map((category) => ({

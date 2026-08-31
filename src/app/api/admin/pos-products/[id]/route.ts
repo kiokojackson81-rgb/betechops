@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { resolveCanonicalProductBrand } from "@/lib/productBrands";
 import { productCatalogueConfigurationSchema } from "@/lib/productCataloguePolicy";
+import { isGeneralShopCategory } from "@/app/shop/shopCatalogConfig";
 import { recomputeOrderEconomics } from "@/lib/recomputeOrderEconomics";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { recalcMarketingEntry, recalcSupportEntry } from "@/lib/marketingReceiptCleanup";
@@ -298,7 +299,10 @@ export async function PATCH(req: Request, context: ParamsContext) {
     sessionUserId: (auth.session?.user as { id?: string } | undefined)?.id,
     fallbackActorId: await getActorId(),
   });
-  const data = auth.isBrendah ? sanitizeBrendahProductUpdate(parsed.data) : parsed.data;
+  const parsedData = auth.isBrendah ? sanitizeBrendahProductUpdate(parsed.data) : parsed.data;
+  const data = isGeneralShopCategory(parsedData.shopCategory ?? existing.shopCategory)
+    ? { ...parsedData, productType: "WAREHOUSE_PRODUCT" }
+    : parsedData;
   const canonicalBrand =
     data.brand !== undefined ? await resolveCanonicalProductBrand(prisma, capabilities, data.brand) : undefined;
   const canonicalShopBrand =

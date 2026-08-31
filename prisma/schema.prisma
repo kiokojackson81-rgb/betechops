@@ -1067,6 +1067,10 @@ model Product {
   status                     String             @default("ACTIVE")
   availabilityType           String             @default("SHOP")
   pickupDelayDays            Int                @default(0)
+  warehouseFulfillmentSource String?
+  estimatedDeliveryDays      String?
+  internationalShippingCharge Decimal?          @db.Decimal(12, 2)
+  supplierInfo               String?
   productType                String?
   posEnabled                 Boolean            @default(true)
   catalogueConfiguration     Json?
