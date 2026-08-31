@@ -243,16 +243,9 @@ const SITE_VISIT_SCHEMA_SQL = [
         FOREIGN KEY ("assignedStaffId") REFERENCES "User"("id")
         ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
-    IF NOT EXISTS (
-      SELECT 1 FROM information_schema.table_constraints
-      WHERE constraint_name = 'SiteVisit_assignedTechnicianId_fkey'
-        AND table_name = 'SiteVisit'
-    ) THEN
-      ALTER TABLE "SiteVisit"
-        ADD CONSTRAINT "SiteVisit_assignedTechnicianId_fkey"
-        FOREIGN KEY ("assignedTechnicianId") REFERENCES "User"("id")
-        ON DELETE SET NULL ON UPDATE CASCADE;
-    END IF;
+    -- Technicians can be internal users or external agents, so this column
+    -- cannot reference only the User table.
+    ALTER TABLE "SiteVisit" DROP CONSTRAINT IF EXISTS "SiteVisit_assignedTechnicianId_fkey";
     IF NOT EXISTS (
       SELECT 1 FROM information_schema.table_constraints
       WHERE constraint_name = 'SiteVisit_createdById_fkey'

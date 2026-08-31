@@ -1,5 +1,9 @@
+import { notFound } from "next/navigation";
 import SiteVisitsWorkspaceClient from "@/app/admin/quotation-center/site-visits/SiteVisitsWorkspaceClient";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getOrderedQuoteStaffUsers } from "@/lib/quoteRequests";
+import { getSiteVisitAccessActor } from "@/lib/siteVisitAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +12,18 @@ export default async function AdminQuotationCenterSiteVisitsPage({
 }: {
   searchParams?: Promise<{ quoteRef?: string }>;
 }) {
-  const staffOptions = await getOrderedQuoteStaffUsers();
+  const session = await auth();
+  const actor = await getSiteVisitAccessActor(session?.user as never);
+  if (!actor) notFound();
+
+  const [staffOptions, externalTechnicians] = await Promise.all([
+    getOrderedQuoteStaffUsers(),
+    prisma.projectExternalAgent.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, whatsappNumber: true },
+    }),
+  ]);
   const params = (await searchParams) || {};
 
   return (
@@ -16,6 +31,8 @@ export default async function AdminQuotationCenterSiteVisitsPage({
       <div className="mx-auto max-w-[1800px]">
         <SiteVisitsWorkspaceClient
           staffOptions={staffOptions}
+          externalTechnicians={externalTechnicians}
+          canAssignTechnicians={actor.canAssignTechnicians}
           initialQuoteRef={params.quoteRef?.trim() || null}
         />
       </div>

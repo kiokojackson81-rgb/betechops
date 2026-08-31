@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getSiteVisitAccessActor } from "@/lib/siteVisitAccess";
+import { dispatchSiteVisitTechnicianAssignment } from "@/lib/siteVisitNotifications";
 import {
   createSiteVisit,
   listAdminSiteVisits,
@@ -40,6 +42,14 @@ export async function POST(request: NextRequest) {
   if (!actor.canViewAll) {
     return NextResponse.json({ ok: false, error: "Only administrators, supervisors and technical managers can create site visits." }, { status: 403 });
   }
+  if ((parsed.data.assignedStaffId || parsed.data.assignedTechnicianId) && !actor.canAssignTechnicians) {
+    return NextResponse.json({ ok: false, error: "Only an administrator can assign the visit owner or technician." }, { status: 403 });
+  }
+  if (parsed.data.assignedTechnicianId?.startsWith("external:")) {
+    const externalId = parsed.data.assignedTechnicianId.slice("external:".length);
+    const external = await prisma.projectExternalAgent.findFirst({ where: { id: externalId, isActive: true }, select: { id: true } });
+    if (!external) return NextResponse.json({ ok: false, error: "Select an active external technician." }, { status: 400 });
+  }
 
   const visit = await createSiteVisit(parsed.data, {
     id: actor.id,
@@ -49,6 +59,8 @@ export async function POST(request: NextRequest) {
   if (!visit) {
     return NextResponse.json({ ok: false, error: "Unable to create site visit." }, { status: 500 });
   }
+
+  if (visit.assignedTechnicianId) void dispatchSiteVisitTechnicianAssignment(visit);
 
   return NextResponse.json({ ok: true, visit });
 }
