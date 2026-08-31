@@ -853,6 +853,11 @@ async function resolveUserLabels(input: { assignedStaffId?: string | null; assig
   };
 }
 
+function toValidDate(value: string | Date | null | undefined) {
+  const iso = toIso(value);
+  return iso ? new Date(iso) : null;
+}
+
 function buildStatusWhere(status: SiteVisitStatus | "ALL") {
   if (status === "ALL") return Prisma.empty;
   return Prisma.sql`AND "status" = ${status}`;
@@ -1237,16 +1242,16 @@ export async function updateSiteVisit(
     throw new Error("A waiver reason is required before waiving the visit fee.");
   }
   const scheduledAt = input.scheduledAt !== undefined
-    ? (input.scheduledAt?.trim() ? new Date(input.scheduledAt) : null)
-    : (existing.scheduledAt ? new Date(existing.scheduledAt) : null);
+    ? toValidDate(input.scheduledAt)
+    : toValidDate(existing.scheduledAt);
   const preferredDate = input.preferredDate !== undefined
-    ? (input.preferredDate?.trim() ? new Date(`${input.preferredDate.trim()}T00:00:00.000`) : null)
-    : (existing.preferredDate ? new Date(existing.preferredDate) : null);
+    ? toValidDate(input.preferredDate?.trim() ? `${input.preferredDate.trim()}T00:00:00.000` : null)
+    : toValidDate(existing.preferredDate);
   const completedAt =
     nextStatus === "VISITED" || nextStatus === "CLOSED"
-      ? (existing.completedAt ? new Date(existing.completedAt) : new Date())
+      ? (toValidDate(existing.completedAt) || new Date())
       : null;
-  const closedAt = nextStatus === "CLOSED" ? (existing.closedAt ? new Date(existing.closedAt) : new Date()) : null;
+  const closedAt = nextStatus === "CLOSED" ? (toValidDate(existing.closedAt) || new Date()) : null;
   const nextPaymentStatus = input.paymentStatus || existing.paymentStatus;
   const nextDataLoggerRequested = input.dataLoggerRequested ?? existing.dataLoggerRequested;
   const nextDataLoggerDays = nextDataLoggerRequested
@@ -1255,23 +1260,23 @@ export async function updateSiteVisit(
   const nextDataLoggerFee = nextDataLoggerDays * DATA_LOGGER_DAILY_RATE;
   const nextDataLoggerStatus = input.dataLoggerStatus || existing.dataLoggerStatus;
   const loggerInstalledAt = input.dataLoggerInstalledAt
-    ? new Date(input.dataLoggerInstalledAt)
+    ? toValidDate(input.dataLoggerInstalledAt)
     : existing.dataLoggerInstalledAt
-      ? new Date(existing.dataLoggerInstalledAt)
+      ? toValidDate(existing.dataLoggerInstalledAt)
       : (["INSTALLED", "MONITORING", "COMPLETED"] as DataLoggerStatus[]).includes(nextDataLoggerStatus)
         ? new Date()
         : null;
   const loggerExpectedEndAt = input.dataLoggerExpectedEndAt
-    ? new Date(input.dataLoggerExpectedEndAt)
+    ? toValidDate(input.dataLoggerExpectedEndAt)
     : existing.dataLoggerExpectedEndAt
-      ? new Date(existing.dataLoggerExpectedEndAt)
+      ? toValidDate(existing.dataLoggerExpectedEndAt)
       : loggerInstalledAt
         ? new Date(loggerInstalledAt.getTime() + nextDataLoggerDays * 24 * 60 * 60 * 1000)
         : null;
   const loggerCompletedAt = input.dataLoggerCompletedAt
-    ? new Date(input.dataLoggerCompletedAt)
+    ? toValidDate(input.dataLoggerCompletedAt)
     : existing.dataLoggerCompletedAt
-      ? new Date(existing.dataLoggerCompletedAt)
+      ? toValidDate(existing.dataLoggerCompletedAt)
       : nextDataLoggerStatus === "COMPLETED"
         ? new Date()
         : null;
@@ -1340,7 +1345,7 @@ export async function updateSiteVisit(
       "feeOverrideReason" = ${input.feeOverrideReason?.trim() || existing.feeOverrideReason},
       "paymentMethod" = ${input.paymentMethod?.trim() || existing.paymentMethod},
       "paymentAmount" = ${nextPaymentStatus === "PAID" ? Number(input.paymentAmount ?? existing.paymentAmount ?? nextVisitFee + nextDataLoggerFee) : existing.paymentAmount},
-      "paymentPaidAt" = ${nextPaymentStatus === "PAID" ? (existing.paymentPaidAt ? new Date(existing.paymentPaidAt) : new Date()) : null},
+      "paymentPaidAt" = ${nextPaymentStatus === "PAID" ? (toValidDate(existing.paymentPaidAt) || new Date()) : null},
       "paymentRecordedById" = ${paymentChanged ? actor.id : existing.paymentRecordedById},
       "paymentRecordedByName" = ${paymentChanged ? actor.name ?? actor.email ?? "Betech Staff" : existing.paymentRecordedByName},
       "paymentVerificationStatus" = ${nextPaymentStatus === "PAID" ? "VERIFIED" : existing.paymentVerificationStatus},
