@@ -106,11 +106,16 @@ export default function SiteVisitDetailClient({
     setError(null);
     setMessage(null);
     try {
-      const body = {
+      const candidate = {
         ...draft,
         ...patch,
         scheduledAt: (patch.scheduledAt ?? draft.scheduledAt) || undefined,
       };
+      // The serialized visit includes nullable read-only fields. The update
+      // schema accepts omitted optional values, but not null for those fields.
+      const body = Object.fromEntries(
+        Object.entries(candidate).filter(([, value]) => value !== null),
+      );
       const response = await fetch(`/api/admin/site-visits/${visit.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
