@@ -16,6 +16,7 @@ export const SHOP_ORDER_SUCCESS_HREF = "/order-success";
 export const SHOP_QUOTE_SUCCESS_HREF = "/quote-success";
 
 export function getShopCategoryHref(slug: string) {
+  if (slug === "other-categories") return SHOP_ALL_PRODUCTS_HREF;
   return `/category/${slug}`;
 }
 

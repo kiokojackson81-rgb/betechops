@@ -128,7 +128,18 @@ export function buildShopCategories(imageOverrides: Record<string, string> = {})
 export const shopCategories: ShopCategory[] = buildShopCategories();
 
 export function buildHomeShopCategories(imageOverrides: Record<string, string> = {}) {
-  return buildShopCategories(imageOverrides).filter((category) => category.department !== "GENERAL");
+  const solarCategories = buildShopCategories(imageOverrides).filter((category) => category.department !== "GENERAL");
+  return [
+    ...solarCategories,
+    {
+      slug: "other-categories",
+      title: "Other Categories",
+      blurb: "Computers, phones, electronics, appliances, tools, security and more.",
+      image: "/agents/product-accessories-generated.png",
+      accent: "green" as const,
+      department: "GENERAL" as const,
+    },
+  ];
 }
 
 export const trustBadges = [

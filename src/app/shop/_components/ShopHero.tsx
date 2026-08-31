@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, Headphones, MapPin, MessageCircle, PlayCircle, ShieldCheck, Truck } from "lucide-react";
 import type { ShopCategory } from "@/app/shop/shopData";
-import { getShopCategoryDefinition } from "@/app/shop/shopCatalogConfig";
+import { getShopCategoryDepartment, getShopCategoryDefinition, SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopCategoryHref, SHOP_ALL_PRODUCTS_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
@@ -43,7 +43,8 @@ const helpCards = [
 ];
 
 export default function ShopHero({ categories, heroImageUrl = "/agents/hero-generated-v2.png" }: ShopHeroProps) {
-  const categoryList = categories.slice(0, 10);
+  const otherCategory = categories.find((category) => category.slug === "other-categories");
+  const categoryList = [...categories.filter((category) => category.slug !== "other-categories").slice(0, 9), ...(otherCategory ? [otherCategory] : [])];
   const isRemoteImage = /^https?:\/\//i.test(heroImageUrl);
 
   return (
@@ -59,13 +60,13 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                 <div key={category.slug} className="group relative">
                   <Link
                     href={getCategoryHref(category.slug)}
-                    aria-haspopup={getShopCategoryDefinition(category.slug)?.subcategories.length ? "menu" : undefined}
+                    aria-haspopup={(category.slug === "other-categories" || getShopCategoryDefinition(category.slug)?.subcategories.length) ? "menu" : undefined}
                     className="flex items-center justify-between gap-3 border-b border-[#7a0000]/6 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000] focus-visible:bg-[#fff7ea] focus-visible:text-[#7a0000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#f2b20f]"
                   >
                     <span>{category.title}</span>
                     <ArrowRight className="h-4 w-4 text-[#7a0000]/50 transition group-hover:translate-x-0.5 group-hover:text-[#7a0000] group-focus-within:translate-x-0.5 group-focus-within:text-[#7a0000]" />
                   </Link>
-                  {getShopCategoryDefinition(category.slug)?.subcategories.length ? (
+                  {(category.slug === "other-categories" || getShopCategoryDefinition(category.slug)?.subcategories.length) ? (
                     <div
                       role="menu"
                       aria-label={`${category.title} subcategories`}
@@ -80,13 +81,16 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                           role="menuitem"
                           className="flex items-center justify-between rounded-2xl bg-[#fff7ea] px-3 py-2 text-xs font-black text-[#7a0000] transition hover:bg-[#fff0d0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2b20f]"
                         >
-                          View all {category.title}
+                          {category.slug === "other-categories" ? "Browse all products" : `View all ${category.title}`}
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
-                        {getShopCategoryDefinition(category.slug)?.subcategories.map((subcategory) => (
+                        {(category.slug === "other-categories"
+                          ? SHOP_CATEGORY_DEFINITIONS.filter((entry) => getShopCategoryDepartment(entry) === "GENERAL").map((entry) => ({ value: entry.value, label: entry.label, isCategory: true }))
+                          : getShopCategoryDefinition(category.slug)?.subcategories.map((subcategory) => ({ ...subcategory, isCategory: false }))
+                        )?.map((subcategory) => (
                           <Link
                             key={subcategory.value}
-                            href={`${getShopCategoryHref(category.slug)}?sub=${subcategory.value}`}
+                            href={subcategory.isCategory ? getShopCategoryHref(subcategory.value) : `${getShopCategoryHref(category.slug)}?sub=${subcategory.value}`}
                             role="menuitem"
                             className="rounded-2xl px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000] focus-visible:bg-[#fff7ea] focus-visible:text-[#7a0000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2b20f]"
                           >
