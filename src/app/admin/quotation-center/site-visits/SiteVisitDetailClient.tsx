@@ -87,6 +87,13 @@ export default function SiteVisitDetailClient({
   const input =
     "w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/60 disabled:opacity-60";
 
+  async function responseData(response: Response) {
+    const text = await response.text();
+    if (!text) return { error: `Request failed with status ${response.status}.` };
+    try { return JSON.parse(text) as { error?: string; [key: string]: unknown }; }
+    catch { return { error: `Request failed with status ${response.status}.` }; }
+  }
+
   async function refresh() {
     const response = await fetch(`/api/admin/site-visits/${visit.id}`, {
       cache: "no-store",
@@ -116,12 +123,18 @@ export default function SiteVisitDetailClient({
       const body = Object.fromEntries(
         Object.entries(candidate).filter(([, value]) => value !== null),
       );
+      if (!body.dataLoggerRequested) {
+        delete body.dataLoggerDays;
+        delete body.dataLoggerInstalledAt;
+        delete body.dataLoggerExpectedEndAt;
+        delete body.dataLoggerCompletedAt;
+      }
       const response = await fetch(`/api/admin/site-visits/${visit.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await response.json();
+      const data = await responseData(response);
       if (!response.ok)
         throw new Error(data.error || "Unable to save changes.");
       await refresh();

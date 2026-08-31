@@ -78,11 +78,17 @@ export async function PATCH(
     if (!external) return NextResponse.json({ ok: false, error: "Select an active external technician." }, { status: 400 });
   }
 
-  const visit = await updateSiteVisit(id, parsed.data, {
-    id: actor.id,
-    name: actor.name,
-    email: actor.email,
-  });
+  let visit;
+  try {
+    visit = await updateSiteVisit(id, parsed.data, {
+      id: actor.id,
+      name: actor.name,
+      email: actor.email,
+    });
+  } catch (error) {
+    console.error("[site-visit.update]", { id, error });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unable to update site visit." }, { status: 400 });
+  }
   if (!visit) {
     return NextResponse.json({ ok: false, error: "Site visit not found." }, { status: 404 });
   }
