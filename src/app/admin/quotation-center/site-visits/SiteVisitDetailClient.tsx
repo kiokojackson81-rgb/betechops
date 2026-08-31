@@ -177,6 +177,15 @@ export default function SiteVisitDetailClient({
       setSaving(false);
     }
   }
+  async function openPublicAssessment() {
+    setError(null);
+    try {
+      const response = await fetch(`/api/admin/site-visits/${visit.id}/assessment-link`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to create assessment link.");
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (linkError) { setError(linkError instanceof Error ? linkError.message : "Unable to create assessment link."); }
+  }
   async function applyCredit() {
     if (
       !window.confirm(
@@ -266,12 +275,13 @@ export default function SiteVisitDetailClient({
                 <MapPin className="h-4 w-4" /> Open maps
               </a>
             ) : null}
-            <Link
-              href={`/technical/site-visits/${visit.id}`}
+            <button
+              type="button"
+              onClick={() => void openPublicAssessment()}
               className="inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-100"
             >
               <ExternalLink className="h-4 w-4" /> Open technician assessment
-            </Link>
+            </button>
             {visit.quoteRequestId ? (
               <Link
                 href={`/admin/quotation-center?quoteId=${visit.quoteRequestId}`}
