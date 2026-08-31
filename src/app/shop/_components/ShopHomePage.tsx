@@ -12,7 +12,7 @@ import ShopMobileDock from "@/app/shop/_components/ShopMobileDock";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { buildShopCategories, shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
+import { buildHomeShopCategories, shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { getShopCategoryHref, SHOP_ALL_PRODUCTS_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 import { compareProductsByPopularity, getPopularitySignalsForProducts, type ProductPopularitySignal } from "@/lib/productPopularity";
@@ -53,7 +53,7 @@ export default async function ShopHomePage({
   const [products, imageOverrides] = await Promise.all([getShopProducts({ q: searchQuery }), getShopImageOverrides()]);
   const popularitySignals = searchQuery ? new Map<string, ProductPopularitySignal>() : await getPopularitySignalsForProducts(products);
   const popularProducts = searchQuery ? products : sortProductsForHomepage(products, popularitySignals).slice(0, 8);
-  const categories = buildShopCategories(imageOverrides.categoryImages);
+  const categories = buildHomeShopCategories(imageOverrides.categoryImages);
   const kitProducts = getProductsForCategories(products, ["solar-full-kits"], popularitySignals);
   const panelProducts = getProductsForCategories(products, ["solar-panels"], popularitySignals);
   const inverterProducts = getProductsForCategories(products, ["solar-inverters"], popularitySignals);

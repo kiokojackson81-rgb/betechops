@@ -1,4 +1,4 @@
-import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
+import { getShopCategoryDepartment, SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
 import {
   getShopCategoryHref,
   SHOP_ALL_PRODUCTS_HREF,
@@ -92,15 +92,23 @@ export type ShopProductSection = {
 export const shopNavLinks: ShopNavigationItem[] = [
   { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF },
   { label: "All Products", href: SHOP_ALL_PRODUCTS_HREF },
-  ...SHOP_CATEGORY_DEFINITIONS.map((category) => ({
+  ...SHOP_CATEGORY_DEFINITIONS.filter((category) => getShopCategoryDepartment(category) === "SOLAR_ENERGY").map((category) => ({
     label: category.label,
-    section: category.department ?? "SOLAR_ENERGY",
+    section: "SOLAR_ENERGY" as const,
     href: getShopCategoryHref(category.value),
     children: category.subcategories.map((subcategory) => ({
       label: subcategory.label,
       href: `${getShopCategoryHref(category.value)}?sub=${subcategory.value}`,
     })),
   })),
+  {
+    label: "Other Categories",
+    href: SHOP_ALL_PRODUCTS_HREF,
+    section: "GENERAL",
+    children: SHOP_CATEGORY_DEFINITIONS
+      .filter((category) => getShopCategoryDepartment(category) === "GENERAL")
+      .map((category) => ({ label: category.label, href: getShopCategoryHref(category.value) })),
+  },
   { label: "Request Quote", href: SHOP_REQUEST_QUOTE_HREF },
   { label: "Warranty Support", href: SHOP_WARRANTY_SUPPORT_HREF },
   { label: "Delivery, Installation & Payment", href: SHOP_DELIVERY_PAYMENT_HREF },
@@ -118,6 +126,10 @@ export function buildShopCategories(imageOverrides: Record<string, string> = {})
 }
 
 export const shopCategories: ShopCategory[] = buildShopCategories();
+
+export function buildHomeShopCategories(imageOverrides: Record<string, string> = {}) {
+  return buildShopCategories(imageOverrides).filter((category) => category.department !== "GENERAL");
+}
 
 export const trustBadges = [
   { title: "Genuine products", copy: "Trusted solar brands supplied by Betech Solar Solutions." },

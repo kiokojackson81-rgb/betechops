@@ -122,7 +122,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
 
                 return (
                   <div key={item.label}>
-                    {showSection ? <div className="px-2 pt-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#7a0000]">{item.section === "GENERAL" ? "General categories" : "Solar & energy"}</div> : null}
+                    {showSection ? <div className="px-2 pt-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#7a0000]">{item.section === "GENERAL" ? "Other Categories" : "Solar & energy"}</div> : null}
                     <div className="overflow-hidden rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7]">
                     {hasChildren ? (
                       <>
