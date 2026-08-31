@@ -300,7 +300,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
     fallbackActorId: await getActorId(),
   });
   const parsedData = auth.isBrendah ? sanitizeBrendahProductUpdate(parsed.data) : parsed.data;
-  const data = isGeneralShopCategory(parsedData.shopCategory ?? existing.shopCategory)
+  const data = isGeneralShopCategory(parsedData.shopCategory ?? String(existing.shopCategory ?? ""))
     ? { ...parsedData, productType: "WAREHOUSE_PRODUCT" }
     : parsedData;
   const canonicalBrand =
