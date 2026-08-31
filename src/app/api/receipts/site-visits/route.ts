@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
-import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
-import { notifySiteVisitCustomer } from "@/lib/siteVisitNotifications";
+import { dispatchSiteVisitCreated } from "@/lib/siteVisitNotifications";
 import { DATA_LOGGER_DAILY_RATE, getStandardSiteVisitFee } from "@/lib/siteVisitPolicy";
 import {
   createSiteVisit,
@@ -127,29 +126,7 @@ export async function POST(request: NextRequest) {
     );
     if (!visit) return NextResponse.json({ ok: false, error: "Unable to create site visit." }, { status: 500 });
 
-    void notifySiteVisitCustomer({
-      event: "REQUEST_RECEIVED",
-      customerName: visit.customerName,
-      phone: visit.customerPhone,
-      email: visit.customerEmail,
-      visitRef: visit.visitRef,
-      detail: `${visit.assignedStaffName || requestedOwner.name || "Betech staff"} is your contact. Admin will confirm the technician and schedule. Site visit fee: KES ${visit.totalPayable.toLocaleString("en-KE")}.`,
-    });
-    await notifyAdminCriticalSms({
-      eventType: "SITE_VISIT_REQUESTED",
-      entityId: visit.id,
-      title: `Staff site visit booking ${visit.visitRef}`,
-      details: [
-        `Customer: ${visit.customerName}`,
-        `Requested by: ${visit.assignedStaffName || requestedOwner.name || requestedOwner.email || "Staff"}`,
-        `Technician: ${visit.assignedTechnicianName || "Awaiting assignment"}`,
-        `Location: ${visit.town}, ${visit.county}`,
-        `Payment: ${visit.paymentStatus} · KSh ${visit.totalPayable.toLocaleString("en-KE")}`,
-        visit.dataLoggerRequested ? `Data logger: ${visit.dataLoggerDays} day(s)` : "Data logger: Not requested",
-      ],
-      actionPath: `/admin/quotation-center/site-visits/${encodeURIComponent(visit.id)}`,
-      payload: { visitRef: visit.visitRef, ownerId: requestedOwner.id, createdById: actor.id },
-    });
+    void dispatchSiteVisitCreated(visit, visit.assignedStaffName || requestedOwner.name || requestedOwner.email);
 
     return NextResponse.json({ ok: true, visit }, { status: 201 });
   } catch (error) {

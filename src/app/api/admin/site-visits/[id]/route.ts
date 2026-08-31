@@ -8,7 +8,7 @@ import {
   siteVisitUpdateSchema,
   updateSiteVisit,
 } from "@/lib/siteVisits";
-import { notifySiteVisitCustomer } from "@/lib/siteVisitNotifications";
+import { dispatchSiteVisitTechnicianAssignment, notifySiteVisitCustomer } from "@/lib/siteVisitNotifications";
 
 export const dynamic = "force-dynamic";
 
@@ -98,31 +98,7 @@ export async function PATCH(
     });
   }
   const technicianChanged = existing.assignedTechnicianId !== visit.assignedTechnicianId;
-  if ((existing.scheduledAt !== visit.scheduledAt || technicianChanged) && visit.scheduledAt && visit.assignedTechnicianName) {
-    const paymentInstruction = visit.paymentStatus === "COLLECT_ON_SITE"
-      ? "Payment will be collected on site."
-      : visit.paymentStatus === "PAID"
-        ? "Your payment is confirmed."
-        : `Please pay KES ${visit.totalPayable.toLocaleString("en-KE")} before the visit.`;
-    void notifySiteVisitCustomer({
-      event: "SCHEDULE_CONFIRMED",
-      customerName: visit.customerName,
-      phone: visit.customerPhone,
-      email: visit.customerEmail,
-      visitRef: visit.visitRef,
-      detail: `Scheduled for ${new Date(visit.scheduledAt).toLocaleString("en-KE")} with ${visit.assignedTechnicianName}. Site visit fee: KES ${visit.visitFee.toLocaleString("en-KE")}. ${paymentInstruction} The paid site visit fee is deducted from the final project cost if you proceed with Betech for installation.`,
-    });
-  }
-  if (existing.status !== "VISITED" && visit.status === "VISITED") {
-    void notifySiteVisitCustomer({
-      event: "VISIT_COMPLETED",
-      customerName: visit.customerName,
-      phone: visit.customerPhone,
-      email: visit.customerEmail,
-      visitRef: visit.visitRef,
-      detail: "The technical assessment has been recorded.",
-    });
-  }
+  if (technicianChanged && visit.assignedTechnicianId) void dispatchSiteVisitTechnicianAssignment(visit, existing.assignedTechnicianId);
 
   return NextResponse.json({ ok: true, visit });
 }
