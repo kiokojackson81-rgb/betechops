@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
 
 type UsageMode = "DAILY_HOURS" | "EVENTS_DAILY" | "EVENTS_WEEKLY" | "ALWAYS_ON";
+type NumericField = number | "";
 type LoadPreset = {
   key: string;
   name: string;
@@ -16,15 +17,15 @@ type Load = {
   id: number;
   kind: string;
   name: string;
-  qty: number;
-  watts: number | null;
+  qty: NumericField;
+  watts: NumericField | null;
   ratingKnown: boolean;
   usageMode: UsageMode;
-  hours: number;
-  uses: number;
-  minutes: number;
+  hours: NumericField;
+  uses: NumericField;
+  minutes: NumericField;
   period: string;
-  simultaneous: number;
+  simultaneous: NumericField;
   essential: boolean;
   design: string;
   photo: boolean;
@@ -134,6 +135,10 @@ const presets: LoadPreset[] = [
 ];
 const input =
   "mt-1 w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-white";
+const readNumber = (value: NumericField | null) =>
+  typeof value === "number" ? value : 0;
+const numberOrBlank = (value: string): NumericField =>
+  value === "" ? "" : Number(value);
 const draftStorageKey = "betech-site-assessment-draft-v1";
 const emptyHome = {
   bedrooms: "",
@@ -150,7 +155,7 @@ const emptyElectrical = {
   monthlyBill: "",
   tariff: "",
   systemGoal: "Backup during outages",
-  backupHours: "",
+  backupHours: "8",
   budget: "",
 };
 const lightAreas = [
@@ -231,6 +236,26 @@ export default function SiteAssessmentPublicClient({
   };
   const add = (preset: LoadPreset) => {
     const id = Date.now();
+    const usageDefaults = {
+      lights: {
+        usageMode: "DAILY_HOURS" as UsageMode,
+        hours: 6,
+        period: "Night",
+      },
+      tv: { usageMode: "DAILY_HOURS" as UsageMode, hours: 5, period: "Night" },
+      washing: {
+        usageMode: "EVENTS_WEEKLY" as UsageMode,
+        uses: 2,
+        minutes: 120,
+        period: "Day",
+      },
+      microwave: {
+        usageMode: "EVENTS_DAILY" as UsageMode,
+        uses: 2,
+        minutes: 5,
+        period: "Both",
+      },
+    }[preset.key];
     setLoads((current) => [
       ...current,
       {
@@ -240,11 +265,13 @@ export default function SiteAssessmentPublicClient({
         qty: 1,
         watts: preset.watts,
         ratingKnown: true,
-        usageMode: preset.alwaysOn ? "ALWAYS_ON" : "DAILY_HOURS",
-        hours: 4,
-        uses: 1,
-        minutes: 15,
-        period: preset.alwaysOn ? "Both" : "Day",
+        usageMode: preset.alwaysOn
+          ? "ALWAYS_ON"
+          : usageDefaults?.usageMode || "DAILY_HOURS",
+        hours: usageDefaults?.hours || 4,
+        uses: usageDefaults?.uses || 1,
+        minutes: usageDefaults?.minutes || 15,
+        period: preset.alwaysOn ? "Both" : usageDefaults?.period || "Day",
         simultaneous: 1,
         essential: !preset.heavy,
         design: preset.heavy ? "No - leave on grid" : "Yes",
@@ -289,17 +316,22 @@ export default function SiteAssessmentPublicClient({
   const detail = (load: Load, key: string, value: string) =>
     edit(load.id, { details: { ...load.details, [key]: value } });
   const loadWh = (load: Load) =>
-    !load.watts
+    !readNumber(load.watts)
       ? 0
       : load.usageMode === "ALWAYS_ON"
-        ? load.qty * load.watts * 24
+        ? readNumber(load.qty) * readNumber(load.watts) * 24
         : load.usageMode === "DAILY_HOURS"
-          ? load.qty * load.watts * load.hours
-          : (load.qty * load.watts * load.uses * load.minutes) /
+          ? readNumber(load.qty) *
+            readNumber(load.watts) *
+            readNumber(load.hours)
+          : (readNumber(load.qty) *
+              readNumber(load.watts) *
+              readNumber(load.uses) *
+              readNumber(load.minutes)) /
             60 /
             (load.usageMode === "EVENTS_WEEKLY" ? 7 : 1);
   const connected = loads.reduce(
-    (total, load) => total + (load.watts || 0) * load.qty,
+    (total, load) => total + readNumber(load.watts) * readNumber(load.qty),
     0,
   );
   const daily = loads.reduce((total, load) => total + loadWh(load), 0);
@@ -841,7 +873,7 @@ function LoadCard({
             min="1"
             value={load.qty}
             onChange={(event) =>
-              edit(load.id, { qty: Number(event.target.value) })
+              edit(load.id, { qty: numberOrBlank(event.target.value) })
             }
           />
         </Field>
@@ -1057,9 +1089,9 @@ function LoadCard({
               className={input}
               type="number"
               min="0"
-              value={load.watts || ""}
+              value={load.watts ?? ""}
               onChange={(event) =>
-                edit(load.id, { watts: Number(event.target.value) })
+                edit(load.id, { watts: numberOrBlank(event.target.value) })
               }
             />
           </Field>
@@ -1103,7 +1135,7 @@ function LoadCard({
               step="0.25"
               value={load.hours}
               onChange={(event) =>
-                edit(load.id, { hours: Number(event.target.value) })
+                edit(load.id, { hours: numberOrBlank(event.target.value) })
               }
             />
           </Field>
@@ -1122,7 +1154,7 @@ function LoadCard({
                 min="0"
                 value={load.uses}
                 onChange={(event) =>
-                  edit(load.id, { uses: Number(event.target.value) })
+                  edit(load.id, { uses: numberOrBlank(event.target.value) })
                 }
               />
             </Field>
@@ -1133,7 +1165,7 @@ function LoadCard({
                 min="0"
                 value={load.minutes}
                 onChange={(event) =>
-                  edit(load.id, { minutes: Number(event.target.value) })
+                  edit(load.id, { minutes: numberOrBlank(event.target.value) })
                 }
               />
             </Field>
@@ -1161,7 +1193,7 @@ function LoadCard({
             min="0"
             value={load.simultaneous}
             onChange={(event) =>
-              edit(load.id, { simultaneous: Number(event.target.value) })
+              edit(load.id, { simultaneous: numberOrBlank(event.target.value) })
             }
           />
         </Field>
