@@ -568,17 +568,30 @@ export default function SiteAssessmentPublicClient({
       : Math.max(backupEnergyWh, continuous * backupHours);
   const batteryKwh = systemEnergyWh / 1000 / 0.8 / 0.9;
   const pvKw = daily / 1000 / 4.5 / 0.78;
+  const inverterCatalogueKw = [1.5, 3, 5, 6, 8, 10, 12, 16, 20];
+  const batteryCatalogueKwh = [2.56, 5.12, 7.68, 10, 15, 16];
   const roundUp = (value: number, sizes: number[]) =>
-    sizes.find((size) => size >= value) || Math.ceil(value);
+    sizes.find((size) => size >= value) || sizes[sizes.length - 1];
   const inverterKw = roundUp(
-    inverterWatts / 1000,
-    [1, 1.5, 2, 3, 3.5, 5, 6, 8, 10, 12],
+    Math.max(inverterWatts / 1000, inverterCatalogueKw[0]),
+    inverterCatalogueKw,
   );
-  const recommendedBatteryKwh = roundUp(
-    batteryKwh,
-    [1, 2, 2.5, 5, 7.5, 10, 15, 20, 30],
+  const batteryModuleKwh = roundUp(
+    Math.max(batteryKwh, batteryCatalogueKwh[0]),
+    batteryCatalogueKwh,
   );
-  const panelCount = Math.max(1, Math.ceil((pvKw * 1000) / 550));
+  const batteryModuleCount =
+    batteryKwh > batteryCatalogueKwh[batteryCatalogueKwh.length - 1]
+      ? Math.ceil(
+          batteryKwh / batteryCatalogueKwh[batteryCatalogueKwh.length - 1],
+        )
+      : 1;
+  const recommendedBatteryKwh = batteryModuleCount * batteryModuleKwh;
+  const batteryRecommendation =
+    batteryModuleCount > 1
+      ? `${batteryModuleCount} x ${batteryModuleKwh.toFixed(2)} kWh`
+      : `${batteryModuleKwh.toFixed(2)} kWh`;
+  const panelCount = Math.max(1, Math.ceil((pvKw * 1000) / 600));
   const groups = Array.from(new Set(presets.map((preset) => preset.group))).map(
     (group) => ({
       group,
@@ -1027,6 +1040,21 @@ export default function SiteAssessmentPublicClient({
             placeholder="What must work during an outage? Budget, expansion, concerns, or special requests."
           />
         </section>
+        <section className="rounded-3xl bg-amber-400/10 p-5">
+          <b>Analyse Assessment with AI</b>
+          <p className="mt-2 text-sm">
+            Save the assessment inputs and submit all usage patterns, known
+            values and uploaded evidence for review. The live sizing proposal
+            below stays available and updates as staff correct readings.
+          </p>
+          <button
+            type="button"
+            disabled={!loads.length}
+            className="mt-4 w-full rounded-xl bg-cyan-400 py-4 font-black text-slate-950 disabled:opacity-50"
+          >
+            Save draft and analyse assessment
+          </button>
+        </section>
         <section className="rounded-3xl border border-cyan-400/30 bg-cyan-400/10 p-5">
           <h2 className="text-xl font-bold">Known-load summary</h2>
           <div className="mt-3 grid gap-3 text-lg font-bold sm:grid-cols-3">
@@ -1045,7 +1073,7 @@ export default function SiteAssessmentPublicClient({
               </p>
             </div>
             <span className="rounded-full bg-emerald-400/15 px-3 py-2 text-sm font-bold text-emerald-200">
-              Planning estimate
+              Live calculation
             </span>
           </div>
           {!solarLoads.length ? (
@@ -1071,19 +1099,19 @@ export default function SiteAssessmentPublicClient({
                   value={`${inverterKw.toFixed(1)} kW`}
                   detail={
                     largestMotor
-                      ? "Includes 25% headroom and motor-start allowance."
-                      : "Includes 25% operating headroom."
+                      ? "Selected from our 1.5-20 kW range with 25% headroom and motor-start allowance."
+                      : "Selected from our 1.5-20 kW range with 25% operating headroom."
                   }
                 />
                 <ProposalMetric
                   label="Recommended lithium storage"
-                  value={`${recommendedBatteryKwh.toFixed(1)} kWh`}
-                  detail={`${backupHours}h essential-load target at 80% battery depth of discharge and 90% efficiency.`}
+                  value={`${recommendedBatteryKwh.toFixed(2)} kWh`}
+                  detail={`${batteryRecommendation} from our 2.56/5.12/7.68/10/15/16 kWh lithium range for a ${backupHours}h target.`}
                 />
                 <ProposalMetric
                   label="Indicative PV array"
                   value={`${pvKw.toFixed(2)} kWp`}
-                  detail={`About ${panelCount} x 550 W panels, assuming 4.5 peak-sun-hours and 78% performance.`}
+                  detail={`About ${panelCount} x 600 W panels, assuming 4.5 peak-sun-hours and 78% performance.`}
                 />
                 <ProposalMetric
                   label="Daily energy to cover"
@@ -1103,20 +1131,6 @@ export default function SiteAssessmentPublicClient({
               </div>
             </>
           )}
-        </section>
-        <section className="rounded-3xl bg-amber-400/10 p-5">
-          <b>Analyse Assessment with AI</b>
-          <p className="mt-2 text-sm">
-            AI will analyse usage patterns, known values and photo evidence
-            together. Unknown ratings are never treated as zero.
-          </p>
-          <button
-            type="button"
-            disabled={!loads.length}
-            className="mt-4 w-full rounded-xl bg-cyan-400 py-4 font-black text-slate-950 disabled:opacity-50"
-          >
-            Save draft and analyse assessment
-          </button>
         </section>
       </div>
     </main>
