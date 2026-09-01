@@ -173,11 +173,32 @@ export default function SiteAssessmentPublicClient({
     units: "1",
     notes: "",
   });
-  const add = (preset: LoadPreset) =>
+  const [electrical, setElectrical] = useState({
+    billing: "Prepaid meter",
+    grid: "Connected to grid",
+    wiring: "Wiring complete",
+    meterId: "",
+    monthlyKwh: "",
+    monthlyBill: "",
+    tariff: "",
+    systemGoal: "Backup during outages",
+    backupHours: "",
+    budget: "",
+  });
+  const focusLoad = (id: number) => {
+    window.setTimeout(() => {
+      document.getElementById(`assessment-load-${id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  };
+  const add = (preset: LoadPreset) => {
+    const id = Date.now();
     setLoads((current) => [
       ...current,
       {
-        id: Date.now() + current.length,
+        id,
         kind: preset.key,
         name: preset.name,
         qty: 1,
@@ -198,11 +219,14 @@ export default function SiteAssessmentPublicClient({
             : {},
       },
     ]);
-  const addUnknown = () =>
+    focusLoad(id);
+  };
+  const addUnknown = () => {
+    const id = Date.now();
     setLoads((current) => [
       ...current,
       {
-        id: Date.now() + current.length,
+        id,
         kind: "unknown",
         name: "Unknown equipment",
         qty: 1,
@@ -220,6 +244,8 @@ export default function SiteAssessmentPublicClient({
         details: {},
       },
     ]);
+    focusLoad(id);
+  };
   const edit = (id: number, patch: Partial<Load>) =>
     setLoads((current) =>
       current.map((load) => (load.id === id ? { ...load, ...patch } : load)),
@@ -394,10 +420,44 @@ export default function SiteAssessmentPublicClient({
         </section>
         <Section title="Electrical supply and safety">
           <Field label="Meter and billing">
-            <select className={input}>
+            <select
+              className={input}
+              value={electrical.billing}
+              onChange={(event) =>
+                setElectrical({ ...electrical, billing: event.target.value })
+              }
+            >
               <option>Prepaid meter</option>
               <option>Postpaid meter</option>
               <option>Unknown</option>
+            </select>
+          </Field>
+          <Field label="Grid connection status">
+            <select
+              className={input}
+              value={electrical.grid}
+              onChange={(event) =>
+                setElectrical({ ...electrical, grid: event.target.value })
+              }
+            >
+              <option>Connected to grid</option>
+              <option>Grid nearby, not connected</option>
+              <option>No grid connection</option>
+              <option>Grid status unknown</option>
+            </select>
+          </Field>
+          <Field label="Existing house wiring">
+            <select
+              className={input}
+              value={electrical.wiring}
+              onChange={(event) =>
+                setElectrical({ ...electrical, wiring: event.target.value })
+              }
+            >
+              <option>Wiring complete</option>
+              <option>Partially wired</option>
+              <option>Not wired yet</option>
+              <option>Wiring needs inspection</option>
             </select>
           </Field>
           <Field label="Supply type">
@@ -422,6 +482,122 @@ export default function SiteAssessmentPublicClient({
           </Field>
           <Field label="Earth wire gauge / notes">
             <input className={input} />
+          </Field>
+          {electrical.grid === "Connected to grid" && (
+            <>
+              <Field
+                label={
+                  electrical.billing === "Postpaid meter"
+                    ? "KPLC account number or meter number"
+                    : "KPLC meter number or account number"
+                }
+              >
+                <input
+                  className={input}
+                  value={electrical.meterId}
+                  onChange={(event) =>
+                    setElectrical({
+                      ...electrical,
+                      meterId: event.target.value,
+                    })
+                  }
+                  placeholder="Enter the identifier printed on the bill or meter"
+                />
+              </Field>
+              <Field label="Tariff category (if shown on bill)">
+                <input
+                  className={input}
+                  value={electrical.tariff}
+                  onChange={(event) =>
+                    setElectrical({ ...electrical, tariff: event.target.value })
+                  }
+                  placeholder="Example: Domestic Ordinary (DC3)"
+                />
+              </Field>
+              <Field label="Latest bill / token statement photo">
+                <input
+                  className={input}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  capture="environment"
+                />
+              </Field>
+              <Field label="Last bill consumption (kWh)">
+                <input
+                  className={input}
+                  type="number"
+                  min="0"
+                  value={electrical.monthlyKwh}
+                  onChange={(event) =>
+                    setElectrical({
+                      ...electrical,
+                      monthlyKwh: event.target.value,
+                    })
+                  }
+                  placeholder="Example: 111"
+                />
+              </Field>
+              <Field label="Last bill or monthly token amount (KES)">
+                <input
+                  className={input}
+                  type="number"
+                  min="0"
+                  value={electrical.monthlyBill}
+                  onChange={(event) =>
+                    setElectrical({
+                      ...electrical,
+                      monthlyBill: event.target.value,
+                    })
+                  }
+                  placeholder="Example: 3141"
+                />
+              </Field>
+            </>
+          )}
+        </Section>
+        <Section title="Customer energy goal and budget">
+          <Field label="What does the customer want the solar system to do?">
+            <select
+              className={input}
+              value={electrical.systemGoal}
+              onChange={(event) =>
+                setElectrical({ ...electrical, systemGoal: event.target.value })
+              }
+            >
+              <option>Backup during outages</option>
+              <option>Reduce electricity bill</option>
+              <option>Completely off-grid</option>
+              <option>Solar daytime loads only</option>
+              <option>Not decided yet</option>
+            </select>
+          </Field>
+          <Field label="Required backup hours during outage">
+            <input
+              className={input}
+              type="number"
+              min="0"
+              step="0.5"
+              value={electrical.backupHours}
+              onChange={(event) =>
+                setElectrical({
+                  ...electrical,
+                  backupHours: event.target.value,
+                })
+              }
+              placeholder="Example: 8"
+            />
+          </Field>
+          <Field label="Customer budget (KES), if shared">
+            <input
+              className={input}
+              type="number"
+              min="0"
+              value={electrical.budget}
+              onChange={(event) =>
+                setElectrical({ ...electrical, budget: event.target.value })
+              }
+              placeholder="Leave blank if not discussed"
+            />
           </Field>
         </Section>
         <Section title="Roof, mounting and access">
@@ -587,19 +763,17 @@ function LoadCard({
     </Field>
   );
   return (
-    <article className="mt-5 rounded-2xl bg-slate-950 p-4">
+    <article
+      id={`assessment-load-${load.id}`}
+      className="mt-5 scroll-mt-5 rounded-2xl bg-slate-950 p-4"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <b>
           {load.name} {index + 1}
         </b>
-        <div className="flex gap-4">
-          <button type="button" onClick={addAnother} className="text-cyan-300">
-            Add another
-          </button>
-          <button type="button" onClick={remove} className="text-rose-300">
-            Remove
-          </button>
-        </div>
+        <button type="button" onClick={remove} className="text-rose-300">
+          Remove
+        </button>
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field label="Load name / description">
@@ -965,6 +1139,13 @@ function LoadCard({
           </select>
         </Field>
       </div>
+      <button
+        type="button"
+        onClick={addAnother}
+        className="mt-5 w-full rounded-xl border border-cyan-400/40 px-4 py-3 font-bold text-cyan-300"
+      >
+        + Add another {load.name}
+      </button>
     </article>
   );
 }
