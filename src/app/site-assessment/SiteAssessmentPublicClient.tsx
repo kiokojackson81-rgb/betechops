@@ -31,6 +31,10 @@ type Load = {
   photo: boolean;
   details: Record<string, string>;
 };
+type LoadProfile = Pick<
+  Load,
+  "usageMode" | "hours" | "uses" | "minutes" | "period" | "essential" | "design"
+> & { details?: Record<string, string> };
 
 const presets: LoadPreset[] = [
   { key: "lights", name: "Lights", watts: 10, group: "Lighting" },
@@ -183,6 +187,191 @@ const lightProfiles: Record<
   Floodlight: { watts: 50, hours: 10, period: "Night" },
   Other: { watts: 10, hours: 5, period: "Night" },
 };
+const loadProfiles: Record<string, LoadProfile> = {
+  lights: {
+    usageMode: "DAILY_HOURS",
+    hours: 6,
+    uses: 1,
+    minutes: 15,
+    period: "Night",
+    essential: true,
+    design: "Yes",
+    details: { area: "Living area", bulbType: "LED" },
+  },
+  tv: {
+    usageMode: "DAILY_HOURS",
+    hours: 5,
+    uses: 1,
+    minutes: 15,
+    period: "Night",
+    essential: true,
+    design: "Yes",
+  },
+  fridge: {
+    usageMode: "ALWAYS_ON",
+    hours: 24,
+    uses: 1,
+    minutes: 15,
+    period: "Both",
+    essential: true,
+    design: "Yes",
+  },
+  freezer: {
+    usageMode: "ALWAYS_ON",
+    hours: 24,
+    uses: 1,
+    minutes: 15,
+    period: "Both",
+    essential: true,
+    design: "Yes",
+  },
+  microwave: {
+    usageMode: "EVENTS_DAILY",
+    hours: 0,
+    uses: 3,
+    minutes: 5,
+    period: "Both",
+    essential: false,
+    design: "Daytime only",
+    details: { routine: "Morning, lunch and evening" },
+  },
+  kettle: {
+    usageMode: "EVENTS_DAILY",
+    hours: 0,
+    uses: 3,
+    minutes: 5,
+    period: "Both",
+    essential: false,
+    design: "Daytime only",
+    details: { routine: "Morning, lunch and evening" },
+  },
+  cooker: {
+    usageMode: "EVENTS_DAILY",
+    hours: 0,
+    uses: 2,
+    minutes: 45,
+    period: "Both",
+    essential: false,
+    design: "No - leave on grid",
+  },
+  washing: {
+    usageMode: "EVENTS_WEEKLY",
+    hours: 0,
+    uses: 2,
+    minutes: 120,
+    period: "Day",
+    essential: false,
+    design: "Daytime only",
+  },
+  iron: {
+    usageMode: "EVENTS_WEEKLY",
+    hours: 0,
+    uses: 2,
+    minutes: 60,
+    period: "Day",
+    essential: false,
+    design: "Daytime only",
+  },
+  shower: {
+    usageMode: "EVENTS_DAILY",
+    hours: 0,
+    uses: 2,
+    minutes: 10,
+    period: "Both",
+    essential: false,
+    design: "No - leave on grid",
+  },
+  "water-pump": {
+    usageMode: "DAILY_HOURS",
+    hours: 1,
+    uses: 1,
+    minutes: 15,
+    period: "Day",
+    essential: true,
+    design: "Yes",
+  },
+  "borehole-pump": {
+    usageMode: "EVENTS_DAILY",
+    hours: 0,
+    uses: 2,
+    minutes: 30,
+    period: "Day",
+    essential: true,
+    design: "Yes",
+  },
+  cctv: {
+    usageMode: "ALWAYS_ON",
+    hours: 24,
+    uses: 1,
+    minutes: 15,
+    period: "Both",
+    essential: true,
+    design: "Yes",
+  },
+  "electric-fence": {
+    usageMode: "ALWAYS_ON",
+    hours: 24,
+    uses: 1,
+    minutes: 15,
+    period: "Both",
+    essential: true,
+    design: "Yes",
+  },
+  "electric-gate": {
+    usageMode: "EVENTS_DAILY",
+    hours: 0,
+    uses: 10,
+    minutes: 1,
+    period: "Both",
+    essential: true,
+    design: "Backup only",
+  },
+  wifi: {
+    usageMode: "ALWAYS_ON",
+    hours: 24,
+    uses: 1,
+    minutes: 15,
+    period: "Both",
+    essential: true,
+    design: "Yes",
+  },
+  laptop: {
+    usageMode: "DAILY_HOURS",
+    hours: 5,
+    uses: 1,
+    minutes: 15,
+    period: "Day",
+    essential: true,
+    design: "Yes",
+  },
+  desktop: {
+    usageMode: "DAILY_HOURS",
+    hours: 6,
+    uses: 1,
+    minutes: 15,
+    period: "Day",
+    essential: true,
+    design: "Yes",
+  },
+  printer: {
+    usageMode: "EVENTS_WEEKLY",
+    hours: 0,
+    uses: 5,
+    minutes: 5,
+    period: "Day",
+    essential: false,
+    design: "Daytime only",
+  },
+  ac: {
+    usageMode: "DAILY_HOURS",
+    hours: 8,
+    uses: 1,
+    minutes: 15,
+    period: "Night",
+    essential: false,
+    design: "No - leave on grid",
+  },
+};
 function Field({
   label,
   children,
@@ -250,26 +439,7 @@ export default function SiteAssessmentPublicClient({
   };
   const add = (preset: LoadPreset) => {
     const id = Date.now();
-    const usageDefaults = {
-      lights: {
-        usageMode: "DAILY_HOURS" as UsageMode,
-        hours: 6,
-        period: "Night",
-      },
-      tv: { usageMode: "DAILY_HOURS" as UsageMode, hours: 5, period: "Night" },
-      washing: {
-        usageMode: "EVENTS_WEEKLY" as UsageMode,
-        uses: 2,
-        minutes: 120,
-        period: "Day",
-      },
-      microwave: {
-        usageMode: "EVENTS_DAILY" as UsageMode,
-        uses: 2,
-        minutes: 5,
-        period: "Both",
-      },
-    }[preset.key];
+    const profile = loadProfiles[preset.key];
     setLoads((current) => [
       ...current,
       {
@@ -279,21 +449,16 @@ export default function SiteAssessmentPublicClient({
         qty: 1,
         watts: preset.watts,
         ratingKnown: true,
-        usageMode: preset.alwaysOn
-          ? "ALWAYS_ON"
-          : usageDefaults?.usageMode || "DAILY_HOURS",
-        hours: usageDefaults?.hours || 4,
-        uses: usageDefaults?.uses || 1,
-        minutes: usageDefaults?.minutes || 15,
-        period: preset.alwaysOn ? "Both" : usageDefaults?.period || "Day",
+        usageMode: profile.usageMode,
+        hours: profile.hours,
+        uses: profile.uses,
+        minutes: profile.minutes,
+        period: profile.period,
         simultaneous: 1,
-        essential: !preset.heavy,
-        design: preset.heavy ? "No - leave on grid" : "Yes",
+        essential: profile.essential,
+        design: profile.design,
         photo: false,
-        details:
-          preset.key === "lights"
-            ? { area: "Living area", bulbType: "LED" }
-            : {},
+        details: profile.details || {},
       },
     ]);
     focusLoad(id);
@@ -1161,6 +1326,20 @@ function LoadCard({
               />,
             )}
           </>
+        )}
+        {["microwave", "kettle"].includes(load.kind) && (
+          <Field label="Typical use times">
+            <select
+              className={input}
+              value={load.details.routine || "Morning, lunch and evening"}
+              onChange={(event) => detail(load, "routine", event.target.value)}
+            >
+              <option>Morning, lunch and evening</option>
+              <option>Morning and evening</option>
+              <option>Mostly daytime</option>
+              <option>Mostly evening</option>
+            </select>
+          </Field>
         )}
         {load.kind === "washing" && (
           <>
