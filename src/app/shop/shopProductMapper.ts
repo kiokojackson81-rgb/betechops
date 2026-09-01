@@ -15,7 +15,12 @@ import {
   getProductCheckoutAvailabilityMessage,
   normalizeAvailabilityType,
 } from "@/app/shop/shopAvailability";
-import { sanitizeProductDescription, sanitizeProductSpecificationLines } from "@/lib/productDescriptionFormatting";
+import {
+  hasRichProductDescriptionHtml,
+  sanitizeProductDescription,
+  sanitizeProductSpecificationLines,
+  sanitizeRichProductDescriptionHtml,
+} from "@/lib/productDescriptionFormatting";
 import {
   inferLegacyProductCataloguePolicy,
   productCatalogueConfigurationSchema,
@@ -84,12 +89,7 @@ type ShopCategoryDefinition = {
 const SHOP_CATALOGUE_REVALIDATE_SECONDS = 600;
 
 export type ShopProductMappingField =
-  | "category"
-  | "price"
-  | "brand"
-  | "image"
-  | "warranty"
-  | "specs";
+  "category" | "price" | "brand" | "image" | "warranty" | "specs";
 
 export type ShopProductMappingWarning = {
   field: ShopProductMappingField;
@@ -201,15 +201,14 @@ function slugify(value: string) {
 
 function compactUnique(values: Array<string | null | undefined>) {
   return Array.from(
-    new Set(
-      values
-        .map((value) => String(value || "").trim())
-        .filter(Boolean),
-    ),
+    new Set(values.map((value) => String(value || "").trim()).filter(Boolean)),
   );
 }
 
-async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = []) {
+async function queryOpsCatalogueProducts(
+  whereClause = "",
+  params: unknown[] = [],
+) {
   const capabilities = await getProductTableCapabilities(prisma);
   const available = capabilities.available;
 
@@ -335,7 +334,9 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
     );
   }
 
-  throw new Error(`Unsupported Product table shape for read-only shop sync. Columns: ${Array.from(available).join(", ")}`);
+  throw new Error(
+    `Unsupported Product table shape for read-only shop sync. Columns: ${Array.from(available).join(", ")}`,
+  );
 }
 
 function normalizeOptionalText(value: string | null | undefined) {
@@ -343,10 +344,21 @@ function normalizeOptionalText(value: string | null | undefined) {
   return normalized || null;
 }
 
+function normalizeRichDescription(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const normalized = hasRichProductDescriptionHtml(raw)
+    ? sanitizeRichProductDescriptionHtml(raw)
+    : sanitizeProductDescription(raw);
+  return normalized || null;
+}
+
 function normalizeStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
     return compactUnique(
-      value.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "").trim())),
+      value.map((entry) =>
+        typeof entry === "string" ? entry : String(entry ?? "").trim(),
+      ),
     );
   }
 
@@ -358,7 +370,9 @@ function normalizeStringArray(value: unknown): string[] {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
         return compactUnique(
-          parsed.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "").trim())),
+          parsed.map((entry) =>
+            typeof entry === "string" ? entry : String(entry ?? "").trim(),
+          ),
         );
       }
     } catch {
@@ -366,9 +380,7 @@ function normalizeStringArray(value: unknown): string[] {
     }
 
     return compactUnique(
-      trimmed
-        .split(/\r?\n|[,;]+/)
-        .map((entry) => entry.trim()),
+      trimmed.split(/\r?\n|[,;]+/).map((entry) => entry.trim()),
     );
   }
 
@@ -386,24 +398,35 @@ function normalizeSpecificationLines(value: unknown) {
 }
 
 function hasAnyKeyword(haystacks: string[], keywords: readonly string[]) {
-  const normalizedHaystack = haystacks.map((value) => normalizeText(value)).join(" ");
-  return keywords.some((keyword) => normalizedHaystack.includes(normalizeText(keyword)));
+  const normalizedHaystack = haystacks
+    .map((value) => normalizeText(value))
+    .join(" ");
+  return keywords.some((keyword) =>
+    normalizedHaystack.includes(normalizeText(keyword)),
+  );
 }
 
 function matchCategoryDefinition(input: string) {
   const haystack = normalizeText(input);
   return (
     OPS_SHOP_CATEGORY_MAP.find((entry) =>
-      entry.keywords.some((keyword) => haystack.includes(normalizeText(keyword))),
+      entry.keywords.some((keyword) =>
+        haystack.includes(normalizeText(keyword)),
+      ),
     ) ?? null
   );
 }
 
 function getCategoryDefinitionBySlug(slug: string) {
-  return OPS_SHOP_CATEGORY_MAP.find((entry) => entry.slug === slug) ?? OPS_SHOP_CATEGORY_MAP[OPS_SHOP_CATEGORY_MAP.length - 1];
+  return (
+    OPS_SHOP_CATEGORY_MAP.find((entry) => entry.slug === slug) ??
+    OPS_SHOP_CATEGORY_MAP[OPS_SHOP_CATEGORY_MAP.length - 1]
+  );
 }
 
-function inferCategoryDefinition(product: Pick<OpsCatalogueProduct, "category" | "name" | "sku">) {
+function inferCategoryDefinition(
+  product: Pick<OpsCatalogueProduct, "category" | "name" | "sku">,
+) {
   const rawCategory = String(product.category || "").trim();
   const matched =
     matchCategoryDefinition(rawCategory) ??
@@ -423,7 +446,9 @@ function inferCategoryDefinition(product: Pick<OpsCatalogueProduct, "category" |
     };
   }
 
-  const fallback = rawCategory ? getCategoryDefinitionBySlug("accessories") : getCategoryDefinitionBySlug("uncategorized");
+  const fallback = rawCategory
+    ? getCategoryDefinitionBySlug("accessories")
+    : getCategoryDefinitionBySlug("uncategorized");
 
   return {
     definition: fallback,
@@ -438,11 +463,15 @@ function inferCategoryDefinition(product: Pick<OpsCatalogueProduct, "category" |
 
 function normalizeShopCategoryValue(value: string | null | undefined) {
   const normalized = normalizeShopCategorySlug(value);
-  return OPS_SHOP_CATEGORY_MAP.find((entry) => entry.slug === normalized) ?? null;
+  return (
+    OPS_SHOP_CATEGORY_MAP.find((entry) => entry.slug === normalized) ?? null
+  );
 }
 
 function inferBrand(name: string) {
-  const hit = KNOWN_BRANDS.find((brand) => normalizeText(name).includes(normalizeText(brand)));
+  const hit = KNOWN_BRANDS.find((brand) =>
+    normalizeText(name).includes(normalizeText(brand)),
+  );
   return hit ?? "Betech Solar";
 }
 
@@ -451,7 +480,9 @@ function inferSpecs(product: OpsCatalogueProduct, categoryTitle: string) {
   const powerMatch = normalizedName.match(/(\d+(?:\.\d+)?)\s*(kw|kva|w|ah|v)/i);
 
   const specs = compactUnique([
-    powerMatch ? `${powerMatch[1]}${powerMatch[2].toUpperCase()} configuration` : null,
+    powerMatch
+      ? `${powerMatch[1]}${powerMatch[2].toUpperCase()} configuration`
+      : null,
     categoryTitle,
     `SKU: ${product.sku}`,
   ]).slice(0, 4);
@@ -460,17 +491,26 @@ function inferSpecs(product: OpsCatalogueProduct, categoryTitle: string) {
 }
 
 function inferWarranty(product: OpsCatalogueProduct) {
-  return product.defaultWarranty?.trim() || "Contact Betech Solar for warranty guidance.";
+  return (
+    product.defaultWarranty?.trim() ||
+    "Contact Betech Solar for warranty guidance."
+  );
 }
 
-function inferStockStatus(product: OpsCatalogueProduct): ShopProduct["stockStatus"] {
+function inferStockStatus(
+  product: OpsCatalogueProduct,
+): ShopProduct["stockStatus"] {
   if (!product.isActive) return "quote_only";
   if (product.stockQuantity > product.minStockLevel) return "in_stock";
   if (product.stockQuantity > 0) return "limited_stock";
   return "quote_only";
 }
 
-function inferTags(product: OpsCatalogueProduct, category: ShopCategoryDefinition, brand: string) {
+function inferTags(
+  product: OpsCatalogueProduct,
+  category: ShopCategoryDefinition,
+  brand: string,
+) {
   const powerMatch = product.name.match(/(\d+(?:\.\d+)?)\s*(kw|kva|w|ah|v)/i);
 
   return compactUnique([
@@ -494,8 +534,15 @@ export function isSolarShopEligibleProduct(input: {
 }) {
   const name = String(input.name || "").trim();
   const price = Number(input.price);
-  const haystacks = [name, String(input.category || ""), ...(input.tags || []), ...(input.specs || [])];
-  const explicitlyVisibleOnline = Boolean(input.showInShop ?? input.ecommerceVisible);
+  const haystacks = [
+    name,
+    String(input.category || ""),
+    ...(input.tags || []),
+    ...(input.specs || []),
+  ];
+  const explicitlyVisibleOnline = Boolean(
+    input.showInShop ?? input.ecommerceVisible,
+  );
 
   const rejectionReasons: string[] = [];
 
@@ -511,11 +558,19 @@ export function isSolarShopEligibleProduct(input: {
     rejectionReasons.push("rejected: missing product image");
   }
 
-  if (String(input.status || "ACTIVE").trim().toUpperCase() !== "ACTIVE") {
+  if (
+    String(input.status || "ACTIVE")
+      .trim()
+      .toUpperCase() !== "ACTIVE"
+  ) {
     rejectionReasons.push("rejected: inactive status");
   }
 
-  if (!explicitlyVisibleOnline && (hasAnyKeyword(haystacks, NON_SOLAR_BLOCK_KEYWORDS) || !hasAnyKeyword(haystacks, SOLAR_ALLOW_KEYWORDS))) {
+  if (
+    !explicitlyVisibleOnline &&
+    (hasAnyKeyword(haystacks, NON_SOLAR_BLOCK_KEYWORDS) ||
+      !hasAnyKeyword(haystacks, SOLAR_ALLOW_KEYWORDS))
+  ) {
     rejectionReasons.push("rejected: non-solar keyword/category");
   }
 
@@ -538,31 +593,52 @@ function buildMappingWarnings(
 
   if (categoryWarning) warnings.push(categoryWarning);
   if (!String(product.category || "").trim()) {
-    warnings.push({ field: "category", message: "Category is blank in the ops catalogue." });
+    warnings.push({
+      field: "category",
+      message: "Category is blank in the ops catalogue.",
+    });
   }
   if (!Number.isFinite(price) || price < 0) {
-    warnings.push({ field: "price", message: "Price is missing or invalid, so the product is excluded from customer-facing catalogue results." });
+    warnings.push({
+      field: "price",
+      message:
+        "Price is missing or invalid, so the product is excluded from customer-facing catalogue results.",
+    });
   }
   if (brand === "Betech Solar") {
-    warnings.push({ field: "brand", message: "Brand was not found explicitly in the ops catalogue name and fell back to Betech Solar." });
+    warnings.push({
+      field: "brand",
+      message:
+        "Brand was not found explicitly in the ops catalogue name and fell back to Betech Solar.",
+    });
   }
-  if (!(normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl))) {
-    warnings.push({ field: "image", message: "No product image mapping was available, so the product is excluded from the customer-facing catalogue." });
+  if (!(
+    normalizeOptionalText(product.mainImageUrl) ||
+    normalizeOptionalText(product.shopImageUrl)
+  )) {
+    warnings.push({
+      field: "image",
+      message:
+        "No product image mapping was available, so the product is excluded from the customer-facing catalogue.",
+    });
   }
-  if (
-    !(
-      normalizeOptionalText(product.warrantyPeriod) ||
-      normalizeOptionalText(product.shopWarranty) ||
-      product.defaultWarranty?.trim()
-    )
-  ) {
-    warnings.push({ field: "warranty", message: "Warranty is missing in the ops catalogue. Customer pages fall back to contact-for-warranty guidance." });
+  if (!(
+    normalizeOptionalText(product.warrantyPeriod) ||
+    normalizeOptionalText(product.shopWarranty) ||
+    product.defaultWarranty?.trim()
+  )) {
+    warnings.push({
+      field: "warranty",
+      message:
+        "Warranty is missing in the ops catalogue. Customer pages fall back to contact-for-warranty guidance.",
+    });
   }
-  if (
-    specs.length === 1 &&
-    specs[0] === "Contact us for full specs."
-  ) {
-    warnings.push({ field: "specs", message: "Specs are missing in the ops catalogue. Customer pages fall back to contact-for-specs guidance." });
+  if (specs.length === 1 && specs[0] === "Contact us for full specs.") {
+    warnings.push({
+      field: "specs",
+      message:
+        "Specs are missing in the ops catalogue. Customer pages fall back to contact-for-specs guidance.",
+    });
   }
 
   return warnings;
@@ -576,7 +652,9 @@ function mapOpsProduct(
   const explicitShopCategory = normalizeShopCategoryValue(product.shopCategory);
   const inferredCategory = inferCategoryDefinition(product);
   const category = explicitShopCategory ?? inferredCategory.definition;
-  const categoryWarning = explicitShopCategory ? null : inferredCategory.warning;
+  const categoryWarning = explicitShopCategory
+    ? null
+    : inferredCategory.warning;
   const safeName = product.name.trim() || product.sku || "";
   const brand =
     normalizeOptionalText(product.shopBrand) ||
@@ -607,14 +685,20 @@ function mapOpsProduct(
     product.defaultWarranty?.trim() ||
     inferWarranty(product);
   const warrantyNotes = normalizeOptionalText(product.warrantyNotes);
-  const mainImage = normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl) || category.image;
-  const galleryImages = compactUnique([mainImage, ...normalizeStringArray(product.galleryImageUrls)]).filter(Boolean);
+  const mainImage =
+    normalizeOptionalText(product.mainImageUrl) ||
+    normalizeOptionalText(product.shopImageUrl) ||
+    category.image;
+  const galleryImages = compactUnique([
+    mainImage,
+    ...normalizeStringArray(product.galleryImageUrls),
+  ]).filter(Boolean);
   const brandImage = normalizeOptionalText(product.brandImageUrl);
   const tiktokVideoUrl = normalizeOptionalText(product.tiktokVideoUrl);
   const fullDescription =
-    normalizeOptionalText(product.description) ||
-    normalizeOptionalText(product.shopShortDescription) ||
-    normalizeOptionalText(product.shortDescription);
+    normalizeRichDescription(product.description) ||
+    normalizeRichDescription(product.shopShortDescription) ||
+    normalizeRichDescription(product.shortDescription);
   const shortDescription =
     normalizeOptionalText(product.shortDescription) ||
     normalizeOptionalText(product.shopShortDescription) ||
@@ -634,15 +718,28 @@ function mapOpsProduct(
     warehouseFulfillmentSource: product.warehouseFulfillmentSource,
     estimatedDeliveryDays: product.estimatedDeliveryDays,
   });
-  const warnings = buildMappingWarnings(product, category, price, brand, specs, warranty, categoryWarning);
-  const hasImage = Boolean(normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl));
+  const warnings = buildMappingWarnings(
+    product,
+    category,
+    price,
+    brand,
+    specs,
+    warranty,
+    categoryWarning,
+  );
+  const hasImage = Boolean(
+    normalizeOptionalText(product.mainImageUrl) ||
+    normalizeOptionalText(product.shopImageUrl),
+  );
   const ecommerceVisible =
     typeof product.ecommerceVisible === "boolean"
       ? product.ecommerceVisible
       : typeof product.showInShop === "boolean"
         ? product.showInShop
         : null;
-  const status = normalizeOptionalText(product.status) || (product.isActive ? "ACTIVE" : "INACTIVE");
+  const status =
+    normalizeOptionalText(product.status) ||
+    (product.isActive ? "ACTIVE" : "INACTIVE");
   const eligibility = isSolarShopEligibleProduct({
     name: safeName,
     category: product.shopCategory || product.category || category.title,
@@ -684,34 +781,65 @@ function mapOpsProduct(
         warrantyNotes: warrantyNotes || undefined,
         availabilityType,
         pickupDelayDays,
-        warehouseFulfillmentSource: product.warehouseFulfillmentSource === "OVERSEAS" ? "OVERSEAS" : product.warehouseFulfillmentSource === "LOCAL_WAREHOUSE" ? "LOCAL_WAREHOUSE" : null,
-        estimatedDeliveryDays: normalizeOptionalText(product.estimatedDeliveryDays),
-        internationalShippingCharge: product.internationalShippingCharge == null ? null : Number(product.internationalShippingCharge),
+        warehouseFulfillmentSource:
+          product.warehouseFulfillmentSource === "OVERSEAS"
+            ? "OVERSEAS"
+            : product.warehouseFulfillmentSource === "LOCAL_WAREHOUSE"
+              ? "LOCAL_WAREHOUSE"
+              : null,
+        estimatedDeliveryDays: normalizeOptionalText(
+          product.estimatedDeliveryDays,
+        ),
+        internationalShippingCharge:
+          product.internationalShippingCharge == null
+            ? null
+            : Number(product.internationalShippingCharge),
         availabilityMessage,
         checkoutAvailabilityMessage,
         stockStatus: inferStockStatus(product),
-        tags: compactUnique([...inferTags(product, category, brand), resolvedSubcategory?.label, resolvedSubcategory?.value]).slice(0, 8),
+        tags: compactUnique([
+          ...inferTags(product, category, brand),
+          resolvedSubcategory?.label,
+          resolvedSubcategory?.value,
+        ]).slice(0, 8),
         whatsappMessage: `Hello Betech Solar, I want more details about ${fallbackName}.`,
         source: "ops",
         opsProductId: product.id,
-        createdAt: product.createdAt ? new Date(product.createdAt).toISOString() : null,
-        updatedAt: product.updatedAt ? new Date(product.updatedAt).toISOString() : null,
+        createdAt: product.createdAt
+          ? new Date(product.createdAt).toISOString()
+          : null,
+        updatedAt: product.updatedAt
+          ? new Date(product.updatedAt).toISOString()
+          : null,
         commissionEnabled: Boolean(product.commissionEnabled),
-        commissionAmount: product.commissionAmount == null ? null : Number(product.commissionAmount),
+        commissionAmount:
+          product.commissionAmount == null
+            ? null
+            : Number(product.commissionAmount),
         commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
         lipaPolePoleEnabled:
           Boolean(product.lipaPolePoleEnabled) ||
           (Boolean(options.autoEnableLipaPolePole) && price >= 500),
         lipaPolePoleMinDeposit:
-          product.lipaPolePoleMinDeposit == null ? null : Number(product.lipaPolePoleMinDeposit),
+          product.lipaPolePoleMinDeposit == null
+            ? null
+            : Number(product.lipaPolePoleMinDeposit),
         lipaPolePoleMaxDays:
-          product.lipaPolePoleMaxDays == null ? null : Number(product.lipaPolePoleMaxDays),
+          product.lipaPolePoleMaxDays == null
+            ? null
+            : Number(product.lipaPolePoleMaxDays),
         lipaPolePoleDefaultDays:
-          product.lipaPolePoleDefaultDays == null ? null : Number(product.lipaPolePoleDefaultDays),
+          product.lipaPolePoleDefaultDays == null
+            ? null
+            : Number(product.lipaPolePoleDefaultDays),
         lipaPolePoleTerms: normalizeOptionalText(product.lipaPolePoleTerms),
         productType: normalizeOptionalText(product.productType),
-        catalogueConfiguration: productCatalogueConfigurationSchema.safeParse(product.catalogueConfiguration).success
-          ? productCatalogueConfigurationSchema.parse(product.catalogueConfiguration)
+        catalogueConfiguration: productCatalogueConfigurationSchema.safeParse(
+          product.catalogueConfiguration,
+        ).success
+          ? productCatalogueConfigurationSchema.parse(
+              product.catalogueConfiguration,
+            )
           : inferLegacyProductCataloguePolicy(product),
       }
     : null;
@@ -732,7 +860,9 @@ function mapOpsProduct(
   };
 }
 
-export function mapOpsProductToShopProduct(product: OpsCatalogueProduct): ShopProduct | null {
+export function mapOpsProductToShopProduct(
+  product: OpsCatalogueProduct,
+): ShopProduct | null {
   return mapOpsProduct(product).product;
 }
 
@@ -756,7 +886,10 @@ export function filterShopProducts(
 
     const productSubcategory = slugify(product.subcategory || "");
     const productTags = product.tags.map((tag) => slugify(tag));
-    const matchesSubcategory = !subcategory || productSubcategory === subcategory || productTags.includes(subcategory);
+    const matchesSubcategory =
+      !subcategory ||
+      productSubcategory === subcategory ||
+      productTags.includes(subcategory);
     if (!matchesSubcategory) return false;
 
     if (!query) return true;
@@ -771,7 +904,9 @@ export function filterShopProducts(
       .join(" ")
       .toLowerCase();
 
-    return queryNeedles.every((needle) => haystacks.includes(needle.toLowerCase()));
+    return queryNeedles.every((needle) =>
+      haystacks.includes(needle.toLowerCase()),
+    );
   });
 }
 
@@ -790,16 +925,18 @@ export async function getOpsCatalogueProductMappedById(opsProductId: string) {
   if (!normalizedId) return null;
 
   return (
-    (await getOpsCatalogueProductsReadOnly())
-      .find((entry) => entry.opsProductId === normalizedId)
-      ?.product ?? null
+    (await getOpsCatalogueProductsReadOnly()).find(
+      (entry) => entry.opsProductId === normalizedId,
+    )?.product ?? null
   );
 }
 
 const getCachedOpsCatalogueProductsReadOnly = unstable_cache(
   async () => {
     const products = await queryOpsCatalogueProducts();
-    const autoEnableLipaPolePole = !products.some((product) => product.lipaPolePoleEnabled === true);
+    const autoEnableLipaPolePole = !products.some(
+      (product) => product.lipaPolePoleEnabled === true,
+    );
     return products
       .map((product) => mapOpsProduct(product, { autoEnableLipaPolePole }))
       .filter((entry): entry is ShopProductMappingPreview => Boolean(entry));

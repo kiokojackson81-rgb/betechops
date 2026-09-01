@@ -24,7 +24,65 @@ const HTML_ENTITY_REPLACEMENTS: Array<[RegExp, string]> = [
 ];
 
 function decodeHtmlEntities(value: string) {
-  return HTML_ENTITY_REPLACEMENTS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
+  return HTML_ENTITY_REPLACEMENTS.reduce(
+    (text, [pattern, replacement]) => text.replace(pattern, replacement),
+    value,
+  );
+}
+
+const RICH_DESCRIPTION_TAGS = new Set([
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "ul",
+  "ol",
+  "li",
+  "strong",
+  "b",
+  "em",
+  "i",
+  "a",
+  "br",
+]);
+
+export function hasRichProductDescriptionHtml(
+  value: string | null | undefined,
+) {
+  return /<\/?(?:p|h[1-6]|ul|ol|li|strong|b|em|i|a|br)\b[^>]*>/i.test(
+    String(value || ""),
+  );
+}
+
+/** Keeps only presentation markup accepted by the storefront renderer. */
+export function sanitizeRichProductDescriptionHtml(
+  value: string | null | undefined,
+) {
+  const source = String(value || "").trim();
+  if (!source) return "";
+
+  return source
+    .replace(/<!--([\s\S]*?)-->/g, "")
+    .replace(
+      /<(?:script|style|iframe|object|embed|svg|math)[^>]*>[\s\S]*?<\/(?:script|style|iframe|object|embed|svg|math)>/gi,
+      "",
+    )
+    .replace(/<(?:script|style|iframe|object|embed|svg|math)[^>]*\/?\s*>/gi, "")
+    .replace(/<\/?([a-z0-9]+)(?:\s[^>]*)?>/gi, (match, rawTag: string) => {
+      const tag = rawTag.toLowerCase();
+      if (!RICH_DESCRIPTION_TAGS.has(tag)) return "";
+      if (match.startsWith("</")) return `</${tag}>`;
+      if (tag !== "a") return `<${tag}>`;
+
+      const hrefMatch = match.match(/\bhref\s*=\s*(["'])(.*?)\1/i);
+      const href = hrefMatch?.[2]?.trim() || "";
+      if (!/^(https?:\/\/|mailto:|tel:)/i.test(href)) return "<a>";
+      return `<a href="${href.replace(/"/g, "&quot;")}">`;
+    })
+    .trim();
 }
 
 export function sanitizeProductDescription(value: string | null | undefined) {
@@ -32,7 +90,13 @@ export function sanitizeProductDescription(value: string | null | undefined) {
   if (!text) return "";
 
   text = text
-    .replace(/<a\s+[^>]*href=["']((?:https?:\/\/|mailto:|tel:)[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_match, href, label) => `[${String(label).replace(/<[^>]+>/g, "").trim()}](${href})`)
+    .replace(
+      /<a\s+[^>]*href=["']((?:https?:\/\/|mailto:|tel:)[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+      (_match, href, label) =>
+        `[${String(label)
+          .replace(/<[^>]+>/g, "")
+          .trim()}](${href})`,
+    )
     .replace(/<(?:strong|b)[^>]*>/gi, "**")
     .replace(/<\/(?:strong|b)>/gi, "**")
     .replace(/<(?:em|i)[^>]*>/gi, "*")
@@ -70,4 +134,3 @@ export function sanitizeProductSpecificationLines(value: unknown) {
     .map((line) => line.replace(/^[-*•]\s*/, "").trim())
     .filter(Boolean);
 }
-
