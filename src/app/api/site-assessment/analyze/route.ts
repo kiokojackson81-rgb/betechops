@@ -22,6 +22,57 @@ const assessmentReviewSchema = z.object({
   dataGaps: z.array(z.string().trim().min(1).max(500)).max(8).default([]),
 });
 
+function getAnalysisErrorResponse(error: unknown) {
+  const apiError = error as {
+    status?: number;
+    code?: string | null;
+    message?: string;
+  };
+  const status = apiError?.status;
+  const code = apiError?.code || "";
+
+  console.error("[site-assessment/analyze] AI analysis failed", {
+    status,
+    code,
+    message: apiError?.message,
+  });
+
+  if (status === 401 || code === "invalid_api_key") {
+    return NextResponse.json(
+      {
+        error:
+          "OpenAI rejected the server API key. Replace OPENAI_API_KEY in Vercel Production with an active project key, then redeploy.",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (status === 403 || code === "model_not_found") {
+    return NextResponse.json(
+      {
+        error:
+          "The OpenAI project cannot access the assessment model. Check the project's model permissions and billing.",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (status === 429) {
+    return NextResponse.json(
+      {
+        error:
+          "OpenAI has no available quota for assessment analysis. Check the OpenAI project's billing and usage limits.",
+      },
+      { status: 503 },
+    );
+  }
+
+  return NextResponse.json(
+    { error: "AI assessment analysis failed. Please try again." },
+    { status: 500 },
+  );
+}
+
 export async function POST(request: Request) {
   if (!client) {
     return NextResponse.json(
@@ -117,10 +168,6 @@ export async function POST(request: Request) {
     const review = assessmentReviewSchema.parse(JSON.parse(rawReview));
     return NextResponse.json({ review });
   } catch (error) {
-    console.error("[site-assessment/analyze] AI analysis failed", error);
-    return NextResponse.json(
-      { error: "AI assessment analysis failed. Please try again." },
-      { status: 500 },
-    );
+    return getAnalysisErrorResponse(error);
   }
 }
