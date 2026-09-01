@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
 
 type UsageMode = "DAILY_HOURS" | "EVENTS_DAILY" | "EVENTS_WEEKLY" | "ALWAYS_ON";
@@ -35,6 +35,13 @@ type LoadProfile = Pick<
   Load,
   "usageMode" | "hours" | "uses" | "minutes" | "period" | "essential" | "design"
 > & { details?: Record<string, string> };
+type AssessmentAiReview = {
+  summary: string;
+  observations: string[];
+  risks: string[];
+  recommendations: string[];
+  dataGaps: string[];
+};
 
 const presets: LoadPreset[] = [
   { key: "lights", name: "Lights", watts: 10, group: "Lighting" },
@@ -389,13 +396,19 @@ function Field({
 
 export default function SiteAssessmentPublicClient({
   visit,
+  assessmentToken,
 }: {
   visit: SerializedSiteVisit;
+  assessmentToken: string;
 }) {
+  const assessmentRootRef = useRef<HTMLElement | null>(null);
   const [loads, setLoads] = useState<Load[]>([]);
   const [home, setHome] = useState(emptyHome);
   const [electrical, setElectrical] = useState(emptyElectrical);
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const [aiReview, setAiReview] = useState<AssessmentAiReview | null>(null);
+  const [isAnalysing, setIsAnalysing] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
   useEffect(() => {
     try {
       const draft = localStorage.getItem(draftStorageKey);
@@ -404,11 +417,13 @@ export default function SiteAssessmentPublicClient({
           loads: Load[];
           home: typeof emptyHome;
           electrical: typeof emptyElectrical;
+          aiReview: AssessmentAiReview;
         }>;
         if (parsed.loads) setLoads(parsed.loads);
         if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
         if (parsed.electrical)
           setElectrical({ ...emptyElectrical, ...parsed.electrical });
+        if (parsed.aiReview) setAiReview(parsed.aiReview);
       }
     } catch {
       localStorage.removeItem(draftStorageKey);
@@ -420,13 +435,14 @@ export default function SiteAssessmentPublicClient({
     if (draftLoaded)
       localStorage.setItem(
         draftStorageKey,
-        JSON.stringify({ loads, home, electrical }),
+        JSON.stringify({ loads, home, electrical, aiReview }),
       );
-  }, [draftLoaded, electrical, home, loads]);
+  }, [aiReview, draftLoaded, electrical, home, loads]);
   const clearDraft = () => {
     setLoads([]);
     setHome(emptyHome);
     setElectrical(emptyElectrical);
+    setAiReview(null);
     localStorage.removeItem(draftStorageKey);
   };
   const focusLoad = (id: number) => {
@@ -592,6 +608,60 @@ export default function SiteAssessmentPublicClient({
       ? `${batteryModuleCount} x ${batteryModuleKwh.toFixed(2)} kWh`
       : `${batteryModuleKwh.toFixed(2)} kWh`;
   const panelCount = Math.max(1, Math.ceil((pvKw * 1000) / 600));
+  const analyseAssessment = async () => {
+    if (!loads.length || isAnalysing) return;
+    setIsAnalysing(true);
+    setAnalysisError("");
+    try {
+      const form = new FormData();
+      form.set("token", assessmentToken);
+      form.set(
+        "assessment",
+        JSON.stringify({
+          loads,
+          home,
+          electrical,
+          calculation: {
+            connectedKw: connected / 1000,
+            dailyKwh: daily / 1000,
+            continuousKw: continuous / 1000,
+            simultaneousPeakKw: simultaneousPeak / 1000,
+            inverterKw,
+            batteryRecommendation,
+            panelCount,
+            panelWatts: 600,
+          },
+        }),
+      );
+      const files = Array.from(
+        assessmentRootRef.current?.querySelectorAll<HTMLInputElement>(
+          'input[type="file"]',
+        ) || [],
+      )
+        .flatMap((input) => Array.from(input.files || []))
+        .filter((file) => file.type.startsWith("image/"))
+        .slice(0, 8);
+      files.forEach((file) => form.append("photos", file));
+      const response = await fetch("/api/site-assessment/analyze", {
+        method: "POST",
+        body: form,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.review)
+        throw new Error(
+          data?.error || "Assessment analysis could not be completed.",
+        );
+      setAiReview(data.review as AssessmentAiReview);
+    } catch (error) {
+      setAnalysisError(
+        error instanceof Error
+          ? error.message
+          : "Assessment analysis could not be completed.",
+      );
+    } finally {
+      setIsAnalysing(false);
+    }
+  };
   const groups = Array.from(new Set(presets.map((preset) => preset.group))).map(
     (group) => ({
       group,
@@ -599,7 +669,10 @@ export default function SiteAssessmentPublicClient({
     }),
   );
   return (
-    <main className="min-h-screen bg-slate-950 p-3 text-slate-100">
+    <main
+      ref={assessmentRootRef}
+      className="min-h-screen bg-slate-950 p-3 text-slate-100"
+    >
       <div className="mx-auto max-w-3xl space-y-5">
         <header className="rounded-3xl bg-cyan-400 p-6 text-slate-950">
           <b className="text-xs uppercase tracking-widest">
@@ -1049,11 +1122,40 @@ export default function SiteAssessmentPublicClient({
           </p>
           <button
             type="button"
-            disabled={!loads.length}
+            onClick={analyseAssessment}
+            disabled={!loads.length || isAnalysing}
             className="mt-4 w-full rounded-xl bg-cyan-400 py-4 font-black text-slate-950 disabled:opacity-50"
           >
-            Save draft and analyse assessment
+            {isAnalysing
+              ? "Analysing assessment..."
+              : "Save draft and analyse assessment"}
           </button>
+          {analysisError ? (
+            <p className="mt-3 text-sm font-semibold text-rose-200">
+              {analysisError}
+            </p>
+          ) : null}
+          {aiReview ? (
+            <div className="mt-5 rounded-2xl border border-cyan-400/30 bg-slate-950/70 p-4">
+              <h3 className="font-black text-cyan-200">AI assessment review</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-200">
+                {aiReview.summary}
+              </p>
+              <AiReviewList
+                title="Site observations"
+                items={aiReview.observations}
+              />
+              <AiReviewList title="Risks or blockers" items={aiReview.risks} />
+              <AiReviewList
+                title="Recommended next actions"
+                items={aiReview.recommendations}
+              />
+              <AiReviewList
+                title="Information still needed"
+                items={aiReview.dataGaps}
+              />
+            </div>
+          ) : null}
         </section>
         <section className="rounded-3xl border border-cyan-400/30 bg-cyan-400/10 p-5">
           <h2 className="text-xl font-bold">Known-load summary</h2>
@@ -1165,6 +1267,19 @@ function ProposalMetric({
       <p className="text-sm font-semibold text-slate-300">{label}</p>
       <p className="mt-2 text-2xl font-black text-emerald-300">{value}</p>
       <p className="mt-2 text-xs leading-5 text-slate-400">{detail}</p>
+    </div>
+  );
+}
+function AiReviewList({ title, items }: { title: string; items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="mt-4">
+      <h4 className="text-sm font-black text-slate-100">{title}</h4>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-300">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
     </div>
   );
 }
