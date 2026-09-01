@@ -169,6 +169,20 @@ const lightAreas = [
   "Floodlight",
   "Other",
 ];
+const lightProfiles: Record<
+  string,
+  { watts: number; hours: number; period: string }
+> = {
+  "Living area": { watts: 10, hours: 5, period: "Night" },
+  Bedroom: { watts: 10, hours: 5, period: "Night" },
+  Kitchen: { watts: 10, hours: 4, period: "Both" },
+  Bathroom: { watts: 10, hours: 2, period: "Night" },
+  Balcony: { watts: 10, hours: 6, period: "Night" },
+  Outdoor: { watts: 20, hours: 10, period: "Night" },
+  Security: { watts: 30, hours: 10, period: "Night" },
+  Floodlight: { watts: 50, hours: 10, period: "Night" },
+  Other: { watts: 10, hours: 5, period: "Night" },
+};
 function Field({
   label,
   children,
@@ -995,6 +1009,18 @@ function LoadCard({
       {children}
     </Field>
   );
+  const applyLightProfile = (area: string) => {
+    const profile = lightProfiles[area] || lightProfiles.Other;
+    edit(load.id, {
+      watts: profile.watts,
+      ratingKnown: true,
+      usageMode: "DAILY_HOURS",
+      hours: profile.hours,
+      period: profile.period,
+      simultaneous: load.qty,
+      details: { ...load.details, area, bulbType: "LED" },
+    });
+  };
   return (
     <article
       id={`assessment-load-${load.id}`}
@@ -1022,9 +1048,13 @@ function LoadCard({
             type="number"
             min="1"
             value={load.qty}
-            onChange={(event) =>
-              edit(load.id, { qty: numberOrBlank(event.target.value) })
-            }
+            onChange={(event) => {
+              const qty = numberOrBlank(event.target.value);
+              edit(
+                load.id,
+                load.kind === "lights" ? { qty, simultaneous: qty } : { qty },
+              );
+            }}
           />
         </Field>
         {load.kind === "lights" && (
@@ -1035,7 +1065,7 @@ function LoadCard({
               <select
                 className={input}
                 value={load.details.area || "Living area"}
-                onChange={(event) => detail(load, "area", event.target.value)}
+                onChange={(event) => applyLightProfile(event.target.value)}
               >
                 {lightAreas.map((area) => (
                   <option key={area}>{area}</option>
@@ -1059,6 +1089,10 @@ function LoadCard({
                 <option>Unknown</option>
               </select>,
             )}
+            <p className="sm:col-span-2 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm text-cyan-100">
+              Area selection applies an editable LED profile for rating,
+              night/day use and simultaneous lights.
+            </p>
           </>
         )}
         {load.kind === "tv" && (
