@@ -336,6 +336,70 @@ export default function SiteAssessmentPublicClient({
   );
   const daily = loads.reduce((total, load) => total + loadWh(load), 0);
   const unknown = loads.filter((load) => !load.ratingKnown).length;
+  const solarLoads = loads.filter(
+    (load) => load.design !== "No - leave on grid",
+  );
+  const essentialLoads = solarLoads.filter((load) => load.essential);
+  const wattsFor = (load: Load) =>
+    readNumber(load.watts) * readNumber(load.qty);
+  const continuous = solarLoads
+    .filter((load) => load.usageMode === "ALWAYS_ON")
+    .reduce((total, load) => total + wattsFor(load), 0);
+  const simultaneousPeak = solarLoads.reduce(
+    (total, load) =>
+      total +
+      readNumber(load.watts) *
+        Math.min(readNumber(load.qty), readNumber(load.simultaneous)),
+    0,
+  );
+  const motorLoads = solarLoads.filter((load) =>
+    [
+      "fridge",
+      "freezer",
+      "water-pump",
+      "borehole-pump",
+      "electric-gate",
+      "ac",
+    ].includes(load.kind),
+  );
+  const largestMotor = motorLoads.reduce(
+    (largest, load) => Math.max(largest, readNumber(load.watts)),
+    0,
+  );
+  const inverterWatts = Math.max(
+    simultaneousPeak * 1.25,
+    continuous * 1.25,
+    simultaneousPeak + largestMotor * 2,
+  );
+  const backupHours = Number(electrical.backupHours) || 8;
+  const essentialDaily = essentialLoads.reduce(
+    (total, load) => total + loadWh(load),
+    0,
+  );
+  const essentialContinuous = essentialLoads
+    .filter((load) => load.usageMode === "ALWAYS_ON")
+    .reduce((total, load) => total + wattsFor(load), 0);
+  const backupEnergyWh = Math.max(
+    essentialContinuous * backupHours,
+    essentialDaily * Math.min(backupHours / 24, 1),
+  );
+  const systemEnergyWh =
+    electrical.systemGoal === "Completely off-grid"
+      ? daily
+      : Math.max(backupEnergyWh, continuous * backupHours);
+  const batteryKwh = systemEnergyWh / 1000 / 0.8 / 0.9;
+  const pvKw = daily / 1000 / 4.5 / 0.78;
+  const roundUp = (value: number, sizes: number[]) =>
+    sizes.find((size) => size >= value) || Math.ceil(value);
+  const inverterKw = roundUp(
+    inverterWatts / 1000,
+    [1, 1.5, 2, 3, 3.5, 5, 6, 8, 10, 12],
+  );
+  const recommendedBatteryKwh = roundUp(
+    batteryKwh,
+    [1, 2, 2.5, 5, 7.5, 10, 15, 20, 30],
+  );
+  const panelCount = Math.max(1, Math.ceil((pvKw * 1000) / 550));
   const groups = Array.from(new Set(presets.map((preset) => preset.group))).map(
     (group) => ({
       group,
@@ -792,6 +856,75 @@ export default function SiteAssessmentPublicClient({
             <span>{unknown} unknown ratings</span>
           </div>
         </section>
+        <section className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Preliminary system proposal</h2>
+              <p className="mt-1 text-sm text-slate-300">
+                Based on selected solar loads, recorded simultaneous operation,
+                and {backupHours} backup hours.
+              </p>
+            </div>
+            <span className="rounded-full bg-emerald-400/15 px-3 py-2 text-sm font-bold text-emerald-200">
+              Planning estimate
+            </span>
+          </div>
+          {!solarLoads.length ? (
+            <p className="mt-4 rounded-xl bg-slate-950/60 p-4 text-slate-300">
+              Add loads and select those to include in the solar design to
+              calculate a proposal.
+            </p>
+          ) : (
+            <>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <ProposalMetric
+                  label="Continuous solar load"
+                  value={`${(continuous / 1000).toFixed(2)} kW`}
+                  detail="24-hour equipment such as CCTV, fridge, freezer, fence and Wi-Fi."
+                />
+                <ProposalMetric
+                  label="Recorded simultaneous peak"
+                  value={`${(simultaneousPeak / 1000).toFixed(2)} kW`}
+                  detail="Uses the quantity that can run together on each load card."
+                />
+                <ProposalMetric
+                  label="Recommended inverter"
+                  value={`${inverterKw.toFixed(1)} kW`}
+                  detail={
+                    largestMotor
+                      ? "Includes 25% headroom and motor-start allowance."
+                      : "Includes 25% operating headroom."
+                  }
+                />
+                <ProposalMetric
+                  label="Recommended lithium storage"
+                  value={`${recommendedBatteryKwh.toFixed(1)} kWh`}
+                  detail={`${backupHours}h essential-load target at 80% battery depth of discharge and 90% efficiency.`}
+                />
+                <ProposalMetric
+                  label="Indicative PV array"
+                  value={`${pvKw.toFixed(2)} kWp`}
+                  detail={`About ${panelCount} x 550 W panels, assuming 4.5 peak-sun-hours and 78% performance.`}
+                />
+                <ProposalMetric
+                  label="Daily energy to cover"
+                  value={`${(systemEnergyWh / 1000).toFixed(2)} kWh`}
+                  detail={
+                    electrical.systemGoal === "Completely off-grid"
+                      ? "One full day of entered load energy for the off-grid objective."
+                      : "The greater of essential-load backup energy or continuous-load backup energy."
+                  }
+                />
+              </div>
+              <div className="mt-5 rounded-2xl border border-amber-300/30 bg-slate-950/60 p-4 text-sm text-amber-100">
+                <b>Before quotation:</b> Confirm all unknown nameplates,
+                appliance surge data, roof capacity, shading, wiring and actual
+                KPLC usage. This is a field planning recommendation, not a final
+                electrical design or installation approval.
+              </div>
+            </>
+          )}
+        </section>
         <section className="rounded-3xl bg-amber-400/10 p-5">
           <b>Analyse Assessment with AI</b>
           <p className="mt-2 text-sm">
@@ -823,6 +956,23 @@ function Section({
       <h2 className="text-xl font-bold">{title}</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">{children}</div>
     </section>
+  );
+}
+function ProposalMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-slate-950/70 p-4">
+      <p className="text-sm font-semibold text-slate-300">{label}</p>
+      <p className="mt-2 text-2xl font-black text-emerald-300">{value}</p>
+      <p className="mt-2 text-xs leading-5 text-slate-400">{detail}</p>
+    </div>
   );
 }
 function LoadCard({
