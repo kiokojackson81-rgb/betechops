@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
 
 type UsageMode = "DAILY_HOURS" | "EVENTS_DAILY" | "EVENTS_WEEKLY" | "ALWAYS_ON";
@@ -134,6 +134,25 @@ const presets: LoadPreset[] = [
 ];
 const input =
   "mt-1 w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-white";
+const draftStorageKey = "betech-site-assessment-draft-v1";
+const emptyHome = {
+  bedrooms: "",
+  type: "House",
+  units: "1",
+  notes: "",
+};
+const emptyElectrical = {
+  billing: "Prepaid meter",
+  grid: "Connected to grid",
+  wiring: "Wiring complete",
+  meterId: "",
+  monthlyKwh: "",
+  monthlyBill: "",
+  tariff: "",
+  systemGoal: "Backup during outages",
+  backupHours: "",
+  budget: "",
+};
 const lightAreas = [
   "Living area",
   "Bedroom",
@@ -166,25 +185,42 @@ export default function SiteAssessmentPublicClient({
   visit: SerializedSiteVisit;
 }) {
   const [loads, setLoads] = useState<Load[]>([]);
-  const [home, setHome] = useState({
-    bedrooms: "",
-    occupants: "",
-    type: "House",
-    units: "1",
-    notes: "",
-  });
-  const [electrical, setElectrical] = useState({
-    billing: "Prepaid meter",
-    grid: "Connected to grid",
-    wiring: "Wiring complete",
-    meterId: "",
-    monthlyKwh: "",
-    monthlyBill: "",
-    tariff: "",
-    systemGoal: "Backup during outages",
-    backupHours: "",
-    budget: "",
-  });
+  const [home, setHome] = useState(emptyHome);
+  const [electrical, setElectrical] = useState(emptyElectrical);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  useEffect(() => {
+    try {
+      const draft = localStorage.getItem(draftStorageKey);
+      if (draft) {
+        const parsed = JSON.parse(draft) as Partial<{
+          loads: Load[];
+          home: typeof emptyHome;
+          electrical: typeof emptyElectrical;
+        }>;
+        if (parsed.loads) setLoads(parsed.loads);
+        if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
+        if (parsed.electrical)
+          setElectrical({ ...emptyElectrical, ...parsed.electrical });
+      }
+    } catch {
+      localStorage.removeItem(draftStorageKey);
+    } finally {
+      setDraftLoaded(true);
+    }
+  }, []);
+  useEffect(() => {
+    if (draftLoaded)
+      localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({ loads, home, electrical }),
+      );
+  }, [draftLoaded, electrical, home, loads]);
+  const clearDraft = () => {
+    setLoads([]);
+    setHome(emptyHome);
+    setElectrical(emptyElectrical);
+    localStorage.removeItem(draftStorageKey);
+  };
   const focusLoad = (id: number) => {
     window.setTimeout(() => {
       document.getElementById(`assessment-load-${id}`)?.scrollIntoView({
@@ -286,14 +322,20 @@ export default function SiteAssessmentPublicClient({
             {visit.visitRef} · {visit.customerName}
           </p>
         </header>
-        <section className="sticky top-2 z-10 rounded-2xl bg-slate-900 p-4">
-          <b>Known-load summary</b>
-          <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
-            <span>{(connected / 1000).toFixed(2)} kW connected</span>
-            <span>{(daily / 1000).toFixed(2)} kWh/day</span>
-            <span>{unknown} unknown ratings</span>
-          </div>
-        </section>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm text-cyan-100">
+          <span>
+            {draftLoaded
+              ? "Assessment details save automatically on this device."
+              : "Loading saved assessment..."}
+          </span>
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="rounded-lg border border-rose-300/50 px-3 py-2 font-bold text-rose-200"
+          >
+            Clear saved draft
+          </button>
+        </div>
         <section className="rounded-3xl bg-slate-900 p-5">
           <h2 className="text-xl font-bold">Home and project details</h2>
           <p className="mt-1 text-sm text-slate-400">
@@ -327,17 +369,6 @@ export default function SiteAssessmentPublicClient({
                 }
               />
             </Field>
-            <Field label="People normally in the home">
-              <input
-                className={input}
-                type="number"
-                min="0"
-                value={home.occupants}
-                onChange={(event) =>
-                  setHome({ ...home, occupants: event.target.value })
-                }
-              />
-            </Field>
             <Field label="Consumer units / distribution boards">
               <input
                 className={input}
@@ -349,17 +380,6 @@ export default function SiteAssessmentPublicClient({
                 }
               />
             </Field>
-            <label className="sm:col-span-2 text-sm font-semibold text-slate-200">
-              Project comments and customer priorities
-              <textarea
-                className={`${input} min-h-28`}
-                value={home.notes}
-                onChange={(event) =>
-                  setHome({ ...home, notes: event.target.value })
-                }
-                placeholder="What must work during an outage? Budget, expansion, concerns, or special requests."
-              />
-            </label>
           </div>
         </section>
         <section className="rounded-3xl bg-slate-900 p-5">
@@ -707,6 +727,37 @@ export default function SiteAssessmentPublicClient({
                 />
               </label>
             ))}
+          </div>
+        </section>
+        <section className="rounded-3xl bg-slate-900 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-bold">
+              Project comments and customer priorities
+            </h2>
+            <button
+              type="button"
+              onClick={() => setHome({ ...home, notes: "" })}
+              disabled={!home.notes}
+              className="rounded-lg border border-white/20 px-3 py-2 text-sm font-bold text-slate-300 disabled:opacity-40"
+            >
+              Clear comments
+            </button>
+          </div>
+          <textarea
+            className={`${input} min-h-28`}
+            value={home.notes}
+            onChange={(event) =>
+              setHome({ ...home, notes: event.target.value })
+            }
+            placeholder="What must work during an outage? Budget, expansion, concerns, or special requests."
+          />
+        </section>
+        <section className="rounded-3xl border border-cyan-400/30 bg-cyan-400/10 p-5">
+          <h2 className="text-xl font-bold">Known-load summary</h2>
+          <div className="mt-3 grid gap-3 text-lg font-bold sm:grid-cols-3">
+            <span>{(connected / 1000).toFixed(2)} kW connected</span>
+            <span>{(daily / 1000).toFixed(2)} kWh/day</span>
+            <span>{unknown} unknown ratings</span>
           </div>
         </section>
         <section className="rounded-3xl bg-amber-400/10 p-5">
