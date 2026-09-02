@@ -265,7 +265,10 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
   END $$`,
 ] as const;
 
-const QUOTE_REQUEST_STAFF_EMAILS = ["jeniffer@betech.co.ke", "brendah@betech.co.ke"] as const;
+const QUOTE_REQUEST_STAFF_EMAILS = [
+  "jeniffer@betech.co.ke",
+  "brendah@betech.co.ke",
+] as const;
 
 const globalQuoteRequestState = globalThis as typeof globalThis & {
   __quoteRequestSchemaReady?: Promise<void>;
@@ -296,10 +299,19 @@ export const QUOTE_PROJECT_TYPES = [
 
 export type QuoteProjectType = (typeof QUOTE_PROJECT_TYPES)[number];
 
-export const QUOTE_CONTACT_METHODS = ["PHONE_CALL", "WHATSAPP", "EMAIL"] as const;
+export const QUOTE_CONTACT_METHODS = [
+  "PHONE_CALL",
+  "WHATSAPP",
+  "EMAIL",
+] as const;
 export type QuoteContactMethod = (typeof QUOTE_CONTACT_METHODS)[number];
 
-export const QUOTE_CONTACT_TIMES = ["ANYTIME", "MORNING", "AFTERNOON", "EVENING"] as const;
+export const QUOTE_CONTACT_TIMES = [
+  "ANYTIME",
+  "MORNING",
+  "AFTERNOON",
+  "EVENING",
+] as const;
 export type QuoteContactTime = (typeof QUOTE_CONTACT_TIMES)[number];
 
 export const QUOTE_URGENCY_LEVELS = [
@@ -315,7 +327,8 @@ export const QUOTE_INSTALLATION_STATUSES = [
   "UPGRADE_EXISTING_SYSTEM",
   "REPAIR_OR_REPLACEMENT",
 ] as const;
-export type QuoteInstallationStatus = (typeof QUOTE_INSTALLATION_STATUSES)[number];
+export type QuoteInstallationStatus =
+  (typeof QUOTE_INSTALLATION_STATUSES)[number];
 
 export const QUOTE_TEMPLATE_CATEGORIES = [
   "SOLAR_SYSTEM",
@@ -409,7 +422,9 @@ export const quoteRequestCreateSchema = z.object({
   answers: quoteStructuredAnswersSchema,
 });
 
-export type QuoteRequestCreateInput = z.infer<typeof quoteRequestCreateSchema> & {
+export type QuoteRequestCreateInput = z.infer<
+  typeof quoteRequestCreateSchema
+> & {
   customerUserId?: string | null;
   status?: QuoteRequestStatus;
   source?: QuoteRequestSource;
@@ -436,7 +451,10 @@ export const quoteRequestResponseSchema = z.object({
   quoteMessage: z.string().trim().max(12000).optional(),
   quoteItems: z.array(quoteLineItemSchema).default([]),
   discountAmount: z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    (value) =>
+      value === "" || value === null || value === undefined
+        ? undefined
+        : Number(value),
     z.number().nonnegative().max(1000000000).optional(),
   ),
   warrantyMode: z.enum(QUOTE_WARRANTY_MODES).optional(),
@@ -463,11 +481,17 @@ export const quoteRequestResponseSchema = z.object({
   deliveryMode: z.enum(QUOTE_FEE_MODES).optional(),
   installationMode: z.enum(QUOTE_FEE_MODES).optional(),
   depositAmount: z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    (value) =>
+      value === "" || value === null || value === undefined
+        ? undefined
+        : Number(value),
     z.number().nonnegative().max(1000000000).optional(),
   ),
   balanceAmount: z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    (value) =>
+      value === "" || value === null || value === undefined
+        ? undefined
+        : Number(value),
     z.number().nonnegative().max(1000000000).optional(),
   ),
   followUpNotes: z.string().trim().max(4000).optional(),
@@ -475,7 +499,9 @@ export const quoteRequestResponseSchema = z.object({
   sendSms: z.boolean().optional(),
 });
 
-export type QuoteRequestResponseInput = z.infer<typeof quoteRequestResponseSchema>;
+export type QuoteRequestResponseInput = z.infer<
+  typeof quoteRequestResponseSchema
+>;
 
 export const bulkQuoteRequestUpdateSchema = z.object({
   ids: z.array(z.string().trim().min(1)).min(1).max(200),
@@ -483,7 +509,9 @@ export const bulkQuoteRequestUpdateSchema = z.object({
   assignedAttendantId: z.string().trim().nullable().optional(),
 });
 
-export type BulkQuoteRequestUpdateInput = z.infer<typeof bulkQuoteRequestUpdateSchema>;
+export type BulkQuoteRequestUpdateInput = z.infer<
+  typeof bulkQuoteRequestUpdateSchema
+>;
 
 export const quotationTemplateSchema = z.object({
   templateName: z.string().trim().min(2).max(200),
@@ -513,9 +541,12 @@ export const quotationTemplateSchema = z.object({
 
 export type QuotationTemplateInput = z.infer<typeof quotationTemplateSchema>;
 
-const optionalEnumValue = <T extends readonly [string, ...string[]]>(values: T) =>
+const optionalEnumValue = <T extends readonly [string, ...string[]]>(
+  values: T,
+) =>
   z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? undefined : value),
+    (value) =>
+      value === "" || value === null || value === undefined ? undefined : value,
     z.enum(values).optional(),
   );
 
@@ -527,7 +558,8 @@ export const manualQuotationCreateSchema = z.object({
   county: z.string().trim().optional(),
   town: z.string().trim().optional(),
   specificLocation: z.string().trim().optional(),
-  projectType: optionalEnumValue(QUOTE_PROJECT_TYPES).default("SOLAR_HOME_SYSTEM"),
+  projectType:
+    optionalEnumValue(QUOTE_PROJECT_TYPES).default("SOLAR_HOME_SYSTEM"),
   propertyType: z.string().trim().optional(),
   preferredContactMethod: optionalEnumValue(QUOTE_CONTACT_METHODS),
   bestTimeToContact: optionalEnumValue(QUOTE_CONTACT_TIMES),
@@ -547,7 +579,10 @@ export const manualQuotationCreateSchema = z.object({
   quoteMessage: z.string().trim().max(12000).optional(),
   quoteItems: z.array(quoteLineItemSchema).default([]),
   discountAmount: z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    (value) =>
+      value === "" || value === null || value === undefined
+        ? undefined
+        : Number(value),
     z.number().nonnegative().max(1000000000).optional(),
   ),
   warrantyMode: z.enum(QUOTE_WARRANTY_MODES).optional(),
@@ -574,17 +609,25 @@ export const manualQuotationCreateSchema = z.object({
   deliveryMode: z.enum(QUOTE_FEE_MODES).optional(),
   installationMode: z.enum(QUOTE_FEE_MODES).optional(),
   depositAmount: z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    (value) =>
+      value === "" || value === null || value === undefined
+        ? undefined
+        : Number(value),
     z.number().nonnegative().max(1000000000).optional(),
   ),
   balanceAmount: z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    (value) =>
+      value === "" || value === null || value === undefined
+        ? undefined
+        : Number(value),
     z.number().nonnegative().max(1000000000).optional(),
   ),
   followUpNotes: z.string().trim().max(4000).optional(),
 });
 
-export type ManualQuotationCreateInput = z.infer<typeof manualQuotationCreateSchema>;
+export type ManualQuotationCreateInput = z.infer<
+  typeof manualQuotationCreateSchema
+>;
 
 type QuoteRequestRow = {
   id: string;
@@ -826,7 +869,9 @@ export type SerializedQuotationEvent = {
 };
 
 function normalizeEmail(value: unknown) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function normalizePhone(value: unknown) {
@@ -834,36 +879,52 @@ function normalizePhone(value: unknown) {
 }
 
 function isQuoteStatus(value: unknown): value is QuoteRequestStatus {
-  return QUOTE_REQUEST_STATUSES.includes(String(value).trim().toUpperCase() as QuoteRequestStatus);
+  return QUOTE_REQUEST_STATUSES.includes(
+    String(value).trim().toUpperCase() as QuoteRequestStatus,
+  );
 }
 
 function isQuoteSource(value: unknown): value is QuoteRequestSource {
-  return QUOTE_REQUEST_SOURCES.includes(String(value).trim().toUpperCase() as QuoteRequestSource);
+  return QUOTE_REQUEST_SOURCES.includes(
+    String(value).trim().toUpperCase() as QuoteRequestSource,
+  );
 }
 
-function isQuoteTemplateCategory(value: unknown): value is QuoteTemplateCategory {
+function isQuoteTemplateCategory(
+  value: unknown,
+): value is QuoteTemplateCategory {
   return QUOTE_TEMPLATE_CATEGORIES.includes(
     String(value).trim().toUpperCase() as QuoteTemplateCategory,
   );
 }
 
 function isQuoteProjectType(value: unknown): value is QuoteProjectType {
-  return QUOTE_PROJECT_TYPES.includes(String(value).trim().toUpperCase() as QuoteProjectType);
+  return QUOTE_PROJECT_TYPES.includes(
+    String(value).trim().toUpperCase() as QuoteProjectType,
+  );
 }
 
 function isQuoteContactMethod(value: unknown): value is QuoteContactMethod {
-  return QUOTE_CONTACT_METHODS.includes(String(value).trim().toUpperCase() as QuoteContactMethod);
+  return QUOTE_CONTACT_METHODS.includes(
+    String(value).trim().toUpperCase() as QuoteContactMethod,
+  );
 }
 
 function isQuoteContactTime(value: unknown): value is QuoteContactTime {
-  return QUOTE_CONTACT_TIMES.includes(String(value).trim().toUpperCase() as QuoteContactTime);
+  return QUOTE_CONTACT_TIMES.includes(
+    String(value).trim().toUpperCase() as QuoteContactTime,
+  );
 }
 
 function isQuoteUrgency(value: unknown): value is QuoteUrgency {
-  return QUOTE_URGENCY_LEVELS.includes(String(value).trim().toUpperCase() as QuoteUrgency);
+  return QUOTE_URGENCY_LEVELS.includes(
+    String(value).trim().toUpperCase() as QuoteUrgency,
+  );
 }
 
-function isQuoteInstallationStatus(value: unknown): value is QuoteInstallationStatus {
+function isQuoteInstallationStatus(
+  value: unknown,
+): value is QuoteInstallationStatus {
   return QUOTE_INSTALLATION_STATUSES.includes(
     String(value).trim().toUpperCase() as QuoteInstallationStatus,
   );
@@ -871,7 +932,9 @@ function isQuoteInstallationStatus(value: unknown): value is QuoteInstallationSt
 
 function toIsoString(value: Date | string | null | undefined) {
   if (!value) return null;
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+  return value instanceof Date
+    ? value.toISOString()
+    : new Date(value).toISOString();
 }
 
 function asJsonObject(value: Prisma.JsonValue | null | undefined) {
@@ -966,39 +1029,56 @@ export const QUOTATION_EVENT_SELECT_SQL = Prisma.sql`
   "createdAt"
 `;
 
-function serializeQuotationTemplate(row: QuotationTemplateRow): SerializedQuotationTemplate {
+function serializeQuotationTemplate(
+  row: QuotationTemplateRow,
+): SerializedQuotationTemplate {
   const templateData = asJsonObject(row.templateData);
   const items = Array.isArray(templateData?.items)
     ? sanitizeQuoteLineItems(
-        (templateData.items as Array<unknown>).reduce<Array<z.infer<typeof quoteLineItemSchema>>>(
-          (accumulator, item) => {
-            if (!item || typeof item !== "object") return accumulator;
-            const record = item as Record<string, unknown>;
-            accumulator.push({
-              itemName: String(record.itemName ?? ""),
-              description: typeof record.description === "string" ? String(record.description) : undefined,
-              quantity: Number(record.quantity ?? 0),
-              unitPrice: Number(record.unitPrice ?? 0),
-              defaultWarranty:
-                typeof record.defaultWarranty === "string" ? String(record.defaultWarranty) : undefined,
-              warranty: typeof record.warranty === "string" ? String(record.warranty) : undefined,
-              warrantyPeriod:
-                typeof record.warrantyPeriod === "number" ? Number(record.warrantyPeriod) : undefined,
-              warrantyUnit:
-                typeof record.warrantyUnit === "string"
-                  ? (String(record.warrantyUnit) as z.infer<typeof quoteLineItemSchema>["warrantyUnit"])
-                  : undefined,
-              warrantyNotes:
-                typeof record.warrantyNotes === "string" ? String(record.warrantyNotes) : undefined,
-              warrantySource:
-                typeof record.warrantySource === "string"
-                  ? (String(record.warrantySource) as z.infer<typeof quoteLineItemSchema>["warrantySource"])
-                  : undefined,
-            });
-            return accumulator;
-          },
-          [],
-        ),
+        (templateData.items as Array<unknown>).reduce<
+          Array<z.infer<typeof quoteLineItemSchema>>
+        >((accumulator, item) => {
+          if (!item || typeof item !== "object") return accumulator;
+          const record = item as Record<string, unknown>;
+          accumulator.push({
+            itemName: String(record.itemName ?? ""),
+            description:
+              typeof record.description === "string"
+                ? String(record.description)
+                : undefined,
+            quantity: Number(record.quantity ?? 0),
+            unitPrice: Number(record.unitPrice ?? 0),
+            defaultWarranty:
+              typeof record.defaultWarranty === "string"
+                ? String(record.defaultWarranty)
+                : undefined,
+            warranty:
+              typeof record.warranty === "string"
+                ? String(record.warranty)
+                : undefined,
+            warrantyPeriod:
+              typeof record.warrantyPeriod === "number"
+                ? Number(record.warrantyPeriod)
+                : undefined,
+            warrantyUnit:
+              typeof record.warrantyUnit === "string"
+                ? (String(record.warrantyUnit) as z.infer<
+                    typeof quoteLineItemSchema
+                  >["warrantyUnit"])
+                : undefined,
+            warrantyNotes:
+              typeof record.warrantyNotes === "string"
+                ? String(record.warrantyNotes)
+                : undefined,
+            warrantySource:
+              typeof record.warrantySource === "string"
+                ? (String(record.warrantySource) as z.infer<
+                    typeof quoteLineItemSchema
+                  >["warrantySource"])
+                : undefined,
+          });
+          return accumulator;
+        }, []),
       )
     : [];
   return {
@@ -1042,7 +1122,9 @@ function serializeQuotationTemplate(row: QuotationTemplateRow): SerializedQuotat
   };
 }
 
-function serializeQuotationEvent(row: QuotationEventRow): SerializedQuotationEvent {
+function serializeQuotationEvent(
+  row: QuotationEventRow,
+): SerializedQuotationEvent {
   return {
     id: row.id,
     quoteRequestId: row.quoteRequestId,
@@ -1083,18 +1165,35 @@ function getQuotationApprovalPolicy(input: {
   hasCustomDiscount?: boolean;
 }) {
   const total = Number(input.total || 0);
-  const paymentTerms = String(input.paymentTerms || "").trim().toUpperCase();
+  const paymentTerms = String(input.paymentTerms || "")
+    .trim()
+    .toUpperCase();
   if (total > 500000) {
-    return { requiresApproval: true, reason: "Quotation amount above KSh 500,000." };
+    return {
+      requiresApproval: true,
+      reason: "Quotation amount above KSh 500,000.",
+    };
   }
   if (total >= 100000 && total <= 500000) {
-    return { requiresApproval: true, reason: "Quotation amount in monitored approval band." };
+    return {
+      requiresApproval: true,
+      reason: "Quotation amount in monitored approval band.",
+    };
   }
   if (input.hasCustomDiscount) {
-    return { requiresApproval: true, reason: "Custom discount requires approval." };
+    return {
+      requiresApproval: true,
+      reason: "Custom discount requires approval.",
+    };
   }
-  if (paymentTerms && !["FULL_PAYMENT", "DEPOSIT_AND_BALANCE"].includes(paymentTerms)) {
-    return { requiresApproval: true, reason: "Custom payment term requires approval." };
+  if (
+    paymentTerms &&
+    !["FULL_PAYMENT", "DEPOSIT_AND_BALANCE"].includes(paymentTerms)
+  ) {
+    return {
+      requiresApproval: true,
+      reason: "Custom payment term requires approval.",
+    };
   }
   return { requiresApproval: false, reason: null as string | null };
 }
@@ -1175,12 +1274,18 @@ function canUseQuotationDesk(input: {
   return input.role === "ATTENDANT" || isQuoteRequestsStaffEmail(input.email);
 }
 
-export async function requireQuoteRequestsStaffActor(options?: { impersonateId?: string | null }) {
+export async function requireQuoteRequestsStaffActor(options?: {
+  impersonateId?: string | null;
+}) {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role ?? null;
   const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
-  const email = normalizeEmail((session?.user as { email?: string } | undefined)?.email);
-  const attendantCategory = (session?.user as { attendantCategory?: string | null } | undefined)?.attendantCategory ?? null;
+  const email = normalizeEmail(
+    (session?.user as { email?: string } | undefined)?.email,
+  );
+  const attendantCategory =
+    (session?.user as { attendantCategory?: string | null } | undefined)
+      ?.attendantCategory ?? null;
 
   if (!session || !userId) {
     return { ok: false as const, status: 401, error: "Unauthorized" };
@@ -1190,7 +1295,14 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
   if (hasElevatedRole && options?.impersonateId) {
     const targetUser = await prisma.user.findUnique({
       where: { id: options.impersonateId },
-      select: { id: true, name: true, email: true, attendantCategory: true, role: true, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        attendantCategory: true,
+        role: true,
+        isActive: true,
+      },
     });
     if (
       !targetUser ||
@@ -1201,7 +1313,11 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
         role: targetUser.role,
       })
     ) {
-      return { ok: false as const, status: 403, error: "Invalid quotation attendant target." };
+      return {
+        ok: false as const,
+        status: 403,
+        error: "Invalid quotation attendant target.",
+      };
     }
     return {
       ok: true as const,
@@ -1215,7 +1331,10 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
     };
   }
 
-  if (!hasElevatedRole && !canUseQuotationDesk({ email, attendantCategory, role })) {
+  if (
+    !hasElevatedRole &&
+    !canUseQuotationDesk({ email, attendantCategory, role })
+  ) {
     return { ok: false as const, status: 403, error: "Forbidden" };
   }
 
@@ -1254,7 +1373,10 @@ async function getAutomaticQuoteAssignmentUsers() {
 
   return QUOTE_REQUEST_STAFF_EMAILS.map((value) =>
     staffUsers.find((user) => normalizeEmail(user.email) === value),
-  ).filter((user): user is { id: string; name: string | null; email: string | null } => Boolean(user?.id));
+  ).filter(
+    (user): user is { id: string; name: string | null; email: string | null } =>
+      Boolean(user?.id),
+  );
 }
 
 export async function getQuoteStaffUserById(userId: string | null | undefined) {
@@ -1263,32 +1385,30 @@ export async function getQuoteStaffUserById(userId: string | null | undefined) {
   return staff.find((user) => user.id === userId) ?? null;
 }
 
-async function pickQuoteAssignee() {
+async function pickQuoteAssignee(source = "WEBSITE_REQUEST") {
   const orderedStaff = await getAutomaticQuoteAssignmentUsers();
   if (!orderedStaff.length) return null;
 
-  const counts = new Map<string, number>(orderedStaff.map((user) => [user.id, 0]));
   const rows = await prisma.$queryRaw<
-    Array<{ assignedAttendantId: string | null; total: bigint | number }>
+    Array<{ assignedAttendantId: string | null }>
   >(Prisma.sql`
-    SELECT "assignedAttendantId", COUNT(*)::bigint AS "total"
+    SELECT "assignedAttendantId"
     FROM "QuoteRequest"
-    WHERE "assignedAttendantId" IS NOT NULL
-    GROUP BY "assignedAttendantId"
+    WHERE "source" = ${source}
+      AND "assignedAttendantId" IN (${Prisma.join(orderedStaff.map((user) => user.id))})
+    ORDER BY "createdAt" DESC, "id" DESC
+    LIMIT 1
   `);
 
-  for (const row of rows) {
-    const staffId = row.assignedAttendantId ? String(row.assignedAttendantId) : null;
-    if (!staffId || !counts.has(staffId)) continue;
-    counts.set(staffId, Number(row.total ?? 0));
-  }
-
-  return orderedStaff.reduce((best, current) => {
-    if (!best) return current;
-    const bestCount = Number(counts.get(best.id) ?? 0);
-    const currentCount = Number(counts.get(current.id) ?? 0);
-    return currentCount < bestCount ? current : best;
-  }, orderedStaff[0] ?? null);
+  const lastAssigneeId = rows[0]?.assignedAttendantId ?? null;
+  const lastAssigneeIndex = orderedStaff.findIndex(
+    (user) => user.id === lastAssigneeId,
+  );
+  return (
+    orderedStaff[
+      (lastAssigneeIndex + 1 + orderedStaff.length) % orderedStaff.length
+    ] ?? orderedStaff[0]
+  );
 }
 
 export async function ensureQuoteRequestAssignments() {
@@ -1296,8 +1416,10 @@ export async function ensureQuoteRequestAssignments() {
   const orderedStaff = await getAutomaticQuoteAssignmentUsers();
   if (!orderedStaff.length) return orderedStaff;
 
-  const unassignedRows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT "id"
+  const unassignedRows = await prisma.$queryRaw<
+    Array<{ id: string; source: string | null }>
+  >(Prisma.sql`
+    SELECT "id", "source"
     FROM "QuoteRequest"
     WHERE "assignedAttendantId" IS NULL
     ORDER BY "createdAt" ASC
@@ -1305,10 +1427,9 @@ export async function ensureQuoteRequestAssignments() {
 
   if (!unassignedRows.length) return orderedStaff;
 
-  let roundRobinIndex = 0;
   for (const row of unassignedRows) {
-    const assignee = orderedStaff[roundRobinIndex % orderedStaff.length];
-    roundRobinIndex += 1;
+    const assignee = await pickQuoteAssignee(row.source || "WEBSITE_REQUEST");
+    if (!assignee) continue;
     await prisma.$executeRaw(Prisma.sql`
       UPDATE "QuoteRequest"
       SET
@@ -1323,7 +1444,9 @@ export async function ensureQuoteRequestAssignments() {
   return orderedStaff;
 }
 
-export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequest {
+export function serializeQuoteRequest(
+  row: QuoteRequestRow,
+): SerializedQuoteRequest {
   const normalizedStatus = normalizeQuoteRequestStatus(row.status);
   return {
     id: row.id,
@@ -1341,7 +1464,9 @@ export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequ
     preferredContactMethod: isQuoteContactMethod(row.preferredContactMethod)
       ? row.preferredContactMethod
       : null,
-    bestTimeToContact: isQuoteContactTime(row.bestTimeToContact) ? row.bestTimeToContact : null,
+    bestTimeToContact: isQuoteContactTime(row.bestTimeToContact)
+      ? row.bestTimeToContact
+      : null,
     urgency: isQuoteUrgency(row.urgency) ? row.urgency : null,
     installationStatus: isQuoteInstallationStatus(row.installationStatus)
       ? row.installationStatus
@@ -1401,8 +1526,12 @@ export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequ
 export async function createQuoteRequest(input: QuoteRequestCreateInput) {
   await ensureQuoteRequestsSchema();
   const quoteRef = await buildUniqueQuoteRequestRef();
-  const requestedAssignee = await getQuoteStaffUserById(input.assignedAttendantId ?? null);
-  const assignee = requestedAssignee || (await pickQuoteAssignee());
+  const requestedAssignee = await getQuoteStaffUserById(
+    input.assignedAttendantId ?? null,
+  );
+  const assignee =
+    requestedAssignee ||
+    (await pickQuoteAssignee(input.source || "WEBSITE_REQUEST"));
   const id = randomUUID();
   const quotationData = input.quotationData
     ? input.quotationData
@@ -1523,10 +1652,9 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
         input.source && input.source !== "WEBSITE_REQUEST"
           ? "Quotation created manually"
           : "Customer quote request created",
-      eventDetail:
-        input.templateName
-          ? `Template used: ${input.templateName}`
-          : input.quoteTitle || input.preferredProducts || null,
+      eventDetail: input.templateName
+        ? `Template used: ${input.templateName}`
+        : input.quoteTitle || input.preferredProducts || null,
       actorUserId: assignee?.id ?? null,
       actorName: assignee?.name ?? assignee?.email ?? null,
       metadata: {
@@ -1591,7 +1719,9 @@ export async function deleteQuoteRequest(
     WHERE "id" = ${id}
     LIMIT 1
   `);
-  const existing = existingRows[0] ? serializeQuoteRequest(existingRows[0]) : null;
+  const existing = existingRows[0]
+    ? serializeQuoteRequest(existingRows[0])
+    : null;
   if (!existing) return null;
 
   const assignedAttendantId = existing.assignedAttendant?.id ?? null;
@@ -1652,7 +1782,9 @@ export async function updateQuoteRequestResponse(
   await ensureQuoteRequestsSchema();
   const sanitizedItems = sanitizeQuoteLineItems(input.quoteItems);
   const subtotal = calculateQuoteTotal(sanitizedItems);
-  const discountAmount = roundCurrency(Math.max(0, Number(input.discountAmount || 0)));
+  const discountAmount = roundCurrency(
+    Math.max(0, Number(input.discountAmount || 0)),
+  );
   const discountedTotal = roundCurrency(Math.max(0, subtotal - discountAmount));
   const paymentBreakdown = normalizeQuotePaymentBreakdown({
     total: discountedTotal,
@@ -1666,7 +1798,9 @@ export async function updateQuoteRequestResponse(
     WHERE "id" = ${id}
     LIMIT 1
   `);
-  const existing = existingRows[0] ? serializeQuoteRequest(existingRows[0]) : null;
+  const existing = existingRows[0]
+    ? serializeQuoteRequest(existingRows[0])
+    : null;
   if (!existing) return null;
   const enriched = applyQuotationAiEnrichment({
     projectType: existing.projectType,
@@ -1679,7 +1813,9 @@ export async function updateQuoteRequestResponse(
     customWarranty: input.customWarranty,
     quoteMessage: input.quoteMessage,
     customerNotes: input.followUpNotes,
-    customerLocation: existing.customerLocation || [existing.town, existing.county].filter(Boolean).join(", "),
+    customerLocation:
+      existing.customerLocation ||
+      [existing.town, existing.county].filter(Boolean).join(", "),
     projectOverview: input.projectOverview,
     whatPriceIncludes: input.whatPriceIncludes,
     whatItCanPower: input.whatItCanPower,
@@ -1715,7 +1851,10 @@ export async function updateQuoteRequestResponse(
     projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
     aiGeneratedSections: enriched.generated,
     proposalVisibility: Object.fromEntries(
-      QUOTE_PROPOSAL_VISIBILITY_KEYS.map((key) => [key, input.proposalVisibility?.[key] !== false]),
+      QUOTE_PROPOSAL_VISIBILITY_KEYS.map((key) => [
+        key,
+        input.proposalVisibility?.[key] !== false,
+      ]),
     ),
     paymentMethod: input.paymentMethod || null,
     paymentTerms: paymentBreakdown.paymentTerms,
@@ -1775,10 +1914,9 @@ export async function updateQuoteRequestResponse(
       quoteRequestId: updated.id,
       eventType: nextStatus,
       eventLabel:
-        nextStatus === "QUOTED"
-          ? "Quotation issued"
-          : "Quotation updated",
-      eventDetail: input.quoteTitle?.trim() || input.followUpNotes?.trim() || null,
+        nextStatus === "QUOTED" ? "Quotation issued" : "Quotation updated",
+      eventDetail:
+        input.quoteTitle?.trim() || input.followUpNotes?.trim() || null,
       actorUserId: user.id,
       actorName: user.name ?? user.email ?? "Quotation attendant",
       metadata: {
@@ -1811,7 +1949,10 @@ export async function updateQuoteRequestStatus(
   await appendQuotationEvent({
     quoteRequestId: updated.id,
     eventType: "STATUS_UPDATED",
-    eventLabel: status === "CONTACTED" ? "Customer contacted" : "Quotation status updated",
+    eventLabel:
+      status === "CONTACTED"
+        ? "Customer contacted"
+        : "Quotation status updated",
     eventDetail:
       status === "CONTACTED"
         ? "Customer was contacted; no quotation is currently required."
@@ -1830,14 +1971,20 @@ export async function backfillQuoteRequestsForCustomerAccount(input: {
   normalizedEmails: string[];
 }) {
   await ensureQuoteRequestsSchema();
-  const phoneVariants = [...new Set(input.phoneVariants.map(normalizePhone).filter(Boolean))];
-  const normalizedEmails = [...new Set(input.normalizedEmails.map(normalizeEmail).filter(Boolean))];
+  const phoneVariants = [
+    ...new Set(input.phoneVariants.map(normalizePhone).filter(Boolean)),
+  ];
+  const normalizedEmails = [
+    ...new Set(input.normalizedEmails.map(normalizeEmail).filter(Boolean)),
+  ];
 
   if (!phoneVariants.length && !normalizedEmails.length) return;
 
   const conditions: Prisma.Sql[] = [];
   if (phoneVariants.length) {
-    conditions.push(Prisma.sql`"customerPhone" IN (${Prisma.join(phoneVariants)})`);
+    conditions.push(
+      Prisma.sql`"customerPhone" IN (${Prisma.join(phoneVariants)})`,
+    );
   }
   if (normalizedEmails.length) {
     conditions.push(
@@ -1863,12 +2010,20 @@ export async function listCustomerQuoteRequests(input: {
   take?: number;
 }) {
   await ensureQuoteRequestsSchema();
-  const conditions: Prisma.Sql[] = [Prisma.sql`"customerUserId" = ${input.userId}`];
-  const phoneVariants = [...new Set(input.phoneVariants.map(normalizePhone).filter(Boolean))];
-  const normalizedEmails = [...new Set(input.normalizedEmails.map(normalizeEmail).filter(Boolean))];
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`"customerUserId" = ${input.userId}`,
+  ];
+  const phoneVariants = [
+    ...new Set(input.phoneVariants.map(normalizePhone).filter(Boolean)),
+  ];
+  const normalizedEmails = [
+    ...new Set(input.normalizedEmails.map(normalizeEmail).filter(Boolean)),
+  ];
 
   if (phoneVariants.length) {
-    conditions.push(Prisma.sql`"customerPhone" IN (${Prisma.join(phoneVariants)})`);
+    conditions.push(
+      Prisma.sql`"customerPhone" IN (${Prisma.join(phoneVariants)})`,
+    );
   }
   if (normalizedEmails.length) {
     conditions.push(
@@ -1896,12 +2051,20 @@ export async function getCustomerQuoteRequestById(input: {
   normalizedEmails: string[];
 }) {
   await ensureQuoteRequestsSchema();
-  const conditions: Prisma.Sql[] = [Prisma.sql`"customerUserId" = ${input.userId}`];
-  const phoneVariants = [...new Set(input.phoneVariants.map(normalizePhone).filter(Boolean))];
-  const normalizedEmails = [...new Set(input.normalizedEmails.map(normalizeEmail).filter(Boolean))];
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`"customerUserId" = ${input.userId}`,
+  ];
+  const phoneVariants = [
+    ...new Set(input.phoneVariants.map(normalizePhone).filter(Boolean)),
+  ];
+  const normalizedEmails = [
+    ...new Set(input.normalizedEmails.map(normalizeEmail).filter(Boolean)),
+  ];
 
   if (phoneVariants.length) {
-    conditions.push(Prisma.sql`"customerPhone" IN (${Prisma.join(phoneVariants)})`);
+    conditions.push(
+      Prisma.sql`"customerPhone" IN (${Prisma.join(phoneVariants)})`,
+    );
   }
   if (normalizedEmails.length) {
     conditions.push(
@@ -1974,11 +2137,19 @@ export async function listQuotationEvents(quoteRequestId: string) {
 
 export async function bulkUpdateQuoteRequests(
   input: BulkQuoteRequestUpdateInput,
-  actor: { userId: string; actorUserId?: string | null; name: string | null; email: string | null },
+  actor: {
+    userId: string;
+    actorUserId?: string | null;
+    name: string | null;
+    email: string | null;
+  },
 ) {
   await ensureQuoteRequestsSchema();
-  const ids = [...new Set(input.ids.map((value) => value.trim()).filter(Boolean))];
-  if (!ids.length) return { updatedCount: 0, requests: [] as SerializedQuoteRequest[] };
+  const ids = [
+    ...new Set(input.ids.map((value) => value.trim()).filter(Boolean)),
+  ];
+  if (!ids.length)
+    return { updatedCount: 0, requests: [] as SerializedQuoteRequest[] };
 
   const assignee =
     input.assignedAttendantId === undefined
@@ -2001,7 +2172,10 @@ export async function bulkUpdateQuoteRequests(
       WHERE "id" IN (${Prisma.join(ids)})
       ORDER BY "updatedAt" DESC, "createdAt" DESC
     `);
-    return { updatedCount: requests.length, requests: requests.map(serializeQuoteRequest) };
+    return {
+      updatedCount: requests.length,
+      requests: requests.map(serializeQuoteRequest),
+    };
   }
 
   await prisma.$executeRaw(Prisma.sql`
@@ -2009,13 +2183,19 @@ export async function bulkUpdateQuoteRequests(
     SET
       "status" = ${input.status ?? Prisma.raw(`"status"`)},
       "assignedAttendantId" = ${
-        assignmentsChanged ? (assignee?.id ?? null) : Prisma.raw(`"assignedAttendantId"`)
+        assignmentsChanged
+          ? (assignee?.id ?? null)
+          : Prisma.raw(`"assignedAttendantId"`)
       },
       "assignedAttendantEmail" = ${
-        assignmentsChanged ? (assignee?.email ?? null) : Prisma.raw(`"assignedAttendantEmail"`)
+        assignmentsChanged
+          ? (assignee?.email ?? null)
+          : Prisma.raw(`"assignedAttendantEmail"`)
       },
       "assignedAttendantName" = ${
-        assignmentsChanged ? (assignee?.name ?? null) : Prisma.raw(`"assignedAttendantName"`)
+        assignmentsChanged
+          ? (assignee?.name ?? null)
+          : Prisma.raw(`"assignedAttendantName"`)
       },
       "updatedAt" = CURRENT_TIMESTAMP
     WHERE "id" IN (${Prisma.join(ids)})
@@ -2033,8 +2213,18 @@ export async function bulkUpdateQuoteRequests(
     serialized.map((request) =>
       appendQuotationEvent({
         quoteRequestId: request.id,
-        eventType: statusChanged && assignmentsChanged ? "BULK_STATUS_AND_ASSIGNMENT_UPDATED" : statusChanged ? "BULK_STATUS_UPDATED" : "BULK_ASSIGNMENT_UPDATED",
-        eventLabel: statusChanged && assignmentsChanged ? "Bulk status and owner updated" : statusChanged ? "Bulk status updated" : "Bulk owner updated",
+        eventType:
+          statusChanged && assignmentsChanged
+            ? "BULK_STATUS_AND_ASSIGNMENT_UPDATED"
+            : statusChanged
+              ? "BULK_STATUS_UPDATED"
+              : "BULK_ASSIGNMENT_UPDATED",
+        eventLabel:
+          statusChanged && assignmentsChanged
+            ? "Bulk status and owner updated"
+            : statusChanged
+              ? "Bulk status updated"
+              : "Bulk owner updated",
         eventDetail: [
           statusChanged ? `Status: ${input.status}` : null,
           assignmentsChanged
@@ -2063,10 +2253,14 @@ export async function createManualQuotation(
   const projectType = input.projectType || "SOLAR_HOME_SYSTEM";
   const quoteItems = sanitizeQuoteLineItems(input.quoteItems);
   if (!quoteItems.length) {
-    throw new Error("Add at least one quotation item before saving the quotation.");
+    throw new Error(
+      "Add at least one quotation item before saving the quotation.",
+    );
   }
   const subtotal = calculateQuoteTotal(quoteItems);
-  const discountAmount = roundCurrency(Math.max(0, Number(input.discountAmount || 0)));
+  const discountAmount = roundCurrency(
+    Math.max(0, Number(input.discountAmount || 0)),
+  );
   const discountedTotal = roundCurrency(Math.max(0, subtotal - discountAmount));
   const paymentBreakdown = normalizeQuotePaymentBreakdown({
     total: discountedTotal,
@@ -2076,7 +2270,10 @@ export async function createManualQuotation(
   });
   const enriched = applyQuotationAiEnrichment({
     projectType,
-    quoteTitle: input.quoteTitle || input.preferredProducts || projectType.replace(/_/g, " "),
+    quoteTitle:
+      input.quoteTitle ||
+      input.preferredProducts ||
+      projectType.replace(/_/g, " "),
     items: quoteItems,
     total: paymentBreakdown.total,
     paymentTerms: paymentBreakdown.paymentTerms,
@@ -2085,7 +2282,9 @@ export async function createManualQuotation(
     customWarranty: input.customWarranty,
     quoteMessage: input.quoteMessage,
     customerNotes: input.notes,
-    customerLocation: [input.specificLocation, input.town, input.county].filter(Boolean).join(", "),
+    customerLocation: [input.specificLocation, input.town, input.county]
+      .filter(Boolean)
+      .join(", "),
     projectOverview: input.projectOverview,
     whatPriceIncludes: input.whatPriceIncludes,
     whatItCanPower: input.whatItCanPower,
@@ -2103,7 +2302,10 @@ export async function createManualQuotation(
     requiresApproval: false,
     assignedAttendantId: input.assignedAttendantId || actor.id,
     projectType,
-    quoteTitle: input.quoteTitle || input.preferredProducts || projectType.replace(/_/g, " "),
+    quoteTitle:
+      input.quoteTitle ||
+      input.preferredProducts ||
+      projectType.replace(/_/g, " "),
     quoteMessage: input.quoteMessage,
     quotationData: {
       items: quoteItems,
@@ -2130,7 +2332,10 @@ export async function createManualQuotation(
       projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
       aiGeneratedSections: enriched.generated,
       proposalVisibility: Object.fromEntries(
-        QUOTE_PROPOSAL_VISIBILITY_KEYS.map((key) => [key, input.proposalVisibility?.[key] !== false]),
+        QUOTE_PROPOSAL_VISIBILITY_KEYS.map((key) => [
+          key,
+          input.proposalVisibility?.[key] !== false,
+        ]),
       ),
       paymentMethod: input.paymentMethod || null,
       paymentTerms: paymentBreakdown.paymentTerms,
@@ -2233,11 +2438,13 @@ export async function createQuotationTemplate(
       ${input.defaultBalanceAmount ?? null},
       ${input.defaultPdfLayout?.trim() || null},
       ${input.isActive !== false},
-      ${{
-        items: sanitizeQuoteLineItems(input.items),
-        defaultDiscountAmount: input.defaultDiscountAmount ?? null,
-        projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
-      } as Prisma.JsonObject},
+      ${
+        {
+          items: sanitizeQuoteLineItems(input.items),
+          defaultDiscountAmount: input.defaultDiscountAmount ?? null,
+          projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
+        } as Prisma.JsonObject
+      },
       ${actor.id},
       ${actor.id},
       CURRENT_TIMESTAMP,
@@ -2302,13 +2509,17 @@ export async function duplicateQuotationTemplate(
   return createQuotationTemplate(
     {
       templateName: `${existing.templateName} Copy`,
-      category: isQuoteTemplateCategory(existing.category) ? existing.category : undefined,
+      category: isQuoteTemplateCategory(existing.category)
+        ? existing.category
+        : undefined,
       ownerAttendantId: existing.ownerAttendantId || undefined,
       systemSize: existing.systemSize || undefined,
       brand: existing.brand || undefined,
       projectReferenceLinks:
-        typeof asJsonObject(existing.templateData)?.projectReferenceLinks === "string"
-          ? (asJsonObject(existing.templateData)?.projectReferenceLinks as string)
+        typeof asJsonObject(existing.templateData)?.projectReferenceLinks ===
+        "string"
+          ? (asJsonObject(existing.templateData)
+              ?.projectReferenceLinks as string)
           : undefined,
       projectOverview: existing.projectOverview || undefined,
       whatItCanPower: existing.whatItCanPower || undefined,
@@ -2319,14 +2530,19 @@ export async function duplicateQuotationTemplate(
       afterSalesSupport: existing.afterSalesSupport || undefined,
       terms: existing.terms || undefined,
       internalNotes: existing.internalNotes || undefined,
-      defaultPaymentMethod: (existing.defaultPaymentMethod as QuotePaymentMethod | null) || undefined,
-      defaultPaymentTerms: (existing.defaultPaymentTerms as QuotePaymentTerms | null) || undefined,
+      defaultPaymentMethod:
+        (existing.defaultPaymentMethod as QuotePaymentMethod | null) ||
+        undefined,
+      defaultPaymentTerms:
+        (existing.defaultPaymentTerms as QuotePaymentTerms | null) || undefined,
       defaultDepositAmount: existing.defaultDepositAmount ?? undefined,
       defaultBalanceAmount: existing.defaultBalanceAmount ?? undefined,
       defaultPdfLayout: existing.defaultPdfLayout || undefined,
       isActive: existing.isActive,
       items: Array.isArray(asJsonObject(existing.templateData)?.items)
-        ? ((asJsonObject(existing.templateData)?.items as Array<z.infer<typeof quoteLineItemSchema>>))
+        ? (asJsonObject(existing.templateData)?.items as Array<
+            z.infer<typeof quoteLineItemSchema>
+          >)
         : [],
     },
     actor,
@@ -2365,11 +2581,13 @@ export async function updateQuotationTemplate(
       "defaultBalanceAmount" = ${input.defaultBalanceAmount ?? null},
       "defaultPdfLayout" = ${input.defaultPdfLayout?.trim() || null},
       "isActive" = ${input.isActive !== false},
-      "templateData" = ${{
-        items: sanitizeQuoteLineItems(input.items),
-        defaultDiscountAmount: input.defaultDiscountAmount ?? null,
-        projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
-      } as Prisma.JsonObject},
+      "templateData" = ${
+        {
+          items: sanitizeQuoteLineItems(input.items),
+          defaultDiscountAmount: input.defaultDiscountAmount ?? null,
+          projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
+        } as Prisma.JsonObject
+      },
       "updatedById" = ${actor.id},
       "updatedAt" = CURRENT_TIMESTAMP
     WHERE "id" = ${templateId}
