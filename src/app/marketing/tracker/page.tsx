@@ -6,8 +6,14 @@ import MarketingTrackerLegacySections, {
 } from "@/app/marketing/tracker/MarketingTrackerLegacySections";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
-import { WEBSITE_ORDER_ACTIVE_STATUSES } from "@/lib/websiteOrders";
+import {
+  getTradingPeriodFor,
+  parseTradingPeriodKey,
+} from "@/lib/tradingPeriod";
+import {
+  WEBSITE_ORDER_ACTIVE_STATUSES,
+  websiteCheckoutOrderWhere,
+} from "@/lib/websiteOrders";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import {
   isCarriedForwardPendingItem,
@@ -43,7 +49,10 @@ const AGENT_OPEN_STATUSES = [
   "delivered_pending_balance",
 ] as const;
 
-function canAccessOperationsHub(role: string | null | undefined, attendantCategory: string | null | undefined) {
+function canAccessOperationsHub(
+  role: string | null | undefined,
+  attendantCategory: string | null | undefined,
+) {
   return (
     role === "ADMIN" ||
     attendantCategory === "DIRECT_SALES_OPS" ||
@@ -81,7 +90,10 @@ function ageLabel(value: string | Date | null | undefined) {
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 }
 
-function staffRoleLabel(role: string | null | undefined, attendantCategory: string | null | undefined) {
+function staffRoleLabel(
+  role: string | null | undefined,
+  attendantCategory: string | null | undefined,
+) {
   if (role === "ADMIN") return "Admin";
   if (attendantCategory === "DIRECT_SALES_OPS") return "Direct Sales Ops";
   if (attendantCategory === "MARKETING_OPS") return "Marketing Ops";
@@ -124,11 +136,17 @@ function explainTrackerError(error: unknown) {
   return String(error);
 }
 
-async function safeLoad<T>(label: string, loader: () => Promise<T>, fallback: T): Promise<T> {
+async function safeLoad<T>(
+  label: string,
+  loader: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
   try {
     return await loader();
   } catch (error) {
-    console.warn(`[marketing.tracker] ${label} unavailable: ${explainTrackerError(error)}`);
+    console.warn(
+      `[marketing.tracker] ${label} unavailable: ${explainTrackerError(error)}`,
+    );
     return fallback;
   }
 }
@@ -172,16 +190,23 @@ function PendingKpiCard({
       href={href}
       className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-emerald-400/30 hover:bg-white/[0.05]"
     >
-      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</div>
+      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        {title}
+      </div>
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
           <div className="text-4xl font-semibold text-white">{count}</div>
           <div className="mt-1 text-sm text-slate-400">Pending</div>
           <div className="mt-2 text-[11px] text-slate-500">
-            {breakdownLabel} {currentPeriodCount} · {secondaryBreakdownLabel} {carriedForwardCount}
+            {breakdownLabel} {currentPeriodCount} · {secondaryBreakdownLabel}{" "}
+            {carriedForwardCount}
           </div>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${tone}`}>Open</span>
+        <span
+          className={`rounded-full border px-3 py-1 text-xs font-medium ${tone}`}
+        >
+          Open
+        </span>
       </div>
     </Link>
   );
@@ -233,11 +258,21 @@ type TrackerAgentOrder = Awaited<ReturnType<typeof getAdminAgentSales>>[number];
 function readWebsiteOrderAssignment(
   metadata: Prisma.JsonValue | null | undefined,
 ): TrackerWebsiteOrder["assignedAttendant"] {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+    return null;
   const source = metadata as Record<string, unknown>;
-  const id = typeof source.assignedAttendantId === "string" ? source.assignedAttendantId : null;
-  const email = typeof source.assignedAttendantEmail === "string" ? source.assignedAttendantEmail : null;
-  const name = typeof source.assignedAttendantName === "string" ? source.assignedAttendantName : null;
+  const id =
+    typeof source.assignedAttendantId === "string"
+      ? source.assignedAttendantId
+      : null;
+  const email =
+    typeof source.assignedAttendantEmail === "string"
+      ? source.assignedAttendantEmail
+      : null;
+  const name =
+    typeof source.assignedAttendantName === "string"
+      ? source.assignedAttendantName
+      : null;
   if (!id && !email && !name) return null;
   return { id, email, name };
 }
@@ -245,7 +280,7 @@ function readWebsiteOrderAssignment(
 async function listTrackerWebsiteOrders(): Promise<TrackerWebsiteOrder[]> {
   const rows = await prisma.websiteOrder.findMany({
     where: {
-      source: "WEBSITE",
+      ...websiteCheckoutOrderWhere,
       status: { in: WEBSITE_ORDER_ACTIVE_STATUSES },
     },
     orderBy: { createdAt: "desc" },
@@ -294,43 +329,45 @@ async function listVisibleQuoteRequests(input: {
         ...getQuoteRequestStatusAliases("APPROVED"),
       ]),
     );
-    const rows = await prisma.$queryRaw<Array<{
-      id: string;
-      customerName: string;
-      customerPhone: string;
-      customerEmail: string | null;
-      customerLocation: string | null;
-      county: string | null;
-      town: string | null;
-      status: string;
-      assignedAttendantId: string | null;
-      assignedAttendantEmail: string | null;
-      assignedAttendantName: string | null;
-      quoteTitle: string | null;
-      quoteMessage: string | null;
-      quotationData: Prisma.JsonValue | null;
-      responseMetadata: Prisma.JsonValue | null;
-      respondedAt: Date | string | null;
-      respondedById: string | null;
-      metadata: Prisma.JsonValue | null;
-      createdAt: Date | string;
-      updatedAt: Date | string;
-      quoteRef: string;
-      customerUserId: string | null;
-      specificLocation: string | null;
-      projectType: string | null;
-      propertyType: string | null;
-      preferredContactMethod: string | null;
-      bestTimeToContact: string | null;
-      urgency: string | null;
-      installationStatus: string | null;
-      loadDescription: string | null;
-      budgetRange: string | null;
-      preferredProducts: string | null;
-      notes: string | null;
-      answersJson: Prisma.JsonValue | null;
-      source: string | null;
-    }>>(Prisma.sql`
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        customerName: string;
+        customerPhone: string;
+        customerEmail: string | null;
+        customerLocation: string | null;
+        county: string | null;
+        town: string | null;
+        status: string;
+        assignedAttendantId: string | null;
+        assignedAttendantEmail: string | null;
+        assignedAttendantName: string | null;
+        quoteTitle: string | null;
+        quoteMessage: string | null;
+        quotationData: Prisma.JsonValue | null;
+        responseMetadata: Prisma.JsonValue | null;
+        respondedAt: Date | string | null;
+        respondedById: string | null;
+        metadata: Prisma.JsonValue | null;
+        createdAt: Date | string;
+        updatedAt: Date | string;
+        quoteRef: string;
+        customerUserId: string | null;
+        specificLocation: string | null;
+        projectType: string | null;
+        propertyType: string | null;
+        preferredContactMethod: string | null;
+        bestTimeToContact: string | null;
+        urgency: string | null;
+        installationStatus: string | null;
+        loadDescription: string | null;
+        budgetRange: string | null;
+        preferredProducts: string | null;
+        notes: string | null;
+        answersJson: Prisma.JsonValue | null;
+        source: string | null;
+      }>
+    >(Prisma.sql`
       SELECT *
       FROM "QuoteRequest"
       WHERE UPPER(COALESCE("status", '')) IN (${Prisma.join(uniqueActionableStatuses)})
@@ -355,8 +392,14 @@ async function listVisibleQuoteRequests(input: {
       town: row.town,
       projectType: row.projectType as SerializedQuoteRequest["projectType"],
       status: normalizeQuoteRequestStatus(row.status),
-      source: QUOTE_REQUEST_SOURCES.includes(String(row.source || "").trim().toUpperCase() as (typeof QUOTE_REQUEST_SOURCES)[number])
-        ? (String(row.source).trim().toUpperCase() as SerializedQuoteRequest["source"])
+      source: QUOTE_REQUEST_SOURCES.includes(
+        String(row.source || "")
+          .trim()
+          .toUpperCase() as (typeof QUOTE_REQUEST_SOURCES)[number],
+      )
+        ? (String(row.source)
+            .trim()
+            .toUpperCase() as SerializedQuoteRequest["source"])
         : "WEBSITE_REQUEST",
       assignedAttendant: row.assignedAttendantId
         ? {
@@ -366,12 +409,32 @@ async function listVisibleQuoteRequests(input: {
           }
         : null,
       quoteTitle: row.quoteTitle,
-      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
-      updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : new Date(row.updatedAt).toISOString(),
+      createdAt:
+        row.createdAt instanceof Date
+          ? row.createdAt.toISOString()
+          : new Date(row.createdAt).toISOString(),
+      updatedAt:
+        row.updatedAt instanceof Date
+          ? row.updatedAt.toISOString()
+          : new Date(row.updatedAt).toISOString(),
     })) as Array<
       Pick<
         SerializedQuoteRequest,
-        "id" | "customerName" | "customerPhone" | "customerEmail" | "customerUserId" | "customerLocation" | "county" | "town" | "projectType" | "status" | "source" | "assignedAttendant" | "quoteTitle" | "createdAt" | "updatedAt"
+        | "id"
+        | "customerName"
+        | "customerPhone"
+        | "customerEmail"
+        | "customerUserId"
+        | "customerLocation"
+        | "county"
+        | "town"
+        | "projectType"
+        | "status"
+        | "source"
+        | "assignedAttendant"
+        | "quoteTitle"
+        | "createdAt"
+        | "updatedAt"
       >
     >;
   }
@@ -411,25 +474,47 @@ async function listPodFollowUp(limit = 5): Promise<PodFollowUpItem[]> {
   for (const receipt of receipts as PodReceiptFollowUpRow[]) {
     const receiptData = receipt.data ?? {};
     const podDelivery =
-      receiptData.podDelivery && typeof receiptData.podDelivery === "object" && !Array.isArray(receiptData.podDelivery)
+      receiptData.podDelivery &&
+      typeof receiptData.podDelivery === "object" &&
+      !Array.isArray(receiptData.podDelivery)
         ? (receiptData.podDelivery as Record<string, unknown>)
         : null;
     const receiptTotals = receipt.totals ?? {};
-    const receiptNumber = String(receipt.order?.orderNumber ?? receiptData.receiptNumber ?? receipt.id);
+    const receiptNumber = String(
+      receipt.order?.orderNumber ?? receiptData.receiptNumber ?? receipt.id,
+    );
     if (seen.has(receiptNumber)) continue;
     seen.add(receiptNumber);
 
     const total =
-      Number(receiptTotals.total ?? receiptTotals.grandTotal ?? receipt.order?.totalAmount ?? receiptData.amount ?? 0) || 0;
+      Number(
+        receiptTotals.total ??
+          receiptTotals.grandTotal ??
+          receipt.order?.totalAmount ??
+          receiptData.amount ??
+          0,
+      ) || 0;
     const status = String(podDelivery?.status ?? "pending");
     items.push({
       id: String(receipt.id),
       receiptNumber,
-      customerName: String(receipt.order?.customerName ?? receiptData.customerName ?? "POD customer"),
-      customerPhone: String(receipt.order?.customerPhone ?? receiptData.customerPhone ?? "").trim() || null,
+      customerName: String(
+        receipt.order?.customerName ??
+          receiptData.customerName ??
+          "POD customer",
+      ),
+      customerPhone:
+        String(
+          receipt.order?.customerPhone ?? receiptData.customerPhone ?? "",
+        ).trim() || null,
       total,
       status,
-      createdAt: receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt instanceof Date ? receipt.createdAt : null,
+      createdAt:
+        receipt.generatedAt instanceof Date
+          ? receipt.generatedAt
+          : receipt.createdAt instanceof Date
+            ? receipt.createdAt
+            : null,
       updatedAt:
         typeof podDelivery?.updatedAt === "string"
           ? new Date(String(podDelivery.updatedAt))
@@ -451,18 +536,23 @@ type TrackerPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function MarketingTrackerPage({ searchParams }: TrackerPageProps) {
+export default async function MarketingTrackerPage({
+  searchParams,
+}: TrackerPageProps) {
   const session = await auth();
-  const actor = session?.user as {
-    id?: string | null;
-    email?: string | null;
-    name?: string | null;
-    role?: string | null;
-    attendantCategory?: string | null;
-  } | undefined;
+  const actor = session?.user as
+    | {
+        id?: string | null;
+        email?: string | null;
+        name?: string | null;
+        role?: string | null;
+        attendantCategory?: string | null;
+      }
+    | undefined;
 
   if (!session || !actor?.id) redirect("/admin/login");
-  if (!canAccessOperationsHub(actor.role, actor.attendantCategory)) redirect("/not-authorized");
+  if (!canAccessOperationsHub(actor.role, actor.attendantCategory))
+    redirect("/not-authorized");
 
   const resolvedSearchParams = (await searchParams) ?? {};
   const periodKeyParam = Array.isArray(resolvedSearchParams.periodKey)
@@ -471,9 +561,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   const impersonateIdParam = Array.isArray(resolvedSearchParams.impersonateId)
     ? resolvedSearchParams.impersonateId[0]
     : resolvedSearchParams.impersonateId;
-  const impersonateId = typeof impersonateIdParam === "string" && impersonateIdParam.trim()
-    ? impersonateIdParam.trim()
-    : null;
+  const impersonateId =
+    typeof impersonateIdParam === "string" && impersonateIdParam.trim()
+      ? impersonateIdParam.trim()
+      : null;
   let user = actor;
 
   if (actor.role === "ADMIN" && impersonateId) {
@@ -488,13 +579,17 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       },
     });
 
-    if (target && canAccessOperationsHub(target.role, target.attendantCategory)) {
+    if (
+      target &&
+      canAccessOperationsHub(target.role, target.attendantCategory)
+    ) {
       user = target;
     }
   }
 
   const userId = String(user.id);
-  const period = parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
+  const period =
+    parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
   const nairobiDate = new Intl.DateTimeFormat("en-KE", {
     weekday: "short",
     day: "2-digit",
@@ -516,23 +611,43 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     podFollowUp,
     voiceSnapshot,
   ] = await Promise.all([
-    safeLoad("website orders", () => listTrackerWebsiteOrders(), [] as TrackerWebsiteOrder[]),
-    safeLoad("quote requests", () => listVisibleQuoteRequests({ userId, role: user.role }), [] as SerializedQuoteRequest[]),
-    safeLoad("agent orders", () => getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }), [] as TrackerAgentOrder[]),
-    safeLoad("pod follow-up", () => listPodFollowUp(5), [] as PodFollowUpItem[]),
-    safeLoad("voice operations", async () => {
-      const voiceViewer: VoiceViewer = {
-        actorUserId: String(user.id),
-        actorRole: user.role ?? null,
-        actorEmail: user.email?.toLowerCase() ?? null,
-        targetUserId: String(user.id),
-        targetRole: user.role ?? null,
-        targetAttendantCategory: user.attendantCategory ?? null,
-        isAdmin: false,
-        impersonateId: null,
-      };
-      return getVoiceLiveSnapshot({ viewer: voiceViewer, scope: "mine" });
-    }, null as Awaited<ReturnType<typeof getVoiceLiveSnapshot>> | null),
+    safeLoad(
+      "website orders",
+      () => listTrackerWebsiteOrders(),
+      [] as TrackerWebsiteOrder[],
+    ),
+    safeLoad(
+      "quote requests",
+      () => listVisibleQuoteRequests({ userId, role: user.role }),
+      [] as SerializedQuoteRequest[],
+    ),
+    safeLoad(
+      "agent orders",
+      () => getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }),
+      [] as TrackerAgentOrder[],
+    ),
+    safeLoad(
+      "pod follow-up",
+      () => listPodFollowUp(5),
+      [] as PodFollowUpItem[],
+    ),
+    safeLoad(
+      "voice operations",
+      async () => {
+        const voiceViewer: VoiceViewer = {
+          actorUserId: String(user.id),
+          actorRole: user.role ?? null,
+          actorEmail: user.email?.toLowerCase() ?? null,
+          targetUserId: String(user.id),
+          targetRole: user.role ?? null,
+          targetAttendantCategory: user.attendantCategory ?? null,
+          isAdmin: false,
+          impersonateId: null,
+        };
+        return getVoiceLiveSnapshot({ viewer: voiceViewer, scope: "mine" });
+      },
+      null as Awaited<ReturnType<typeof getVoiceLiveSnapshot>> | null,
+    ),
   ]);
 
   const websiteOrders =
@@ -543,7 +658,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
             order.assignedAttendant?.id === user.id ||
             (order.assignedAttendant?.email &&
               user.email &&
-              order.assignedAttendant.email.toLowerCase() === user.email.toLowerCase()),
+              order.assignedAttendant.email.toLowerCase() ===
+                user.email.toLowerCase()),
         );
   const websiteOrdersPending = websiteOrders.filter(
     (order) =>
@@ -559,12 +675,14 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   const websiteOrdersInPeriod = websiteOrdersPending.filter((order) =>
     wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, period),
   );
-  const websiteOrdersCarriedForward = websiteOrdersPending.filter((order) =>
-    isCarriedForwardPendingItem({
-      status: order.status,
-      createdAt: order.createdAt,
-      periodStart: period.start,
-    }) && !wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, period),
+  const websiteOrdersCarriedForward = websiteOrdersPending.filter(
+    (order) =>
+      isCarriedForwardPendingItem({
+        status: order.status,
+        createdAt: order.createdAt,
+        periodStart: period.start,
+      }) &&
+      !wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, period),
   );
 
   const agentOrders =
@@ -575,69 +693,83 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
             sale.assignedProcessorId === user.id ||
             (sale.assignedProcessorEmail &&
               user.email &&
-              sale.assignedProcessorEmail.toLowerCase() === user.email.toLowerCase()),
+              sale.assignedProcessorEmail.toLowerCase() ===
+                user.email.toLowerCase()),
         );
-  const openAgentOrders = agentOrders.filter((sale) =>
-    isOpenWorkItemStatus(sale.status) &&
-    shouldShowPendingWorkItem({
-      status: sale.status,
-      createdAt: sale.createdAt,
-      updatedAt: sale.updatedAt,
-      periodStart: period.start,
-      periodEnd: period.end,
-    }),
+  const openAgentOrders = agentOrders.filter(
+    (sale) =>
+      isOpenWorkItemStatus(sale.status) &&
+      shouldShowPendingWorkItem({
+        status: sale.status,
+        createdAt: sale.createdAt,
+        updatedAt: sale.updatedAt,
+        periodStart: period.start,
+        periodEnd: period.end,
+      }),
   );
   const openAgentOrdersInPeriod = openAgentOrders.filter((sale) =>
     wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, period),
   );
-  const openAgentOrdersCarriedForward = openAgentOrders.filter((sale) =>
-    isCarriedForwardPendingItem({
-      status: sale.status,
-      createdAt: sale.createdAt,
-      periodStart: period.start,
-    }) && !wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, period),
+  const openAgentOrdersCarriedForward = openAgentOrders.filter(
+    (sale) =>
+      isCarriedForwardPendingItem({
+        status: sale.status,
+        createdAt: sale.createdAt,
+        periodStart: period.start,
+      }) &&
+      !wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, period),
   );
 
-  const quoteRequests = rawQuoteRequests.filter((request) =>
-    isWebsiteQuotationRequestSource(request.source) &&
-    isPendingQuotationStatus(request.status) &&
-    shouldShowPendingWorkItem({
-      status: request.status,
-      createdAt: request.createdAt,
-      updatedAt: request.updatedAt,
-      periodStart: period.start,
-      periodEnd: period.end,
-    }),
+  const quoteRequests = rawQuoteRequests.filter(
+    (request) =>
+      isWebsiteQuotationRequestSource(request.source) &&
+      isPendingQuotationStatus(request.status) &&
+      shouldShowPendingWorkItem({
+        status: request.status,
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+        periodStart: period.start,
+        periodEnd: period.end,
+      }),
   );
   const quoteRequestsInPeriod = quoteRequests.filter((request) =>
     wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, period),
   );
-  const quoteRequestsCarriedForward = quoteRequests.filter((request) =>
-    isCarriedForwardPendingItem({
-      status: request.status,
-      createdAt: request.createdAt,
-      periodStart: period.start,
-    }) && !wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, period),
+  const quoteRequestsCarriedForward = quoteRequests.filter(
+    (request) =>
+      isCarriedForwardPendingItem({
+        status: request.status,
+        createdAt: request.createdAt,
+        periodStart: period.start,
+      }) &&
+      !wasCreatedOrUpdatedInPeriod(
+        request.createdAt,
+        request.updatedAt,
+        period,
+      ),
   );
-  const pendingPodFollowUp = podFollowUp.filter((item) =>
-    isPendingPodStatus(item.status) &&
-    shouldShowPendingWorkItem({
-      status: item.status,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      periodStart: period.start,
-      periodEnd: period.end,
-    }),
+  const pendingPodFollowUp = podFollowUp.filter(
+    (item) =>
+      isPendingPodStatus(item.status) &&
+      shouldShowPendingWorkItem({
+        status: item.status,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        periodStart: period.start,
+        periodEnd: period.end,
+      }),
   );
   const pendingPodFollowUpInPeriod = pendingPodFollowUp.filter((item) =>
     wasCreatedOrUpdatedInPeriod(item.createdAt, item.updatedAt, period),
   );
-  const pendingPodFollowUpCarriedForward = pendingPodFollowUp.filter((item) =>
-    isCarriedForwardPendingItem({
-      status: item.status,
-      createdAt: item.createdAt,
-      periodStart: period.start,
-    }) && !wasCreatedOrUpdatedInPeriod(item.createdAt, item.updatedAt, period),
+  const pendingPodFollowUpCarriedForward = pendingPodFollowUp.filter(
+    (item) =>
+      isCarriedForwardPendingItem({
+        status: item.status,
+        createdAt: item.createdAt,
+        periodStart: period.start,
+      }) &&
+      !wasCreatedOrUpdatedInPeriod(item.createdAt, item.updatedAt, period),
   );
   const needsAttentionQueue: QueueItem[] = [
     ...websiteOrdersPending.slice(0, 6).map((order) => ({
@@ -655,7 +787,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       status: websiteStatusLabel(order.status),
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
-      assignedTo: order.assignedAttendant?.name || order.assignedAttendant?.email || null,
+      assignedTo:
+        order.assignedAttendant?.name || order.assignedAttendant?.email || null,
       href: withImpersonateId(
         `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
         impersonateId,
@@ -679,8 +812,12 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       status: sale.statusMeta.label,
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
-      assignedTo: sale.assignedProcessorName || sale.assignedProcessorEmail || null,
-      href: withImpersonateId(`/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`, impersonateId),
+      assignedTo:
+        sale.assignedProcessorName || sale.assignedProcessorEmail || null,
+      href: withImpersonateId(
+        `/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`,
+        impersonateId,
+      ),
       carriedForward: isCarriedForwardPendingItem({
         status: sale.status,
         createdAt: sale.createdAt,
@@ -702,7 +839,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       status: quoteStatusLabel(request.status),
       createdAt: request.createdAt,
       updatedAt: request.updatedAt,
-      assignedTo: request.assignedAttendant?.name || request.assignedAttendant?.email || null,
+      assignedTo:
+        request.assignedAttendant?.name ||
+        request.assignedAttendant?.email ||
+        null,
       href: withImpersonateId(
         `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(request.id)}`,
         impersonateId,
@@ -739,198 +879,275 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     })),
   ]
     .sort((left, right) => {
-      const leftCreatedAt = left.createdAt ? new Date(left.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
-      const rightCreatedAt = right.createdAt ? new Date(right.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
-      if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
+      const leftCreatedAt = left.createdAt
+        ? new Date(left.createdAt).getTime()
+        : Number.MAX_SAFE_INTEGER;
+      const rightCreatedAt = right.createdAt
+        ? new Date(right.createdAt).getTime()
+        : Number.MAX_SAFE_INTEGER;
+      if (leftCreatedAt !== rightCreatedAt)
+        return leftCreatedAt - rightCreatedAt;
 
       const leftAmount = Number(left.amount ?? 0);
       const rightAmount = Number(right.amount ?? 0);
       if (leftAmount !== rightAmount) return rightAmount - leftAmount;
 
-      const leftUpdatedAt = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
-      const rightUpdatedAt = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+      const leftUpdatedAt = left.updatedAt
+        ? new Date(left.updatedAt).getTime()
+        : 0;
+      const rightUpdatedAt = right.updatedAt
+        ? new Date(right.updatedAt).getTime()
+        : 0;
       return rightUpdatedAt - leftUpdatedAt;
     })
     .slice(0, 14);
 
-  const voiceMissedCount = Array.isArray(voiceSnapshot?.missedLeads) ? voiceSnapshot.missedLeads.length : 0;
-  const voiceFollowUpCount = Array.isArray(voiceSnapshot?.followUps) ? voiceSnapshot.followUps.length : 0;
+  const voiceMissedCount = Array.isArray(voiceSnapshot?.missedLeads)
+    ? voiceSnapshot.missedLeads.length
+    : 0;
+  const voiceFollowUpCount = Array.isArray(voiceSnapshot?.followUps)
+    ? voiceSnapshot.followUps.length
+    : 0;
   const voiceQueueCount = voiceMissedCount + voiceFollowUpCount;
 
   return (
     <div className="mx-auto max-w-[1420px] space-y-4 text-slate-100 sm:space-y-6">
-        <header className="rounded-[22px] border border-white/10 bg-gradient-to-br from-white/8 via-white/4 to-transparent p-4 shadow-2xl shadow-black/20 sm:rounded-[28px] sm:p-6">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_520px] xl:items-start">
-            <div className="space-y-4">
-              <div className="text-xs uppercase tracking-[0.26em] text-cyan-200/80">{staffRoleLabel(user.role, user.attendantCategory)}</div>
-              <div>
-                <h1 className="max-w-2xl text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">
-                  Good {nairobiHour < 12 ? "morning" : nairobiHour < 17 ? "afternoon" : "evening"}, {user.name?.split(" ")[0] || "there"}.
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                  Your sales queues, quotations, customer follow-ups, daily reporting, commission, and payroll are connected here.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
-                  {user.name || user.email || "Operations staff"}
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
-                  {period.label}
-                </span>
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
-                  Today • {nairobiDate} • Nairobi
-                </span>
-              </div>
+      <header className="rounded-[22px] border border-white/10 bg-gradient-to-br from-white/8 via-white/4 to-transparent p-4 shadow-2xl shadow-black/20 sm:rounded-[28px] sm:p-6">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_520px] xl:items-start">
+          <div className="space-y-4">
+            <div className="text-xs uppercase tracking-[0.26em] text-cyan-200/80">
+              {staffRoleLabel(user.role, user.attendantCategory)}
             </div>
-
-            <div className="min-w-0 rounded-3xl border border-white/10 bg-[#091223] p-4">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Statistics period</div>
-                  <div className="mt-1 text-lg font-semibold text-white">{period.label}</div>
-                  <div className="mt-1 text-xs text-slate-400">Today · {nairobiDate}</div>
-                </div>
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">Nairobi</span>
-              </div>
-              <MarketingTrackerTopActions />
+            <div>
+              <h1 className="max-w-2xl text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">
+                Good{" "}
+                {nairobiHour < 12
+                  ? "morning"
+                  : nairobiHour < 17
+                    ? "afternoon"
+                    : "evening"}
+                , {user.name?.split(" ")[0] || "there"}.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                Your sales queues, quotations, customer follow-ups, daily
+                reporting, commission, and payroll are connected here.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
+                {user.name || user.email || "Operations staff"}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
+                {period.label}
+              </span>
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
+                Today • {nairobiDate} • Nairobi
+              </span>
             </div>
           </div>
-        </header>
 
-        <section id="attention" className="scroll-mt-36 rounded-[22px] border border-white/10 bg-[#091223] p-3 shadow-2xl shadow-black/20 sm:scroll-mt-6 sm:rounded-[28px] sm:p-5">
-          <div className="mb-5">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Needs Attention</div>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Sales Control Center</h2>
+          <div className="min-w-0 rounded-3xl border border-white/10 bg-[#091223] p-4">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                  Statistics period
+                </div>
+                <div className="mt-1 text-lg font-semibold text-white">
+                  {period.label}
+                </div>
+                <div className="mt-1 text-xs text-slate-400">
+                  Today · {nairobiDate}
+                </div>
+              </div>
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
+                Nairobi
+              </span>
+            </div>
+            <MarketingTrackerTopActions />
+          </div>
+        </div>
+      </header>
+
+      <section
+        id="attention"
+        className="scroll-mt-36 rounded-[22px] border border-white/10 bg-[#091223] p-3 shadow-2xl shadow-black/20 sm:scroll-mt-6 sm:rounded-[28px] sm:p-5"
+      >
+        <div className="mb-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+            Needs Attention
+          </div>
+          <h2 className="mt-2 text-2xl font-semibold text-white">
+            Sales Control Center
+          </h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Live pending counts for web orders, agent orders, quotations, and
+            POD follow-up, including unresolved carried-forward work.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <PendingKpiCard
+            title="Web Orders"
+            count={websiteOrdersPending.length}
+            currentPeriodCount={websiteOrdersInPeriod.length}
+            carriedForwardCount={websiteOrdersCarriedForward.length}
+            href={withImpersonateId(
+              "/marketing/receipts?tab=web-orders",
+              impersonateId,
+            )}
+          />
+          <PendingKpiCard
+            title="Agent Orders"
+            count={openAgentOrders.length}
+            currentPeriodCount={openAgentOrdersInPeriod.length}
+            carriedForwardCount={openAgentOrdersCarriedForward.length}
+            href={withImpersonateId("/marketing/agent-orders", impersonateId)}
+          />
+          <PendingKpiCard
+            title="Quotations"
+            count={quoteRequests.length}
+            currentPeriodCount={quoteRequestsInPeriod.length}
+            carriedForwardCount={quoteRequestsCarriedForward.length}
+            href={withImpersonateId(
+              "/marketing/receipts?tab=quotations",
+              impersonateId,
+            )}
+          />
+          <PendingKpiCard
+            title="POD Follow-up"
+            count={pendingPodFollowUp.length}
+            currentPeriodCount={pendingPodFollowUpInPeriod.length}
+            carriedForwardCount={pendingPodFollowUpCarriedForward.length}
+            href={withImpersonateId(
+              "/marketing/receipts?tab=pos&pod=pending",
+              impersonateId,
+            )}
+          />
+          <PendingKpiCard
+            title="Missed Calls / Follow-ups"
+            count={voiceQueueCount}
+            currentPeriodCount={voiceMissedCount}
+            carriedForwardCount={voiceFollowUpCount}
+            href={withImpersonateId(
+              "/attendant/voice?tab=followups",
+              impersonateId,
+            )}
+            breakdownLabel="Missed"
+            secondaryBreakdownLabel="Follow-ups"
+          />
+        </div>
+
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Unified Work Queue
+            </div>
             <p className="mt-1 text-sm text-slate-400">
-              Live pending counts for web orders, agent orders, quotations, and POD follow-up, including unresolved carried-forward work.
+              Only actual action-needed items appear here, ordered by oldest
+              pending first. Unresolved older work stays visible until it is
+              closed.
             </p>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <PendingKpiCard
-              title="Web Orders"
-              count={websiteOrdersPending.length}
-              currentPeriodCount={websiteOrdersInPeriod.length}
-              carriedForwardCount={websiteOrdersCarriedForward.length}
-              href={withImpersonateId("/marketing/receipts?tab=web-orders", impersonateId)}
-            />
-            <PendingKpiCard
-              title="Agent Orders"
-              count={openAgentOrders.length}
-              currentPeriodCount={openAgentOrdersInPeriod.length}
-              carriedForwardCount={openAgentOrdersCarriedForward.length}
-              href={withImpersonateId("/marketing/agent-orders", impersonateId)}
-            />
-            <PendingKpiCard
-              title="Quotations"
-              count={quoteRequests.length}
-              currentPeriodCount={quoteRequestsInPeriod.length}
-              carriedForwardCount={quoteRequestsCarriedForward.length}
-              href={withImpersonateId("/marketing/receipts?tab=quotations", impersonateId)}
-            />
-            <PendingKpiCard
-              title="POD Follow-up"
-              count={pendingPodFollowUp.length}
-              currentPeriodCount={pendingPodFollowUpInPeriod.length}
-              carriedForwardCount={pendingPodFollowUpCarriedForward.length}
-              href={withImpersonateId("/marketing/receipts?tab=pos&pod=pending", impersonateId)}
-            />
-            <PendingKpiCard
-              title="Missed Calls / Follow-ups"
-              count={voiceQueueCount}
-              currentPeriodCount={voiceMissedCount}
-              carriedForwardCount={voiceFollowUpCount}
-              href={withImpersonateId("/attendant/voice?tab=followups", impersonateId)}
-              breakdownLabel="Missed"
-              secondaryBreakdownLabel="Follow-ups"
-            />
+          <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-300">
+            {needsAttentionQueue.length} pending item
+            {needsAttentionQueue.length === 1 ? "" : "s"}
           </div>
+        </div>
 
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Unified Work Queue</div>
-              <p className="mt-1 text-sm text-slate-400">
-                Only actual action-needed items appear here, ordered by oldest pending first. Unresolved older work stays visible until it is closed.
-              </p>
-            </div>
-            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-300">
-              {needsAttentionQueue.length} pending item{needsAttentionQueue.length === 1 ? "" : "s"}
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-3">
-            {needsAttentionQueue.length ? (
-              needsAttentionQueue.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-3 md:grid-cols-2 xl:grid-cols-[120px_minmax(180px,1.3fr)_minmax(130px,.8fr)_minmax(120px,.7fr)_minmax(130px,.8fr)_minmax(130px,auto)] xl:items-center"
-                >
-                  <div className="flex flex-col items-start gap-2">
-                    <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
-                      {item.type}
+        <div className="mt-5 grid gap-3">
+          {needsAttentionQueue.length ? (
+            needsAttentionQueue.map((item) => (
+              <div
+                key={item.id}
+                className="grid gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-3 md:grid-cols-2 xl:grid-cols-[120px_minmax(180px,1.3fr)_minmax(130px,.8fr)_minmax(120px,.7fr)_minmax(130px,.8fr)_minmax(130px,auto)] xl:items-center"
+              >
+                <div className="flex flex-col items-start gap-2">
+                  <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                    {item.type}
+                  </span>
+                  {item.carriedForward ? (
+                    <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                      Carried forward
                     </span>
-                    {item.carriedForward ? (
-                      <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100">
-                        Carried forward
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="min-w-0">
-                    <Link href={withImpersonateId(item.customerHref, impersonateId)} className="line-clamp-2 font-semibold leading-5 text-white transition hover:text-cyan-200">
-                      {item.customerName}
-                    </Link>
-                    <div className="mt-1 text-sm text-slate-400">{item.phone || "No phone captured"}</div>
-                  </div>
-                  <div className="text-sm text-slate-300">
-                    <div className="font-medium text-white">{item.amount != null ? formatKes(item.amount) : "Amount pending"}</div>
-                    <div className="mt-1 capitalize text-slate-400">{item.status}</div>
-                  </div>
-                  <div className="text-sm text-slate-400">
-                    <div>{formatDateOnly(item.createdAt)}</div>
-                    <div className="mt-1">{ageLabel(item.createdAt)}</div>
-                  </div>
-                  <div className="text-sm text-slate-400">
-                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Assigned</div>
-                    <div className="mt-1 text-slate-200">{item.assignedTo || "Shared queue"}</div>
-                  </div>
-                  <div className="flex items-center justify-start md:col-span-2 xl:col-span-1 xl:justify-end">
-                    <Link
-                      href={item.href}
-                      className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
-                    >
-                      {item.type === "Agent Order"
-                        ? "Process order"
-                        : item.type === "Web Order"
-                          ? "Open order"
-                          : item.type === "Quotation"
-                            ? "View quotation"
-                            : "Open POD"}
-                    </Link>
+                  ) : null}
+                </div>
+                <div className="min-w-0">
+                  <Link
+                    href={withImpersonateId(item.customerHref, impersonateId)}
+                    className="line-clamp-2 font-semibold leading-5 text-white transition hover:text-cyan-200"
+                  >
+                    {item.customerName}
+                  </Link>
+                  <div className="mt-1 text-sm text-slate-400">
+                    {item.phone || "No phone captured"}
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">
-                No pending work right now.
+                <div className="text-sm text-slate-300">
+                  <div className="font-medium text-white">
+                    {item.amount != null
+                      ? formatKes(item.amount)
+                      : "Amount pending"}
+                  </div>
+                  <div className="mt-1 capitalize text-slate-400">
+                    {item.status}
+                  </div>
+                </div>
+                <div className="text-sm text-slate-400">
+                  <div>{formatDateOnly(item.createdAt)}</div>
+                  <div className="mt-1">{ageLabel(item.createdAt)}</div>
+                </div>
+                <div className="text-sm text-slate-400">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                    Assigned
+                  </div>
+                  <div className="mt-1 text-slate-200">
+                    {item.assignedTo || "Shared queue"}
+                  </div>
+                </div>
+                <div className="flex items-center justify-start md:col-span-2 xl:col-span-1 xl:justify-end">
+                  <Link
+                    href={item.href}
+                    className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
+                  >
+                    {item.type === "Agent Order"
+                      ? "Process order"
+                      : item.type === "Web Order"
+                        ? "Open order"
+                        : item.type === "Quotation"
+                          ? "View quotation"
+                          : "Open POD"}
+                  </Link>
+                </div>
               </div>
-            )}
-          </div>
-        </section>
-
-        <section id="daily-report" className="scroll-mt-36 rounded-[22px] border border-white/10 bg-[#091223] p-3 shadow-2xl shadow-black/20 sm:scroll-mt-6 sm:rounded-[28px] sm:p-5">
-          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Staff Report & Payroll</div>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Daily reporting, quick stats, and payslip tools</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Complete the daily checklist, review your period stats, and download payroll documents from one integrated section.
-              </p>
+            ))
+          ) : (
+            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">
+              No pending work right now.
             </div>
-          </div>
-          <MarketingTrackerLegacySections />
-        </section>
+          )}
+        </div>
+      </section>
 
+      <section
+        id="daily-report"
+        className="scroll-mt-36 rounded-[22px] border border-white/10 bg-[#091223] p-3 shadow-2xl shadow-black/20 sm:scroll-mt-6 sm:rounded-[28px] sm:p-5"
+      >
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Staff Report & Payroll
+            </div>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              Daily reporting, quick stats, and payslip tools
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Complete the daily checklist, review your period stats, and
+              download payroll documents from one integrated section.
+            </p>
+          </div>
+        </div>
+        <MarketingTrackerLegacySections />
+      </section>
     </div>
   );
 }

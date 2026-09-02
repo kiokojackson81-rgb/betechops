@@ -1,7 +1,21 @@
-import { WebsiteOrderStatus, WebsiteOrderType, type Prisma } from "@prisma/client";
+import {
+  WebsiteOrderStatus,
+  WebsiteOrderType,
+  type Prisma,
+} from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+// Projects share the customer-account order table for tracking, but belong in
+// the Projects desk rather than the checkout-only Web Orders queues.
+export const websiteCheckoutOrderWhere = {
+  source: "WEBSITE",
+  NOT: [
+    { metadata: { path: ["receiptFlowMode"], equals: "project" } },
+    { metadata: { path: ["customerType"], equals: "project" } },
+  ],
+} satisfies Prisma.WebsiteOrderWhereInput;
 
 const WEBSITE_ORDER_SCHEMA_SQL = [
   `DO $$
@@ -158,13 +172,15 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
 ] as const;
 
 export const websiteOrderCreateSchema = z.object({
-  items: z.array(
-    z.object({
-      productId: z.string().trim().min(1),
-      quantity: z.number().int().positive(),
-      bookingType: z.enum(["INSTALLATION"]).optional(),
-    }),
-  ).min(1),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().trim().min(1),
+        quantity: z.number().int().positive(),
+        bookingType: z.enum(["INSTALLATION"]).optional(),
+      }),
+    )
+    .min(1),
   customerName: z.string().trim().min(2),
   customerPhone: z.string().trim().min(7),
   customerEmail: z.string().trim().email().optional().or(z.literal("")),
@@ -172,11 +188,13 @@ export const websiteOrderCreateSchema = z.object({
   deliveryMethod: z.string().trim().min(2),
   paymentMethod: z.string().trim().min(2),
   notes: z.string().trim().max(4000).optional(),
-  projectBooking: z.object({
-    zone: z.enum(["ZONE_1", "ZONE_2", "ZONE_3"]),
-    paymentStructure: z.enum(["FULL_UPFRONT", "DEPOSIT_30"]),
-    preferredInstallationDate: z.string().date().optional(),
-  }).optional(),
+  projectBooking: z
+    .object({
+      zone: z.enum(["ZONE_1", "ZONE_2", "ZONE_3"]),
+      paymentStructure: z.enum(["FULL_UPFRONT", "DEPOSIT_30"]),
+      preferredInstallationDate: z.string().date().optional(),
+    })
+    .optional(),
 });
 
 export type WebsiteOrderCreateInput = z.infer<typeof websiteOrderCreateSchema>;
@@ -243,17 +261,28 @@ export const websiteOrderAdminInclude = {
   },
 } satisfies Prisma.WebsiteOrderInclude;
 
-export function deriveWebsiteOrderType(deliveryMethod: string, paymentMethod: string) {
+export function deriveWebsiteOrderType(
+  deliveryMethod: string,
+  paymentMethod: string,
+) {
   const delivery = deliveryMethod.toLowerCase();
   const payment = paymentMethod.toLowerCase();
   if (delivery.includes("pickup")) return WebsiteOrderType.SHOP_PICKUP;
   if (payment.includes("quote")) return WebsiteOrderType.QUOTE_FIRST;
-  if (payment.includes("pay on delivery") || payment.includes("pod")) return WebsiteOrderType.POD;
+  if (payment.includes("pay on delivery") || payment.includes("pod"))
+    return WebsiteOrderType.POD;
   return WebsiteOrderType.PREPAID;
 }
 
-export function isWebsiteOrderPod(orderType: WebsiteOrderType, paymentMethod: string) {
-  return orderType === WebsiteOrderType.POD || paymentMethod.toLowerCase().includes("pay on delivery") || paymentMethod.toLowerCase().includes("pod");
+export function isWebsiteOrderPod(
+  orderType: WebsiteOrderType,
+  paymentMethod: string,
+) {
+  return (
+    orderType === WebsiteOrderType.POD ||
+    paymentMethod.toLowerCase().includes("pay on delivery") ||
+    paymentMethod.toLowerCase().includes("pod")
+  );
 }
 
 export function buildWebsiteOrderRef() {
@@ -262,9 +291,14 @@ export function buildWebsiteOrderRef() {
   return `BT-WEB-${stamp}-${random}`;
 }
 
-export function toNumberValue(value: Prisma.Decimal | number | string | null | undefined) {
+export function toNumberValue(
+  value: Prisma.Decimal | number | string | null | undefined,
+) {
   if (value == null) return null;
-  const numeric = typeof value === "object" && "toNumber" in value ? value.toNumber() : Number(value);
+  const numeric =
+    typeof value === "object" && "toNumber" in value
+      ? value.toNumber()
+      : Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 }
 
@@ -344,32 +378,46 @@ type WebsiteOrderReferralAgentSummary = {
   referralCode: string | null;
 };
 
-const WEBSITE_ORDER_STAFF_EMAILS = ["jeniffer@betech.co.ke", "brendah@betech.co.ke"] as const;
+const WEBSITE_ORDER_STAFF_EMAILS = [
+  "jeniffer@betech.co.ke",
+  "brendah@betech.co.ke",
+] as const;
 
 function normalizeEmail(value: unknown) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 export function isWebsiteOrdersStaffEmail(email: unknown) {
-  return WEBSITE_ORDER_STAFF_EMAILS.includes(normalizeEmail(email) as (typeof WEBSITE_ORDER_STAFF_EMAILS)[number]);
+  return WEBSITE_ORDER_STAFF_EMAILS.includes(
+    normalizeEmail(email) as (typeof WEBSITE_ORDER_STAFF_EMAILS)[number],
+  );
 }
 
 function readWebsiteOrderAssignment(metadata: unknown) {
-  const base = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : {};
+  const base =
+    metadata && typeof metadata === "object"
+      ? (metadata as Record<string, unknown>)
+      : {};
   const assignedAttendantId =
-    typeof base.assignedAttendantId === "string" && base.assignedAttendantId.trim()
+    typeof base.assignedAttendantId === "string" &&
+    base.assignedAttendantId.trim()
       ? base.assignedAttendantId.trim()
       : null;
   const assignedAttendantEmail =
-    typeof base.assignedAttendantEmail === "string" && base.assignedAttendantEmail.trim()
+    typeof base.assignedAttendantEmail === "string" &&
+    base.assignedAttendantEmail.trim()
       ? base.assignedAttendantEmail.trim().toLowerCase()
       : null;
   const assignedAttendantName =
-    typeof base.assignedAttendantName === "string" && base.assignedAttendantName.trim()
+    typeof base.assignedAttendantName === "string" &&
+    base.assignedAttendantName.trim()
       ? base.assignedAttendantName.trim()
       : null;
 
-  if (!assignedAttendantId && !assignedAttendantEmail && !assignedAttendantName) return null;
+  if (!assignedAttendantId && !assignedAttendantEmail && !assignedAttendantName)
+    return null;
   return {
     id: assignedAttendantId,
     email: assignedAttendantEmail,
@@ -378,7 +426,10 @@ function readWebsiteOrderAssignment(metadata: unknown) {
 }
 
 function readWebsiteOrderMetadata(metadata: unknown) {
-  const base = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : {};
+  const base =
+    metadata && typeof metadata === "object"
+      ? (metadata as Record<string, unknown>)
+      : {};
   const readString = (key: string) => {
     const value = base[key];
     return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -393,15 +444,23 @@ function readWebsiteOrderMetadata(metadata: unknown) {
     paymentConfirmationMethod: readString("paymentConfirmationMethod"),
     paymentConfirmationReference: readString("paymentConfirmationReference"),
     deliveredAt: readString("deliveredAt"),
-    receiptFlowMode: receiptFlowModeRaw === "pod" || receiptFlowModeRaw === "normal" ? receiptFlowModeRaw : null,
+    receiptFlowMode:
+      receiptFlowModeRaw === "pod" || receiptFlowModeRaw === "normal"
+        ? receiptFlowModeRaw
+        : null,
   } as const;
 }
 
-async function buildWebsiteOrderReferralAgentMap(orders: WebsiteOrderListRow[]) {
+async function buildWebsiteOrderReferralAgentMap(
+  orders: WebsiteOrderListRow[],
+) {
   const agentIds = Array.from(
     new Set(
       orders
-        .flatMap((order) => [order.referredByAgentId, order.customerUser?.referredByAgentId])
+        .flatMap((order) => [
+          order.referredByAgentId,
+          order.customerUser?.referredByAgentId,
+        ])
         .map((value) => String(value || "").trim())
         .filter(Boolean),
     ),
@@ -429,7 +488,13 @@ async function buildWebsiteOrderReferralAgentMap(orders: WebsiteOrderListRow[]) 
 
   return new Map<string, WebsiteOrderReferralAgentSummary>(
     users.map((user) => {
-      const profileName = [user.agentProfile?.firstName, user.agentProfile?.lastName].filter(Boolean).join(" ").trim();
+      const profileName = [
+        user.agentProfile?.firstName,
+        user.agentProfile?.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
       return [
         user.id,
         {
@@ -452,8 +517,12 @@ function serializeWebsiteOrderRow(
   const total = toNumberValue(order.total) ?? 0;
   const metadata = order.metadata ?? null;
   const lifecycle = readWebsiteOrderMetadata(metadata);
-  const referredByAgentId = order.referredByAgentId || order.customerUser?.referredByAgentId || null;
-  const attributionCodeUsed = order.attributionCodeUsed || order.customerUser?.attributionCodeUsed || null;
+  const referredByAgentId =
+    order.referredByAgentId || order.customerUser?.referredByAgentId || null;
+  const attributionCodeUsed =
+    order.attributionCodeUsed ||
+    order.customerUser?.attributionCodeUsed ||
+    null;
 
   return {
     id: order.id,
@@ -465,7 +534,9 @@ function serializeWebsiteOrderRow(
     customerEmail: order.customerEmail,
     referredByAgentId,
     attributionCodeUsed,
-    referredByAgent: referredByAgentId ? referralAgentsById.get(referredByAgentId) ?? null : null,
+    referredByAgent: referredByAgentId
+      ? (referralAgentsById.get(referredByAgentId) ?? null)
+      : null,
     deliveryMethod: order.deliveryMethod,
     paymentMethod: order.paymentMethod,
     orderType: order.orderType,
@@ -531,7 +602,9 @@ function serializeWebsiteOrderRow(
 
 export async function serializeWebsiteOrders(orders: WebsiteOrderListRow[]) {
   const referralAgentsById = await buildWebsiteOrderReferralAgentMap(orders);
-  return orders.map((order) => serializeWebsiteOrderRow(order, referralAgentsById));
+  return orders.map((order) =>
+    serializeWebsiteOrderRow(order, referralAgentsById),
+  );
 }
 
 export async function serializeWebsiteOrder(order: WebsiteOrderListRow) {
@@ -539,9 +612,15 @@ export async function serializeWebsiteOrder(order: WebsiteOrderListRow) {
   return serialized;
 }
 
-export function buildWebsiteOrderReceiptPrefill(order: SerializedWebsiteOrder, mode: "pod" | "normal") {
-  const isPickup = order.orderType === WebsiteOrderType.SHOP_PICKUP || order.deliveryMethod.toLowerCase().includes("pickup");
-  const customerType = mode === "pod" ? "pod" : isPickup ? "online" : "delivery";
+export function buildWebsiteOrderReceiptPrefill(
+  order: SerializedWebsiteOrder,
+  mode: "pod" | "normal",
+) {
+  const isPickup =
+    order.orderType === WebsiteOrderType.SHOP_PICKUP ||
+    order.deliveryMethod.toLowerCase().includes("pickup");
+  const customerType =
+    mode === "pod" ? "pod" : isPickup ? "online" : "delivery";
   const paymentMethod =
     order.paymentConfirmationMethod?.toUpperCase() === "MPESA"
       ? "MPESA"
@@ -553,7 +632,9 @@ export function buildWebsiteOrderReceiptPrefill(order: SerializedWebsiteOrder, m
   const notes = [
     `Website order ref: ${order.orderRef}`,
     `Website payment option: ${order.paymentMethod}`,
-    order.paymentConfirmationMethod ? `Website payment confirmed: ${order.paymentConfirmationMethod}${order.paymentConfirmationReference ? ` (${order.paymentConfirmationReference})` : ""}` : "",
+    order.paymentConfirmationMethod
+      ? `Website payment confirmed: ${order.paymentConfirmationMethod}${order.paymentConfirmationReference ? ` (${order.paymentConfirmationReference})` : ""}`
+      : "",
     `Website delivery method: ${order.deliveryMethod}`,
     order.notes || "",
   ]
@@ -571,7 +652,10 @@ export function buildWebsiteOrderReceiptPrefill(order: SerializedWebsiteOrder, m
     deliveryStatus: customerType === "delivery" ? "pending" : undefined,
     paymentMethod,
     notes,
-    podDelivery: mode === "pod" ? { note: `Website POD order ${order.orderRef}` } : undefined,
+    podDelivery:
+      mode === "pod"
+        ? { note: `Website POD order ${order.orderRef}` }
+        : undefined,
     metadata: {
       source: "WEBSITE",
       websiteOrderId: order.id,
@@ -599,7 +683,10 @@ export const WEBSITE_ORDER_LIFECYCLE: WebsiteOrderStatus[] = [
   WebsiteOrderStatus.DELIVERED,
 ] as const;
 
-export function canAdvanceWebsiteOrderStatus(current: WebsiteOrderStatus, next: WebsiteOrderStatus) {
+export function canAdvanceWebsiteOrderStatus(
+  current: WebsiteOrderStatus,
+  next: WebsiteOrderStatus,
+) {
   if (current === next) {
     return {
       ok: false as const,
@@ -608,16 +695,22 @@ export function canAdvanceWebsiteOrderStatus(current: WebsiteOrderStatus, next: 
   }
 
   if (next === WebsiteOrderStatus.CANCELLED) {
-    if (current === WebsiteOrderStatus.DELIVERED || current === WebsiteOrderStatus.CANCELLED) {
+    if (
+      current === WebsiteOrderStatus.DELIVERED ||
+      current === WebsiteOrderStatus.CANCELLED
+    ) {
       return {
         ok: false as const,
-        error: "Delivered or cancelled website orders cannot be cancelled again.",
+        error:
+          "Delivered or cancelled website orders cannot be cancelled again.",
       };
     }
     return { ok: true as const };
   }
 
-  const allowedTransitions: Partial<Record<WebsiteOrderStatus, WebsiteOrderStatus[]>> = {
+  const allowedTransitions: Partial<
+    Record<WebsiteOrderStatus, WebsiteOrderStatus[]>
+  > = {
     [WebsiteOrderStatus.PENDING]: [WebsiteOrderStatus.PROCESSING],
     [WebsiteOrderStatus.CONFIRMED]: [WebsiteOrderStatus.PROCESSING],
     [WebsiteOrderStatus.PROCESSING]: [WebsiteOrderStatus.RECEIPT_ISSUED],
@@ -637,7 +730,10 @@ export function canAdvanceWebsiteOrderStatus(current: WebsiteOrderStatus, next: 
   return { ok: true as const };
 }
 
-export function buildWebsiteOrderReceiptPayload(order: SerializedWebsiteOrder, mode: "pod" | "normal") {
+export function buildWebsiteOrderReceiptPayload(
+  order: SerializedWebsiteOrder,
+  mode: "pod" | "normal",
+) {
   const prefill = buildWebsiteOrderReceiptPrefill(order, mode);
   return {
     serial: order.orderRef,
@@ -678,11 +774,15 @@ export async function requireWebsiteOrdersAdmin() {
   return { ok: true as const, session, userId, role };
 }
 
-export async function requireWebsiteOrdersStaffActor(options?: { impersonateId?: string | null }) {
+export async function requireWebsiteOrdersStaffActor(options?: {
+  impersonateId?: string | null;
+}) {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role ?? null;
   const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
-  const email = normalizeEmail((session?.user as { email?: string } | undefined)?.email);
+  const email = normalizeEmail(
+    (session?.user as { email?: string } | undefined)?.email,
+  );
 
   if (!session || !userId) {
     return { ok: false as const, status: 401, error: "Unauthorized" };
@@ -695,7 +795,11 @@ export async function requireWebsiteOrdersStaffActor(options?: { impersonateId?:
       select: { id: true, name: true, email: true },
     });
     if (!targetUser || !isWebsiteOrdersStaffEmail(targetUser.email)) {
-      return { ok: false as const, status: 403, error: "Invalid website-order attendant target." };
+      return {
+        ok: false as const,
+        status: 403,
+        error: "Invalid website-order attendant target.",
+      };
     }
     return {
       ok: true as const,
@@ -738,13 +842,15 @@ export async function ensureWebsiteOrderAssignments() {
   const orderedStaff = WEBSITE_ORDER_STAFF_EMAILS.map((email) =>
     staffUsers.find((user) => normalizeEmail(user.email) === email),
   ).filter(
-    (user): user is { id: string; name: string | null; email: string | null } => Boolean(user?.id),
+    (user): user is { id: string; name: string | null; email: string | null } =>
+      Boolean(user?.id),
   );
 
   if (!orderedStaff.length) return orderedStaff;
 
   const staffIds = new Set(orderedStaff.map((user) => user.id));
   const orders = await prisma.websiteOrder.findMany({
+    where: websiteCheckoutOrderWhere,
     select: {
       id: true,
       metadata: true,
@@ -754,7 +860,9 @@ export async function ensureWebsiteOrderAssignments() {
     orderBy: [{ createdAt: "asc" }],
   });
 
-  const assignmentCounts = new Map<string, number>(orderedStaff.map((user) => [user.id, 0]));
+  const assignmentCounts = new Map<string, number>(
+    orderedStaff.map((user) => [user.id, 0]),
+  );
   const queuedAssignments: Array<{
     id: string;
     metadata: Record<string, unknown>;
@@ -767,12 +875,14 @@ export async function ensureWebsiteOrderAssignments() {
     const currentAssignment = readWebsiteOrderAssignment(order.metadata);
     const assignedById =
       currentAssignment?.id && staffIds.has(currentAssignment.id)
-        ? orderedStaff.find((user) => user.id === currentAssignment.id) ?? null
+        ? (orderedStaff.find((user) => user.id === currentAssignment.id) ??
+          null)
         : null;
-    const assignedByEmail =
-      currentAssignment?.email
-        ? orderedStaff.find((user) => normalizeEmail(user.email) === currentAssignment.email) ?? null
-        : null;
+    const assignedByEmail = currentAssignment?.email
+      ? (orderedStaff.find(
+          (user) => normalizeEmail(user.email) === currentAssignment.email,
+        ) ?? null)
+      : null;
     const resolvedCurrentAssignee = assignedById ?? assignedByEmail;
 
     if (resolvedCurrentAssignee) {
@@ -782,8 +892,12 @@ export async function ensureWebsiteOrderAssignments() {
       );
       if (
         currentAssignment?.id !== resolvedCurrentAssignee.id ||
-        currentAssignment?.email !== normalizeEmail(resolvedCurrentAssignee.email) ||
-        currentAssignment?.name !== (resolvedCurrentAssignee.name ?? resolvedCurrentAssignee.email ?? "Website order attendant")
+        currentAssignment?.email !==
+          normalizeEmail(resolvedCurrentAssignee.email) ||
+        currentAssignment?.name !==
+          (resolvedCurrentAssignee.name ??
+            resolvedCurrentAssignee.email ??
+            "Website order attendant")
       ) {
         const metadata =
           order.metadata && typeof order.metadata === "object"
@@ -802,26 +916,38 @@ export async function ensureWebsiteOrderAssignments() {
       order.metadata && typeof order.metadata === "object"
         ? { ...(order.metadata as Record<string, unknown>) }
         : {};
-    const confirmedStaff = order.confirmedById && staffIds.has(order.confirmedById)
-      ? orderedStaff.find((user) => user.id === order.confirmedById) ?? null
-      : null;
+    const confirmedStaff =
+      order.confirmedById && staffIds.has(order.confirmedById)
+        ? (orderedStaff.find((user) => user.id === order.confirmedById) ?? null)
+        : null;
     const assignee =
       confirmedStaff ??
-      [...orderedStaff]
-        .sort((left, right) => {
-          const countDiff =
-            Number(assignmentCounts.get(left.id) ?? 0) - Number(assignmentCounts.get(right.id) ?? 0);
-          if (countDiff !== 0) return countDiff;
-          const leftIndex = orderedStaff.findIndex((user) => user.id === left.id);
-          const rightIndex = orderedStaff.findIndex((user) => user.id === right.id);
-          const leftScore = (leftIndex - roundRobinIndex + orderedStaff.length) % orderedStaff.length;
-          const rightScore = (rightIndex - roundRobinIndex + orderedStaff.length) % orderedStaff.length;
-          return leftScore - rightScore;
-        })[0];
+      [...orderedStaff].sort((left, right) => {
+        const countDiff =
+          Number(assignmentCounts.get(left.id) ?? 0) -
+          Number(assignmentCounts.get(right.id) ?? 0);
+        if (countDiff !== 0) return countDiff;
+        const leftIndex = orderedStaff.findIndex((user) => user.id === left.id);
+        const rightIndex = orderedStaff.findIndex(
+          (user) => user.id === right.id,
+        );
+        const leftScore =
+          (leftIndex - roundRobinIndex + orderedStaff.length) %
+          orderedStaff.length;
+        const rightScore =
+          (rightIndex - roundRobinIndex + orderedStaff.length) %
+          orderedStaff.length;
+        return leftScore - rightScore;
+      })[0];
 
     if (!assignee) continue;
-    roundRobinIndex = (orderedStaff.findIndex((user) => user.id === assignee.id) + 1) % orderedStaff.length;
-    assignmentCounts.set(assignee.id, Number(assignmentCounts.get(assignee.id) ?? 0) + 1);
+    roundRobinIndex =
+      (orderedStaff.findIndex((user) => user.id === assignee.id) + 1) %
+      orderedStaff.length;
+    assignmentCounts.set(
+      assignee.id,
+      Number(assignmentCounts.get(assignee.id) ?? 0) + 1,
+    );
     queuedAssignments.push({ id: order.id, metadata, assignee });
   }
 
@@ -834,9 +960,12 @@ export async function ensureWebsiteOrderAssignments() {
           assignedAttendantId: assignment.assignee.id,
           assignedAttendantEmail: normalizeEmail(assignment.assignee.email),
           assignedAttendantName:
-            assignment.assignee.name ?? assignment.assignee.email ?? "Website order attendant",
+            assignment.assignee.name ??
+            assignment.assignee.email ??
+            "Website order attendant",
           assignedAt:
-            typeof assignment.metadata.assignedAt === "string" && assignment.metadata.assignedAt
+            typeof assignment.metadata.assignedAt === "string" &&
+            assignment.metadata.assignedAt
               ? assignment.metadata.assignedAt
               : new Date().toISOString(),
         } as Prisma.InputJsonValue,
@@ -863,14 +992,20 @@ export function withWebsiteOrderAssignmentMetadata(
   metadata: unknown,
   assignment: { id: string; email?: string | null; name?: string | null },
 ) {
-  const base = metadata && typeof metadata === "object" ? { ...(metadata as Record<string, unknown>) } : {};
+  const base =
+    metadata && typeof metadata === "object"
+      ? { ...(metadata as Record<string, unknown>) }
+      : {};
   return {
     ...base,
     assignedAttendantId: assignment.id,
     assignedAttendantEmail: normalizeEmail(assignment.email),
-    assignedAttendantName: assignment.name ?? assignment.email ?? "Website order attendant",
+    assignedAttendantName:
+      assignment.name ?? assignment.email ?? "Website order attendant",
     assignedAt:
-      typeof base.assignedAt === "string" && base.assignedAt ? base.assignedAt : new Date().toISOString(),
+      typeof base.assignedAt === "string" && base.assignedAt
+        ? base.assignedAt
+        : new Date().toISOString(),
   } as Prisma.InputJsonValue;
 }
 

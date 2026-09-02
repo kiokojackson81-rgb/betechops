@@ -6,10 +6,16 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getUnpricedDailySalesForRange } from "@/lib/marketingUnpricedSales";
 import { groupMarketingUnpricedSales } from "@/lib/unpricedReceiptGrouping";
 import { getReviewsReferralsAdminSummary } from "@/lib/reviewsReferrals";
-import { ensureQuoteRequestsSchema, listAllQuoteRequests } from "@/lib/quoteRequests";
+import {
+  ensureQuoteRequestsSchema,
+  listAllQuoteRequests,
+} from "@/lib/quoteRequests";
 import { isPendingQuotationStatus } from "@/lib/operationsWorkQueue";
 import { ensureSiteVisitsSchema, listAdminSiteVisits } from "@/lib/siteVisits";
-import { ensureWebsiteOrdersSchema } from "@/lib/websiteOrders";
+import {
+  ensureWebsiteOrdersSchema,
+  websiteCheckoutOrderWhere,
+} from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
 
@@ -47,10 +53,27 @@ export async function GET() {
       where: {
         data: { path: ["projectFlow", "isProject"], equals: true },
         OR: [
-          { data: { path: ["projectFlow", "stage"], equals: "RECEIPT_CREATED" } },
-          { data: { path: ["projectFlow", "stage"], equals: "PROJECT_SCHEDULED" } },
-          { data: { path: ["projectFlow", "stage"], equals: "PROJECT_IN_PROGRESS" } },
-          { data: { path: ["projectFlow", "stage"], equals: "PROJECT_INSTALLED" } },
+          {
+            data: { path: ["projectFlow", "stage"], equals: "RECEIPT_CREATED" },
+          },
+          {
+            data: {
+              path: ["projectFlow", "stage"],
+              equals: "PROJECT_SCHEDULED",
+            },
+          },
+          {
+            data: {
+              path: ["projectFlow", "stage"],
+              equals: "PROJECT_IN_PROGRESS",
+            },
+          },
+          {
+            data: {
+              path: ["projectFlow", "stage"],
+              equals: "PROJECT_INSTALLED",
+            },
+          },
         ],
       },
     }),
@@ -59,10 +82,12 @@ export async function GET() {
     listAllQuoteRequests({ status: "ALL" }),
     prisma.leaveRequest.count({ where: { status: "PENDING" } }),
     prisma.cashAdvance.count({ where: { status: "PENDING" } }),
-    prismaWithAdjustments.payrollAdjustmentRequest?.count({ where: { status: "PENDING" } }).catch(() => 0) ?? 0,
+    prismaWithAdjustments.payrollAdjustmentRequest
+      ?.count({ where: { status: "PENDING" } })
+      .catch(() => 0) ?? 0,
     prisma.websiteOrder.count({
       where: {
-        source: "WEBSITE",
+        ...websiteCheckoutOrderWhere,
         status: {
           in: [
             WebsiteOrderStatus.PENDING,
@@ -85,7 +110,9 @@ export async function GET() {
   const pendingSiteVisits = siteVisits.filter(
     (visit) => visit.status === "PENDING" || visit.status === "SCHEDULED",
   ).length;
-  const pendingCustomerReviews = Number(reviewSummary.reviews.submittedReviews ?? 0);
+  const pendingCustomerReviews = Number(
+    reviewSummary.reviews.submittedReviews ?? 0,
+  );
   const pendingQuotations = quoteRequests.filter((request) =>
     isPendingQuotationStatus(request.status),
   ).length;

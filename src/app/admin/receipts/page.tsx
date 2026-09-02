@@ -4,7 +4,12 @@ import { headers } from "next/headers";
 import ReceiptsAdminClient from "@/app/receipts/ReceiptsAdminClient";
 import { absUrl, withParams } from "@/lib/abs-url";
 import WebsiteOrdersAdminClient from "@/app/admin/orders/website/WebsiteOrdersAdminClient";
-import { ensureWebsiteOrdersSchema, serializeWebsiteOrders, websiteOrderAdminInclude } from "@/lib/websiteOrders";
+import {
+  ensureWebsiteOrdersSchema,
+  serializeWebsiteOrders,
+  websiteCheckoutOrderWhere,
+  websiteOrderAdminInclude,
+} from "@/lib/websiteOrders";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -24,13 +29,14 @@ export default async function AdminReceiptsPage({
 }) {
   try {
     const params = (await searchParams) || {};
-    const activeTab = params.tab === "website-orders" ? "website-orders" : "receipts";
+    const activeTab =
+      params.tab === "website-orders" ? "website-orders" : "receipts";
 
     if (activeTab === "website-orders") {
       await ensureWebsiteOrdersSchema();
       const orders = await prisma.websiteOrder.findMany({
         where: {
-          source: "WEBSITE",
+          ...websiteCheckoutOrderWhere,
         },
         include: websiteOrderAdminInclude,
         orderBy: [{ createdAt: "desc" }],
@@ -52,10 +58,18 @@ export default async function AdminReceiptsPage({
     const incomingHeaders = await headers();
     const cookieHeader = incomingHeaders.get("cookie") ?? undefined;
     const apiUrl = await absUrl("/api/receipts");
-    const res = await fetch(withParams(apiUrl, { includeItems: true, scope: "global", onlyPos: "1", includeLedger: false }), {
-      cache: "no-store",
-      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
-    });
+    const res = await fetch(
+      withParams(apiUrl, {
+        includeItems: true,
+        scope: "global",
+        onlyPos: "1",
+        includeLedger: false,
+      }),
+      {
+        cache: "no-store",
+        headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+      },
+    );
     const j = await res.json();
     const receipts: unknown[] = j.receipts || [];
 
@@ -82,7 +96,13 @@ export default async function AdminReceiptsPage({
               Staff Quotations
             </Link>
           </div>
-          <ReceiptsAdminClient initial={receipts as never[]} allowEdit scope="global" onlyPos includeLedger={false} />
+          <ReceiptsAdminClient
+            initial={receipts as never[]}
+            allowEdit
+            scope="global"
+            onlyPos
+            includeLedger={false}
+          />
         </div>
       </main>
     );
