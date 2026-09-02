@@ -8,6 +8,7 @@ import { getAllowedAuthOrigins, isAllowedAuthOrigin } from "@/lib/runtimeUrls";
 import { readVerifiedPhoneToken } from "@/lib/phoneOtpAuth";
 import { Prisma } from "@prisma/client";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
+import { PRODUCT_CONTRIBUTOR_EMAIL } from "@/lib/productContributorConfig";
 
 type ExtendedToken = {
   email?: string;
@@ -102,6 +103,23 @@ export const authOptions = {
         const password = credentials?.password || "";
 
         if (!email || !password) return null;
+
+        // Seed the dedicated catalogue contributor only when it first signs in.
+        // Existing accounts are never changed here, including their password.
+        if (email === PRODUCT_CONTRIBUTOR_EMAIL) {
+          await prisma.user.upsert({
+            where: { email },
+            create: {
+              email,
+              name: "Twili Product Contributor",
+              password: "$2b$12$MRXvUInWbL.uU82VIpfZpOjtbJsBmwJjzR/qdGlyN43fdvJNOV0Ve",
+              role: "ATTENDANT",
+              attendantCategory: "GENERAL_OPS",
+              isActive: true,
+            },
+            update: {},
+          });
+        }
 
         const user = await prisma.user.findUnique({
           where: { email },

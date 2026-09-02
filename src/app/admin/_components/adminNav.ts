@@ -44,6 +44,7 @@ export const NAV: AdminNavItem[] = [
     children: [
       { href: "/admin/receipts", label: "Receipts" },
       { href: "/admin/pos-management", label: "Catalogue" },
+      { href: "/admin/product-contributors/withdrawals", label: "Contributor withdrawals" },
       { href: "/admin/customers", label: "Customers" },
       { href: "/admin/settings/shop-images", label: "Shop Images" },
       { href: "/admin/marketing-report?impersonateId=cmimxqf9t0003v5mcjdq8x61p", label: "SalesOps" },

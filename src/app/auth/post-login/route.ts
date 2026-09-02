@@ -62,6 +62,7 @@ export async function GET(req: Request) {
   } | undefined;
   const role = user?.role ?? '';
   const category = user?.attendantCategory ?? null;
+  const isProductContributor = user?.email?.trim().toLowerCase() === "twili@betech.co.ke";
   let isAgent = Boolean(user?.isAgent);
 
   if (!isAgent) {
@@ -100,7 +101,9 @@ export async function GET(req: Request) {
       isAgent = true;
     }
   }
-  let target = isAgentsHost(host)
+  let target = isProductContributor
+    ? "/contributor"
+    : isAgentsHost(host)
     ? (isAgent ? agentPath("/dashboard", useRootAgentPaths) : "/")
     : isOpsHost(host)
       ? getLandingPage(category, role)
