@@ -59,6 +59,7 @@ type PosProduct = {
   galleryImageUrls?: string[] | null;
   brandImageUrl?: string | null;
   tiktokVideoUrl?: string | null;
+  purchaseLink?: string | null;
   ecommerceVisible?: boolean | null;
   isFeatured?: boolean | null;
   status?: string | null;
@@ -90,6 +91,7 @@ type PosCatalogueCapabilities = {
   galleryImageUrls: boolean;
   brandImageUrl: boolean;
   tiktokVideoUrl: boolean;
+  purchaseLink: boolean;
   ecommerceVisible: boolean;
   isFeatured: boolean;
   status: boolean;
@@ -157,6 +159,7 @@ type ProductDraft = {
   galleryImageUrls: string[];
   brandImageUrl: string;
   tiktokVideoUrl: string;
+  purchaseLink: string;
   ecommerceVisible: boolean;
   isFeatured: boolean;
   status: "ACTIVE" | "INACTIVE";
@@ -218,6 +221,7 @@ const emptyDraft: ProductDraft = {
   galleryImageUrls: [],
   brandImageUrl: "",
   tiktokVideoUrl: "",
+  purchaseLink: "",
   ecommerceVisible: true,
   isFeatured: false,
   status: "ACTIVE",
@@ -278,6 +282,7 @@ const defaultCapabilities: PosCatalogueCapabilities = {
   galleryImageUrls: false,
   brandImageUrl: false,
   tiktokVideoUrl: false,
+  purchaseLink: false,
   ecommerceVisible: false,
   isFeatured: false,
   status: false,
@@ -440,6 +445,7 @@ function createDraftFromProduct(product: PosProduct): ProductDraft {
     galleryImageUrls: parseStringArray(product.galleryImageUrls),
     brandImageUrl: product.brandImageUrl ?? "",
     tiktokVideoUrl: product.tiktokVideoUrl ?? "",
+    purchaseLink: product.purchaseLink ?? "",
     ecommerceVisible: Boolean(product.ecommerceVisible ?? product.showInShop),
     isFeatured: Boolean(product.isFeatured),
     status:
@@ -1573,6 +1579,9 @@ export default function PosManagementClient({
           : {}),
         ...(capabilities.tiktokVideoUrl
           ? { tiktokVideoUrl: draft.tiktokVideoUrl.trim() || null }
+          : {}),
+        ...(capabilities.purchaseLink
+          ? { purchaseLink: draft.purchaseLink.trim() || null }
           : {}),
         ...(capabilities.ecommerceVisible
           ? { ecommerceVisible: websiteEligible }
@@ -3002,6 +3011,26 @@ export default function PosManagementClient({
                       <div className="mt-1 text-xs text-slate-500">
                         Paste the TikTok product video link. The video will be
                         embedded directly on the product page.
+                      </div>
+                    </label>
+
+                    <label className="text-sm text-slate-300 md:col-span-2">
+                      Purchase link
+                      <input
+                        type="url"
+                        className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                        value={draft.purchaseLink}
+                        disabled={!capabilities.purchaseLink}
+                        onChange={(e) =>
+                          setDraft((s) => ({
+                            ...s,
+                            purchaseLink: e.target.value,
+                          }))
+                        }
+                        placeholder="https://supplier.example.com/product"
+                      />
+                      <div className="mt-1 text-xs text-slate-500">
+                        Internal source link for this listing. It is not shown on the website.
                       </div>
                     </label>
 

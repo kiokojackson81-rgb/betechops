@@ -23,6 +23,7 @@ type Product = {
   description?: string | null;
   warrantyPeriod?: string | null;
   tiktokVideoUrl?: string | null;
+  purchaseLink?: string | null;
   mainImageUrl?: string | null;
   variableCost?: boolean | null;
   lastBuyingPrice?: number | null;
@@ -63,6 +64,7 @@ const blank = () => ({
   description: "",
   warrantyPeriod: "No warranty",
   tiktokVideoUrl: "https://www.tiktok.com/@betechsolarsolutionske",
+  purchaseLink: "",
   mainImageUrl: "",
   galleryImageUrls: "",
   availabilityType: "WAREHOUSE",
@@ -131,6 +133,7 @@ function toForm(product: Product) {
     tiktokVideoUrl:
       product.tiktokVideoUrl ||
       "https://www.tiktok.com/@betechsolarsolutionske",
+    purchaseLink: product.purchaseLink || "",
     mainImageUrl: product.mainImageUrl || "",
     galleryImageUrls: Array.isArray(product.galleryImageUrls)
       ? product.galleryImageUrls.join("\n")
@@ -280,6 +283,7 @@ export default function ContributorDashboard() {
     stockQuantity: Number(form.stockQuantity || 0),
     lastBuyingPrice: form.lastBuyingPrice ? Number(form.lastBuyingPrice) : null,
     tiktokVideoUrl: form.tiktokVideoUrl.trim() || null,
+    purchaseLink: form.purchaseLink.trim() || null,
     zone1TransportFee: Number(form.zone1TransportFee || 500),
     zone2TransportFee: Number(form.zone2TransportFee || 750),
     zone3TransportFee: Number(form.zone3TransportFee || 1000),
@@ -759,6 +763,19 @@ export default function ContributorDashboard() {
                     <span className="mt-1 block text-xs font-normal text-slate-400">
                       Paste the TikTok product video link. It will appear on the
                       product page.
+                    </span>
+                  </label>
+                  <label className="sm:col-span-2 text-sm font-semibold text-slate-200">
+                    Purchase link
+                    <input
+                      type="url"
+                      value={form.purchaseLink}
+                      onChange={(e) => set("purchaseLink", e.target.value)}
+                      className={input}
+                      placeholder="https://supplier.example.com/product"
+                    />
+                    <span className="mt-1 block text-xs font-normal text-slate-400">
+                      Internal source link for the product listing. It is not shown to customers.
                     </span>
                   </label>
                   <section className="sm:col-span-2 rounded-2xl border border-amber-300/25 bg-amber-300/5 p-4">

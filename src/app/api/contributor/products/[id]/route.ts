@@ -18,6 +18,7 @@ const updateInput = z.object({
   description: z.string().trim().max(10000).optional().nullable(),
   warrantyPeriod: z.string().trim().max(120).optional().nullable(),
   tiktokVideoUrl: z.string().trim().url().max(500).optional().nullable(),
+  purchaseLink: z.string().trim().url().max(500).optional().nullable(),
   mainImageUrl: z.string().trim().url().max(500),
   galleryImageUrls: z
     .array(z.string().trim().url().max(500))
@@ -75,6 +76,7 @@ export async function PATCH(
       warrantyPeriod: data.warrantyPeriod || null,
       warrantyNotes: null,
       tiktokVideoUrl: data.tiktokVideoUrl || null,
+      purchaseLink: data.purchaseLink || null,
       mainImageUrl: data.mainImageUrl,
       shopImageUrl: data.mainImageUrl,
       galleryImageUrls: data.galleryImageUrls,

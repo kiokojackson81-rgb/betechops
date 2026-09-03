@@ -38,6 +38,7 @@ const productSchema = z.object({
   galleryImageUrls: z.array(z.string().trim().max(500)).max(12).nullable().optional(),
   brandImageUrl: z.string().trim().max(500).nullable().optional(),
   tiktokVideoUrl: z.string().trim().max(500).nullable().optional(),
+  purchaseLink: z.string().trim().url().max(500).nullable().optional(),
   ecommerceVisible: z.boolean().optional().default(true),
   isFeatured: z.boolean().optional().default(false),
   status: productStatusEnum.optional().default("ACTIVE"),
@@ -186,6 +187,9 @@ function buildShopInsertFragments(
   if (capabilities.tiktokVideoUrl) {
     pushColumn("tiktokVideoUrl", normalizeOptionalText(data.tiktokVideoUrl));
   }
+  if (capabilities.purchaseLink) {
+    pushColumn("purchaseLink", normalizeOptionalText(data.purchaseLink));
+  }
   if (capabilities.ecommerceVisible) {
     pushColumn("ecommerceVisible", Boolean(data.ecommerceVisible));
   }
@@ -329,6 +333,7 @@ export async function GET(req: Request) {
             ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
             ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
             ${capabilities.tiktokVideoUrl ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
+            ${capabilities.purchaseLink ? `"purchaseLink"` : `NULL::text`} AS "purchaseLink",
             ${capabilities.ecommerceVisible ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
             ${capabilities.isFeatured ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
             ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("isActive", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
@@ -401,6 +406,7 @@ export async function GET(req: Request) {
             ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
             ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
             ${capabilities.tiktokVideoUrl ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
+            ${capabilities.purchaseLink ? `"purchaseLink"` : `NULL::text`} AS "purchaseLink",
             ${capabilities.ecommerceVisible ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
             ${capabilities.isFeatured ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
             ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("active", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",

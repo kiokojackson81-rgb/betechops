@@ -40,6 +40,7 @@ const updateSchema = z.object({
   galleryImageUrls: z.array(z.string().trim().max(500)).max(12).nullable().optional(),
   brandImageUrl: z.string().trim().max(500).nullable().optional(),
   tiktokVideoUrl: z.string().trim().max(500).nullable().optional(),
+  purchaseLink: z.string().trim().url().max(500).nullable().optional(),
   ecommerceVisible: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
   status: productStatusEnum.optional(),
@@ -133,6 +134,7 @@ function sanitizeBrendahProductUpdate(data: z.infer<typeof updateSchema>): z.inf
     galleryImageUrls: data.galleryImageUrls,
     brandImageUrl: data.brandImageUrl,
     tiktokVideoUrl: data.tiktokVideoUrl,
+    purchaseLink: data.purchaseLink,
     ecommerceVisible: true,
     isFeatured: false,
     status: "ACTIVE" as const,
@@ -188,6 +190,7 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
             ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
             ${capabilities.tiktokVideoUrl ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
+            ${capabilities.purchaseLink ? `"purchaseLink"` : `NULL::text`} AS "purchaseLink",
             ${capabilities.ecommerceVisible ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
             ${capabilities.isFeatured ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
             ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("isActive", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
@@ -236,6 +239,7 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
             ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
             ${capabilities.tiktokVideoUrl ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
+            ${capabilities.purchaseLink ? `"purchaseLink"` : `NULL::text`} AS "purchaseLink",
             ${capabilities.ecommerceVisible ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
             ${capabilities.isFeatured ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
             ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("active", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
@@ -366,6 +370,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
   if (capabilities.galleryImageUrls && data.galleryImageUrls !== undefined) pushSet("galleryImageUrls", normalizeJsonStringArray(data.galleryImageUrls));
   if (capabilities.brandImageUrl && data.brandImageUrl !== undefined) pushSet("brandImageUrl", normalizeOptionalText(data.brandImageUrl));
   if (capabilities.tiktokVideoUrl && data.tiktokVideoUrl !== undefined) pushSet("tiktokVideoUrl", normalizeOptionalText(data.tiktokVideoUrl));
+  if (capabilities.purchaseLink && data.purchaseLink !== undefined) pushSet("purchaseLink", normalizeOptionalText(data.purchaseLink));
   if (capabilities.ecommerceVisible) pushSet("ecommerceVisible", websiteEligible);
   if (capabilities.isFeatured && (!websiteEligible || data.isFeatured !== undefined)) {
     pushSet("isFeatured", websiteEligible && Boolean(data.isFeatured ?? existing.isFeatured));

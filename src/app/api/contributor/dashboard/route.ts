@@ -22,6 +22,7 @@ const productInput = z.object({
   description: z.string().trim().max(10000).optional().nullable(),
   warrantyPeriod: z.string().trim().max(120).optional().nullable(),
   tiktokVideoUrl: z.string().trim().url().max(500).optional().nullable(),
+  purchaseLink: z.string().trim().url().max(500).optional().nullable(),
   mainImageUrl: z.string().trim().url().max(500),
   galleryImageUrls: z
     .array(z.string().trim().url().max(500))
@@ -80,6 +81,7 @@ function productData(data: ProductInput, sku: string) {
     warrantyPeriod: data.warrantyPeriod || null,
     warrantyNotes: null,
     tiktokVideoUrl: data.tiktokVideoUrl || null,
+    purchaseLink: data.purchaseLink || null,
     mainImageUrl: data.mainImageUrl,
     shopImageUrl: data.mainImageUrl,
     galleryImageUrls: data.galleryImageUrls,
@@ -142,7 +144,7 @@ export async function GET() {
   const [balance, products, withdrawals] = await Promise.all([
     getContributorBalance(access.userId),
     prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `SELECT p."id", p."sku", p."name", p."sellingPrice", p."category", p."shopSubcategory", p."productType", p."brand", p."shortDescription", p."description", p."warrantyPeriod", p."warrantyNotes", p."tiktokVideoUrl", p."mainImageUrl", p."galleryImageUrls", p."availabilityType", p."stockQuantity", p."variableCost", p."lastBuyingPrice", p."catalogueConfiguration", p."showInShop", p."ecommerceVisible", p."updatedAt", cpp."earningKes"
+      `SELECT p."id", p."sku", p."name", p."sellingPrice", p."category", p."shopSubcategory", p."productType", p."brand", p."shortDescription", p."description", p."warrantyPeriod", p."warrantyNotes", p."tiktokVideoUrl", p."purchaseLink", p."mainImageUrl", p."galleryImageUrls", p."availabilityType", p."stockQuantity", p."variableCost", p."lastBuyingPrice", p."catalogueConfiguration", p."showInShop", p."ecommerceVisible", p."updatedAt", cpp."earningKes"
        FROM "ProductContributorProduct" cpp
        JOIN "Product" p ON p."id" = cpp."productId"
        WHERE cpp."contributorId" = $1
