@@ -1628,7 +1628,7 @@ export async function createQuotationDraftFromSiteVisit(
     ].filter(Boolean).join("\n"),
     status: "PENDING",
     source: "MANUAL",
-    assignedAttendantId: visit.assignedStaffId || actor.id,
+    fallbackAssigneeId: visit.assignedStaffId || actor.id,
     metadata: { sourceLabel: "SITE_VISIT", siteVisitId: visit.id, siteVisitRef: visit.visitRef, siteVisitCreditAvailable: visit.quotationCreditStatus === "AVAILABLE" ? visit.visitFee : 0 },
   });
   if (!quote) throw new Error("Unable to create quotation draft.");

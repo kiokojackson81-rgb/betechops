@@ -429,6 +429,7 @@ export type QuoteRequestCreateInput = z.infer<
   status?: QuoteRequestStatus;
   source?: QuoteRequestSource;
   assignedAttendantId?: string | null;
+  fallbackAssigneeId?: string | null;
   assignedAttendantEmail?: string | null;
   assignedAttendantName?: string | null;
   templateId?: string | null;
@@ -1385,6 +1386,32 @@ export async function getQuoteStaffUserById(userId: string | null | undefined) {
   return staff.find((user) => user.id === userId) ?? null;
 }
 
+async function findPreviousCustomerQuoteAssignee(input: Pick<QuoteRequestCreateInput, "customerUserId" | "phone" | "email">) {
+  const customerUserId = String(input.customerUserId || "").trim();
+  const phone = normalizePhone(input.phone);
+  const email = normalizeEmail(input.email);
+  const conditions: Prisma.Sql[] = [];
+
+  if (customerUserId) conditions.push(Prisma.sql`"customerUserId" = ${customerUserId}`);
+  if (phone) conditions.push(Prisma.sql`"customerPhone" = ${phone}`);
+  if (email) conditions.push(Prisma.sql`LOWER(COALESCE("customerEmail", '')) = ${email}`);
+  if (!conditions.length) return null;
+
+  const rows = await prisma.$queryRaw<Array<{ assignedAttendantId: string | null }>>(Prisma.sql`
+    SELECT "assignedAttendantId"
+    FROM "QuoteRequest"
+    WHERE "assignedAttendantId" IS NOT NULL
+      AND (${Prisma.join(conditions, " OR ")})
+    ORDER BY
+      CASE WHEN ${customerUserId || null} IS NOT NULL AND "customerUserId" = ${customerUserId || null} THEN 0 ELSE 1 END,
+      "updatedAt" DESC,
+      "createdAt" DESC
+    LIMIT 1
+  `);
+
+  return getQuoteStaffUserById(rows[0]?.assignedAttendantId);
+}
+
 async function pickQuoteAssignee(source = "WEBSITE_REQUEST") {
   const orderedStaff = await getAutomaticQuoteAssignmentUsers();
   if (!orderedStaff.length) return null;
@@ -1529,8 +1556,16 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
   const requestedAssignee = await getQuoteStaffUserById(
     input.assignedAttendantId ?? null,
   );
+  const previousCustomerAssignee = requestedAssignee
+    ? null
+    : await findPreviousCustomerQuoteAssignee(input);
+  const fallbackAssignee = requestedAssignee || previousCustomerAssignee
+    ? null
+    : await getQuoteStaffUserById(input.fallbackAssigneeId ?? null);
   const assignee =
     requestedAssignee ||
+    previousCustomerAssignee ||
+    fallbackAssignee ||
     (await pickQuoteAssignee(input.source || "WEBSITE_REQUEST"));
   const id = randomUUID();
   const quotationData = input.quotationData
@@ -1549,6 +1584,13 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
   const metadata = {
     source: input.source || "WEBSITE_REQUEST",
     assignedAt: new Date().toISOString(),
+    assignmentStrategy: requestedAssignee
+      ? "EXPLICIT"
+      : previousCustomerAssignee
+        ? "PREVIOUS_CUSTOMER_OWNER"
+        : fallbackAssignee
+          ? "FALLBACK_STAFF"
+          : "ROUND_ROBIN",
     ...(input.metadata || {}),
   } as Prisma.JsonObject;
 
@@ -1875,10 +1917,7 @@ export async function updateQuoteRequestResponse(
     lastRespondedByName: user.name ?? user.email ?? "Quotation attendant",
     lastRespondedAt: new Date().toISOString(),
   } satisfies Record<string, unknown>;
-  const nextStatus =
-    input.issueQuotation && ["PENDING", "CONTACTED"].includes(input.status)
-      ? "QUOTED"
-      : input.status;
+  const nextStatus = input.issueQuotation ? "QUOTED" : input.status;
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "QuoteRequest"
@@ -2306,7 +2345,8 @@ export async function createManualQuotation(
     status: input.status || "QUOTED",
     source: input.source || "MANUAL",
     requiresApproval: false,
-    assignedAttendantId: input.assignedAttendantId || actor.id,
+    assignedAttendantId: input.assignedAttendantId,
+    fallbackAssigneeId: actor.id,
     projectType,
     quoteTitle:
       input.quoteTitle ||
