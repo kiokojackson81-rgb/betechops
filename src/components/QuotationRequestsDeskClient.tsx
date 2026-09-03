@@ -316,6 +316,10 @@ function isPendingQuotationStatus(status: QuoteRequestStatus) {
   return (QUOTE_REQUEST_ACTIONABLE_STATUSES as readonly string[]).includes(status);
 }
 
+function isNewPendingQuotationStatus(status: QuoteRequestStatus) {
+  return status === "PENDING";
+}
+
 function getAdminViewLabel(view: AdminQuotationView) {
   switch (view) {
     case "WEBSITE":
@@ -1696,12 +1700,12 @@ export default function QuotationRequestsDeskClient({
           request.quoteMessage || "",
           ...storedProposal.items.flatMap((item) => [item.itemName, item.description || ""]),
         ].some((entry) => entry.toLowerCase().includes(value));
-      }).sort(
-        (left, right) =>
-          new Date(right.updatedAt || right.createdAt).getTime() -
-            new Date(left.updatedAt || left.createdAt).getTime() ||
-          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-      ),
+      }).sort((left, right) => {
+        const pendingDifference = Number(isNewPendingQuotationStatus(right.status)) - Number(isNewPendingQuotationStatus(left.status));
+        if (pendingDifference) return pendingDifference;
+        return new Date(right.updatedAt || right.createdAt).getTime() - new Date(left.updatedAt || left.createdAt).getTime() ||
+          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      }),
     [adminView, enableAdminFilters, end, query, requests, start],
   );
 

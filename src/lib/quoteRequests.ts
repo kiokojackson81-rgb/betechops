@@ -1702,7 +1702,10 @@ export async function listAssignedQuoteRequests(input: {
             )`
           : Prisma.empty
       }
-    ORDER BY "updatedAt" DESC, "createdAt" DESC
+    ORDER BY
+      CASE WHEN UPPER(COALESCE("status", '')) IN (${Prisma.join(getQuoteRequestStatusAliases("PENDING"))}) THEN 0 ELSE 1 END ASC,
+      "updatedAt" DESC,
+      "createdAt" DESC
   `);
 
   return rows.map(serializeQuoteRequest);
@@ -2118,7 +2121,10 @@ export async function listAllQuoteRequests(input?: {
             )`
           : Prisma.empty
       }
-    ORDER BY "updatedAt" DESC, "createdAt" DESC
+    ORDER BY
+      CASE WHEN UPPER(COALESCE("status", '')) IN (${Prisma.join(getQuoteRequestStatusAliases("PENDING"))}) THEN 0 ELSE 1 END ASC,
+      "updatedAt" DESC,
+      "createdAt" DESC
   `);
 
   return rows.map(serializeQuoteRequest);
