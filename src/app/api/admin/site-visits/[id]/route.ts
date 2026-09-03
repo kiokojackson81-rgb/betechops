@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { canAccessSiteVisit, getSiteVisitAccessActor } from "@/lib/siteVisitAccess";
 import {
+  deleteSiteVisit,
   getSiteVisitById,
   listSiteVisitAttachments,
   listSiteVisitEvents,
@@ -107,4 +108,25 @@ export async function PATCH(
   if (technicianChanged && visit.assignedTechnicianId) void dispatchSiteVisitTechnicianAssignment(visit, existing.assignedTechnicianId);
 
   return NextResponse.json({ ok: true, visit });
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const session = await auth().catch(() => null);
+  const user = session?.user as { id?: string; role?: string; name?: string | null; email?: string | null; attendantCategory?: string | null } | undefined;
+  const actor = await getSiteVisitAccessActor(user);
+  if (!session || !actor?.canManageCommercials) {
+    return NextResponse.json({ ok: false, error: "Only administrators and supervisors can delete site visits." }, { status: 403 });
+  }
+
+  const { id } = await context.params;
+  const visit = await getSiteVisitById(id);
+  if (!visit) {
+    return NextResponse.json({ ok: false, error: "Site visit not found." }, { status: 404 });
+  }
+
+  await deleteSiteVisit(id);
+  return NextResponse.json({ ok: true });
 }

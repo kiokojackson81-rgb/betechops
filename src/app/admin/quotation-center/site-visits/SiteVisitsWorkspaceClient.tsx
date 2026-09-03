@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
-import { CalendarDays, CircleDollarSign, MapPin, Plus, Search, X } from "lucide-react";
+import { CalendarDays, CircleDollarSign, MapPin, Plus, Search, Trash2, X } from "lucide-react";
 import type { QuoteProjectType } from "@/lib/quoteRequests";
 import type { SerializedSiteVisit, SiteVisitPaymentStatus, SiteVisitStatus } from "@/lib/siteVisitShared";
 import { getStandardSiteVisitFee } from "@/lib/siteVisitPolicy";
@@ -10,7 +10,7 @@ import { getServiceZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/age
 
 type StaffOption = { id: string; name: string | null; email: string | null };
 type ExternalTechnicianOption = { id: string; name: string; whatsappNumber: string | null };
-type Props = { staffOptions: StaffOption[]; externalTechnicians?: ExternalTechnicianOption[]; canAssignTechnicians?: boolean; initialQuoteRef?: string | null; basePath?: string };
+type Props = { staffOptions: StaffOption[]; externalTechnicians?: ExternalTechnicianOption[]; canAssignTechnicians?: boolean; canDeleteVisits?: boolean; initialQuoteRef?: string | null; basePath?: string };
 
 const statuses: Array<SiteVisitStatus | "ALL"> = ["ALL", "PENDING", "SCHEDULED", "VISITED", "CLOSED"];
 const projectTypes: QuoteProjectType[] = ["SOLAR_HOME_SYSTEM", "SOLAR_WATER_PUMP", "SOLAR_WATER_HEATER", "BOREHOLE_SOLAR_SYSTEM", "COMMERCIAL_SOLAR_SYSTEM", "CCTV_PLUS_SOLAR", "STREET_LIGHTS", "OTHER"];
@@ -32,7 +32,7 @@ function Field({ label: fieldLabel, children, wide = false }: { label: string; c
   return <label className={wide ? "space-y-2 md:col-span-2" : "space-y-2"}><span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{fieldLabel}</span>{children}</label>;
 }
 
-export default function SiteVisitsWorkspaceClient({ staffOptions, externalTechnicians = [], canAssignTechnicians = false, initialQuoteRef, basePath = "/admin/quotation-center/site-visits" }: Props) {
+export default function SiteVisitsWorkspaceClient({ staffOptions, externalTechnicians = [], canAssignTechnicians = false, canDeleteVisits = false, initialQuoteRef, basePath = "/admin/quotation-center/site-visits" }: Props) {
   const [visits, setVisits] = useState<SerializedSiteVisit[]>([]);
   const [status, setStatus] = useState<SiteVisitStatus | "ALL">("ALL");
   const [query, setQuery] = useState("");
@@ -44,6 +44,7 @@ export default function SiteVisitsWorkspaceClient({ staffOptions, externalTechni
   const [showCreate, setShowCreate] = useState(Boolean(initialQuoteRef));
   const [form, setForm] = useState(() => emptyForm(initialQuoteRef || ""));
   const [saving, setSaving] = useState(false);
+  const [deletingVisitId, setDeletingVisitId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useEffectEvent(async () => {
@@ -96,6 +97,22 @@ export default function SiteVisitsWorkspaceClient({ staffOptions, externalTechni
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Unable to create site visit."); setSaving(false); }
   }
 
+  async function deleteVisit(visit: SerializedSiteVisit) {
+    if (!window.confirm(`Delete site visit ${visit.visitRef} for ${visit.customerName}? This cannot be undone.`)) return;
+    setDeletingVisitId(visit.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/admin/site-visits/${visit.id}`, { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Unable to delete site visit.");
+      setVisits((current) => current.filter((item) => item.id !== visit.id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete site visit.");
+    } finally {
+      setDeletingVisitId(null);
+    }
+  }
+
   const inputClass = "w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/60";
   return <div className="min-w-0 space-y-5 overflow-x-hidden">
     <header className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,.15),transparent_35%),linear-gradient(145deg,#111d2d,#07111f)] p-5 sm:p-7">
@@ -108,7 +125,20 @@ export default function SiteVisitsWorkspaceClient({ staffOptions, externalTechni
       <div className="mt-4 flex flex-wrap gap-2">{statuses.map((item) => <button key={item} onClick={() => setStatus(item)} className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider ${status === item ? "bg-cyan-400 text-slate-950" : "border border-white/10 text-slate-300"}`}>{item}</button>)}</div>
     </section>
 
-    <section className="space-y-3">{loading ? <div className="rounded-2xl border border-white/10 p-8 text-slate-400">Loading site visits...</div> : null}{!loading && !visible.length ? <div className="rounded-2xl border border-dashed border-white/15 p-10 text-center text-slate-400">No visits match these filters.</div> : visible.map((visit) => <Link key={visit.id} href={`${basePath}/${visit.id}`} className="grid min-w-0 gap-4 rounded-[24px] border border-white/10 bg-[#0b1524] p-5 transition hover:border-cyan-400/40 lg:grid-cols-[minmax(0,1.2fr)_minmax(180px,.6fr)_minmax(180px,.6fr)_auto] lg:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-white">{visit.visitRef}</span>{visit.source === "CUSTOMER_REQUEST" ? <span className="rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-bold text-amber-300">CUSTOMER REQUEST</span> : null}</div><div className="mt-2 truncate text-lg font-semibold text-white">{visit.customerName}</div><div className="text-sm text-slate-400">{visit.customerPhone}</div></div><div className="min-w-0 text-sm text-slate-300"><div className="flex gap-2"><MapPin className="h-4 w-4 shrink-0 text-cyan-300" /><span className="truncate">{[visit.location, visit.town, visit.county].filter(Boolean).join(", ") || "Location pending"}</span></div><div className="mt-2 truncate">{label(visit.projectType || "GENERAL_VISIT")} · {label(visit.visitReason || "OTHER")}</div></div><div className="text-sm text-slate-300"><div className="flex gap-2"><CalendarDays className="h-4 w-4 text-cyan-300" />{dateTime(visit.scheduledAt || visit.preferredDate)}</div><div className="mt-2">{visit.assignedTechnicianName || visit.assignedStaffName || "Unassigned"}</div></div><div className="flex flex-row gap-2 lg:flex-col lg:items-end"><span className="rounded-full border border-cyan-400/30 px-3 py-1 text-xs font-bold text-cyan-200">{visit.status}</span><span className={`rounded-full px-3 py-1 text-xs font-bold ${visit.paymentStatus === "PAID" ? "bg-emerald-400/15 text-emerald-300" : "bg-amber-400/15 text-amber-300"}`}><CircleDollarSign className="mr-1 inline h-3 w-3" />{visit.paymentStatus} · {money(visit.visitFee)}</span></div></Link>)}</section>
+    <section className="space-y-3">
+      {loading ? <div className="rounded-2xl border border-white/10 p-8 text-slate-400">Loading site visits...</div> : null}
+      {!loading && !visible.length ? <div className="rounded-2xl border border-dashed border-white/15 p-10 text-center text-slate-400">No visits match these filters.</div> : null}
+      {visible.map((visit) => (
+        <article key={visit.id} className="grid min-w-0 gap-4 rounded-[24px] border border-white/10 bg-[#0b1524] p-5 transition hover:border-cyan-400/40 lg:grid-cols-[minmax(0,1.2fr)_minmax(180px,.6fr)_minmax(180px,.6fr)_auto] lg:items-center">
+          <Link href={`${basePath}/${visit.id}`} className="contents">
+            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-white">{visit.visitRef}</span>{visit.source === "CUSTOMER_REQUEST" ? <span className="rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-bold text-amber-300">CUSTOMER REQUEST</span> : null}</div><div className="mt-2 truncate text-lg font-semibold text-white">{visit.customerName}</div><div className="text-sm text-slate-400">{visit.customerPhone}</div></div>
+            <div className="min-w-0 text-sm text-slate-300"><div className="flex gap-2"><MapPin className="h-4 w-4 shrink-0 text-cyan-300" /><span className="truncate">{[visit.location, visit.town, visit.county].filter(Boolean).join(", ") || "Location pending"}</span></div><div className="mt-2 truncate">{label(visit.projectType || "GENERAL_VISIT")} · {label(visit.visitReason || "OTHER")}</div></div>
+            <div className="text-sm text-slate-300"><div className="flex gap-2"><CalendarDays className="h-4 w-4 text-cyan-300" />{dateTime(visit.scheduledAt || visit.preferredDate)}</div><div className="mt-2">{visit.assignedTechnicianName || visit.assignedStaffName || "Unassigned"}</div></div>
+          </Link>
+          <div className="flex flex-row gap-2 lg:flex-col lg:items-end"><span className="rounded-full border border-cyan-400/30 px-3 py-1 text-xs font-bold text-cyan-200">{visit.status}</span><span className={`rounded-full px-3 py-1 text-xs font-bold ${visit.paymentStatus === "PAID" ? "bg-emerald-400/15 text-emerald-300" : "bg-amber-400/15 text-amber-300"}`}><CircleDollarSign className="mr-1 inline h-3 w-3" />{visit.paymentStatus} · {money(visit.visitFee)}</span>{canDeleteVisits ? <button type="button" onClick={() => void deleteVisit(visit)} disabled={deletingVisitId === visit.id} className="inline-flex items-center justify-center gap-1 rounded-full border border-rose-400/35 px-3 py-1 text-xs font-bold text-rose-200 hover:bg-rose-400/10 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" />{deletingVisitId === visit.id ? "Deleting..." : "Delete"}</button> : null}</div>
+        </article>
+      ))}
+    </section>
 
     {showCreate ? <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/80 p-0 backdrop-blur-sm sm:items-center sm:p-4"><form onSubmit={createVisit} className="max-h-[96vh] w-full max-w-6xl overflow-y-auto rounded-t-[28px] border border-white/10 bg-[#0a1422] p-5 text-white shadow-2xl sm:rounded-[28px] sm:p-7"><div className="sticky top-0 z-10 flex items-start justify-between bg-[#0a1422] pb-5"><div><div className="text-xs font-bold uppercase tracking-[.25em] text-cyan-300">New field visit</div><h2 className="mt-2 text-2xl font-semibold">Create Site Visit</h2></div><button type="button" onClick={() => setShowCreate(false)} className="rounded-full border border-white/10 p-3"><X className="h-5 w-5" /></button></div>
       {error ? <div className="mb-4 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</div> : null}

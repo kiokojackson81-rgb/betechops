@@ -1103,6 +1103,24 @@ export async function getSiteVisitById(id: string) {
   return rows[0] ? serializeSiteVisit(rows[0]) : null;
 }
 
+export async function deleteSiteVisit(id: string) {
+  await ensureSiteVisitsSchema();
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`DELETE FROM "SiteVisitNotification" WHERE "siteVisitId" = ${id}`,
+    );
+    await tx.$executeRaw(
+      Prisma.sql`DELETE FROM "SiteVisitAttachment" WHERE "siteVisitId" = ${id}`,
+    );
+    await tx.$executeRaw(
+      Prisma.sql`DELETE FROM "SiteVisitEvent" WHERE "siteVisitId" = ${id}`,
+    );
+    return tx.$executeRaw(
+      Prisma.sql`DELETE FROM "SiteVisit" WHERE "id" = ${id}`,
+    );
+  });
+}
+
 export async function listSiteVisitEvents(siteVisitId: string) {
   await ensureSiteVisitsSchema();
   const rows = await prisma.$queryRaw<SiteVisitEventRow[]>(Prisma.sql`

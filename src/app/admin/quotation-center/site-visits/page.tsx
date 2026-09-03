@@ -33,6 +33,7 @@ export default async function AdminQuotationCenterSiteVisitsPage({
           staffOptions={staffOptions}
           externalTechnicians={externalTechnicians}
           canAssignTechnicians={actor.canAssignTechnicians}
+          canDeleteVisits={actor.canManageCommercials}
           initialQuoteRef={params.quoteRef?.trim() || null}
         />
       </div>
