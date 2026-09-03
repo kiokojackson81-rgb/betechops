@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import ProductDescriptionEditor from "@/components/ProductDescriptionEditor";
+import { getShopSubcategoryOptions, SHOP_CATEGORY_OPTIONS } from "@/app/shop/shopCatalogConfig";
 
 type Product = {
-  id: string; sku: string; name: string; sellingPrice: number; category: string; brand?: string | null;
+  id: string; sku: string; name: string; sellingPrice: number; category: string; shopSubcategory?: string | null; brand?: string | null;
   shortDescription?: string | null; description?: string | null; specifications?: string[] | null;
   warrantyPeriod?: string | null; warrantyNotes?: string | null; mainImageUrl?: string | null;
   galleryImageUrls?: string[] | null; availabilityType?: string | null; stockQuantity?: number | null;
@@ -13,14 +15,14 @@ type Withdrawal = { id: string; amountKes: number; status: string; paymentRefere
 type Balance = { productsCreated: number; totalEarnedKes: number; paidKes: number; pendingKes: number; availableKes: number };
 
 const blank = () => ({
-  name: "", sellingPrice: "", category: "", brand: "", shortDescription: "", description: "", specifications: "",
-  warrantyPeriod: "", warrantyNotes: "", mainImageUrl: "", galleryImageUrls: "", availabilityType: "SHOP", stockQuantity: "0",
+  name: "", sellingPrice: "", category: "", shopSubcategory: "", brand: "", shortDescription: "", description: "", specifications: "",
+  warrantyPeriod: "", warrantyNotes: "", mainImageUrl: "", galleryImageUrls: "", availabilityType: "WAREHOUSE", stockQuantity: "0",
 });
 
 function money(value: number) { return new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(value); }
 function toForm(product: Product) {
   return {
-    name: product.name, sellingPrice: String(product.sellingPrice), category: product.category, brand: product.brand || "",
+    name: product.name, sellingPrice: String(product.sellingPrice), category: product.category, shopSubcategory: product.shopSubcategory || "", brand: product.brand || "",
     shortDescription: product.shortDescription || "", description: product.description || "",
     specifications: Array.isArray(product.specifications) ? product.specifications.join("\n") : "",
     warrantyPeriod: product.warrantyPeriod || "", warrantyNotes: product.warrantyNotes || "", mainImageUrl: product.mainImageUrl || "",
@@ -63,12 +65,14 @@ export default function ContributorDashboard() {
     setNotice(editingId ? "Product updated and published to the website." : `Product created. ${money(earning)} was added to your earnings.`);
     setForm(blank()); setEditingId(null); await load(); window.scrollTo({ top: 0, behavior: "smooth" });
   }
-  async function uploadImage(file?: File | null) {
+  async function uploadImage(file?: File | null, target: "main" | "gallery" = "main") {
     if (!file) return; setBusy(true); setNotice(null);
     const body = new FormData(); body.set("file", file);
     const res = await fetch("/api/contributor/upload", { method: "POST", body }); const data = await res.json().catch(() => ({})); setBusy(false);
     if (!res.ok) { setNotice(data.error || "Image upload failed."); return; }
-    set("mainImageUrl", data.url); setNotice("Image uploaded. Complete the product details and save it.");
+    if (target === "main") set("mainImageUrl", data.url);
+    else set("galleryImageUrls", [form.galleryImageUrls, data.url].filter(Boolean).join("\n"));
+    setNotice("Image uploaded. Complete the product details and save it.");
   }
   async function requestWithdrawal(event: FormEvent) {
     event.preventDefault(); setBusy(true); setNotice(null);
@@ -97,17 +101,17 @@ export default function ContributorDashboard() {
           <form onSubmit={submitProduct} className="mt-6 grid gap-4 sm:grid-cols-2">
             <label className={label}>Product name<input required value={form.name} onChange={(e) => set("name", e.target.value)} className={input} /></label>
             <label className={label}>Selling price (KES)<input required min="0" type="number" value={form.sellingPrice} onChange={(e) => set("sellingPrice", e.target.value)} className={input} /></label>
-            <label className={label}>Website category<input required placeholder="e.g. Solar full kits" value={form.category} onChange={(e) => set("category", e.target.value)} className={input} /></label>
+            <label className={label}>Website category<select required value={form.category} onChange={(e) => { set("category", e.target.value); set("shopSubcategory", ""); }} className={input}><option value="">Select category</option>{SHOP_CATEGORY_OPTIONS.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select></label>
             <label className={label}>Brand<input value={form.brand} onChange={(e) => set("brand", e.target.value)} className={input} /></label>
+            <label className={label}>Website subcategory<select value={form.shopSubcategory} disabled={!form.category} onChange={(e) => set("shopSubcategory", e.target.value)} className={input}><option value="">Select subcategory</option>{getShopSubcategoryOptions(form.category).map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select></label>
             <label className={`${label} sm:col-span-2`}>Short description<textarea value={form.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} className={input} rows={2} /></label>
-            <label className={`${label} sm:col-span-2`}>Full rich-text description<textarea value={form.description} onChange={(e) => set("description", e.target.value)} className={input} rows={6} placeholder="Use the admin rich-text conventions: paragraphs, headings, bullets and links are supported." /></label>
+            <div className="sm:col-span-2"><span className={label}>Product description</span><div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950"><ProductDescriptionEditor value={form.description} onChange={(value) => set("description", value)} disabled={busy} /></div></div>
             <label className={`${label} sm:col-span-2`}>Specifications, one per line<textarea value={form.specifications} onChange={(e) => set("specifications", e.target.value)} className={input} rows={4} placeholder="Inverter capacity: 3kW&#10;Battery: 5.12kWh" /></label>
             <label className={label}>Warranty period<input value={form.warrantyPeriod} onChange={(e) => set("warrantyPeriod", e.target.value)} className={input} /></label>
             <label className={label}>Stock quantity<input min="0" type="number" value={form.stockQuantity} onChange={(e) => set("stockQuantity", e.target.value)} className={input} /></label>
-            <label className={label}>Availability<select value={form.availabilityType} onChange={(e) => set("availabilityType", e.target.value)} className={input}><option value="SHOP">In shop</option><option value="WAREHOUSE">Warehouse</option><option value="ORDER_ON_REQUEST">Order on request</option><option value="OUT_OF_STOCK">Out of stock</option></select></label>
+            <label className={label}>Availability<select value={form.availabilityType} onChange={(e) => set("availabilityType", e.target.value)} className={input}><option value="WAREHOUSE">Available in Warehouse</option><option value="SHOP">Available at Shop</option><option value="ORDER_ON_REQUEST">Order on request</option><option value="OUT_OF_STOCK">Out of stock</option></select></label>
             <label className={label}>Warranty notes<input value={form.warrantyNotes} onChange={(e) => set("warrantyNotes", e.target.value)} className={input} /></label>
-            <label className={`${label} sm:col-span-2`}>Main product image<input required type="url" value={form.mainImageUrl} onChange={(e) => set("mainImageUrl", e.target.value)} className={input} placeholder="Image URL" /><input type="file" accept="image/*" disabled={busy} onChange={(e) => void uploadImage(e.target.files?.[0])} className="mt-2 block text-xs text-slate-300" /></label>
-            <label className={`${label} sm:col-span-2`}>Gallery image URLs, one per line<textarea value={form.galleryImageUrls} onChange={(e) => set("galleryImageUrls", e.target.value)} className={input} rows={3} /></label>
+            <div className="sm:col-span-2"><span className={label}>Product images</span><p className="mt-1 text-xs text-slate-400">Add a clear main image, then optional gallery images. JPG, PNG and WebP work best.</p><div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4"><label className="group relative flex aspect-square cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-amber-400/60 bg-slate-950 text-center text-sm font-bold text-amber-200">{form.mainImageUrl ? <img src={form.mainImageUrl} alt="Main product" className="h-full w-full object-cover" /> : <span>+<br />Main image</span>}<input required={!form.mainImageUrl} type="file" accept="image/*" disabled={busy} onChange={(e) => void uploadImage(e.target.files?.[0], "main")} className="absolute inset-0 cursor-pointer opacity-0" /></label>{[0, 1, 2].map((index) => { const url = form.galleryImageUrls.split("\n").filter(Boolean)[index]; return <label key={index} className="relative flex aspect-square cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-600 bg-slate-950 text-center text-sm font-bold text-slate-300">{url ? <img src={url} alt="Gallery product" className="h-full w-full object-cover" /> : <span>+<br />Image</span>}<input type="file" accept="image/*" disabled={busy} onChange={(e) => void uploadImage(e.target.files?.[0], "gallery")} className="absolute inset-0 cursor-pointer opacity-0" /></label>; })}</div></div>
             <div className="sm:col-span-2 flex justify-end"><button disabled={busy} className="rounded-xl bg-emerald-400 px-5 py-3 font-black text-slate-950 disabled:opacity-60">{busy ? "Saving..." : editingId ? "Save product changes" : "Create product and earn KES 5"}</button></div>
           </form>
         </section>

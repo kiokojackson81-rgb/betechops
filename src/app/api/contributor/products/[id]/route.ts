@@ -9,6 +9,7 @@ const updateInput = z.object({
   name: z.string().trim().min(2).max(255),
   sellingPrice: z.coerce.number().min(0),
   category: z.string().trim().min(2).max(120),
+  shopSubcategory: z.string().trim().max(120).optional().nullable(),
   brand: z.string().trim().max(120).optional().nullable(),
   shortDescription: z.string().trim().max(3000).optional().nullable(),
   description: z.string().trim().max(10000).optional().nullable(),
@@ -17,7 +18,7 @@ const updateInput = z.object({
   warrantyNotes: z.string().trim().max(1000).optional().nullable(),
   mainImageUrl: z.string().trim().url().max(500),
   galleryImageUrls: z.array(z.string().trim().url().max(500)).max(12).optional().default([]),
-  availabilityType: z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]).default("SHOP"),
+  availabilityType: z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]).default("WAREHOUSE"),
   stockQuantity: z.coerce.number().int().min(0).max(100000).default(0),
 });
 
@@ -40,11 +41,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       shortDescription: data.shortDescription || null, description: data.description || null,
       specifications: data.specifications, warrantyPeriod: data.warrantyPeriod || null, warrantyNotes: data.warrantyNotes || null,
       mainImageUrl: data.mainImageUrl, shopImageUrl: data.mainImageUrl, galleryImageUrls: data.galleryImageUrls,
-      showInShop: visible, ecommerceVisible: visible, shopCategory: data.category,
+      showInShop: visible, ecommerceVisible: visible, shopCategory: data.category, shopSubcategory: data.shopSubcategory || null,
       shopShortDescription: data.shortDescription || null, shopWarranty: data.warrantyPeriod || null,
       shopSpecs: data.specifications.join(", ") || null, shopBrand: data.brand || null,
       availabilityType: data.availabilityType, pickupDelayDays: data.availabilityType === "WAREHOUSE" ? 1 : 0,
       stockQuantity: data.stockQuantity, isActive: true, status: "ACTIVE", posEnabled: true,
+      catalogueConfiguration: {
+        installationType: "NOT_REQUIRED", installationFeeMode: "UNAVAILABLE", customInstallationFee: null,
+        accessoriesMode: "NOT_INCLUDED", preliminaryAccessoriesFee: null, includedAccessories: "", installationNotes: "",
+        transportMode: "ZONE", useDefaultTransportRates: false, zone1TransportFee: 500, zone2TransportFee: 750, zone3TransportFee: 1000,
+        priceIncludes: ["EQUIPMENT"], allInclusive: false, allInclusiveItems: [], structuredSpecifications: [], componentWarranties: [], projectImageUrls: [], requiresSiteAssessment: false,
+      },
     },
   });
   await prisma.$executeRawUnsafe(`UPDATE "ProductContributorProduct" SET "updatedAt" = NOW() WHERE "productId" = $1`, id);

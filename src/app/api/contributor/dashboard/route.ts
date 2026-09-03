@@ -13,6 +13,7 @@ const productInput = z.object({
   name: z.string().trim().min(2).max(255),
   sellingPrice: z.coerce.number().min(0),
   category: z.string().trim().min(2).max(120),
+  shopSubcategory: z.string().trim().max(120).optional().nullable(),
   brand: z.string().trim().max(120).optional().nullable(),
   shortDescription: z.string().trim().max(3000).optional().nullable(),
   description: z.string().trim().max(10000).optional().nullable(),
@@ -21,7 +22,7 @@ const productInput = z.object({
   warrantyNotes: z.string().trim().max(1000).optional().nullable(),
   mainImageUrl: z.string().trim().url().max(500),
   galleryImageUrls: z.array(z.string().trim().url().max(500)).max(12).optional().default([]),
-  availabilityType: z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]).default("SHOP"),
+  availabilityType: z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]).default("WAREHOUSE"),
   stockQuantity: z.coerce.number().int().min(0).max(100000).default(0),
 });
 
@@ -60,6 +61,7 @@ function productData(data: ProductInput, sku: string) {
     showInShop: websiteVisible,
     ecommerceVisible: websiteVisible,
     shopCategory: data.category,
+    shopSubcategory: data.shopSubcategory || null,
     shopShortDescription: data.shortDescription || null,
     shopWarranty: data.warrantyPeriod || null,
     shopSpecs: data.specifications.join(", ") || null,
@@ -70,6 +72,27 @@ function productData(data: ProductInput, sku: string) {
     isActive: true,
     status: "ACTIVE",
     posEnabled: true,
+    catalogueConfiguration: {
+      installationType: "NOT_REQUIRED",
+      installationFeeMode: "UNAVAILABLE",
+      customInstallationFee: null,
+      accessoriesMode: "NOT_INCLUDED",
+      preliminaryAccessoriesFee: null,
+      includedAccessories: "",
+      installationNotes: "",
+      transportMode: "ZONE",
+      useDefaultTransportRates: false,
+      zone1TransportFee: 500,
+      zone2TransportFee: 750,
+      zone3TransportFee: 1000,
+      priceIncludes: ["EQUIPMENT"],
+      allInclusive: false,
+      allInclusiveItems: [],
+      structuredSpecifications: [],
+      componentWarranties: [],
+      projectImageUrls: [],
+      requiresSiteAssessment: false,
+    },
   };
 }
 
@@ -79,7 +102,7 @@ export async function GET() {
   const [balance, products, withdrawals] = await Promise.all([
     getContributorBalance(access.userId),
     prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `SELECT p."id", p."sku", p."name", p."sellingPrice", p."category", p."brand", p."shortDescription", p."description", p."specifications", p."warrantyPeriod", p."warrantyNotes", p."mainImageUrl", p."galleryImageUrls", p."availabilityType", p."stockQuantity", p."showInShop", p."ecommerceVisible", p."updatedAt", cpp."earningKes"
+      `SELECT p."id", p."sku", p."name", p."sellingPrice", p."category", p."shopSubcategory", p."brand", p."shortDescription", p."description", p."specifications", p."warrantyPeriod", p."warrantyNotes", p."mainImageUrl", p."galleryImageUrls", p."availabilityType", p."stockQuantity", p."showInShop", p."ecommerceVisible", p."updatedAt", cpp."earningKes"
        FROM "ProductContributorProduct" cpp
        JOIN "Product" p ON p."id" = cpp."productId"
        WHERE cpp."contributorId" = $1
