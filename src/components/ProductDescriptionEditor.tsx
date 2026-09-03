@@ -7,6 +7,7 @@ type ProductDescriptionEditorProps = {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  showPreview?: boolean;
 };
 
 type FormatAction = "paragraph" | "heading" | "bold" | "italic" | "bullets" | "numbered" | "link" | "break";
@@ -48,7 +49,7 @@ function formatSelection(value: string, start: number, end: number, action: Form
   };
 }
 
-export default function ProductDescriptionEditor({ value, onChange, disabled = false }: ProductDescriptionEditorProps) {
+export default function ProductDescriptionEditor({ value, onChange, disabled = false, showPreview = true }: ProductDescriptionEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const applyFormat = (action: FormatAction) => {
@@ -79,8 +80,8 @@ export default function ProductDescriptionEditor({ value, onChange, disabled = f
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-2">
-        <div className="border-b border-slate-800 lg:border-b-0 lg:border-r">
+      <div className={showPreview ? "grid lg:grid-cols-2" : ""}>
+        <div className={showPreview ? "border-b border-slate-800 lg:border-b-0 lg:border-r" : ""}>
           <div className="px-3 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Edit description</div>
           <textarea
             ref={textareaRef}
@@ -92,7 +93,7 @@ export default function ProductDescriptionEditor({ value, onChange, disabled = f
           />
         </div>
 
-        <div className="min-h-[320px] bg-slate-900/45 p-4">
+        {showPreview ? <div className="min-h-[320px] bg-slate-900/45 p-4">
           <div className="mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Live storefront preview</div>
           {value.trim() ? (
             <MarkdownRendererClient mdText={value} variant="admin-preview" />
@@ -101,7 +102,7 @@ export default function ProductDescriptionEditor({ value, onChange, disabled = f
               Formatted headings, paragraphs, lists, bold text, and links will appear here before you save.
             </div>
           )}
-        </div>
+        </div> : null}
       </div>
     </div>
   );

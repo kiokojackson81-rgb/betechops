@@ -20,6 +20,9 @@ const updateInput = z.object({
   galleryImageUrls: z.array(z.string().trim().url().max(500)).max(12).optional().default([]),
   availabilityType: z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]).default("WAREHOUSE"),
   stockQuantity: z.coerce.number().int().min(0).max(100000).default(0),
+  variableCost: z.boolean().default(false), lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
+  requiresInstallation: z.boolean().default(false), installationIncluded: z.boolean().default(false), transportIncluded: z.boolean().default(false),
+  zone1TransportFee: z.coerce.number().int().min(0).default(500), zone2TransportFee: z.coerce.number().int().min(0).default(750), zone3TransportFee: z.coerce.number().int().min(0).default(1000),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -44,13 +47,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       showInShop: visible, ecommerceVisible: visible, shopCategory: data.category, shopSubcategory: data.shopSubcategory || null,
       shopShortDescription: data.shortDescription || null, shopWarranty: data.warrantyPeriod || null,
       shopSpecs: data.specifications.join(", ") || null, shopBrand: data.brand || null,
-      availabilityType: data.availabilityType, pickupDelayDays: data.availabilityType === "WAREHOUSE" ? 1 : 0,
+      availabilityType: data.availabilityType, pickupDelayDays: data.availabilityType === "WAREHOUSE" ? 1 : 0, variableCost: data.variableCost, lastBuyingPrice: data.variableCost ? null : data.lastBuyingPrice ?? null,
       stockQuantity: data.stockQuantity, isActive: true, status: "ACTIVE", posEnabled: true,
       catalogueConfiguration: {
-        installationType: "NOT_REQUIRED", installationFeeMode: "UNAVAILABLE", customInstallationFee: null,
+        installationType: data.requiresInstallation ? (data.installationIncluded ? "INCLUDED" : "LOCAL_RECOMMENDED") : "NOT_REQUIRED", installationFeeMode: data.requiresInstallation ? (data.installationIncluded ? "INCLUDED" : "STANDARD") : "UNAVAILABLE", customInstallationFee: null,
         accessoriesMode: "NOT_INCLUDED", preliminaryAccessoriesFee: null, includedAccessories: "", installationNotes: "",
-        transportMode: "ZONE", useDefaultTransportRates: false, zone1TransportFee: 500, zone2TransportFee: 750, zone3TransportFee: 1000,
-        priceIncludes: ["EQUIPMENT"], allInclusive: false, allInclusiveItems: [], structuredSpecifications: [], componentWarranties: [], projectImageUrls: [], requiresSiteAssessment: false,
+        transportMode: data.transportIncluded ? "INCLUDED" : "ZONE", useDefaultTransportRates: false, zone1TransportFee: data.zone1TransportFee, zone2TransportFee: data.zone2TransportFee, zone3TransportFee: data.zone3TransportFee,
+        priceIncludes: ["EQUIPMENT", ...(data.installationIncluded ? ["INSTALLATION"] : []), ...(data.transportIncluded ? ["TRANSPORT"] : [])], allInclusive: false, allInclusiveItems: [], structuredSpecifications: [], componentWarranties: [], projectImageUrls: [], requiresSiteAssessment: false,
       },
     },
   });

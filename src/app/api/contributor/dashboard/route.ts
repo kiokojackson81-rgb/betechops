@@ -24,6 +24,14 @@ const productInput = z.object({
   galleryImageUrls: z.array(z.string().trim().url().max(500)).max(12).optional().default([]),
   availabilityType: z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]).default("WAREHOUSE"),
   stockQuantity: z.coerce.number().int().min(0).max(100000).default(0),
+  variableCost: z.boolean().default(false),
+  lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
+  requiresInstallation: z.boolean().default(false),
+  installationIncluded: z.boolean().default(false),
+  transportIncluded: z.boolean().default(false),
+  zone1TransportFee: z.coerce.number().int().min(0).default(500),
+  zone2TransportFee: z.coerce.number().int().min(0).default(750),
+  zone3TransportFee: z.coerce.number().int().min(0).default(1000),
 });
 
 type ProductInput = z.infer<typeof productInput>;
@@ -66,26 +74,27 @@ function productData(data: ProductInput, sku: string) {
     shopWarranty: data.warrantyPeriod || null,
     shopSpecs: data.specifications.join(", ") || null,
     shopBrand: data.brand || null,
-    availabilityType: data.availabilityType,
+    availabilityType: data.availabilityType, variableCost: data.variableCost,
+    lastBuyingPrice: data.variableCost ? null : data.lastBuyingPrice ?? null,
     pickupDelayDays: data.availabilityType === "WAREHOUSE" ? 1 : 0,
     stockQuantity: data.stockQuantity,
     isActive: true,
     status: "ACTIVE",
     posEnabled: true,
     catalogueConfiguration: {
-      installationType: "NOT_REQUIRED",
-      installationFeeMode: "UNAVAILABLE",
+      installationType: data.requiresInstallation ? (data.installationIncluded ? "INCLUDED" : "LOCAL_RECOMMENDED") : "NOT_REQUIRED",
+      installationFeeMode: data.requiresInstallation ? (data.installationIncluded ? "INCLUDED" : "STANDARD") : "UNAVAILABLE",
       customInstallationFee: null,
       accessoriesMode: "NOT_INCLUDED",
       preliminaryAccessoriesFee: null,
       includedAccessories: "",
       installationNotes: "",
-      transportMode: "ZONE",
+      transportMode: data.transportIncluded ? "INCLUDED" : "ZONE",
       useDefaultTransportRates: false,
-      zone1TransportFee: 500,
-      zone2TransportFee: 750,
-      zone3TransportFee: 1000,
-      priceIncludes: ["EQUIPMENT"],
+      zone1TransportFee: data.zone1TransportFee,
+      zone2TransportFee: data.zone2TransportFee,
+      zone3TransportFee: data.zone3TransportFee,
+      priceIncludes: ["EQUIPMENT", ...(data.installationIncluded ? ["INSTALLATION"] : []), ...(data.transportIncluded ? ["TRANSPORT"] : [])],
       allInclusive: false,
       allInclusiveItems: [],
       structuredSpecifications: [],
@@ -102,7 +111,7 @@ export async function GET() {
   const [balance, products, withdrawals] = await Promise.all([
     getContributorBalance(access.userId),
     prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `SELECT p."id", p."sku", p."name", p."sellingPrice", p."category", p."shopSubcategory", p."brand", p."shortDescription", p."description", p."specifications", p."warrantyPeriod", p."warrantyNotes", p."mainImageUrl", p."galleryImageUrls", p."availabilityType", p."stockQuantity", p."showInShop", p."ecommerceVisible", p."updatedAt", cpp."earningKes"
+      `SELECT p."id", p."sku", p."name", p."sellingPrice", p."category", p."shopSubcategory", p."brand", p."shortDescription", p."description", p."specifications", p."warrantyPeriod", p."warrantyNotes", p."mainImageUrl", p."galleryImageUrls", p."availabilityType", p."stockQuantity", p."variableCost", p."lastBuyingPrice", p."catalogueConfiguration", p."showInShop", p."ecommerceVisible", p."updatedAt", cpp."earningKes"
        FROM "ProductContributorProduct" cpp
        JOIN "Product" p ON p."id" = cpp."productId"
        WHERE cpp."contributorId" = $1
