@@ -1,7 +1,12 @@
-import { getShopCategoryDepartment, SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
+import {
+  getShopCategoryDepartment,
+  SHOP_CATEGORY_DEFINITIONS,
+} from "@/app/shop/shopCatalogConfig";
 import {
   getShopCategoryHref,
+  getShopSubcategoryHref,
   SHOP_ALL_PRODUCTS_HREF,
+  SHOP_DEPARTMENTS_HREF,
   SHOP_DELIVERY_PAYMENT_HREF,
   SHOP_LIPA_POLE_POLE_HREF,
   SHOP_REQUEST_QUOTE_HREF,
@@ -26,13 +31,7 @@ export type ShopCategory = {
 };
 
 export type ShopProductVisualType =
-  | "panel"
-  | "inverter"
-  | "battery"
-  | "kit"
-  | "pump"
-  | "light"
-  | "heater";
+  "panel" | "inverter" | "battery" | "kit" | "pump" | "light" | "heater";
 
 export type ShopProduct = {
   id: string;
@@ -78,7 +77,8 @@ export type ShopProduct = {
   lipaPolePoleDefaultDays?: number | null;
   lipaPolePoleTerms?: string | null;
   productType?: string | null;
-  catalogueConfiguration?: import("@/lib/productCataloguePolicy").ProductCatalogueConfiguration | null;
+  catalogueConfiguration?:
+    import("@/lib/productCataloguePolicy").ProductCatalogueConfiguration | null;
 };
 
 export type ShopProductSection = {
@@ -92,29 +92,40 @@ export type ShopProductSection = {
 export const shopNavLinks: ShopNavigationItem[] = [
   { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF },
   { label: "All Products", href: SHOP_ALL_PRODUCTS_HREF },
-  ...SHOP_CATEGORY_DEFINITIONS.filter((category) => getShopCategoryDepartment(category) === "SOLAR_ENERGY").map((category) => ({
+  { label: "All Departments", href: SHOP_DEPARTMENTS_HREF },
+  ...SHOP_CATEGORY_DEFINITIONS.filter(
+    (category) => getShopCategoryDepartment(category) === "SOLAR_ENERGY",
+  ).map((category) => ({
     label: category.label,
     section: "SOLAR_ENERGY" as const,
     href: getShopCategoryHref(category.value),
     children: category.subcategories.map((subcategory) => ({
       label: subcategory.label,
-      href: `${getShopCategoryHref(category.value)}?sub=${subcategory.value}`,
+      href: getShopSubcategoryHref(category.value, subcategory.value),
     })),
   })),
   {
     label: "Other Categories",
-    href: SHOP_ALL_PRODUCTS_HREF,
+    href: SHOP_DEPARTMENTS_HREF,
     section: "GENERAL",
-    children: SHOP_CATEGORY_DEFINITIONS
-      .filter((category) => getShopCategoryDepartment(category) === "GENERAL")
-      .map((category) => ({ label: category.label, href: getShopCategoryHref(category.value) })),
+    children: SHOP_CATEGORY_DEFINITIONS.filter(
+      (category) => getShopCategoryDepartment(category) === "GENERAL",
+    ).map((category) => ({
+      label: category.label,
+      href: getShopCategoryHref(category.value),
+    })),
   },
   { label: "Request Quote", href: SHOP_REQUEST_QUOTE_HREF },
   { label: "Warranty Support", href: SHOP_WARRANTY_SUPPORT_HREF },
-  { label: "Delivery, Installation & Payment", href: SHOP_DELIVERY_PAYMENT_HREF },
+  {
+    label: "Delivery, Installation & Payment",
+    href: SHOP_DELIVERY_PAYMENT_HREF,
+  },
 ];
 
-export function buildShopCategories(imageOverrides: Record<string, string> = {}): ShopCategory[] {
+export function buildShopCategories(
+  imageOverrides: Record<string, string> = {},
+): ShopCategory[] {
   return SHOP_CATEGORY_DEFINITIONS.map((category) => ({
     slug: category.value,
     title: category.label,
@@ -127,14 +138,19 @@ export function buildShopCategories(imageOverrides: Record<string, string> = {})
 
 export const shopCategories: ShopCategory[] = buildShopCategories();
 
-export function buildHomeShopCategories(imageOverrides: Record<string, string> = {}) {
-  const solarCategories = buildShopCategories(imageOverrides).filter((category) => category.department !== "GENERAL");
+export function buildHomeShopCategories(
+  imageOverrides: Record<string, string> = {},
+) {
+  const solarCategories = buildShopCategories(imageOverrides).filter(
+    (category) => category.department !== "GENERAL",
+  );
   return [
     ...solarCategories,
     {
       slug: "other-categories",
       title: "Other Categories",
-      blurb: "Computers, phones, electronics, appliances, tools, security and more.",
+      blurb:
+        "Computers, phones, electronics, appliances, tools, security and more.",
       image: "/agents/product-accessories-generated.png",
       accent: "green" as const,
       department: "GENERAL" as const,
@@ -143,11 +159,26 @@ export function buildHomeShopCategories(imageOverrides: Record<string, string> =
 }
 
 export const trustBadges = [
-  { title: "Genuine products", copy: "Trusted solar brands supplied by Betech Solar Solutions." },
-  { title: "Warranty support", copy: "Clear warranty guidance on systems, batteries, panels and accessories." },
-  { title: "Nairobi CBD shop", copy: "Visit Betech Solar Solutions at Pramukh Plaza, Nairobi CBD." },
-  { title: "Countrywide delivery", copy: "Panels, batteries, pumps, heaters and kits delivered across Kenya." },
-  { title: "Expert solar guidance", copy: "Our team helps size the right system before you commit." },
+  {
+    title: "Genuine products",
+    copy: "Trusted solar brands supplied by Betech Solar Solutions.",
+  },
+  {
+    title: "Warranty support",
+    copy: "Clear warranty guidance on systems, batteries, panels and accessories.",
+  },
+  {
+    title: "Nairobi CBD shop",
+    copy: "Visit Betech Solar Solutions at Pramukh Plaza, Nairobi CBD.",
+  },
+  {
+    title: "Countrywide delivery",
+    copy: "Panels, batteries, pumps, heaters and kits delivered across Kenya.",
+  },
+  {
+    title: "Expert solar guidance",
+    copy: "Our team helps size the right system before you commit.",
+  },
 ];
 
 export const heroHighlights = [
@@ -196,7 +227,9 @@ export const deliveryPaymentSteps = [
   },
 ] as const;
 
-function product(input: Omit<ShopProduct, "source" | "opsProductId">): ShopProduct {
+function product(
+  input: Omit<ShopProduct, "source" | "opsProductId">,
+): ShopProduct {
   return { ...input, source: "mock", opsProductId: null };
 }
 
@@ -205,7 +238,8 @@ export const shopProductSections: ShopProductSection[] = [
     slug: "best-selling-solar-kits",
     title: "Best Selling Solar Kits",
     eyebrow: "Customer-ready full systems",
-    description: "Practical Betech Solar sample kits for homes, businesses, and backup needs.",
+    description:
+      "Practical Betech Solar sample kits for homes, businesses, and backup needs.",
     products: [
       product({
         id: "kit-1kw-full",
@@ -217,11 +251,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 69999,
         image: "/agents/product-solar-kit-clean.png",
         visualType: "kit",
-        specs: ["1KW inverter system", "Battery and panel ready", "Ideal for lights, TV and charging"],
+        specs: [
+          "1KW inverter system",
+          "Battery and panel ready",
+          "Ideal for lights, TV and charging",
+        ],
         warranty: "12-month warranty",
         stockStatus: "in_stock",
         tags: ["starter kit", "home backup", "best seller"],
-        whatsappMessage: "Hello Betech Solar, I want to order the 1KW Solar Full Kit.",
+        whatsappMessage:
+          "Hello Betech Solar, I want to order the 1KW Solar Full Kit.",
       }),
       product({
         id: "kit-3kw-full",
@@ -233,11 +272,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 198000,
         image: "/agents/product-solar-kit-clean.png",
         visualType: "kit",
-        specs: ["3KW hybrid-ready setup", "Suitable for home and biashara backup", "Expandable system path"],
+        specs: [
+          "3KW hybrid-ready setup",
+          "Suitable for home and biashara backup",
+          "Expandable system path",
+        ],
         warranty: "18-month warranty",
         stockStatus: "limited_stock",
         tags: ["hybrid kit", "business backup", "popular"],
-        whatsappMessage: "Hello Betech Solar, I want more details about the 3KW Solar Full Kit.",
+        whatsappMessage:
+          "Hello Betech Solar, I want more details about the 3KW Solar Full Kit.",
       }),
       product({
         id: "kit-5kw-full",
@@ -249,11 +293,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 348000,
         image: "/agents/product-solar-kit-clean.png",
         visualType: "kit",
-        specs: ["5KW full solar system", "For larger homes and biashara", "Supports stronger daytime loads"],
+        specs: [
+          "5KW full solar system",
+          "For larger homes and biashara",
+          "Supports stronger daytime loads",
+        ],
         warranty: "24-month warranty",
         stockStatus: "quote_only",
         tags: ["premium kit", "full solution", "quote first"],
-        whatsappMessage: "Hello Betech Solar, I need a quote for the 5KW Solar Full Kit.",
+        whatsappMessage:
+          "Hello Betech Solar, I need a quote for the 5KW Solar Full Kit.",
       }),
     ],
   },
@@ -261,7 +310,8 @@ export const shopProductSections: ShopProductSection[] = [
     slug: "solar-panels",
     title: "Solar Panels",
     eyebrow: "High-output mono panels",
-    description: "Realistic panel samples for modern rooftops, farms, institutions and backup systems.",
+    description:
+      "Realistic panel samples for modern rooftops, farms, institutions and backup systems.",
     products: [
       product({
         id: "panel-585w",
@@ -273,11 +323,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 19200,
         image: "/agents/product-solar-kit-clean.png",
         visualType: "panel",
-        specs: ["585W mono panel", "High efficiency generation", "Suitable for home and business rooftops"],
+        specs: [
+          "585W mono panel",
+          "High efficiency generation",
+          "Suitable for home and business rooftops",
+        ],
         warranty: "12-year product warranty",
         stockStatus: "in_stock",
         tags: ["mono panel", "high output", "roof top"],
-        whatsappMessage: "Hello Betech Solar, I want to order the 585W Solar Panel.",
+        whatsappMessage:
+          "Hello Betech Solar, I want to order the 585W Solar Panel.",
       }),
       product({
         id: "panel-620w",
@@ -289,11 +344,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 21800,
         image: "/agents/product-solar-kit-clean.png",
         visualType: "panel",
-        specs: ["620W mono panel", "Higher output for larger installs", "Commercial and large home use"],
+        specs: [
+          "620W mono panel",
+          "Higher output for larger installs",
+          "Commercial and large home use",
+        ],
         warranty: "12-year product warranty",
         stockStatus: "limited_stock",
         tags: ["utility panel", "high output", "commercial"],
-        whatsappMessage: "Hello Betech Solar, I want more details about the 620W Solar Panel.",
+        whatsappMessage:
+          "Hello Betech Solar, I want more details about the 620W Solar Panel.",
       }),
     ],
   },
@@ -301,7 +361,8 @@ export const shopProductSections: ShopProductSection[] = [
     slug: "solar-batteries",
     title: "Solar Batteries",
     eyebrow: "Gel and lithium storage",
-    description: "Battery samples for daily backup, deeper reserve capacity and lithium upgrades.",
+    description:
+      "Battery samples for daily backup, deeper reserve capacity and lithium upgrades.",
     products: [
       product({
         id: "battery-100ah-gel",
@@ -313,11 +374,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 26200,
         image: "/agents/product-battery-clean.png",
         visualType: "battery",
-        specs: ["100AH deep-cycle gel battery", "Reliable home backup", "Works with starter and mid-range kits"],
+        specs: [
+          "100AH deep-cycle gel battery",
+          "Reliable home backup",
+          "Works with starter and mid-range kits",
+        ],
         warranty: "12-month warranty",
         stockStatus: "in_stock",
         tags: ["gel battery", "deep cycle", "home backup"],
-        whatsappMessage: "Hello Betech Solar, I want to order the 100AH Gel Battery.",
+        whatsappMessage:
+          "Hello Betech Solar, I want to order the 100AH Gel Battery.",
       }),
       product({
         id: "battery-200ah-gel",
@@ -329,11 +395,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 45500,
         image: "/agents/product-battery-clean.png",
         visualType: "battery",
-        specs: ["200AH deep-cycle gel battery", "Longer reserve time", "Suitable for stronger backup demands"],
+        specs: [
+          "200AH deep-cycle gel battery",
+          "Longer reserve time",
+          "Suitable for stronger backup demands",
+        ],
         warranty: "12-month warranty",
         stockStatus: "limited_stock",
         tags: ["gel battery", "reserve backup", "heavy duty"],
-        whatsappMessage: "Hello Betech Solar, I need pricing for the 200AH Gel Battery.",
+        whatsappMessage:
+          "Hello Betech Solar, I need pricing for the 200AH Gel Battery.",
       }),
       product({
         id: "battery-100ah-lithium",
@@ -345,11 +416,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 126500,
         image: "/agents/product-battery-clean.png",
         visualType: "battery",
-        specs: ["100AH lithium storage", "Long cycle life", "Clean fit for hybrid inverter systems"],
+        specs: [
+          "100AH lithium storage",
+          "Long cycle life",
+          "Clean fit for hybrid inverter systems",
+        ],
         warranty: "24-month warranty",
         stockStatus: "in_stock",
         tags: ["lithium battery", "hybrid ready", "long cycle"],
-        whatsappMessage: "Hello Betech Solar, I want to order the 100AH Lithium Battery.",
+        whatsappMessage:
+          "Hello Betech Solar, I want to order the 100AH Lithium Battery.",
       }),
       product({
         id: "battery-200ah-lithium",
@@ -361,11 +437,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 229999,
         image: "/agents/product-battery-clean.png",
         visualType: "battery",
-        specs: ["200AH lithium storage", "Longer runtime for home and biashara", "Premium backup option"],
+        specs: [
+          "200AH lithium storage",
+          "Longer runtime for home and biashara",
+          "Premium backup option",
+        ],
         warranty: "24-month warranty",
         stockStatus: "quote_only",
         tags: ["lithium battery", "premium backup", "quote first"],
-        whatsappMessage: "Hello Betech Solar, I need a quote for the 200AH Lithium Battery.",
+        whatsappMessage:
+          "Hello Betech Solar, I need a quote for the 200AH Lithium Battery.",
       }),
     ],
   },
@@ -373,7 +454,8 @@ export const shopProductSections: ShopProductSection[] = [
     slug: "hybrid-inverters",
     title: "Hybrid Inverters",
     eyebrow: "Core power conversion",
-    description: "Hybrid inverter samples for smaller homes up to larger backup and biashara systems.",
+    description:
+      "Hybrid inverter samples for smaller homes up to larger backup and biashara systems.",
     products: [
       product({
         id: "inverter-1-2kw-hybrid",
@@ -385,11 +467,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 31500,
         image: "/agents/product-inverter-clean.png",
         visualType: "inverter",
-        specs: ["1.2KW hybrid inverter", "Compact backup use", "For starter home loads"],
+        specs: [
+          "1.2KW hybrid inverter",
+          "Compact backup use",
+          "For starter home loads",
+        ],
         warranty: "12-month warranty",
         stockStatus: "in_stock",
         tags: ["hybrid inverter", "starter size", "home use"],
-        whatsappMessage: "Hello Betech Solar, I want to order the 1.2KW Hybrid Inverter.",
+        whatsappMessage:
+          "Hello Betech Solar, I want to order the 1.2KW Hybrid Inverter.",
       }),
       product({
         id: "inverter-3-5kw-hybrid",
@@ -401,11 +488,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 82999,
         image: "/agents/product-inverter-clean.png",
         visualType: "inverter",
-        specs: ["3.5KW hybrid inverter", "Ideal for home and biashara backup", "Lithium-ready expansion path"],
+        specs: [
+          "3.5KW hybrid inverter",
+          "Ideal for home and biashara backup",
+          "Lithium-ready expansion path",
+        ],
         warranty: "18-month warranty",
         stockStatus: "in_stock",
         tags: ["hybrid inverter", "popular", "lithium ready"],
-        whatsappMessage: "Hello Betech Solar, I need pricing for the 3.5KW Hybrid Inverter.",
+        whatsappMessage:
+          "Hello Betech Solar, I need pricing for the 3.5KW Hybrid Inverter.",
       }),
       product({
         id: "inverter-5kw-hybrid",
@@ -417,11 +509,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 132500,
         image: "/agents/product-inverter-clean.png",
         visualType: "inverter",
-        specs: ["5KW hybrid inverter", "For larger loads and day power use", "Premium monitoring-ready system core"],
+        specs: [
+          "5KW hybrid inverter",
+          "For larger loads and day power use",
+          "Premium monitoring-ready system core",
+        ],
         warranty: "24-month warranty",
         stockStatus: "limited_stock",
         tags: ["hybrid inverter", "premium", "larger load"],
-        whatsappMessage: "Hello Betech Solar, I want more details about the 5KW Hybrid Inverter.",
+        whatsappMessage:
+          "Hello Betech Solar, I want more details about the 5KW Hybrid Inverter.",
       }),
     ],
   },
@@ -429,7 +526,8 @@ export const shopProductSections: ShopProductSection[] = [
     slug: "water-pumps",
     title: "Water Pumps",
     eyebrow: "Water and outdoor solutions",
-    description: "Solar pumping, lighting and water heating samples for farms, compounds and homes.",
+    description:
+      "Solar pumping, lighting and water heating samples for farms, compounds and homes.",
     products: [
       product({
         id: "pump-dc-12v",
@@ -441,11 +539,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 38999,
         image: "/agents/product-water-pump-clean.png",
         visualType: "pump",
-        specs: ["12V DC pump", "Suitable for tanks and small irrigation", "Low running cost solar pumping"],
+        specs: [
+          "12V DC pump",
+          "Suitable for tanks and small irrigation",
+          "Low running cost solar pumping",
+        ],
         warranty: "12-month warranty",
         stockStatus: "in_stock",
         tags: ["water pump", "dc pump", "farm use"],
-        whatsappMessage: "Hello Betech Solar, I want to order the DC 12V Solar Water Pump.",
+        whatsappMessage:
+          "Hello Betech Solar, I want to order the DC 12V Solar Water Pump.",
       }),
       product({
         id: "light-solar-flood",
@@ -457,11 +560,16 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 11200,
         image: "/agents/hero-generated-v2.png",
         visualType: "light",
-        specs: ["Outdoor flood lighting", "Security and compound use", "Standalone solar charging setup"],
+        specs: [
+          "Outdoor flood lighting",
+          "Security and compound use",
+          "Standalone solar charging setup",
+        ],
         warranty: "6-month warranty",
         stockStatus: "in_stock",
         tags: ["solar light", "security", "compound"],
-        whatsappMessage: "Hello Betech Solar, I want to order the Solar Flood Light.",
+        whatsappMessage:
+          "Hello Betech Solar, I want to order the Solar Flood Light.",
       }),
       product({
         id: "heater-solar-water",
@@ -473,17 +581,24 @@ export const shopProductSections: ShopProductSection[] = [
         oldPrice: 95000,
         image: "/agents/cta-house-generated.png",
         visualType: "heater",
-        specs: ["Roof-mounted water heating", "For homes and rentals", "Helps reduce electricity cost"],
+        specs: [
+          "Roof-mounted water heating",
+          "For homes and rentals",
+          "Helps reduce electricity cost",
+        ],
         warranty: "12-month warranty",
         stockStatus: "preorder",
         tags: ["water heater", "home use", "pre-order"],
-        whatsappMessage: "Hello Betech Solar, I want to request details for the Solar Water Heater.",
+        whatsappMessage:
+          "Hello Betech Solar, I want to request details for the Solar Water Heater.",
       }),
     ],
   },
 ];
 
-export const allShopProducts = shopProductSections.flatMap((section) => section.products);
+export const allShopProducts = shopProductSections.flatMap(
+  (section) => section.products,
+);
 
 export const footerGroups = [
   {
@@ -492,32 +607,92 @@ export const footerGroups = [
       { label: "Call: 0722 151 083", href: "tel:+254722151083", icon: "phone" },
       { label: "Call: 0703 241 917", href: "tel:+254703241917", icon: "phone" },
       { label: "Call: 0716 722 151", href: "tel:+254716722151", icon: "phone" },
-      { label: "WhatsApp our team", href: "https://wa.me/254722151083", icon: "message" },
-      { label: "info@betech.co.ke", href: "mailto:info@betech.co.ke", icon: "mail" },
-      { label: "TikTok", href: "https://www.tiktok.com/@betechsolarsolutionske", icon: "play" },
-      { label: "Recent solar projects", href: "https://www.tiktok.com/@betechsolarprojects", icon: "projects" },
-      { label: "Facebook", href: "https://web.facebook.com/profile.php?id=61567374346730", icon: "social" },
+      {
+        label: "WhatsApp our team",
+        href: "https://wa.me/254722151083",
+        icon: "message",
+      },
+      {
+        label: "info@betech.co.ke",
+        href: "mailto:info@betech.co.ke",
+        icon: "mail",
+      },
+      {
+        label: "TikTok",
+        href: "https://www.tiktok.com/@betechsolarsolutionske",
+        icon: "play",
+      },
+      {
+        label: "Recent solar projects",
+        href: "https://www.tiktok.com/@betechsolarprojects",
+        icon: "projects",
+      },
+      {
+        label: "Facebook",
+        href: "https://web.facebook.com/profile.php?id=61567374346730",
+        icon: "social",
+      },
     ],
   },
   {
     title: "Get Help",
     links: [
-      { label: "Request a Solar System Quote", href: SHOP_REQUEST_QUOTE_HREF, icon: "quote" },
-      { label: "Warranty support", href: SHOP_WARRANTY_SUPPORT_HREF, icon: "warranty" },
-      { label: "Report an Issue / Complaint", href: "/support/report-issue", icon: "complaint" },
-      { label: "Request Site Visit", href: SHOP_SITE_VISIT_HREF, icon: "siteVisit" },
-      { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF, icon: "payment" },
-      { label: "Solar Installation Terms & Conditions", href: "/p/terms", icon: "terms" },
-      { label: "Delivery, Installation & Payments", href: SHOP_DELIVERY_PAYMENT_HREF, icon: "delivery" },
+      {
+        label: "Request a Solar System Quote",
+        href: SHOP_REQUEST_QUOTE_HREF,
+        icon: "quote",
+      },
+      {
+        label: "Warranty support",
+        href: SHOP_WARRANTY_SUPPORT_HREF,
+        icon: "warranty",
+      },
+      {
+        label: "Report an Issue / Complaint",
+        href: "/support/report-issue",
+        icon: "complaint",
+      },
+      {
+        label: "Request Site Visit",
+        href: SHOP_SITE_VISIT_HREF,
+        icon: "siteVisit",
+      },
+      {
+        label: "Lipa Pole Pole",
+        href: SHOP_LIPA_POLE_POLE_HREF,
+        icon: "payment",
+      },
+      {
+        label: "Solar Installation Terms & Conditions",
+        href: "/p/terms",
+        icon: "terms",
+      },
+      {
+        label: "Delivery, Installation & Payments",
+        href: SHOP_DELIVERY_PAYMENT_HREF,
+        icon: "delivery",
+      },
     ],
   },
   {
     title: "Betech Solar Solutions",
     links: [
       { label: "Betech Solar Online Store", href: "/", icon: "store" },
-      { label: "Agents portal", href: "https://agents.betech.co.ke", icon: "external" },
-      { label: "Operations portal", href: "https://ops.betech.co.ke", icon: "external" },
-      { label: "Get shop directions", href: "https://www.tiktok.com/@betechsolarsolutionske/video/7546869303308569861", icon: "location" },
+      {
+        label: "Agents portal",
+        href: "https://agents.betech.co.ke",
+        icon: "external",
+      },
+      {
+        label: "Operations portal",
+        href: "https://ops.betech.co.ke",
+        icon: "external",
+      },
+      {
+        label: "Get shop directions",
+        href: "https://www.tiktok.com/@betechsolarsolutionske/video/7546869303308569861",
+        icon: "location",
+      },
     ],
   },
 ];

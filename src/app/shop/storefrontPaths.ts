@@ -1,5 +1,6 @@
 export const SHOP_HOME_HREF = "/";
 export const SHOP_ALL_PRODUCTS_HREF = "/all-products";
+export const SHOP_DEPARTMENTS_HREF = "/departments";
 export const SHOP_ACCOUNT_HREF = "/login/phone?callbackUrl=/account";
 export const SHOP_ACCOUNT_ORDERS_HREF = "/account/orders";
 export const SHOP_CART_HREF = "/cart";
@@ -20,6 +21,13 @@ export function getShopCategoryHref(slug: string) {
   return `/category/${slug}`;
 }
 
+export function getShopSubcategoryHref(
+  categorySlug: string,
+  subcategorySlug: string,
+) {
+  return `${getShopCategoryHref(categorySlug)}/${subcategorySlug}`;
+}
+
 export function getShopProductHref(slug: string, opsProductId?: string | null) {
   const href = `/${slug}`;
   const normalizedOpsProductId = String(opsProductId || "").trim();
@@ -27,12 +35,18 @@ export function getShopProductHref(slug: string, opsProductId?: string | null) {
   return `${href}?opsProductId=${encodeURIComponent(normalizedOpsProductId)}`;
 }
 
-export function getShopLipaPolePoleProductHref(slug: string, opsProductId?: string | null) {
+export function getShopLipaPolePoleProductHref(
+  slug: string,
+  opsProductId?: string | null,
+) {
   const href = getShopProductHref(slug, opsProductId);
   return `${href}${href.includes("?") ? "&" : "?"}lpp=1`;
 }
 
-export function getShopSiteVisitProductHref(slug: string, opsProductId?: string | null) {
+export function getShopSiteVisitProductHref(
+  slug: string,
+  opsProductId?: string | null,
+) {
   const href = getShopProductHref(slug, opsProductId);
   return `${href}${href.includes("?") ? "&" : "?"}siteVisit=1`;
 }

@@ -30,48 +30,353 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function makeSubcategories(labels: string[], extraKeywords: Record<string, string[]> = {}) {
+function makeSubcategories(
+  labels: string[],
+  extraKeywords: Record<string, string[]> = {},
+) {
   return labels.map((label) => ({
     value: slugify(label),
     label,
-    keywords: [label, ...label.split(/\s+/), ...(extraKeywords[label] || [])].map((item) => item.toLowerCase()),
+    keywords: [
+      label,
+      ...label.split(/\s+/),
+      ...(extraKeywords[label] || []),
+    ].map((item) => item.toLowerCase()),
   }));
 }
 
+// The general marketplace catalogue intentionally excludes Solar & Energy products.
+// Solar-specific equivalents remain in their specialist Solar categories.
 const GENERAL_CATEGORY_DATA: Array<[string, string[]]> = [
-  ["Computers & Laptops", ["Laptops", "Desktop Computers", "Monitors", "Printers & Scanners", "Computer Accessories", "Keyboards & Mice", "Storage, HDD & SSD", "Networking & Routers", "Computer Components", "UPS Systems"]],
-  ["Phones & Tablets", ["Smartphones", "Feature Phones", "Tablets", "Smartwatches", "Power Banks", "Chargers & Cables", "Earphones & Headsets", "Cases & Screen Protectors", "Phone Accessories"]],
-  ["Electronics", ["Televisions", "Speakers", "Home Theatre", "Audio Equipment", "Projectors", "Cameras", "Electronic Accessories"]],
-  ["Power Tools & Equipment", ["Drills", "Grinders", "Saws", "Sanders", "Welding Machines", "Air Compressors", "Pressure Washers", "Hand Tools", "Tool Sets", "Measuring Tools", "Power Tool Accessories"]],
-  ["Home Appliances", ["Refrigerators", "Freezers", "Washing Machines", "Cookers & Ovens", "Microwaves", "Blenders", "Kettles", "Fans", "Air Conditioners", "Water Dispensers", "Vacuum Cleaners", "Small Kitchen Appliances"]],
-  ["Electrical & Power", ["Generators", "UPS & Backup Power", "Voltage Stabilizers", "Automatic Voltage Switches", "Electrical Cables", "Extension Cables", "Circuit Breakers", "Distribution Boards", "Surge Protection", "Switches & Sockets", "Electrical Accessories"]],
-  ["Security & Surveillance", ["CCTV Cameras", "DVR & NVR", "CCTV Kits", "Alarm Systems", "Access Control", "Smart Locks", "Video Doorbells", "Security Accessories"]],
-  ["Home & Office", ["Office Equipment", "Office Furniture", "Home Furniture", "Kitchen & Dining", "Storage & Organization", "Stationery", "Home Improvement"]],
-  ["Automotive", ["Car Batteries", "Car Electronics", "Jump Starters", "Tyre Inflators", "Car Chargers", "Car Lighting", "Car Accessories", "Motorcycle Accessories"]],
-  ["Industrial & Professional Equipment", ["Industrial Tools", "Electric Motors", "Workshop Equipment", "Test & Measurement Equipment", "Electrical Testers", "Measuring Instruments", "Safety Equipment", "Commercial Equipment"]],
+  [
+    "Computing & Digital",
+    [
+      "Laptops & Notebooks",
+      "Desktop Computers",
+      "Monitors & Displays",
+      "Printers & Scanners",
+      "Computer Components",
+      "Storage Devices",
+      "Keyboards & Mice",
+      "Laptop Accessories",
+      "Computer Accessories",
+      "Networking Equipment",
+      "Routers & Wi-Fi",
+      "UPS & Computer Backup",
+      "Software & Digital Accessories",
+    ],
+  ],
+  [
+    "Mobile & Smart Devices",
+    [
+      "Smartphones",
+      "Feature Phones",
+      "Tablets",
+      "Smart Watches",
+      "Wearable Devices",
+      "Power Banks",
+      "Phone Chargers",
+      "Phone Cables",
+      "Cases & Covers",
+      "Screen Protection",
+      "Mobile Accessories",
+    ],
+  ],
+  [
+    "TV, Audio & Electronics",
+    [
+      "Televisions",
+      "Smart TVs",
+      "Projectors",
+      "Home Audio Systems",
+      "Speakers",
+      "Portable Speakers",
+      "Headphones & Earphones",
+      "Radios",
+      "Media Players",
+      "Electronic Accessories",
+      "Cables & Adapters",
+      "Batteries & Chargers",
+    ],
+  ],
+  [
+    "Tools, Workshop & DIY",
+    [
+      "Power Tools",
+      "Cordless Tools",
+      "Drills",
+      "Grinders",
+      "Saws & Cutting Tools",
+      "Sanders & Polishers",
+      "Welding Machines",
+      "Welding Accessories",
+      "Hand Tools",
+      "Tool Sets",
+      "Measuring Tools",
+      "Multimeters & Testers",
+      "Air Compressors",
+      "Pressure Washers",
+      "Ladders",
+      "Tool Accessories",
+      "Workshop Safety Gear",
+    ],
+  ],
+  [
+    "Home & Kitchen Appliances",
+    [
+      "Refrigerators",
+      "Freezers",
+      "Cookers & Ovens",
+      "Microwaves",
+      "Washing Machines",
+      "Water Dispensers",
+      "Kettles",
+      "Blenders & Mixers",
+      "Air Fryers",
+      "Toasters",
+      "Irons",
+      "Fans",
+      "Air Conditioners",
+      "Vacuum Cleaners",
+      "Small Kitchen Appliances",
+      "Appliance Accessories",
+    ],
+  ],
+  [
+    "Electrical, Lighting & Power",
+    [
+      "Circuit Breakers",
+      "Distribution Boards",
+      "Changeover Switches",
+      "Automatic Transfer Switches",
+      "Voltage Protection",
+      "Surge Protection",
+      "Stabilizers & Regulators",
+      "Electrical Cables",
+      "Plugs & Sockets",
+      "Extension Cables",
+      "Switches",
+      "Contactors & Relays",
+      "Electrical Installation Accessories",
+      "LED Bulbs",
+      "Indoor Lighting",
+      "Outdoor Lighting",
+      "Flood Lights",
+      "Emergency Lighting",
+      "Electrical Testing Equipment",
+    ],
+  ],
+  [
+    "Security, Access & Monitoring",
+    [
+      "CCTV Cameras",
+      "CCTV Kits",
+      "IP Cameras",
+      "DVR & NVR Recorders",
+      "Security Alarms",
+      "Motion Sensors",
+      "Access Control",
+      "Smart Locks",
+      "Video Doorbells",
+      "Security Lighting",
+      "CCTV Storage",
+      "CCTV Cables",
+      "Surveillance Accessories",
+    ],
+  ],
+  [
+    "Home, Office & Living",
+    [
+      "Office Furniture",
+      "Home Furniture",
+      "Office Equipment",
+      "Stationery",
+      "Storage & Organization",
+      "Kitchen & Dining",
+      "Cleaning Equipment",
+      "Household Supplies",
+      "Home Décor",
+      "Office Accessories",
+    ],
+  ],
+  [
+    "Vehicle & Garage",
+    [
+      "Car Accessories",
+      "Car Electronics",
+      "Vehicle Batteries",
+      "Battery Chargers",
+      "Jump Starters",
+      "Tyre Inflators",
+      "Vehicle Inverters",
+      "Car Lighting",
+      "Car Tools",
+      "Motorcycle Accessories",
+      "Garage Equipment",
+      "Automotive Electrical Accessories",
+    ],
+  ],
+  [
+    "Farm, Water & Outdoor",
+    [
+      "Irrigation Equipment",
+      "Farm Tools",
+      "Sprayers",
+      "Electric Fencing",
+      "Farm Lighting",
+      "Water Storage",
+      "Water Tanks",
+      "Pipes & Fittings",
+      "Livestock Equipment",
+      "Garden Equipment",
+      "Outdoor Equipment",
+      "Agricultural Machinery",
+    ],
+  ],
+  [
+    "Commercial & Industrial Equipment",
+    [
+      "Industrial Electrical Equipment",
+      "Industrial Inverters & Drives",
+      "Variable Frequency Drives",
+      "Motors",
+      "Industrial Pumps",
+      "Control & Automation",
+      "Control Panels",
+      "Industrial Tools",
+      "Testing & Measurement",
+      "Commercial Power Equipment",
+      "Industrial Safety Equipment",
+    ],
+  ],
+  [
+    "Generators & Backup Systems",
+    [
+      "Petrol Generators",
+      "Diesel Generators",
+      "Inverter Generators",
+      "Portable Generators",
+      "UPS Systems",
+      "Backup Power Equipment",
+      "Generator Changeover Equipment",
+      "Generator Accessories",
+    ],
+  ],
+  [
+    "Building, Plumbing & Hardware",
+    [
+      "Plumbing Supplies",
+      "Pipes & Fittings",
+      "Valves",
+      "Fasteners",
+      "Screws & Bolts",
+      "Adhesives & Sealants",
+      "Locks & Hardware",
+      "Roofing Accessories",
+      "Construction Tools",
+      "Building Supplies",
+      "Installation Hardware",
+    ],
+  ],
+  [
+    "Personal Care & Wellness",
+    [
+      "Grooming Appliances",
+      "Hair Clippers",
+      "Hair Dryers",
+      "Personal Care Devices",
+      "Weighing Scales",
+      "Health Monitoring Devices",
+      "First Aid Products",
+      "Hygiene Products",
+    ],
+  ],
+  [
+    "Fashion & Personal Accessories",
+    [
+      "Men's Clothing",
+      "Women's Clothing",
+      "Kids' Clothing",
+      "Men's Shoes",
+      "Women's Shoes",
+      "Bags",
+      "Watches",
+      "Jewellery",
+      "Fashion Accessories",
+    ],
+  ],
+  [
+    "Sports, Fitness & Adventure",
+    [
+      "Fitness Equipment",
+      "Exercise Equipment",
+      "Sports Equipment",
+      "Sports Accessories",
+      "Bicycles & Accessories",
+      "Camping Equipment",
+      "Outdoor Recreation",
+    ],
+  ],
+  [
+    "Baby, Kids & Toys",
+    [
+      "Baby Care",
+      "Baby Feeding",
+      "Baby Gear",
+      "Kids' Products",
+      "Toys",
+      "Educational Toys",
+      "Kids' Accessories",
+    ],
+  ],
+  [
+    "Books, School & Creative",
+    [
+      "Books",
+      "School Supplies",
+      "Office Stationery",
+      "Art Supplies",
+      "Educational Materials",
+      "Musical Instruments",
+      "Musical Accessories",
+    ],
+  ],
+  [
+    "Pets & Animal Care",
+    ["Pet Food", "Pet Accessories", "Pet Grooming", "Animal Care Products"],
+  ],
 ];
 
-const GENERAL_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = GENERAL_CATEGORY_DATA.map(([label, subcategories], index) => ({
-  department: "GENERAL",
-  value: slugify(label),
-  label,
-  blurb: `Browse ${label.toLowerCase()} available from Betech warehouse or overseas suppliers.`,
-  image: "/agents/product-accessories-generated.png",
-  accent: (["maroon", "gold", "green"] as ShopAccent[])[index % 3],
-  visualType: "kit",
-  keywords: [label, ...subcategories].map((item) => item.toLowerCase()),
-  subcategories: makeSubcategories(subcategories),
-}));
+const GENERAL_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] =
+  GENERAL_CATEGORY_DATA.map(([label, subcategories], index) => ({
+    department: "GENERAL",
+    value: slugify(label),
+    label,
+    blurb: `Browse ${label.toLowerCase()} available from Betech warehouse or overseas suppliers.`,
+    image: "/agents/product-accessories-generated.png",
+    accent: (["maroon", "gold", "green"] as ShopAccent[])[index % 3],
+    visualType: "kit",
+    keywords: [label, ...subcategories].map((item) => item.toLowerCase()),
+    subcategories: makeSubcategories(subcategories),
+  }));
 
 export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "solar-full-kits",
     label: "Solar Full Kits",
-    blurb: "Ready-built kits for home backup, biashara systems and complete solar setups.",
+    blurb:
+      "Ready-built kits for home backup, biashara systems and complete solar setups.",
     image: "/agents/category-solar-full-kits.png",
     accent: "maroon",
     visualType: "kit",
-    keywords: ["solar full kit", "solar kit", "complete home system", "all in one", "starter solar kit", "heavy duty solar system"],
+    keywords: [
+      "solar full kit",
+      "solar kit",
+      "complete home system",
+      "all in one",
+      "starter solar kit",
+      "heavy duty solar system",
+    ],
     subcategories: makeSubcategories(
       [
         "Lithium Solar Kits",
@@ -94,11 +399,18 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "solar-panels",
     label: "Solar Panels",
-    blurb: "High-output panels for rooftops, farms, institutions and backup systems.",
+    blurb:
+      "High-output panels for rooftops, farms, institutions and backup systems.",
     image: "/agents/product-solar-kit-generated.png",
     accent: "gold",
     visualType: "panel",
-    keywords: ["solar panel", "585w panel", "620w panel", "tier 1 panel", "portable panel"],
+    keywords: [
+      "solar panel",
+      "585w panel",
+      "620w panel",
+      "tier 1 panel",
+      "portable panel",
+    ],
     subcategories: makeSubcategories([
       "Monocrystalline Panels",
       "Polycrystalline Panels",
@@ -113,11 +425,19 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "solar-batteries",
     label: "Solar Batteries",
-    blurb: "Gel, lithium and deep-cycle storage options for backup and daily use.",
+    blurb:
+      "Gel, lithium and deep-cycle storage options for backup and daily use.",
     image: "/agents/product-battery-generated.png",
     accent: "green",
     visualType: "battery",
-    keywords: ["solar battery", "100ah battery", "200ah battery", "deep cycle battery", "rack mount battery", "wall mount battery"],
+    keywords: [
+      "solar battery",
+      "100ah battery",
+      "200ah battery",
+      "deep cycle battery",
+      "rack mount battery",
+      "wall mount battery",
+    ],
     subcategories: makeSubcategories(
       [
         "Lithium Batteries",
@@ -137,11 +457,19 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "solar-inverters",
     label: "Solar Inverters",
-    blurb: "Hybrid, off-grid and commercial inverter options for Kenyan solar systems.",
+    blurb:
+      "Hybrid, off-grid and commercial inverter options for Kenyan solar systems.",
     image: "/agents/product-inverter-generated.png",
     accent: "maroon",
     visualType: "inverter",
-    keywords: ["solar inverter", "hybrid inverter", "5kva inverter", "3.5kw inverter", "pumping inverter", "three phase inverter"],
+    keywords: [
+      "solar inverter",
+      "hybrid inverter",
+      "5kva inverter",
+      "3.5kw inverter",
+      "pumping inverter",
+      "three phase inverter",
+    ],
     subcategories: makeSubcategories(
       [
         "Hybrid Inverters",
@@ -164,11 +492,19 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "solar-water-pumps",
     label: "Solar Water Pumps",
-    blurb: "Water pumping solutions for boreholes, shallow wells, livestock and irrigation.",
+    blurb:
+      "Water pumping solutions for boreholes, shallow wells, livestock and irrigation.",
     image: "/agents/product-water-pump-generated.png",
     accent: "green",
     visualType: "pump",
-    keywords: ["solar pump", "borehole pump", "water pump", "surface pump", "submersible pump", "petrol water pump"],
+    keywords: [
+      "solar pump",
+      "borehole pump",
+      "water pump",
+      "surface pump",
+      "submersible pump",
+      "petrol water pump",
+    ],
     subcategories: makeSubcategories([
       "DC Solar Water Pumps",
       "AC Solar Water Pumps",
@@ -190,11 +526,18 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "solar-lights",
     label: "Solar Lights",
-    blurb: "Security, street and compound lighting for homes, shops and institutions.",
+    blurb:
+      "Security, street and compound lighting for homes, shops and institutions.",
     image: "/agents/hero-generated-v2.png",
     accent: "gold",
     visualType: "light",
-    keywords: ["solar light", "street light", "flood light", "motion sensor light", "garden light"],
+    keywords: [
+      "solar light",
+      "street light",
+      "flood light",
+      "motion sensor light",
+      "garden light",
+    ],
     subcategories: makeSubcategories([
       "Solar Street Lights",
       "Solar Flood Lights",
@@ -214,7 +557,14 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
     image: "/agents/top-agents-card.png",
     accent: "green",
     visualType: "light",
-    keywords: ["solar camera", "solar cctv", "4g camera", "wifi camera", "nvr kit", "security kit"],
+    keywords: [
+      "solar camera",
+      "solar cctv",
+      "4g camera",
+      "wifi camera",
+      "nvr kit",
+      "security kit",
+    ],
     subcategories: makeSubcategories([
       "Solar CCTV Cameras",
       "4G Solar Cameras",
@@ -228,7 +578,8 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "dc-appliances",
     label: "DC Appliances",
-    blurb: "Efficient DC electronics for direct solar use and lightweight backup setups.",
+    blurb:
+      "Efficient DC electronics for direct solar use and lightweight backup setups.",
     image: "/agents/product-accessories-generated.png",
     accent: "maroon",
     visualType: "light",
@@ -257,18 +608,30 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
       {
         value: "solar-incubators",
         label: "DC Solar Incubator",
-        keywords: ["dc solar incubator", "solar incubator", "egg incubator", "poultry incubator", "automatic incubator"],
+        keywords: [
+          "dc solar incubator",
+          "solar incubator",
+          "egg incubator",
+          "poultry incubator",
+          "automatic incubator",
+        ],
       },
     ],
   },
   {
     value: "solar-water-heaters",
     label: "Solar Water Heaters",
-    blurb: "Domestic and commercial hot water systems for homes, rentals and hospitality.",
+    blurb:
+      "Domestic and commercial hot water systems for homes, rentals and hospitality.",
     image: "/agents/cta-house-generated.png",
     accent: "gold",
     visualType: "heater",
-    keywords: ["solar water heater", "pressurized water heater", "vacuum tube heater", "flat plate heater"],
+    keywords: [
+      "solar water heater",
+      "pressurized water heater",
+      "vacuum tube heater",
+      "flat plate heater",
+    ],
     subcategories: makeSubcategories([
       "Pressurized Water Heaters",
       "Non-Pressurized Water Heaters",
@@ -282,11 +645,18 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "solar-charge-controllers",
     label: "Solar Charge Controllers",
-    blurb: "PWM and MPPT charge controllers for starter, lithium and higher-voltage systems.",
+    blurb:
+      "PWM and MPPT charge controllers for starter, lithium and higher-voltage systems.",
     image: "/agents/product-accessories-generated.png",
     accent: "maroon",
     visualType: "inverter",
-    keywords: ["charge controller", "mppt", "pwm", "bluetooth controller", "high voltage mppt"],
+    keywords: [
+      "charge controller",
+      "mppt",
+      "pwm",
+      "bluetooth controller",
+      "high voltage mppt",
+    ],
     subcategories: makeSubcategories([
       "PWM Controllers",
       "MPPT Controllers",
@@ -298,11 +668,21 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "solar-accessories",
     label: "Solar Accessories",
-    blurb: "Connectors, cables, breakers and installation items for cleaner solar builds.",
+    blurb:
+      "Connectors, cables, breakers and installation items for cleaner solar builds.",
     image: "/agents/product-accessories-generated.png",
     accent: "maroon",
     visualType: "kit",
-    keywords: ["mc4", "solar cable", "battery cable", "changeover switch", "breaker", "dc bulb", "solar fan", "connector"],
+    keywords: [
+      "mc4",
+      "solar cable",
+      "battery cable",
+      "changeover switch",
+      "breaker",
+      "dc bulb",
+      "solar fan",
+      "connector",
+    ],
     subcategories: makeSubcategories([
       "MC4 Connectors",
       "Solar Cables",
@@ -322,11 +702,17 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "portable-power-stations",
     label: "Portable Power Stations",
-    blurb: "Portable lithium and gel backup units for camping, travel and emergency power.",
+    blurb:
+      "Portable lithium and gel backup units for camping, travel and emergency power.",
     image: "/agents/product-battery-generated.png",
     accent: "green",
     visualType: "battery",
-    keywords: ["portable power station", "portable solar generator", "camping power station", "backup power station"],
+    keywords: [
+      "portable power station",
+      "portable solar generator",
+      "camping power station",
+      "backup power station",
+    ],
     subcategories: makeSubcategories([
       "Lithium Power Stations",
       "Gel Power Stations",
@@ -338,11 +724,18 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   {
     value: "commercial-industrial-solar",
     label: "Commercial & Industrial Solar",
-    blurb: "Larger-scale solar systems, industrial batteries and commercial inverter solutions.",
+    blurb:
+      "Larger-scale solar systems, industrial batteries and commercial inverter solutions.",
     image: "/agents/product-inverter-generated.png",
     accent: "maroon",
     visualType: "inverter",
-    keywords: ["commercial solar", "industrial solar", "three phase system", "high voltage system", "commercial inverter"],
+    keywords: [
+      "commercial solar",
+      "industrial solar",
+      "three phase system",
+      "high voltage system",
+      "commercial inverter",
+    ],
     subcategories: makeSubcategories([
       "Commercial Solar Systems",
       "Three Phase Systems",
@@ -354,7 +747,9 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
   ...GENERAL_CATEGORY_DEFINITIONS,
 ];
 
-export function getShopCategoryDepartment(category: Pick<ShopCategoryDefinition, "department">) {
+export function getShopCategoryDepartment(
+  category: Pick<ShopCategoryDefinition, "department">,
+) {
   return category.department ?? "SOLAR_ENERGY";
 }
 
@@ -363,39 +758,59 @@ export function isGeneralShopCategory(value: string | null | undefined) {
   return category ? getShopCategoryDepartment(category) === "GENERAL" : false;
 }
 
-export const SHOP_CATEGORY_OPTIONS: Array<{ value: ShopCategoryDefinition["value"]; label: ShopCategoryDefinition["label"] }> =
-  SHOP_CATEGORY_DEFINITIONS.map((category) => ({
-    value: category.value,
-    label: category.label,
-  }));
+export const SHOP_CATEGORY_OPTIONS: Array<{
+  value: ShopCategoryDefinition["value"];
+  label: ShopCategoryDefinition["label"];
+}> = SHOP_CATEGORY_DEFINITIONS.map((category) => ({
+  value: category.value,
+  label: category.label,
+}));
 
-export const SHOP_SUBCATEGORY_OPTIONS = SHOP_CATEGORY_DEFINITIONS.flatMap((category) =>
-  category.subcategories.map((subcategory) => ({
-    category: category.value,
-    value: subcategory.value,
-    label: subcategory.label,
-  })),
+export const SHOP_SUBCATEGORY_OPTIONS = SHOP_CATEGORY_DEFINITIONS.flatMap(
+  (category) =>
+    category.subcategories.map((subcategory) => ({
+      category: category.value,
+      value: subcategory.value,
+      label: subcategory.label,
+    })),
 );
 
 export const SHOP_SEARCH_ALIASES = [
-  { query: "200ah battery", keywords: ["200ah", "battery", "gel battery", "lithium battery"] },
-  { query: "100ah battery", keywords: ["100ah", "battery", "gel battery", "lithium battery"] },
-  { query: "5kva inverter", keywords: ["5kva inverter", "5kw inverter", "hybrid inverter"] },
+  {
+    query: "200ah battery",
+    keywords: ["200ah", "battery", "gel battery", "lithium battery"],
+  },
+  {
+    query: "100ah battery",
+    keywords: ["100ah", "battery", "gel battery", "lithium battery"],
+  },
+  {
+    query: "5kva inverter",
+    keywords: ["5kva inverter", "5kw inverter", "hybrid inverter"],
+  },
   { query: "3.5kw inverter", keywords: ["3.5kw inverter", "hybrid inverter"] },
   { query: "585w panel", keywords: ["585w panel", "solar panel"] },
   { query: "620w panel", keywords: ["620w panel", "solar panel"] },
   { query: "solar pump", keywords: ["solar pump", "water pump"] },
-  { query: "borehole pump", keywords: ["borehole pump", "submersible pump", "water pump"] },
+  {
+    query: "borehole pump",
+    keywords: ["borehole pump", "submersible pump", "water pump"],
+  },
   { query: "street light", keywords: ["street light", "solar light"] },
   { query: "flood light", keywords: ["flood light", "solar light"] },
   { query: "dc tv", keywords: ["dc tv", "dc appliances"] },
-  { query: "charge controller", keywords: ["charge controller", "mppt", "pwm"] },
+  {
+    query: "charge controller",
+    keywords: ["charge controller", "mppt", "pwm"],
+  },
   { query: "mppt", keywords: ["mppt", "charge controller"] },
   { query: "pwm", keywords: ["pwm", "charge controller"] },
 ] as const;
 
-export type ShopCategoryOptionValue = (typeof SHOP_CATEGORY_OPTIONS)[number]["value"];
-export type ShopSubcategoryOptionValue = (typeof SHOP_SUBCATEGORY_OPTIONS)[number]["value"];
+export type ShopCategoryOptionValue =
+  (typeof SHOP_CATEGORY_OPTIONS)[number]["value"];
+export type ShopSubcategoryOptionValue =
+  (typeof SHOP_SUBCATEGORY_OPTIONS)[number]["value"];
 
 export function normalizeShopCategorySlug(value: string | null | undefined) {
   return slugify(String(value || ""));
@@ -403,16 +818,28 @@ export function normalizeShopCategorySlug(value: string | null | undefined) {
 
 export function getShopCategoryDefinition(value: string | null | undefined) {
   const slug = normalizeShopCategorySlug(value);
-  return SHOP_CATEGORY_DEFINITIONS.find((category) => category.value === slug) ?? null;
+  return (
+    SHOP_CATEGORY_DEFINITIONS.find((category) => category.value === slug) ??
+    null
+  );
 }
 
-export function getShopSubcategoryOptions(categoryValue: string | null | undefined) {
+export function getShopSubcategoryOptions(
+  categoryValue: string | null | undefined,
+) {
   return getShopCategoryDefinition(categoryValue)?.subcategories ?? [];
 }
 
-export function getShopSubcategoryDefinition(categoryValue: string | null | undefined, subcategoryValue: string | null | undefined) {
+export function getShopSubcategoryDefinition(
+  categoryValue: string | null | undefined,
+  subcategoryValue: string | null | undefined,
+) {
   const subcategorySlug = normalizeShopCategorySlug(subcategoryValue);
-  return getShopSubcategoryOptions(categoryValue).find((subcategory) => subcategory.value === subcategorySlug) ?? null;
+  return (
+    getShopSubcategoryOptions(categoryValue).find(
+      (subcategory) => subcategory.value === subcategorySlug,
+    ) ?? null
+  );
 }
 
 export function resolveShopSubcategory(
@@ -420,19 +847,27 @@ export function resolveShopSubcategory(
   values: Array<string | null | undefined>,
 ) {
   const normalizedHaystack = values
-    .map((value) => String(value || "").trim().toLowerCase())
+    .map((value) =>
+      String(value || "")
+        .trim()
+        .toLowerCase(),
+    )
     .filter(Boolean)
     .join(" ");
 
   return (
     getShopSubcategoryOptions(categoryValue).find((subcategory) =>
-      subcategory.keywords.some((keyword) => normalizedHaystack.includes(keyword.toLowerCase())),
+      subcategory.keywords.some((keyword) =>
+        normalizedHaystack.includes(keyword.toLowerCase()),
+      ),
     ) ?? null
   );
 }
 
 export function expandShopSearchQuery(query: string | null | undefined) {
-  const normalized = String(query || "").trim().toLowerCase();
+  const normalized = String(query || "")
+    .trim()
+    .toLowerCase();
   const alias = SHOP_SEARCH_ALIASES.find((item) => item.query === normalized);
   if (!normalized) return [];
   return Array.from(new Set([normalized, ...(alias?.keywords || [])]));
