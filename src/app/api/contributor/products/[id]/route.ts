@@ -17,7 +17,6 @@ const updateInput = z.object({
   shortDescription: z.string().trim().max(3000).optional().nullable(),
   description: z.string().trim().max(10000).optional().nullable(),
   warrantyPeriod: z.string().trim().max(120).optional().nullable(),
-  warrantyNotes: z.string().trim().max(1000).optional().nullable(),
   tiktokVideoUrl: z.string().trim().url().max(500).optional().nullable(),
   mainImageUrl: z.string().trim().url().max(500),
   galleryImageUrls: z
@@ -28,7 +27,7 @@ const updateInput = z.object({
   availabilityType: z
     .enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"])
     .default("WAREHOUSE"),
-  stockQuantity: z.coerce.number().int().min(0).max(100000).default(0),
+  stockQuantity: z.coerce.number().int().min(0).max(100000).default(10000),
   variableCost: z.boolean().default(false),
   lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
   requiresInstallation: z.boolean().default(false),
@@ -74,7 +73,7 @@ export async function PATCH(
       description: data.description || null,
       specifications: [],
       warrantyPeriod: data.warrantyPeriod || null,
-      warrantyNotes: data.warrantyNotes || null,
+      warrantyNotes: null,
       tiktokVideoUrl: data.tiktokVideoUrl || null,
       mainImageUrl: data.mainImageUrl,
       shopImageUrl: data.mainImageUrl,

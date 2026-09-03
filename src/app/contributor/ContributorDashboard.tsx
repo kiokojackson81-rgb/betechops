@@ -22,7 +22,6 @@ type Product = {
   shortDescription?: string | null;
   description?: string | null;
   warrantyPeriod?: string | null;
-  warrantyNotes?: string | null;
   tiktokVideoUrl?: string | null;
   mainImageUrl?: string | null;
   variableCost?: boolean | null;
@@ -63,12 +62,11 @@ const blank = () => ({
   shortDescription: "",
   description: "",
   warrantyPeriod: "No warranty",
-  warrantyNotes: "",
-  tiktokVideoUrl: "",
+  tiktokVideoUrl: "https://www.tiktok.com/@betechsolarsolutionske",
   mainImageUrl: "",
   galleryImageUrls: "",
   availabilityType: "WAREHOUSE",
-  stockQuantity: "0",
+  stockQuantity: "10000",
   variableCost: false,
   lastBuyingPrice: "",
   requiresInstallation: false,
@@ -130,14 +128,15 @@ function toForm(product: Product) {
     shortDescription: product.shortDescription || "",
     description: product.description || "",
     warrantyPeriod: product.warrantyPeriod || "No warranty",
-    warrantyNotes: product.warrantyNotes || "",
-    tiktokVideoUrl: product.tiktokVideoUrl || "",
+    tiktokVideoUrl:
+      product.tiktokVideoUrl ||
+      "https://www.tiktok.com/@betechsolarsolutionske",
     mainImageUrl: product.mainImageUrl || "",
     galleryImageUrls: Array.isArray(product.galleryImageUrls)
       ? product.galleryImageUrls.join("\n")
       : "",
     availabilityType: product.availabilityType || "WAREHOUSE",
-    stockQuantity: String(product.stockQuantity || 0),
+    stockQuantity: String(product.stockQuantity ?? 10000),
     variableCost: Boolean(product.variableCost),
     lastBuyingPrice:
       product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
@@ -776,14 +775,6 @@ export default function ContributorDashboard() {
                       <option value="ORDER_ON_REQUEST">Order on request</option>
                       <option value="OUT_OF_STOCK">Out of stock</option>
                     </select>
-                  </label>
-                  <label className={label}>
-                    Warranty notes
-                    <input
-                      value={form.warrantyNotes}
-                      onChange={(e) => set("warrantyNotes", e.target.value)}
-                      className={input}
-                    />
                   </label>
                   <label className="sm:col-span-2 text-sm font-semibold text-slate-200">
                     TikTok video link
