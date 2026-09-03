@@ -214,13 +214,13 @@ const emptyDraft: ProductDraft = {
   shortDescription: "",
   description: "",
   specifications: "",
-  warrantyPeriod: "",
+  warrantyPeriod: "No warranty",
   warrantyNotes: "",
   mainImageUrl: "",
   imageExtractedText: "",
   galleryImageUrls: [],
   brandImageUrl: "",
-  tiktokVideoUrl: "",
+  tiktokVideoUrl: "https://www.tiktok.com/@betechsolarsolutionske",
   purchaseLink: "",
   ecommerceVisible: true,
   isFeatured: false,
@@ -307,13 +307,15 @@ const fieldClass =
   "w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
 
 const warrantyOptions = [
-  "",
-  "1 Year",
-  "2 Years",
-  "3 Years",
-  "5 Years",
-  "6 Years",
-  "10 Years",
+  "No warranty",
+  "1 year",
+  "2 years",
+  "3 years",
+  "5 years",
+  "6 years",
+  "10 years",
+  "15 years",
+  "25 years",
 ];
 
 function normalizeAvailabilityType(
@@ -633,6 +635,9 @@ export default function PosManagementClient({
   const [brandOpen, setBrandOpen] = useState(false);
   const [brandLoading, setBrandLoading] = useState(false);
   const [brandSaving, setBrandSaving] = useState(false);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [categoryPickerQuery, setCategoryPickerQuery] = useState("");
+  const [pickerCategory, setPickerCategory] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [expandedProductId, setExpandedProductId] = useState<string | null>(
     null,
@@ -896,6 +901,31 @@ export default function PosManagementClient({
     () => getShopSubcategoryOptions(draft.shopCategory),
     [draft.shopCategory],
   );
+  const pickerCategoryDefinition = useMemo(
+    () =>
+      SHOP_CATEGORY_DEFINITIONS.find(
+        (category) => category.value === pickerCategory,
+      ) ?? null,
+    [pickerCategory],
+  );
+  const categoryPickerResults = useMemo(() => {
+    const query = categoryPickerQuery.trim().toLowerCase();
+    if (!query) return SHOP_CATEGORY_DEFINITIONS;
+    return SHOP_CATEGORY_DEFINITIONS.filter((category) =>
+      [
+        category.label,
+        ...category.subcategories.flatMap((subcategory) => [
+          subcategory.label,
+          ...(subcategory.productTypes || []).map((productType) =>
+            productType.label,
+          ),
+        ]),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [categoryPickerQuery]);
   const availabilityPreview = useMemo(
     () => getAvailabilityPreviewMessage(draft.availabilityType),
     [draft.availabilityType],
@@ -2602,69 +2632,41 @@ export default function PosManagementClient({
                         }
                       />
                     </label>
-                    {isProductDeskMode && !draft.id ? (
-                      <div className="space-y-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-3">
-                        <label className="block text-sm text-slate-300">
-                          Buying price
-                          <input
-                            className={`${fieldClass} mt-1`}
-                            type="number"
-                            min="0"
-                            value={draft.lastBuyingPrice}
-                            onChange={(e) =>
-                              setDraft((s) => ({
-                                ...s,
-                                lastBuyingPrice: e.target.value,
-                              }))
-                            }
-                            placeholder="Optional during creation"
-                          />
-                        </label>
-                        <div className="text-xs text-emerald-100/80">
-                          You can set buying price while creating a new product.
-                          After the product is saved, buying price stays hidden
-                          here and can only be reviewed by admin.
-                        </div>
-                      </div>
-                    ) : null}
-                    {!isProductDeskMode ? (
-                      <>
-                        <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                          <label className="flex items-center gap-2 text-sm text-slate-200">
-                            <input
-                              type="checkbox"
-                              checked={draft.variableCost}
-                              onChange={(e) =>
-                                setDraft((s) => ({
-                                  ...s,
-                                  variableCost: e.target.checked,
-                                  lastBuyingPrice: e.target.checked
-                                    ? ""
-                                    : s.lastBuyingPrice,
-                                }))
-                              }
-                            />
-                            Variable-cost project
-                          </label>
-                          <label className="block text-sm text-slate-300">
-                            Buying price
-                            <input
-                              className={`${fieldClass} mt-1`}
-                              type="number"
-                              min="0"
-                              value={draft.lastBuyingPrice}
-                              onChange={(e) =>
-                                setDraft((s) => ({
-                                  ...s,
-                                  lastBuyingPrice: e.target.value,
-                                }))
-                              }
-                              placeholder="Optional"
-                            />
-                          </label>
-                        </div>
-                      </>
-                    ) : null}
+                    <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                      <label className="flex items-center gap-2 text-sm text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={draft.variableCost}
+                          onChange={(e) =>
+                            setDraft((s) => ({
+                              ...s,
+                              variableCost: e.target.checked,
+                              lastBuyingPrice: e.target.checked
+                                ? ""
+                                : s.lastBuyingPrice,
+                            }))
+                          }
+                        />
+                        Variable-cost project
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        Buying price
+                        <input
+                          className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                          type="number"
+                          min="0"
+                          disabled={draft.variableCost}
+                          value={draft.lastBuyingPrice}
+                          onChange={(e) =>
+                            setDraft((s) => ({
+                              ...s,
+                              lastBuyingPrice: e.target.value,
+                            }))
+                          }
+                          placeholder="Optional"
+                        />
+                      </label>
+                    </div>
                     <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
                       {renderStructuredSection("pricing")}
                     </div>
@@ -2700,12 +2702,9 @@ export default function PosManagementClient({
                   ) : null}
 
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <label className="text-sm text-slate-300">
-                      Shop category
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <span className="text-xs text-slate-500">
-                          Main online shop category
-                        </span>
+                    <div className="text-sm text-slate-300">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Website category</span>
                         <button
                           type="button"
                           className="text-xs font-semibold text-emerald-200 hover:text-emerald-100"
@@ -2714,62 +2713,46 @@ export default function PosManagementClient({
                           Auto-detect
                         </button>
                       </div>
-                      <select
-                        className={`${fieldClass} mt-2 disabled:cursor-not-allowed disabled:opacity-60`}
-                        value={draft.shopCategory}
+                      <button
+                        type="button"
                         disabled={!capabilities.shopCategory}
-                        onChange={(e) =>
-                          setDraft((s) => ({
-                            ...s,
-                            shopCategory: e.target.value,
-                            shopSubcategory: "",
-                            productType: isGeneralShopCategory(e.target.value)
-                              ? "WAREHOUSE_PRODUCT"
-                              : s.productType,
-                          }))
-                        }
+                        onClick={() => {
+                          setPickerCategory(null);
+                          setCategoryPickerQuery("");
+                          setCategoryPickerOpen(true);
+                        }}
+                        className={`${fieldClass} mt-2 flex items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-60`}
                       >
-                        <option value="">Select shop category</option>
-                        {SHOP_CATEGORY_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                        {SHOP_CATEGORY_OPTIONS.find(
+                          (option) => option.value === draft.shopCategory,
+                        )?.label || "Select category"}
+                        <span>⌄</span>
+                      </button>
+                    </div>
 
-                    <label className="text-sm text-slate-300">
-                      Shop subcategory
-                      <select
-                        className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                        value={draft.shopSubcategory}
+                    <div className="text-sm text-slate-300">
+                      <span>Website subcategory</span>
+                      <button
+                        type="button"
                         disabled={
                           !capabilities.shopSubcategory || !draft.shopCategory
                         }
-                        onChange={(e) =>
-                          setDraft((s) => ({
-                            ...s,
-                            shopSubcategory: e.target.value,
-                          }))
-                        }
+                        onClick={() => {
+                          setPickerCategory(draft.shopCategory);
+                          setCategoryPickerQuery("");
+                          setCategoryPickerOpen(true);
+                        }}
+                        className={`${fieldClass} mt-2 flex items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-60`}
                       >
-                        <option value="">
-                          {draft.shopCategory
-                            ? "Select shop subcategory"
-                            : "Select category first"}
-                        </option>
-                        {shopSubcategoryOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        {shopSubcategoryOptions.find(
+                          (option) => option.value === draft.shopSubcategory,
+                        )?.label || "Select subcategory"}
+                        <span>⌄</span>
+                      </button>
                       <div className="mt-1 text-xs text-slate-500">
-                        {capabilities.shopSubcategory
-                          ? "Use a subcategory to keep the online shop organized and searchable."
-                          : "Subcategory support is being enabled on this database."}
+                        Select a category and subcategory in the same side panel.
                       </div>
-                    </label>
+                    </div>
 
                     <label className="text-sm text-slate-300">
                       Brand
@@ -2881,13 +2864,15 @@ export default function PosManagementClient({
 
                 <div className="mt-4 rounded-3xl border border-slate-700 bg-slate-900/60 p-4 sm:p-5">
                   <div className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">
-                    5 Details
+                    Product content
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <label className="text-sm text-slate-300 md:col-span-2">
-                      Short product summary
-                      <textarea
-                        className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
+                    <div className="md:col-span-2">
+                      <div className="text-sm font-semibold text-slate-200">
+                        Product short description
+                      </div>
+                      <div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
+                        <ProductDescriptionEditor
                         value={draft.shortDescription}
                         disabled={
                           !(
@@ -2895,25 +2880,24 @@ export default function PosManagementClient({
                             capabilities.shopShortDescription
                           )
                         }
-                        onChange={(e) =>
+                        onChange={(shortDescription) =>
                           setDraft((s) => ({
                             ...s,
-                            shortDescription: e.target.value,
-                            shopShortDescription: e.target.value,
+                            shortDescription,
+                            shopShortDescription: shortDescription,
                           }))
                         }
-                        placeholder="One short customer-facing overview for product cards and search results"
-                      />
-                      <div className="mt-1 text-xs text-slate-500">
-                        Keep this concise. Use the structured editor below for
-                        the complete product page.
+                        compact
+                        showPreview={false}
+                        placeholder="Brief customer-facing product summary."
+                        />
                       </div>
-                    </label>
+                    </div>
 
                     <div className="md:col-span-2">
                       <div className="mb-2">
                         <div className="text-sm font-semibold text-slate-200">
-                          Product details
+                          Product long description
                         </div>
                         <div className="mt-1 text-xs leading-5 text-slate-500">
                           Use the toolbar instead of typing formatting syntax
@@ -2921,43 +2905,19 @@ export default function PosManagementClient({
                           compatible.
                         </div>
                       </div>
-                      <ProductDescriptionEditor
-                        value={draft.description}
-                        disabled={!capabilities.description}
-                        onChange={(description) =>
-                          setDraft((current) => ({ ...current, description }))
-                        }
-                      />
-                    </div>
-
-                    <label className="text-sm text-slate-300 md:col-span-2">
-                      Key specifications
-                      <textarea
-                        className={`${fieldClass} mt-1 min-h-[140px] disabled:cursor-not-allowed disabled:opacity-60`}
-                        value={draft.specifications}
-                        disabled={
-                          !(
-                            capabilities.specifications ||
-                            capabilities.shopSpecs
-                          )
-                        }
-                        onChange={(event) =>
-                          setDraft((current) => ({
-                            ...current,
-                            specifications: event.target.value,
-                            shopSpecs: event.target.value,
-                          }))
-                        }
-                        placeholder={
-                          "Inverter: 5kW Hybrid\nBattery: 5.12kWh Lithium\nSolar Array: 4 x 585W"
-                        }
-                      />
-                      <div className="mt-1 text-xs text-slate-500">
-                        Enter one concise specification per line.
-                        Label-and-value rows such as “Battery: 5.12kWh Lithium”
-                        render as scannable cards.
+                      <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
+                        <ProductDescriptionEditor
+                          value={draft.description}
+                          disabled={!capabilities.description}
+                          onChange={(description) =>
+                            setDraft((current) => ({ ...current, description }))
+                          }
+                          compact
+                          showPreview={false}
+                          placeholder="Include only product-related information. Keep it clear, accurate, and consistent with the product images."
+                        />
                       </div>
-                    </label>
+                    </div>
 
                     <label className="text-sm text-slate-300">
                       Warranty period
@@ -2985,14 +2945,6 @@ export default function PosManagementClient({
                         ))}
                       </select>
                     </label>
-
-                    <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
-                      <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        Optional structured specifications and component
-                        warranties
-                      </div>
-                      {renderStructuredSection("details")}
-                    </div>
 
                     <label className="text-sm text-slate-300 md:col-span-2">
                       TikTok video link
@@ -3525,6 +3477,133 @@ export default function PosManagementClient({
           ) : null}
         </div>
       </section>
+
+      {categoryPickerOpen ? (
+        <div
+          className="fixed inset-0 z-[110] flex justify-end bg-black/70"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Select website category"
+        >
+          <section className="h-full w-full max-w-lg overflow-y-auto bg-slate-50 p-6 text-slate-900 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black">
+                  {pickerCategoryDefinition
+                    ? pickerCategoryDefinition.label
+                    : "Categories"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {pickerCategoryDefinition
+                    ? "Choose a subcategory"
+                    : "Search and select a category"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryPickerOpen(false);
+                  setPickerCategory(null);
+                }}
+                className="text-2xl leading-none text-slate-500 hover:text-slate-900"
+                aria-label="Close category picker"
+              >
+                ×
+              </button>
+            </div>
+            {pickerCategoryDefinition ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPickerCategory(null);
+                  setCategoryPickerQuery("");
+                }}
+                className="mt-5 text-sm font-bold text-amber-700"
+              >
+                ← All categories
+              </button>
+            ) : (
+              <input
+                autoFocus
+                value={categoryPickerQuery}
+                onChange={(event) => setCategoryPickerQuery(event.target.value)}
+                className="mt-5 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-amber-500"
+                placeholder="Search for a category or subcategory"
+              />
+            )}
+            <div className="mt-6">
+              <h3 className="font-black">
+                {pickerCategoryDefinition
+                  ? "Subcategories"
+                  : categoryPickerQuery
+                    ? "Matching categories"
+                    : "All categories"}
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {pickerCategoryDefinition
+                  ? "Select a subcategory to complete the catalogue classification."
+                  : "Selecting a category immediately shows its subcategories."}
+              </p>
+              <div className="mt-3 space-y-1">
+                {(pickerCategoryDefinition
+                  ? pickerCategoryDefinition.subcategories
+                  : categoryPickerResults
+                ).map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => {
+                      if (!pickerCategoryDefinition) {
+                        setDraft((current) => ({
+                          ...current,
+                          shopCategory: item.value,
+                          shopSubcategory: "",
+                          productType: isGeneralShopCategory(item.value)
+                            ? "WAREHOUSE_PRODUCT"
+                            : current.productType,
+                        }));
+                        setPickerCategory(item.value);
+                        return;
+                      }
+                      setDraft((current) => ({
+                        ...current,
+                        shopCategory: pickerCategoryDefinition.value,
+                        shopSubcategory: item.value,
+                      }));
+                      setCategoryPickerOpen(false);
+                      setPickerCategory(null);
+                      setCategoryPickerQuery("");
+                    }}
+                    className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left hover:bg-amber-50"
+                  >
+                    <span>
+                      <span className="block font-medium">{item.label}</span>
+                      {pickerCategoryDefinition && "productTypes" in item ? (
+                        <span className="mt-1 block text-xs font-normal text-slate-500">
+                          {item.productTypes?.length
+                            ? item.productTypes.map((productType) => productType.label).join(" · ")
+                            : "Final category"}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="font-semibold text-amber-600">
+                      {pickerCategoryDefinition ? "Select" : "›"}
+                    </span>
+                  </button>
+                ))}
+                {!(pickerCategoryDefinition
+                  ? pickerCategoryDefinition.subcategories
+                  : categoryPickerResults
+                ).length ? (
+                  <p className="px-4 py-3 text-sm text-slate-500">
+                    No matching category.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {canManageCommissions ? (
         <div className="space-y-6">
