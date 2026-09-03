@@ -16,9 +16,11 @@ type Balance = { productsCreated: number; totalEarnedKes: number; paidKes: numbe
 
 const blank = () => ({
   name: "", sellingPrice: "", category: "", shopSubcategory: "", brand: "", shortDescription: "", description: "", specifications: "",
-  warrantyPeriod: "", warrantyNotes: "", tiktokVideoUrl: "", mainImageUrl: "", galleryImageUrls: "", availabilityType: "WAREHOUSE", stockQuantity: "0", variableCost: false, lastBuyingPrice: "",
+  warrantyPeriod: "No warranty", warrantyNotes: "", tiktokVideoUrl: "", mainImageUrl: "", galleryImageUrls: "", availabilityType: "WAREHOUSE", stockQuantity: "0", variableCost: false, lastBuyingPrice: "",
   requiresInstallation: false, installationIncluded: false, transportIncluded: false, zone1TransportFee: "500", zone2TransportFee: "750", zone3TransportFee: "1000",
 });
+
+const warrantyOptions = ["No warranty", "1 year", "2 years", "3 years", "5 years", "6 years", "10 years", "15 years", "25 years"];
 
 function money(value: number) { return new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(value); }
 function toForm(product: Product) {
@@ -28,7 +30,7 @@ function toForm(product: Product) {
     name: product.name, sellingPrice: String(product.sellingPrice), category: product.category, shopSubcategory: product.shopSubcategory || "", brand: product.brand || "",
     shortDescription: product.shortDescription || "", description: product.description || "",
     specifications: Array.isArray(product.specifications) ? product.specifications.join("\n") : "",
-    warrantyPeriod: product.warrantyPeriod || "", warrantyNotes: product.warrantyNotes || "", tiktokVideoUrl: product.tiktokVideoUrl || "", mainImageUrl: product.mainImageUrl || "",
+    warrantyPeriod: product.warrantyPeriod || "No warranty", warrantyNotes: product.warrantyNotes || "", tiktokVideoUrl: product.tiktokVideoUrl || "", mainImageUrl: product.mainImageUrl || "",
     galleryImageUrls: Array.isArray(product.galleryImageUrls) ? product.galleryImageUrls.join("\n") : "",
     availabilityType: product.availabilityType || "WAREHOUSE", stockQuantity: String(product.stockQuantity || 0), variableCost: Boolean(product.variableCost), lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
     requiresInstallation, installationIncluded: policy.installationType === "INCLUDED" || policy.installationFeeMode === "INCLUDED", transportIncluded: policy.transportMode === "INCLUDED" || policy.transportMode === "FREE",
@@ -129,7 +131,7 @@ export default function ContributorDashboard() {
             <div className="sm:col-span-2"><span className={label}>Product long description</span><div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950"><ProductDescriptionEditor value={form.description} onChange={(value) => set("description", value)} disabled={busy} showPreview={false} placeholder="Include only product-related information. Keep it clear, accurate, and consistent with the product images." /></div></div>
             <div className="sm:col-span-2"><span className={label}>Key features</span><div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950"><ProductDescriptionEditor value={form.specifications} onChange={(value) => set("specifications", value)} disabled={busy} showPreview={false} compact placeholder="Add key features as bullets, for example: lightweight design, long battery life, Wi-Fi connectivity." /></div></div>
             <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-slate-950/70 p-4"><label className="flex items-center gap-3 font-bold"><input type="checkbox" checked={form.variableCost} onChange={(e) => setForm((current) => ({ ...current, variableCost: e.target.checked, lastBuyingPrice: e.target.checked ? "" : current.lastBuyingPrice }))} />Variable-cost project</label><label className="mt-3 block text-sm font-semibold text-slate-200">Buying price<input disabled={form.variableCost} min="0" type="number" value={form.lastBuyingPrice} onChange={(e) => set("lastBuyingPrice", e.target.value)} className={input} placeholder="Optional" /></label></div>
-            <label className={label}>Warranty period<input value={form.warrantyPeriod} onChange={(e) => set("warrantyPeriod", e.target.value)} className={input} /></label>
+            <label className={label}>Warranty period<select value={form.warrantyPeriod} onChange={(e) => set("warrantyPeriod", e.target.value)} className={input}>{!warrantyOptions.includes(form.warrantyPeriod) ? <option value={form.warrantyPeriod}>{form.warrantyPeriod}</option> : null}{warrantyOptions.map((period) => <option key={period} value={period}>{period}</option>)}</select></label>
             <label className={label}>Stock quantity<input min="0" type="number" value={form.stockQuantity} onChange={(e) => set("stockQuantity", e.target.value)} className={input} /></label>
             <label className={label}>Availability<select value={form.availabilityType} onChange={(e) => set("availabilityType", e.target.value)} className={input}><option value="WAREHOUSE">Available in Warehouse</option><option value="SHOP">Available at Shop</option><option value="ORDER_ON_REQUEST">Order on request</option><option value="OUT_OF_STOCK">Out of stock</option></select></label>
             <label className={label}>Warranty notes<input value={form.warrantyNotes} onChange={(e) => set("warrantyNotes", e.target.value)} className={input} /></label>
