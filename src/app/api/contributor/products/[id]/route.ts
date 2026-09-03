@@ -1,6 +1,8 @@
 import { noStoreJson } from "@/lib/api";
 import { requireProductContributor } from "@/lib/productContributor";
 import { prisma } from "@/lib/prisma";
+import { resolveCanonicalProductBrand } from "@/lib/productBrands";
+import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -56,13 +58,18 @@ export async function PATCH(
     return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });
   const data = parsed.data;
   const visible = Boolean(data.mainImageUrl);
+  const brand = await resolveCanonicalProductBrand(
+    prisma,
+    await getProductTableCapabilities(prisma),
+    data.brand,
+  );
   const product = await prisma.product.update({
     where: { id },
     data: {
       name: data.name,
       sellingPrice: data.sellingPrice,
       category: data.category,
-      brand: data.brand || null,
+      brand,
       shortDescription: data.shortDescription || null,
       description: data.description || null,
       specifications: [],
@@ -80,7 +87,7 @@ export async function PATCH(
       shopShortDescription: data.shortDescription || null,
       shopWarranty: data.warrantyPeriod || null,
       shopSpecs: null,
-      shopBrand: data.brand || null,
+      shopBrand: brand,
       availabilityType: data.availabilityType,
       pickupDelayDays: data.availabilityType === "WAREHOUSE" ? 1 : 0,
       variableCost: data.variableCost,

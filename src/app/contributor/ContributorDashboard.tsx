@@ -189,6 +189,19 @@ export default function ContributorDashboard() {
     void load();
   }, []);
   useEffect(() => {
+    const query = form.brand.trim();
+    if (!query) return;
+    const timeout = window.setTimeout(() => {
+      void fetch(`/api/contributor/brands?q=${encodeURIComponent(query)}`, {
+        cache: "no-store",
+      })
+        .then((res) => res.json())
+        .then((data) => setBrands(data.items || []))
+        .catch(() => undefined);
+    }, 180);
+    return () => window.clearTimeout(timeout);
+  }, [form.brand]);
+  useEffect(() => {
     void fetch("/api/contributor/brands", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setBrands(data.items || []))
@@ -611,50 +624,57 @@ export default function ContributorDashboard() {
                       </div>
                     ) : null}
                   </div>
-                  <label className={label}>
+                  <div className={`${label} relative`}>
                     Website subcategory
-                    <select
-                      value={form.shopSubcategory}
+                    <button
+                      type="button"
                       disabled={!form.category}
-                      onChange={(e) =>
-                        setForm((current) => ({
-                          ...current,
-                          shopSubcategory: e.target.value,
-                          productType: "",
-                        }))
-                      }
-                      className={input}
+                      onClick={() => {
+                        setPickerCategory(form.category);
+                        setCategoryQuery("");
+                        setCategoryOpen(true);
+                      }}
+                      className={`${input} flex items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-60`}
                     >
-                      <option value="">Select subcategory</option>
-                      {getShopSubcategoryOptions(form.category).map(
-                        (category) => (
-                          <option key={category.value} value={category.value}>
-                            {category.label}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </label>
+                      {getShopSubcategoryOptions(form.category).find(
+                        (subcategory) =>
+                          subcategory.value === form.shopSubcategory,
+                      )?.label || "Select subcategory"}
+                      <span>⌄</span>
+                    </button>
+                    <span className="mt-1 block text-xs font-normal text-slate-400">
+                      Choose from the selected category only.
+                    </span>
+                  </div>
                   <label className={label}>
                     Product type{" "}
                     <span className="font-normal text-slate-500">
                       (optional)
                     </span>
-                    <input
+                    <select
                       value={form.productType}
                       onChange={(e) => set("productType", e.target.value)}
                       className={input}
-                      list="contributor-product-types"
-                      placeholder="e.g. Angle Grinders or Business Laptops"
-                    />
-                    <datalist id="contributor-product-types">
+                      disabled={
+                        !form.shopSubcategory || !productTypeOptions.length
+                      }
+                    >
+                      <option value="">
+                        {form.shopSubcategory
+                          ? productTypeOptions.length
+                            ? "Select product type"
+                            : "No product type required"
+                          : "Select subcategory first"}
+                      </option>
                       {productTypeOptions.map((productType) => (
                         <option
                           key={productType.value}
                           value={productType.label}
-                        />
+                        >
+                          {productType.label}
+                        </option>
                       ))}
-                    </datalist>
+                    </select>
                     <span className="mt-1 block text-xs font-normal text-slate-400">
                       Use this for the most specific product grouping when
                       needed.

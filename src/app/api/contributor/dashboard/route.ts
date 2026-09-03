@@ -5,6 +5,8 @@ import {
   requireProductContributor,
 } from "@/lib/productContributor";
 import { prisma } from "@/lib/prisma";
+import { resolveCanonicalProductBrand } from "@/lib/productBrands";
+import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -170,8 +172,13 @@ export async function POST(req: Request) {
   if (!parsed.success)
     return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });
   const sku = await nextSku(parsed.data.name);
+  const brand = await resolveCanonicalProductBrand(
+    prisma,
+    await getProductTableCapabilities(prisma),
+    parsed.data.brand,
+  );
   const product = await prisma.product.create({
-    data: productData(parsed.data, sku),
+    data: productData({ ...parsed.data, brand }, sku),
   });
   await prisma.$executeRawUnsafe(
     `INSERT INTO "ProductContributorProduct" ("productId", "contributorId", "earningKes") VALUES ($1, $2, $3)`,
