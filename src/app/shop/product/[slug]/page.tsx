@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { BadgeCheck, CreditCard, ExternalLink, Headphones, MapPin, Music2, Play, Truck } from "lucide-react";
+import { CreditCard, ExternalLink, Headphones, MapPin, Music2, Play, Truck } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
@@ -68,69 +68,6 @@ function buildBreadcrumbTitle(product: ShopProduct) {
   const normalizedName = normalizeProductText(product.name);
   const segments = normalizedName.split(",").map((segment) => segment.trim()).filter(Boolean);
   return toDisplayCase(segments.slice(0, 2).join(", ") || normalizedName, product.brand);
-}
-
-const DESCRIPTION_SECTION_HEADINGS = [
-  "Specifications",
-  "Key Features",
-  "Benefits",
-  "Ideal For",
-  "Suitable For",
-  "Applications",
-  "What's Included",
-  "Includes",
-  "Warranty",
-] as const;
-
-function formatSpecificationLabel(value: string) {
-  return value
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function splitSpecificationContent(value: string) {
-  const matches = Array.from(value.matchAll(/([A-Z][A-Za-z0-9\/ ]{1,24}):\s*([^:]+?)(?=\s+[A-Z][A-Za-z0-9\/ ]{1,24}:|$)/g));
-  if (!matches.length) return [value.trim()];
-  return matches
-    .map((match) => `${formatSpecificationLabel(match[1])}: ${match[2].trim()}`)
-    .filter(Boolean);
-}
-
-function splitDescriptionIntoBullets(value: string) {
-  const normalized = value.replace(/\s+/g, " ").replace(/\bPrice\s*$/i, "").trim();
-  if (!normalized) return [];
-
-  const sectioned = DESCRIPTION_SECTION_HEADINGS.reduce((text, heading) => {
-    const pattern = new RegExp(`\\s*${heading}\\s*:?\\s*`, "gi");
-    return text.replace(pattern, `\n${heading}: `);
-  }, normalized);
-
-  return sectioned
-    .split("\n")
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .flatMap((segment) => {
-      const sentenceParts = segment
-        .split(/(?<=[.!?])\s+(?=[A-Z])/)
-        .map((part) => part.trim())
-        .filter(Boolean);
-
-      if (sentenceParts.length > 1) return sentenceParts;
-      if (/^[A-Z][A-Za-z ]{2,24}:\s*/.test(segment)) return splitSpecificationContent(segment);
-      return [segment];
-    });
-}
-
-function buildDetailBullets(product: ShopProduct) {
-  return Array.from(
-    new Set(
-      [product.fullDescription, ...product.specs]
-        .flatMap((value) => splitDescriptionIntoBullets(String(value || "")))
-        .map((value) => value.replace(/\s+/g, " ").trim())
-        .filter(Boolean),
-    ),
-  );
 }
 
 function extractTikTokVideoId(value: string | null | undefined) {
@@ -205,7 +142,6 @@ export default async function ShopProductDetailPage({
   const galleryImages = product.galleryImages?.length ? product.galleryImages : [product.image];
   const visualTitle = buildVisualTitle(product);
   const breadcrumbTitle = buildBreadcrumbTitle(product);
-  const detailBullets = buildDetailBullets({ ...product, fullDescription: undefined });
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
   const referralCode = String(resolvedSearchParams.ref || "").trim().toUpperCase();
   const lppReturnHref = `/${product.slug}?${new URLSearchParams({
@@ -266,24 +202,6 @@ export default async function ShopProductDetailPage({
           },
         ]
       : []),
-    {
-      title: "Key specifications",
-      content: (
-        <div className="grid max-w-5xl gap-3 sm:grid-cols-2">
-          {detailBullets.map((spec) => {
-            const labelMatch = spec.match(/^([^:]{2,42}):\s*(.+)$/);
-            return (
-              <div key={spec} className="flex min-w-0 items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] p-3.5 sm:p-4">
-                <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
-                <div className="min-w-0 break-words text-sm leading-6 text-slate-700 [overflow-wrap:anywhere]">
-                  {labelMatch ? <><span className="font-extrabold text-slate-950">{labelMatch[1]}:</span> {labelMatch[2]}</> : spec}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ),
-    },
   ];
 
   return (

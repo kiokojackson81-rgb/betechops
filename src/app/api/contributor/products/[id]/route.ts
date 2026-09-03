@@ -13,7 +13,6 @@ const updateInput = z.object({
   brand: z.string().trim().max(120).optional().nullable(),
   shortDescription: z.string().trim().max(3000).optional().nullable(),
   description: z.string().trim().max(10000).optional().nullable(),
-  specifications: z.array(z.string().trim().max(500)).max(30).optional().default([]),
   warrantyPeriod: z.string().trim().max(120).optional().nullable(),
   warrantyNotes: z.string().trim().max(1000).optional().nullable(),
   tiktokVideoUrl: z.string().trim().url().max(500).optional().nullable(),
@@ -43,11 +42,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data: {
       name: data.name, sellingPrice: data.sellingPrice, category: data.category, brand: data.brand || null,
       shortDescription: data.shortDescription || null, description: data.description || null,
-      specifications: data.specifications, warrantyPeriod: data.warrantyPeriod || null, warrantyNotes: data.warrantyNotes || null, tiktokVideoUrl: data.tiktokVideoUrl || null,
+      specifications: [], warrantyPeriod: data.warrantyPeriod || null, warrantyNotes: data.warrantyNotes || null, tiktokVideoUrl: data.tiktokVideoUrl || null,
       mainImageUrl: data.mainImageUrl, shopImageUrl: data.mainImageUrl, galleryImageUrls: data.galleryImageUrls,
       showInShop: visible, ecommerceVisible: visible, shopCategory: data.category, shopSubcategory: data.shopSubcategory || null,
       shopShortDescription: data.shortDescription || null, shopWarranty: data.warrantyPeriod || null,
-      shopSpecs: data.specifications.join(", ") || null, shopBrand: data.brand || null,
+      shopSpecs: null, shopBrand: data.brand || null,
       availabilityType: data.availabilityType, pickupDelayDays: data.availabilityType === "WAREHOUSE" ? 1 : 0, variableCost: data.variableCost, lastBuyingPrice: data.variableCost ? null : data.lastBuyingPrice ?? null,
       stockQuantity: data.stockQuantity, isActive: true, status: "ACTIVE", posEnabled: true,
       catalogueConfiguration: {

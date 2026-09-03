@@ -7,7 +7,7 @@ import { getShopProductHref } from "@/app/shop/storefrontPaths";
 
 type Product = {
   id: string; sku: string; name: string; sellingPrice: number; category: string; shopSubcategory?: string | null; brand?: string | null;
-  shortDescription?: string | null; description?: string | null; specifications?: string[] | null;
+  shortDescription?: string | null; description?: string | null;
   warrantyPeriod?: string | null; warrantyNotes?: string | null; tiktokVideoUrl?: string | null; mainImageUrl?: string | null; variableCost?: boolean | null; lastBuyingPrice?: number | null; catalogueConfiguration?: Record<string, unknown> | null;
   galleryImageUrls?: string[] | null; availabilityType?: string | null; stockQuantity?: number | null;
   showInShop: boolean; ecommerceVisible: boolean; updatedAt: string; earningKes: number;
@@ -16,7 +16,7 @@ type Withdrawal = { id: string; amountKes: number; status: string; paymentRefere
 type Balance = { productsCreated: number; totalEarnedKes: number; paidKes: number; pendingKes: number; availableKes: number };
 
 const blank = () => ({
-  name: "", sellingPrice: "", category: "", shopSubcategory: "", brand: "", shortDescription: "", description: "", specifications: "",
+  name: "", sellingPrice: "", category: "", shopSubcategory: "", brand: "", shortDescription: "", description: "",
   warrantyPeriod: "No warranty", warrantyNotes: "", tiktokVideoUrl: "", mainImageUrl: "", galleryImageUrls: "", availabilityType: "WAREHOUSE", stockQuantity: "0", variableCost: false, lastBuyingPrice: "",
   requiresInstallation: false, installationIncluded: false, transportIncluded: false, zone1TransportFee: "500", zone2TransportFee: "750", zone3TransportFee: "1000",
 });
@@ -33,7 +33,6 @@ function toForm(product: Product) {
   return {
     name: product.name, sellingPrice: String(product.sellingPrice), category: product.category, shopSubcategory: product.shopSubcategory || "", brand: product.brand || "",
     shortDescription: product.shortDescription || "", description: product.description || "",
-    specifications: Array.isArray(product.specifications) ? product.specifications.join("\n") : "",
     warrantyPeriod: product.warrantyPeriod || "No warranty", warrantyNotes: product.warrantyNotes || "", tiktokVideoUrl: product.tiktokVideoUrl || "", mainImageUrl: product.mainImageUrl || "",
     galleryImageUrls: Array.isArray(product.galleryImageUrls) ? product.galleryImageUrls.join("\n") : "",
     availabilityType: product.availabilityType || "WAREHOUSE", stockQuantity: String(product.stockQuantity || 0), variableCost: Boolean(product.variableCost), lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
@@ -79,7 +78,6 @@ export default function ContributorDashboard() {
     ...form, sellingPrice: Number(form.sellingPrice), stockQuantity: Number(form.stockQuantity || 0), lastBuyingPrice: form.lastBuyingPrice ? Number(form.lastBuyingPrice) : null,
     tiktokVideoUrl: form.tiktokVideoUrl.trim() || null,
     zone1TransportFee: Number(form.zone1TransportFee || 500), zone2TransportFee: Number(form.zone2TransportFee || 750), zone3TransportFee: Number(form.zone3TransportFee || 1000),
-    specifications: form.specifications.split("\n").map((x) => x.trim()).filter(Boolean),
     galleryImageUrls: form.galleryImageUrls.split("\n").map((x) => x.trim()).filter(Boolean),
   });
 
@@ -133,7 +131,6 @@ export default function ContributorDashboard() {
             <label className={label}>Website subcategory<select value={form.shopSubcategory} disabled={!form.category} onChange={(e) => set("shopSubcategory", e.target.value)} className={input}><option value="">Select subcategory</option>{getShopSubcategoryOptions(form.category).map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</select></label>
             <div className="sm:col-span-2"><span className={label}>Product short description</span><div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950"><ProductDescriptionEditor value={form.shortDescription} onChange={(value) => set("shortDescription", value)} disabled={busy} showPreview={false} compact placeholder="Brief customer-facing product summary." /></div></div>
             <div className="sm:col-span-2"><span className={label}>Product long description</span><div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950"><ProductDescriptionEditor value={form.description} onChange={(value) => set("description", value)} disabled={busy} showPreview={false} placeholder="Include only product-related information. Keep it clear, accurate, and consistent with the product images." /></div></div>
-            <div className="sm:col-span-2"><span className={label}>Key features</span><div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950"><ProductDescriptionEditor value={form.specifications} onChange={(value) => set("specifications", value)} disabled={busy} showPreview={false} compact placeholder="Add key features as bullets, for example: lightweight design, long battery life, Wi-Fi connectivity." /></div></div>
             <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-slate-950/70 p-4"><label className="flex items-center gap-3 font-bold"><input type="checkbox" checked={form.variableCost} onChange={(e) => setForm((current) => ({ ...current, variableCost: e.target.checked, lastBuyingPrice: e.target.checked ? "" : current.lastBuyingPrice }))} />Variable-cost project</label><label className="mt-3 block text-sm font-semibold text-slate-200">Buying price<input disabled={form.variableCost} min="0" type="number" value={form.lastBuyingPrice} onChange={(e) => set("lastBuyingPrice", e.target.value)} className={input} placeholder="Optional" /></label></div>
             <label className={label}>Warranty period<select value={form.warrantyPeriod} onChange={(e) => set("warrantyPeriod", e.target.value)} className={input}>{!warrantyOptions.includes(form.warrantyPeriod) ? <option value={form.warrantyPeriod}>{form.warrantyPeriod}</option> : null}{warrantyOptions.map((period) => <option key={period} value={period}>{period}</option>)}</select></label>
             <label className={label}>Stock quantity<input min="0" type="number" value={form.stockQuantity} onChange={(e) => set("stockQuantity", e.target.value)} className={input} /></label>
