@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildStaffAttendantWhere, STAFF_ATTENDANT_ROLES } from "@/lib/staffUsers";
 import { resolveProjectStaffPhone } from "@/lib/projectHandlers";
+import { PRODUCT_CONTRIBUTOR_EMAIL } from "@/lib/productContributorConfig";
 
 export async function GET() {
   // Allow public, read-only access to the staff list so the receipts
@@ -38,6 +39,7 @@ export async function GET() {
       staff = await prisma.user.findMany({
         where: {
           role: { in: STAFF_ATTENDANT_ROLES },
+          email: { not: PRODUCT_CONTRIBUTOR_EMAIL },
           isActive: true,
         },
         orderBy: [{ name: "asc" }],

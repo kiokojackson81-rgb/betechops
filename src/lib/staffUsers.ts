@@ -1,4 +1,5 @@
 import type { Prisma, Role } from "@prisma/client";
+import { PRODUCT_CONTRIBUTOR_EMAIL } from "@/lib/productContributorConfig";
 
 export const STAFF_ATTENDANT_ROLES: Role[] = ["ATTENDANT", "SUPERVISOR"];
 
@@ -21,6 +22,7 @@ export function isStaffAttendantLike(user: {
 export function buildStaffAttendantWhere(): Prisma.UserWhereInput {
   return {
     role: { in: STAFF_ATTENDANT_ROLES },
+    email: { not: PRODUCT_CONTRIBUTOR_EMAIL },
     agentProfile: { is: null },
     OR: [
       { attendantCategory: { not: null } },
