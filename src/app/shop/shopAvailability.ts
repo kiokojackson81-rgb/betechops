@@ -42,7 +42,7 @@ export function getProductCheckoutAvailabilityMessage(product: {
   const availabilityType = normalizeAvailabilityType(product.availabilityType);
 
   if (availabilityType === "SHOP") {
-    return "This item is available for same-day shop pickup.";
+    return "This item is available for same-day shop pickup and delivery.";
   }
 
   if (availabilityType === "WAREHOUSE") {

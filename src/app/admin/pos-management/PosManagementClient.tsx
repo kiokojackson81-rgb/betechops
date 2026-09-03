@@ -337,7 +337,7 @@ function getAvailabilityPreviewMessage(type: ProductAvailabilityType) {
   if (type === "ORDER_ON_REQUEST")
     return "Customer will see: Order on request. Our team will confirm availability.";
   if (type === "OUT_OF_STOCK") return "Customer will see: Out of stock.";
-  return "Customer will see: Available at shop for immediate pickup.";
+  return "Customer will see: Available for same-day shop pickup and delivery.";
 }
 
 function hasProductWebsiteImage(

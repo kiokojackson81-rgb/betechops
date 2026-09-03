@@ -18,7 +18,7 @@ import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 import { getShopProductBySlug, getShopProductBySlugOrOpsProductId, getShopProducts } from "@/app/shop/shopApi";
 import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
-import { getProductAvailabilityBadge, getProductAvailabilityMessage, getProductCheckoutAvailabilityMessage } from "@/app/shop/shopAvailability";
+import { getProductAvailabilityBadge, getProductCheckoutAvailabilityMessage } from "@/app/shop/shopAvailability";
 import { getShopCategoryHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 import { getPublishedProductReviews } from "@/lib/reviewsReferrals";
 import { auth } from "@/lib/auth";
@@ -137,7 +137,6 @@ export default async function ShopProductDetailPage({
   } as const;
   const productJsonLd = buildProductJsonLd(product);
   const availabilityBadge = getProductAvailabilityBadge(product);
-  const availabilityMessage = product.availabilityMessage || getProductAvailabilityMessage(product);
   const checkoutAvailabilityMessage = product.checkoutAvailabilityMessage || getProductCheckoutAvailabilityMessage(product);
   const galleryImages = product.galleryImages?.length ? product.galleryImages : [product.image];
   const visualTitle = buildVisualTitle(product);
@@ -267,9 +266,6 @@ export default async function ShopProductDetailPage({
                         <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Pickup & delivery</div>
                         <div className="mt-1 text-sm font-semibold leading-5 text-slate-800">{checkoutAvailabilityMessage}</div>
                       </div>
-                    </div>
-                    <div className="rounded-[22px] border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3 text-sm leading-6 text-slate-700">
-                      {availabilityMessage}
                     </div>
                     {product.catalogueConfiguration ? (() => {
                       const policy = product.catalogueConfiguration;
