@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import ProductDescriptionEditor from "@/components/ProductDescriptionEditor";
 import {
+  getShopProductTypeOptions,
   getShopSubcategoryOptions,
   SHOP_CATEGORY_DEFINITIONS,
   SHOP_CATEGORY_OPTIONS,
@@ -167,6 +168,7 @@ export default function ContributorDashboard() {
   const [brandOpen, setBrandOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [categoryQuery, setCategoryQuery] = useState("");
+  const [pickerCategory, setPickerCategory] = useState<string | null>(null);
   const [recentCategories, setRecentCategories] = useState<string[]>([]);
 
   async function load() {
@@ -205,9 +207,14 @@ export default function ContributorDashboard() {
   }, []);
   const set = (key: keyof typeof form, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
-  const chooseCategory = (category: string, shopSubcategory = "") => {
-    setForm((current) => ({ ...current, category, shopSubcategory }));
-    setCategoryOpen(false);
+  const selectCategory = (category: string) => {
+    setForm((current) => ({
+      ...current,
+      category,
+      shopSubcategory: "",
+      productType: "",
+    }));
+    setPickerCategory(category);
     setCategoryQuery("");
     setRecentCategories((current) => {
       const next = [
@@ -221,30 +228,43 @@ export default function ContributorDashboard() {
       return next;
     });
   };
+  const chooseSubcategory = (shopSubcategory: string) => {
+    const category = pickerCategory || form.category;
+    if (!category) return;
+    setForm((current) => ({
+      ...current,
+      category,
+      shopSubcategory,
+      productType: "",
+    }));
+    setCategoryOpen(false);
+    setPickerCategory(null);
+    setCategoryQuery("");
+  };
   const filteredBrands = brands
     .filter((brand) => brand.toLowerCase().includes(form.brand.toLowerCase()))
     .slice(0, 8);
-  const categorySearchResults = SHOP_CATEGORY_DEFINITIONS.flatMap(
-    (category) => [
-      {
-        kind: "category" as const,
-        category: category.value,
-        subcategory: "",
-        label: category.label,
-        detail: "Category",
-      },
-      ...category.subcategories.map((subcategory) => ({
-        kind: "subcategory" as const,
-        category: category.value,
-        subcategory: subcategory.value,
-        label: subcategory.label,
-        detail: category.label,
-      })),
-    ],
-  ).filter((item) =>
-    `${item.label} ${item.detail}`
+  const pickerCategoryDefinition =
+    SHOP_CATEGORY_DEFINITIONS.find(
+      (category) => category.value === pickerCategory,
+    ) ?? null;
+  const categorySearchResults = SHOP_CATEGORY_DEFINITIONS.filter((category) =>
+    [
+      category.label,
+      ...category.subcategories.flatMap((subcategory) => [
+        subcategory.label,
+        ...(subcategory.productTypes || []).map(
+          (productType) => productType.label,
+        ),
+      ]),
+    ]
+      .join(" ")
       .toLowerCase()
       .includes(categoryQuery.toLowerCase()),
+  );
+  const productTypeOptions = getShopProductTypeOptions(
+    form.category,
+    form.shopSubcategory,
   );
   const payload = () => ({
     ...form,
@@ -596,7 +616,13 @@ export default function ContributorDashboard() {
                     <select
                       value={form.shopSubcategory}
                       disabled={!form.category}
-                      onChange={(e) => set("shopSubcategory", e.target.value)}
+                      onChange={(e) =>
+                        setForm((current) => ({
+                          ...current,
+                          shopSubcategory: e.target.value,
+                          productType: "",
+                        }))
+                      }
                       className={input}
                     >
                       <option value="">Select subcategory</option>
@@ -618,8 +644,17 @@ export default function ContributorDashboard() {
                       value={form.productType}
                       onChange={(e) => set("productType", e.target.value)}
                       className={input}
+                      list="contributor-product-types"
                       placeholder="e.g. Angle Grinders or Business Laptops"
                     />
+                    <datalist id="contributor-product-types">
+                      {productTypeOptions.map((productType) => (
+                        <option
+                          key={productType.value}
+                          value={productType.label}
+                        />
+                      ))}
+                    </datalist>
                     <span className="mt-1 block text-xs font-normal text-slate-400">
                       Use this for the most specific product grouping when
                       needed.
@@ -1177,22 +1212,51 @@ export default function ContributorDashboard() {
           >
             <section className="h-full w-full max-w-lg overflow-y-auto bg-slate-50 p-6 text-slate-900 shadow-2xl">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black">Categories</h2>
+                <div>
+                  <h2 className="text-xl font-black">
+                    {pickerCategoryDefinition
+                      ? pickerCategoryDefinition.label
+                      : "Categories"}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {pickerCategoryDefinition
+                      ? "Choose a subcategory"
+                      : "Choose a category first"}
+                  </p>
+                </div>
                 <button
-                  onClick={() => setCategoryOpen(false)}
+                  onClick={() => {
+                    setCategoryOpen(false);
+                    setPickerCategory(null);
+                  }}
                   className="text-2xl text-slate-500"
                 >
                   ×
                 </button>
               </div>
-              <input
-                autoFocus
-                value={categoryQuery}
-                onChange={(e) => setCategoryQuery(e.target.value)}
-                className="mt-5 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-amber-500"
-                placeholder="Search category or subcategory"
-              />
-              {recentCategories.length && !categoryQuery ? (
+              {pickerCategoryDefinition ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickerCategory(null);
+                    setCategoryQuery("");
+                  }}
+                  className="mt-5 text-sm font-bold text-amber-700"
+                >
+                  ← All categories
+                </button>
+              ) : (
+                <input
+                  autoFocus
+                  value={categoryQuery}
+                  onChange={(e) => setCategoryQuery(e.target.value)}
+                  className="mt-5 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-amber-500"
+                  placeholder="Search category"
+                />
+              )}
+              {!pickerCategoryDefinition &&
+              recentCategories.length &&
+              !categoryQuery ? (
                 <div className="mt-6">
                   <h3 className="font-black">Recently used categories</h3>
                   <div className="mt-3 space-y-2">
@@ -1203,7 +1267,7 @@ export default function ContributorDashboard() {
                       return category ? (
                         <button
                           key={value}
-                          onClick={() => chooseCategory(value)}
+                          onClick={() => selectCategory(value)}
                           className="block w-full rounded-xl border border-slate-200 px-4 py-3 text-left font-semibold hover:border-amber-500"
                         >
                           {category.label}
@@ -1215,36 +1279,53 @@ export default function ContributorDashboard() {
               ) : null}
               <div className="mt-6">
                 <h3 className="font-black">
-                  {categoryQuery
-                    ? "Matching categories and subcategories"
-                    : "All categories and subcategories"}
+                  {pickerCategoryDefinition
+                    ? "Subcategories"
+                    : categoryQuery
+                      ? "Matching categories"
+                      : "All categories"}
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Choose a subcategory to fill both fields at once.
+                  {pickerCategoryDefinition
+                    ? "Only the selected category's subcategories are shown."
+                    : "Select a category to see its subcategories."}
                 </p>
                 <div className="mt-3 space-y-1">
-                  {categorySearchResults.map((item) => (
+                  {(pickerCategoryDefinition
+                    ? pickerCategoryDefinition.subcategories
+                    : categorySearchResults
+                  ).map((item) => (
                     <button
-                      key={`${item.category}-${item.subcategory || "all"}`}
+                      key={item.value}
                       onClick={() =>
-                        chooseCategory(item.category, item.subcategory)
+                        pickerCategoryDefinition
+                          ? chooseSubcategory(item.value)
+                          : selectCategory(item.value)
                       }
-                      className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left hover:bg-amber-50 ${form.category === item.category && form.shopSubcategory === item.subcategory ? "bg-amber-100 font-black" : ""}`}
+                      className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left hover:bg-amber-50 ${pickerCategoryDefinition ? (form.shopSubcategory === item.value ? "bg-amber-100 font-black" : "") : form.category === item.value ? "bg-amber-100 font-black" : ""}`}
                     >
                       <span>
                         <span className="block">{item.label}</span>
-                        <span className="text-xs font-normal text-slate-500">
-                          {item.detail}
-                        </span>
+                        {pickerCategoryDefinition ? (
+                          <span className="text-xs font-normal text-slate-500">
+                            {item.productTypes?.length
+                              ? `${item.productTypes.map((productType) => productType.label).join(" · ")}`
+                              : "Final category"}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="text-amber-600">
-                        {item.kind === "subcategory" ? "Select" : "›"}
+                        {pickerCategoryDefinition ? "Select" : "›"}
                       </span>
                     </button>
                   ))}
-                  {!categorySearchResults.length ? (
+                  {!(
+                    pickerCategoryDefinition
+                      ? pickerCategoryDefinition.subcategories
+                      : categorySearchResults
+                  ).length ? (
                     <p className="px-4 py-3 text-sm text-slate-500">
-                      No matching category or subcategory.
+                      No matching category.
                     </p>
                   ) : null}
                 </div>

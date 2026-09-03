@@ -7,6 +7,7 @@ export type ShopSubcategoryDefinition = {
   value: string;
   label: string;
   keywords: string[];
+  productTypes?: Array<{ value: string; label: string }>;
 };
 
 export type ShopCategoryDefinition = {
@@ -33,6 +34,7 @@ function slugify(value: string) {
 function makeSubcategories(
   labels: string[],
   extraKeywords: Record<string, string[]> = {},
+  productTypes: Record<string, string[]> = {},
 ) {
   return labels.map((label) => ({
     value: slugify(label),
@@ -42,6 +44,10 @@ function makeSubcategories(
       ...label.split(/\s+/),
       ...(extraKeywords[label] || []),
     ].map((item) => item.toLowerCase()),
+    productTypes: productTypes[label]?.map((productType) => ({
+      value: slugify(productType),
+      label: productType,
+    })),
   }));
 }
 
@@ -86,7 +92,6 @@ const GENERAL_CATEGORY_DATA: Array<[string, string[]]> = [
     "TV, Audio & Electronics",
     [
       "Televisions",
-      "Smart TVs",
       "Projectors",
       "Home Audio Systems",
       "Speakers",
@@ -357,7 +362,50 @@ const GENERAL_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] =
     accent: (["maroon", "gold", "green"] as ShopAccent[])[index % 3],
     visualType: "kit",
     keywords: [label, ...subcategories].map((item) => item.toLowerCase()),
-    subcategories: makeSubcategories(subcategories),
+    subcategories: makeSubcategories(
+      subcategories,
+      {},
+      label === "TV, Audio & Electronics"
+        ? {
+            Televisions: [
+              "Smart TVs",
+              "Digital TVs",
+              "Android TVs",
+              "LED TVs",
+              "QLED TVs",
+              "OLED TVs",
+            ],
+            "Home Audio Systems": [
+              "Sound Bars",
+              "Home Theatres",
+              "Hi-Fi Systems",
+            ],
+            Speakers: [
+              "Bluetooth Speakers",
+              "Tower Speakers",
+              "Party Speakers",
+            ],
+          }
+        : label === "Tools, Workshop & DIY"
+          ? {
+              "Power Tools": [
+                "Angle Grinders",
+                "Impact Drills",
+                "Rotary Hammers",
+                "Circular Saws",
+              ],
+              "Hand Tools": ["Spanners", "Screwdrivers", "Pliers", "Hammers"],
+            }
+          : label === "Computing & Digital"
+            ? {
+                "Laptops & Notebooks": [
+                  "Business Laptops",
+                  "Gaming Laptops",
+                  "Student Laptops",
+                ],
+              }
+            : {},
+    ),
   }));
 
 export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
@@ -839,6 +887,16 @@ export function getShopSubcategoryDefinition(
     getShopSubcategoryOptions(categoryValue).find(
       (subcategory) => subcategory.value === subcategorySlug,
     ) ?? null
+  );
+}
+
+export function getShopProductTypeOptions(
+  categoryValue: string | null | undefined,
+  subcategoryValue: string | null | undefined,
+) {
+  return (
+    getShopSubcategoryDefinition(categoryValue, subcategoryValue)
+      ?.productTypes ?? []
   );
 }
 
