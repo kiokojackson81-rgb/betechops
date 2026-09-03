@@ -129,7 +129,9 @@ function productData(data: ProductInput, sku: string) {
       priceIncludes: [
         "EQUIPMENT",
         ...(data.installationIncluded ? ["INSTALLATION"] : []),
-        ...(accessoriesIncluded ? ["ACCESSORIES"] : []),
+        ...(accessoriesIncluded
+          ? ["ACCESSORIES", "COMMISSIONING", "REMOTE_SUPPORT"]
+          : []),
         ...(data.transportIncluded ? ["TRANSPORT"] : []),
       ],
       allInclusive: false,

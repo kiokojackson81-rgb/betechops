@@ -126,7 +126,9 @@ export async function PATCH(
         priceIncludes: [
           "EQUIPMENT",
           ...(data.installationIncluded ? ["INSTALLATION"] : []),
-          ...(accessoriesIncluded ? ["ACCESSORIES"] : []),
+          ...(accessoriesIncluded
+            ? ["ACCESSORIES", "COMMISSIONING", "REMOTE_SUPPORT"]
+            : []),
           ...(data.transportIncluded ? ["TRANSPORT"] : []),
         ],
         allInclusive: false,

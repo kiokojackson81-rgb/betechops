@@ -1984,18 +1984,38 @@ export default function PosManagementClient({
   };
 
   const setInstallationIncluded = (included: boolean) => {
+    const includedServiceItems = [
+      "EQUIPMENT",
+      "INSTALLATION",
+      "ACCESSORIES",
+      "COMMISSIONING",
+      "REMOTE_SUPPORT",
+    ] as const;
     updateFulfilmentPolicy({
       installationType: included ? "INCLUDED" : "LOCAL_RECOMMENDED",
       installationFeeMode: included ? "INCLUDED" : "STANDARD",
+      accessoriesMode: included ? "INCLUDED" : "NOT_INCLUDED",
+      preliminaryAccessoriesFee: included
+        ? null
+        : draft.catalogueConfiguration.preliminaryAccessoriesFee,
+      includedAccessories: included
+        ? "Installation accessories included in the advertised package."
+        : "",
       priceIncludes: included
         ? Array.from(
             new Set([
               ...draft.catalogueConfiguration.priceIncludes,
-              "INSTALLATION" as const,
+              ...includedServiceItems,
             ]),
           )
         : draft.catalogueConfiguration.priceIncludes.filter(
-            (item) => item !== "INSTALLATION",
+            (item) =>
+              ![
+                "INSTALLATION",
+                "ACCESSORIES",
+                "COMMISSIONING",
+                "REMOTE_SUPPORT",
+              ].includes(item),
           ),
     });
   };
