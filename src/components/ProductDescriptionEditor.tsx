@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { type ClipboardEvent, useRef } from "react";
 import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 
 type ProductDescriptionEditorProps = {
@@ -51,6 +51,44 @@ function formatSelection(value: string, start: number, end: number, action: Form
   };
 }
 
+function htmlToMarkdown(html: string) {
+  const document = new DOMParser().parseFromString(html, "text/html");
+  const renderChildren = (element: ParentNode) => Array.from(element.childNodes).map(renderNode).join("");
+  const renderListItem = (element: Element) => renderChildren(element).trim().replace(/\n{2,}/g, " ");
+  const renderNode = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue?.replace(/\u00a0/g, " ") || "";
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+
+    const element = node as Element;
+    const content = renderChildren(element);
+    switch (element.tagName.toLowerCase()) {
+      case "br": return "\n";
+      case "p":
+      case "div":
+      case "section": return `${content.trim()}\n\n`;
+      case "h1": return `# ${content.trim()}\n\n`;
+      case "h2": return `## ${content.trim()}\n\n`;
+      case "h3": return `### ${content.trim()}\n\n`;
+      case "h4": return `#### ${content.trim()}\n\n`;
+      case "h5": return `##### ${content.trim()}\n\n`;
+      case "h6": return `###### ${content.trim()}\n\n`;
+      case "strong":
+      case "b": return `**${content.trim()}**`;
+      case "em":
+      case "i": return `*${content.trim()}*`;
+      case "a": {
+        const href = element.getAttribute("href")?.trim();
+        return href && !/^javascript:/i.test(href) ? `[${content.trim()}](${href})` : content;
+      }
+      case "ul": return `${Array.from(element.children).filter((child) => child.tagName.toLowerCase() === "li").map((item) => `- ${renderListItem(item)}`).join("\n")}\n\n`;
+      case "ol": return `${Array.from(element.children).filter((child) => child.tagName.toLowerCase() === "li").map((item, index) => `${index + 1}. ${renderListItem(item)}`).join("\n")}\n\n`;
+      default: return content;
+    }
+  };
+
+  return renderChildren(document.body).replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export default function ProductDescriptionEditor({ value, onChange, disabled = false, showPreview = true, compact = false, placeholder }: ProductDescriptionEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -62,6 +100,25 @@ export default function ProductDescriptionEditor({ value, onChange, disabled = f
     requestAnimationFrame(() => {
       textarea.focus();
       textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+    });
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = event.clipboardData.getData("text/html");
+    const hasRichFormatting = /<(?:h[1-6]|ul|ol|li|strong|b|em|i|a|br)\b/i.test(html);
+    if (!hasRichFormatting) return;
+
+    const pasted = htmlToMarkdown(html);
+    if (!pasted) return;
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const nextValue = `${value.slice(0, start)}${pasted}${value.slice(textarea.selectionEnd)}`;
+    onChange(nextValue);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + pasted.length;
+      textarea.setSelectionRange(cursor, cursor);
     });
   };
 
@@ -90,6 +147,7 @@ export default function ProductDescriptionEditor({ value, onChange, disabled = f
             value={value}
             disabled={disabled}
             onChange={(event) => onChange(event.target.value)}
+            onPaste={handlePaste}
             placeholder={placeholder ?? "Add an overview, headings, lists, links, and product details."}
             className={`${compact ? "min-h-[150px]" : "min-h-[320px]"} w-full resize-y bg-transparent px-3 py-3 font-mono text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50`}
           />

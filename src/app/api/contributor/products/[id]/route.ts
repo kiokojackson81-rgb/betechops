@@ -16,6 +16,7 @@ const updateInput = z.object({
   specifications: z.array(z.string().trim().max(500)).max(30).optional().default([]),
   warrantyPeriod: z.string().trim().max(120).optional().nullable(),
   warrantyNotes: z.string().trim().max(1000).optional().nullable(),
+  tiktokVideoUrl: z.string().trim().url().max(500).optional().nullable(),
   mainImageUrl: z.string().trim().url().max(500),
   galleryImageUrls: z.array(z.string().trim().url().max(500)).max(12).optional().default([]),
   availabilityType: z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]).default("WAREHOUSE"),
@@ -42,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data: {
       name: data.name, sellingPrice: data.sellingPrice, category: data.category, brand: data.brand || null,
       shortDescription: data.shortDescription || null, description: data.description || null,
-      specifications: data.specifications, warrantyPeriod: data.warrantyPeriod || null, warrantyNotes: data.warrantyNotes || null,
+      specifications: data.specifications, warrantyPeriod: data.warrantyPeriod || null, warrantyNotes: data.warrantyNotes || null, tiktokVideoUrl: data.tiktokVideoUrl || null,
       mainImageUrl: data.mainImageUrl, shopImageUrl: data.mainImageUrl, galleryImageUrls: data.galleryImageUrls,
       showInShop: visible, ecommerceVisible: visible, shopCategory: data.category, shopSubcategory: data.shopSubcategory || null,
       shopShortDescription: data.shortDescription || null, shopWarranty: data.warrantyPeriod || null,

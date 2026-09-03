@@ -20,6 +20,7 @@ const productInput = z.object({
   specifications: z.array(z.string().trim().max(500)).max(30).optional().default([]),
   warrantyPeriod: z.string().trim().max(120).optional().nullable(),
   warrantyNotes: z.string().trim().max(1000).optional().nullable(),
+  tiktokVideoUrl: z.string().trim().url().max(500).optional().nullable(),
   mainImageUrl: z.string().trim().url().max(500),
   galleryImageUrls: z.array(z.string().trim().url().max(500)).max(12).optional().default([]),
   availabilityType: z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]).default("WAREHOUSE"),
@@ -63,6 +64,7 @@ function productData(data: ProductInput, sku: string) {
     specifications: data.specifications,
     warrantyPeriod: data.warrantyPeriod || null,
     warrantyNotes: data.warrantyNotes || null,
+    tiktokVideoUrl: data.tiktokVideoUrl || null,
     mainImageUrl: data.mainImageUrl,
     shopImageUrl: data.mainImageUrl,
     galleryImageUrls: data.galleryImageUrls,
@@ -111,7 +113,7 @@ export async function GET() {
   const [balance, products, withdrawals] = await Promise.all([
     getContributorBalance(access.userId),
     prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `SELECT p."id", p."sku", p."name", p."sellingPrice", p."category", p."shopSubcategory", p."brand", p."shortDescription", p."description", p."specifications", p."warrantyPeriod", p."warrantyNotes", p."mainImageUrl", p."galleryImageUrls", p."availabilityType", p."stockQuantity", p."variableCost", p."lastBuyingPrice", p."catalogueConfiguration", p."showInShop", p."ecommerceVisible", p."updatedAt", cpp."earningKes"
+      `SELECT p."id", p."sku", p."name", p."sellingPrice", p."category", p."shopSubcategory", p."brand", p."shortDescription", p."description", p."specifications", p."warrantyPeriod", p."warrantyNotes", p."tiktokVideoUrl", p."mainImageUrl", p."galleryImageUrls", p."availabilityType", p."stockQuantity", p."variableCost", p."lastBuyingPrice", p."catalogueConfiguration", p."showInShop", p."ecommerceVisible", p."updatedAt", cpp."earningKes"
        FROM "ProductContributorProduct" cpp
        JOIN "Product" p ON p."id" = cpp."productId"
        WHERE cpp."contributorId" = $1
