@@ -28,11 +28,10 @@ export function getShopSubcategoryHref(
   return `${getShopCategoryHref(categorySlug)}/${subcategorySlug}`;
 }
 
-export function getShopProductHref(slug: string, opsProductId?: string | null) {
-  const href = `/${slug}`;
-  const normalizedOpsProductId = String(opsProductId || "").trim();
-  if (!normalizedOpsProductId) return href;
-  return `${href}?opsProductId=${encodeURIComponent(normalizedOpsProductId)}`;
+export function getShopProductHref(slug: string, _opsProductId?: string | null) {
+  // Public product URLs stay canonical and shareable. Ops IDs remain internal
+  // and are resolved server-side when a freshly published slug is requested.
+  return `/${slug}`;
 }
 
 export function getShopLipaPolePoleProductHref(

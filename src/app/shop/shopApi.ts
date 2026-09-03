@@ -3,7 +3,12 @@ import {
   buildQuoteRequestDraft,
   isShopOpsApiEnabled,
 } from "@/app/shop/integrationPlan";
-import { filterShopProducts, getOpsCatalogueProductMappedById, getOpsCatalogueProductsReadOnlyMapped } from "@/app/shop/shopProductMapper";
+import {
+  filterShopProducts,
+  getOpsCatalogueProductMappedById,
+  getOpsCatalogueProductMappedBySlug,
+  getOpsCatalogueProductsReadOnlyMapped,
+} from "@/app/shop/shopProductMapper";
 
 export type ShopOrderInput = {
   items: Array<{
@@ -88,7 +93,9 @@ export async function getShopProducts(input?: ShopProductQuery): Promise<ShopPro
 
 export async function getShopProductBySlug(slug: string): Promise<ShopProduct | null> {
   if (typeof window === "undefined") {
-    return (await getServerShopProducts()).find((product) => product.slug === slug) ?? null;
+    const cachedProduct = (await getServerShopProducts()).find((product) => product.slug === slug) ?? null;
+    if (cachedProduct || !isShopOpsApiEnabled()) return cachedProduct;
+    return getOpsCatalogueProductMappedBySlug(slug);
   }
 
   const response = await fetchJson<{ product: ShopProduct | null }>(getApiUrl(`/api/shop/products/${slug}`)).catch(() => null);
