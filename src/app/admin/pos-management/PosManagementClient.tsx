@@ -41,6 +41,7 @@ type PosProduct = {
   name: string;
   category: string;
   sellingPrice: number;
+  stockQuantity?: number | null;
   lastBuyingPrice?: number | null;
   defaultWarranty?: string | null;
   variableCost?: boolean;
@@ -142,6 +143,7 @@ type ProductDraft = {
   name: string;
   category: string;
   sellingPrice: string;
+  stockQuantity: string;
   lastBuyingPrice: string;
   variableCost: boolean;
   isActive: boolean;
@@ -204,6 +206,7 @@ const emptyDraft: ProductDraft = {
   name: "",
   category: "pos",
   sellingPrice: "",
+  stockQuantity: "10000",
   lastBuyingPrice: "",
   variableCost: false,
   isActive: true,
@@ -225,8 +228,8 @@ const emptyDraft: ProductDraft = {
   ecommerceVisible: true,
   isFeatured: false,
   status: "ACTIVE",
-  availabilityType: "SHOP",
-  pickupDelayDays: 0,
+  availabilityType: "WAREHOUSE",
+  pickupDelayDays: 1,
   showInShop: true,
   shopCategory: "",
   shopSubcategory: "",
@@ -248,9 +251,9 @@ const emptyDraft: ProductDraft = {
     installationNotes: "",
     transportMode: "ZONE",
     useDefaultTransportRates: false,
-    zone1TransportFee: 3000,
-    zone2TransportFee: 7500,
-    zone3TransportFee: 15000,
+    zone1TransportFee: 500,
+    zone2TransportFee: 750,
+    zone3TransportFee: 1000,
     priceIncludes: ["EQUIPMENT"],
     allInclusive: false,
     allInclusiveItems: [],
@@ -425,6 +428,7 @@ function createDraftFromProduct(product: PosProduct): ProductDraft {
     name: product.name,
     category: product.category,
     sellingPrice: String(product.sellingPrice ?? ""),
+    stockQuantity: String(product.stockQuantity ?? 10000),
     lastBuyingPrice:
       product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
     variableCost: Boolean(product.variableCost),
@@ -1567,6 +1571,7 @@ export default function PosManagementClient({
         name: draft.name,
         category: "pos",
         sellingPrice: Number(draft.sellingPrice || 0),
+        stockQuantity: Number(draft.stockQuantity || 0),
         ...(canSetBuyingPriceOnThisSave
           ? {
               lastBuyingPrice:
@@ -2026,13 +2031,13 @@ export default function PosManagementClient({
       useDefaultTransportRates: false,
       zone1TransportFee: included
         ? draft.catalogueConfiguration.zone1TransportFee
-        : (draft.catalogueConfiguration.zone1TransportFee ?? 3000),
+        : (draft.catalogueConfiguration.zone1TransportFee ?? 500),
       zone2TransportFee: included
         ? draft.catalogueConfiguration.zone2TransportFee
-        : (draft.catalogueConfiguration.zone2TransportFee ?? 7500),
+        : (draft.catalogueConfiguration.zone2TransportFee ?? 750),
       zone3TransportFee: included
         ? draft.catalogueConfiguration.zone3TransportFee
-        : (draft.catalogueConfiguration.zone3TransportFee ?? 15000),
+        : (draft.catalogueConfiguration.zone3TransportFee ?? 1000),
       priceIncludes: included
         ? Array.from(
             new Set([
@@ -2964,6 +2969,22 @@ export default function PosManagementClient({
                           </option>
                         ))}
                       </select>
+                    </label>
+
+                    <label className="text-sm text-slate-300">
+                      Stock quantity
+                      <input
+                        className={`${fieldClass} mt-1`}
+                        type="number"
+                        min="0"
+                        value={draft.stockQuantity}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            stockQuantity: event.target.value,
+                          }))
+                        }
+                      />
                     </label>
 
                     <label className="text-sm text-slate-300 md:col-span-2">

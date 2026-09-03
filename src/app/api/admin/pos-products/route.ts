@@ -20,6 +20,7 @@ const productSchema = z.object({
   name: z.string().trim().min(1).max(255),
   category: z.string().trim().min(1).max(120).default("pos"),
   sellingPrice: z.coerce.number().min(0),
+  stockQuantity: z.coerce.number().int().min(0).max(100000).optional().default(10000),
   lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
   defaultWarranty: z.string().trim().max(50).nullable().optional(),
   variableCost: z.boolean().optional().default(false),
@@ -243,7 +244,10 @@ function buildShopInsertFragments(
   return { columns, values, casts };
 }
 
-function buildModernSystemInsertFragments(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>) {
+function buildModernSystemInsertFragments(
+  capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>,
+  stockQuantity: number,
+) {
   const columns: string[] = ['"id"'];
   const values: unknown[] = [randomUUID()];
   const casts: string[] = [""];
@@ -256,7 +260,7 @@ function buildModernSystemInsertFragments(capabilities: Awaited<ReturnType<typeo
   }
   if (capabilities.available.has("stockQuantity")) {
     columns.push('"stockQuantity"');
-    values.push(0);
+    values.push(stockQuantity);
     casts.push("");
   }
   if (capabilities.available.has("createdAt")) {
@@ -315,6 +319,7 @@ export async function GET(req: Request) {
             "name",
             COALESCE("category", 'pos') AS "category",
             COALESCE("sellingPrice", 0) AS "sellingPrice",
+            ${capabilities.available.has("stockQuantity") ? `COALESCE("stockQuantity", 0)` : `0`} AS "stockQuantity",
             "lastBuyingPrice",
             "defaultWarranty",
             COALESCE("variableCost", false) AS "variableCost",
@@ -388,6 +393,7 @@ export async function GET(req: Request) {
             "name",
             COALESCE("unit", 'pos') AS "category",
             COALESCE("sellPrice", 0) AS "sellingPrice",
+            0 AS "stockQuantity",
             NULL::double precision AS "lastBuyingPrice",
             NULL::text AS "defaultWarranty",
             false AS "variableCost",
@@ -504,7 +510,9 @@ export async function POST(req: Request) {
     brand: canonicalBrand,
     shopBrand: canonicalShopBrand,
   });
-  const systemFragments = capabilities.schemaMode === "modern" ? buildModernSystemInsertFragments(capabilities) : null;
+  const systemFragments = capabilities.schemaMode === "modern"
+    ? buildModernSystemInsertFragments(capabilities, data.stockQuantity)
+    : null;
   const created = capabilities.schemaMode === "modern"
     ? (await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
         `

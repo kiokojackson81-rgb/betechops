@@ -22,6 +22,7 @@ const updateSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   category: z.string().trim().min(1).max(120).optional(),
   sellingPrice: z.coerce.number().min(0).optional(),
+  stockQuantity: z.coerce.number().int().min(0).max(100000).optional(),
   lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
   defaultWarranty: z.string().trim().max(50).nullable().optional(),
   variableCost: z.boolean().optional(),
@@ -123,6 +124,7 @@ function sanitizeBrendahProductUpdate(data: z.infer<typeof updateSchema>): z.inf
     sku: data.sku,
     name: data.name,
     sellingPrice: data.sellingPrice,
+    stockQuantity: data.stockQuantity,
     brand: data.brand,
     shortDescription: data.shortDescription,
     description: data.description,
@@ -172,6 +174,7 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             "name",
             COALESCE("category", 'pos') AS "category",
             COALESCE("sellingPrice", 0) AS "sellingPrice",
+            ${capabilities.available.has("stockQuantity") ? `COALESCE("stockQuantity", 0)` : `0`} AS "stockQuantity",
             "lastBuyingPrice",
             "defaultWarranty",
             COALESCE("variableCost", false) AS "variableCost",
@@ -221,6 +224,7 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             "name",
             COALESCE("unit", 'pos') AS "category",
             COALESCE("sellPrice", 0) AS "sellingPrice",
+            0 AS "stockQuantity",
             NULL::double precision AS "lastBuyingPrice",
             NULL::text AS "defaultWarranty",
             false AS "variableCost",
@@ -340,6 +344,9 @@ export async function PATCH(req: Request, context: ParamsContext) {
     if (data.name !== undefined) pushSet("name", data.name);
     if (data.category !== undefined) pushSet("category", data.category);
     if (data.sellingPrice !== undefined) pushSet("sellingPrice", data.sellingPrice);
+    if (data.stockQuantity !== undefined && capabilities.available.has("stockQuantity")) {
+      pushSet("stockQuantity", data.stockQuantity);
+    }
     if (data.lastBuyingPrice !== undefined || data.variableCost !== undefined) {
       pushSet("lastBuyingPrice", nextVariableCost ? null : nextLastBuyingPrice);
     }
