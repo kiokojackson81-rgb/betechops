@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { signOut } from "next-auth/react";
 import ProductDescriptionEditor from "@/components/ProductDescriptionEditor";
 import {
-  getShopProductTypeOptions,
   getShopSubcategoryOptions,
   SHOP_CATEGORY_DEFINITIONS,
   SHOP_CATEGORY_OPTIONS,
@@ -274,10 +274,6 @@ export default function ContributorDashboard() {
       .toLowerCase()
       .includes(categoryQuery.toLowerCase()),
   );
-  const productTypeOptions = getShopProductTypeOptions(
-    form.category,
-    form.shopSubcategory,
-  );
   const payload = () => ({
     ...form,
     sellingPrice: Number(form.sellingPrice),
@@ -378,18 +374,27 @@ export default function ContributorDashboard() {
   return (
     <main className="min-h-screen bg-[#07121a] px-4 py-8 text-slate-100 sm:px-8">
       <div className="mx-auto max-w-7xl space-y-7">
-        <header className="rounded-3xl border border-emerald-400/20 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,.2),transparent_35%),#0b1823] p-7">
-          <p className="text-xs font-black uppercase tracking-[.25em] text-emerald-300">
-            Betech product contributor
-          </p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-            Website product desk
-          </h1>
-          <p className="mt-2 max-w-2xl text-slate-300">
-            Create complete products for the Betech website. Every product you
-            create earns {money(earning)}. You can edit your work at any time;
-            products cannot be deleted from this workspace.
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-5 rounded-3xl border border-emerald-400/20 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,.2),transparent_35%),#0b1823] p-7">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[.25em] text-emerald-300">
+              Betech product contributor
+            </p>
+            <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
+              Website product desk
+            </h1>
+            <p className="mt-2 max-w-2xl text-slate-300">
+              Create complete products for the Betech website. Every product you
+              create earns {money(earning)}. You can edit your work at any time;
+              products cannot be deleted from this workspace.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void signOut({ callbackUrl: "/attendant/login" })}
+            className="rounded-xl border border-rose-400/35 px-4 py-2.5 text-sm font-bold text-rose-200 transition hover:bg-rose-400/10"
+          >
+            Log out
+          </button>
         </header>
         {notice ? (
           <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
@@ -645,40 +650,6 @@ export default function ContributorDashboard() {
                       Choose from the selected category only.
                     </span>
                   </div>
-                  <label className={label}>
-                    Product type{" "}
-                    <span className="font-normal text-slate-500">
-                      (optional)
-                    </span>
-                    <select
-                      value={form.productType}
-                      onChange={(e) => set("productType", e.target.value)}
-                      className={input}
-                      disabled={
-                        !form.shopSubcategory || !productTypeOptions.length
-                      }
-                    >
-                      <option value="">
-                        {form.shopSubcategory
-                          ? productTypeOptions.length
-                            ? "Select product type"
-                            : "No product type required"
-                          : "Select subcategory first"}
-                      </option>
-                      {productTypeOptions.map((productType) => (
-                        <option
-                          key={productType.value}
-                          value={productType.label}
-                        >
-                          {productType.label}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="mt-1 block text-xs font-normal text-slate-400">
-                      Use this for the most specific product grouping when
-                      needed.
-                    </span>
-                  </label>
                   <div className="sm:col-span-2">
                     <span className={label}>Product short description</span>
                     <div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950">

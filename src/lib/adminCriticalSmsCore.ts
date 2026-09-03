@@ -6,6 +6,7 @@ export const ADMIN_CRITICAL_SMS_EVENT_TYPES = [
   "WEB_PROJECT_BOOKED",
   "AGENT_APPLICATION_CREATED",
   "AGENT_PAYOUT_REQUESTED",
+  "PRODUCT_CONTRIBUTOR_WITHDRAWAL_REQUESTED",
   "LPP_PAYMENT_PENDING",
   "SITE_VISIT_REQUESTED",
   "WELLNESS_LEAVE_REQUESTED",
@@ -55,12 +56,11 @@ export function buildAdminCriticalSmsMessage(input: {
   const action = input.actionUrl ? `Open: ${cleanPart(input.actionUrl)}` : "";
   const fixedLength = `[BETECH ACTION] ${title}.  ${action}`.length;
   const availableDetails = Math.max(0, 600 - fixedLength);
-  const shortenedDetails = detailText.length > availableDetails
-    ? `${detailText.slice(0, Math.max(0, availableDetails - 3)).trimEnd()}...`
-    : detailText;
-  return [
-    `[BETECH ACTION] ${title}.`,
-    shortenedDetails,
-    action,
-  ].filter(Boolean).join(" ");
+  const shortenedDetails =
+    detailText.length > availableDetails
+      ? `${detailText.slice(0, Math.max(0, availableDetails - 3)).trimEnd()}...`
+      : detailText;
+  return [`[BETECH ACTION] ${title}.`, shortenedDetails, action]
+    .filter(Boolean)
+    .join(" ");
 }
