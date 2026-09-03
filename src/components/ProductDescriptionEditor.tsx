@@ -8,6 +8,8 @@ type ProductDescriptionEditorProps = {
   onChange: (value: string) => void;
   disabled?: boolean;
   showPreview?: boolean;
+  compact?: boolean;
+  placeholder?: string;
 };
 
 type FormatAction = "paragraph" | "heading" | "bold" | "italic" | "bullets" | "numbered" | "link" | "break";
@@ -49,7 +51,7 @@ function formatSelection(value: string, start: number, end: number, action: Form
   };
 }
 
-export default function ProductDescriptionEditor({ value, onChange, disabled = false, showPreview = true }: ProductDescriptionEditorProps) {
+export default function ProductDescriptionEditor({ value, onChange, disabled = false, showPreview = true, compact = false, placeholder }: ProductDescriptionEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const applyFormat = (action: FormatAction) => {
@@ -88,8 +90,8 @@ export default function ProductDescriptionEditor({ value, onChange, disabled = f
             value={value}
             disabled={disabled}
             onChange={(event) => onChange(event.target.value)}
-            placeholder="Add an overview, headings, lists, links, and product details."
-            className="min-h-[320px] w-full resize-y bg-transparent px-3 py-3 font-mono text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+            placeholder={placeholder ?? "Add an overview, headings, lists, links, and product details."}
+            className={`${compact ? "min-h-[150px]" : "min-h-[320px]"} w-full resize-y bg-transparent px-3 py-3 font-mono text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50`}
           />
         </div>
 
