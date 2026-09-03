@@ -924,11 +924,12 @@ export async function getOpsCatalogueProductMappedById(opsProductId: string) {
   const normalizedId = String(opsProductId || "").trim();
   if (!normalizedId) return null;
 
-  return (
-    (await getOpsCatalogueProductsReadOnly()).find(
-      (entry) => entry.opsProductId === normalizedId,
-    )?.product ?? null
-  );
+  // A direct product URL must work as soon as Ops publishes it. Avoid the
+  // catalogue listing cache here, which can otherwise retain a prior 404.
+  const product = (
+    await queryOpsCatalogueProducts(`AND "id" = $1`, [normalizedId])
+  )[0];
+  return product ? mapOpsProduct(product).product : null;
 }
 
 const getCachedOpsCatalogueProductsReadOnly = unstable_cache(
