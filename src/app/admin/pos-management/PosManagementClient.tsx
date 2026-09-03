@@ -3088,15 +3088,89 @@ export default function PosManagementClient({
                 <div className="mt-4 rounded-3xl border border-slate-700 bg-slate-900/60 p-4 sm:p-5">
                   <div className="text-sm text-slate-300">
                     <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">
-                      6 Images
+                      Product images
                     </div>
                     <div className="mt-1 text-xs leading-5 text-slate-500">
-                      Accepted formats: {imageUploadFormats}. Best product
-                      images: `1600 x 1600 px` square for the main image and
-                      gallery, bright product-centered crop, no inner
-                      whitespace.
+                      Add a clear main image, then optional gallery images.
+                      {" "}{imageUploadFormats} are supported.
                     </div>
-                    <div className="mt-2 grid gap-4 md:grid-cols-2">
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <label className="group relative flex aspect-square cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-amber-400/60 bg-slate-950 text-center text-sm font-bold text-amber-200">
+                        {draft.mainImageUrl ? (
+                          <img
+                            src={draft.mainImageUrl}
+                            alt="Main product"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span>+<br />Main image</span>
+                        )}
+                        <input
+                          required={!draft.mainImageUrl}
+                          type="file"
+                          accept={imageUploadAccept}
+                          disabled={
+                            !(capabilities.mainImageUrl || capabilities.shopImageUrl) ||
+                            uploadingKind !== null
+                          }
+                          onChange={async (event) => {
+                            const file = event.target.files?.[0];
+                            event.currentTarget.value = "";
+                            if (!file) return;
+                            try {
+                              const url = await uploadProductImage(file, "main");
+                              setDraft((current) => ({
+                                ...current,
+                                mainImageUrl: url,
+                                shopImageUrl: url,
+                              }));
+                              await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
+                              showToast("Main image uploaded", "success");
+                            } catch (err) {
+                              showToast(err instanceof Error ? err.message : "Failed to upload main image", "error");
+                            }
+                          }}
+                          className="absolute inset-0 cursor-pointer opacity-0"
+                        />
+                      </label>
+                      {[0, 1, 2].map((index) => {
+                        const imageUrl = draft.galleryImageUrls[index];
+                        return (
+                          <label
+                            key={index}
+                            className="relative flex aspect-square cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-600 bg-slate-950 text-center text-sm font-bold text-slate-300"
+                          >
+                            {imageUrl ? (
+                              <img src={imageUrl} alt={`Gallery product ${index + 1}`} className="h-full w-full object-cover" />
+                            ) : (
+                              <span>+<br />Image</span>
+                            )}
+                            <input
+                              type="file"
+                              accept={imageUploadAccept}
+                              disabled={!capabilities.galleryImageUrls || uploadingKind !== null}
+                              onChange={async (event) => {
+                                const file = event.target.files?.[0];
+                                event.currentTarget.value = "";
+                                if (!file) return;
+                                try {
+                                  const url = await uploadProductImage(file, "gallery");
+                                  const nextGallery = [...draft.galleryImageUrls];
+                                  nextGallery[index] = url;
+                                  setDraft((current) => ({ ...current, galleryImageUrls: nextGallery }));
+                                  await persistImageFields({ galleryImageUrls: nextGallery });
+                                  showToast("Gallery image uploaded", "success");
+                                } catch (err) {
+                                  showToast(err instanceof Error ? err.message : "Failed to upload gallery image", "error");
+                                }
+                              }}
+                              className="absolute inset-0 cursor-pointer opacity-0"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="hidden">
                       <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                           Main image
