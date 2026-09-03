@@ -145,7 +145,11 @@ function roundEstimate(value: number) {
 }
 
 export function calculateAccessoriesEstimate(price: number, policy: ProductCatalogueConfiguration) {
-  if (policy.accessoriesMode === "INCLUDED" || policy.priceIncludes.includes("ACCESSORIES")) {
+  if (
+    policy.allInclusive ||
+    policy.accessoriesMode === "INCLUDED" ||
+    policy.priceIncludes.includes("ACCESSORIES")
+  ) {
     return { status: "INCLUDED" as const, amount: 0, minimum: 0, maximum: 0 };
   }
   if (policy.preliminaryAccessoriesFee != null) {

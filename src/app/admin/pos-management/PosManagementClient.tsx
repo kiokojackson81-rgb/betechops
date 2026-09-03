@@ -2199,7 +2199,7 @@ export default function PosManagementClient({
               </div>
             </div>
           ) : null}
-          {policy.accessoriesMode !== "INCLUDED" ? (
+          {policy.accessoriesMode !== "INCLUDED" && !policy.allInclusive && !policy.priceIncludes.includes("ACCESSORIES") ? (
             <label className="block text-sm text-slate-300">
               Preliminary installation accessories estimate (KES)
               <input

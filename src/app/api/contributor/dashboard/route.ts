@@ -69,6 +69,7 @@ async function nextSku(name: string) {
 
 function productData(data: ProductInput, sku: string) {
   const websiteVisible = Boolean(data.mainImageUrl);
+  const accessoriesIncluded = data.requiresInstallation && data.installationIncluded;
   return {
     sku,
     name: data.name,
@@ -114,9 +115,11 @@ function productData(data: ProductInput, sku: string) {
           : "STANDARD"
         : "UNAVAILABLE",
       customInstallationFee: null,
-      accessoriesMode: "NOT_INCLUDED",
+      accessoriesMode: accessoriesIncluded ? "INCLUDED" : "NOT_INCLUDED",
       preliminaryAccessoriesFee: null,
-      includedAccessories: "",
+      includedAccessories: accessoriesIncluded
+        ? "Installation accessories included in the advertised package."
+        : "",
       installationNotes: "",
       transportMode: data.transportIncluded ? "INCLUDED" : "ZONE",
       useDefaultTransportRates: false,
@@ -126,6 +129,7 @@ function productData(data: ProductInput, sku: string) {
       priceIncludes: [
         "EQUIPMENT",
         ...(data.installationIncluded ? ["INSTALLATION"] : []),
+        ...(accessoriesIncluded ? ["ACCESSORIES"] : []),
         ...(data.transportIncluded ? ["TRANSPORT"] : []),
       ],
       allInclusive: false,

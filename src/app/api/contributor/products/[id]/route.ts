@@ -57,6 +57,7 @@ export async function PATCH(
   if (!parsed.success)
     return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });
   const data = parsed.data;
+  const accessoriesIncluded = data.requiresInstallation && data.installationIncluded;
   const visible = Boolean(data.mainImageUrl);
   const brand = await resolveCanonicalProductBrand(
     prisma,
@@ -111,9 +112,11 @@ export async function PATCH(
             : "STANDARD"
           : "UNAVAILABLE",
         customInstallationFee: null,
-        accessoriesMode: "NOT_INCLUDED",
+        accessoriesMode: accessoriesIncluded ? "INCLUDED" : "NOT_INCLUDED",
         preliminaryAccessoriesFee: null,
-        includedAccessories: "",
+        includedAccessories: accessoriesIncluded
+          ? "Installation accessories included in the advertised package."
+          : "",
         installationNotes: "",
         transportMode: data.transportIncluded ? "INCLUDED" : "ZONE",
         useDefaultTransportRates: false,
@@ -123,6 +126,7 @@ export async function PATCH(
         priceIncludes: [
           "EQUIPMENT",
           ...(data.installationIncluded ? ["INSTALLATION"] : []),
+          ...(accessoriesIncluded ? ["ACCESSORIES"] : []),
           ...(data.transportIncluded ? ["TRANSPORT"] : []),
         ],
         allInclusive: false,

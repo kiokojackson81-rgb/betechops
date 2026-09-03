@@ -644,6 +644,37 @@ function buildMappingWarnings(
   return warnings;
 }
 
+function applyAdvertisedAccessoriesPolicy(
+  policy: ProductCatalogueConfiguration | null,
+  product: Pick<OpsCatalogueProduct, "shortDescription" | "description" | "shopShortDescription">,
+) {
+  if (!policy) return null;
+  if (
+    policy.allInclusive ||
+    policy.accessoriesMode === "INCLUDED" ||
+    policy.priceIncludes.includes("ACCESSORIES")
+  ) {
+    return policy;
+  }
+
+  const copy = [product.shortDescription, product.description, product.shopShortDescription]
+    .filter(Boolean)
+    .join(" ");
+  const advertisesIncludedAccessories =
+    /installation\s+accessories\s+(?:are\s+)?included/i.test(copy) ||
+    /includes?[^.]{0,160}installation\s+accessories/i.test(copy);
+  if (!advertisesIncludedAccessories) return policy;
+
+  return {
+    ...policy,
+    accessoriesMode: "INCLUDED" as const,
+    preliminaryAccessoriesFee: null,
+    includedAccessories:
+      policy.includedAccessories || "Installation accessories included in the advertised package.",
+    priceIncludes: Array.from(new Set([...policy.priceIncludes, "ACCESSORIES" as const])),
+  };
+}
+
 function mapOpsProduct(
   product: OpsCatalogueProduct,
   options: { autoEnableLipaPolePole?: boolean } = {},
@@ -757,6 +788,15 @@ function mapOpsProduct(
   });
   const includedInCatalog = eligibility.eligible;
   const fallbackName = safeName || `OPS Product ${product.id}`;
+  const parsedCatalogueConfiguration = productCatalogueConfigurationSchema.safeParse(
+    product.catalogueConfiguration,
+  );
+  const catalogueConfiguration = applyAdvertisedAccessoriesPolicy(
+    parsedCatalogueConfiguration.success
+      ? parsedCatalogueConfiguration.data
+      : inferLegacyProductCataloguePolicy(product),
+    product,
+  );
   const mappedProduct: ShopProduct | null = includedInCatalog
     ? {
         id: `ops-${product.id}`,
@@ -834,13 +874,7 @@ function mapOpsProduct(
             : Number(product.lipaPolePoleDefaultDays),
         lipaPolePoleTerms: normalizeOptionalText(product.lipaPolePoleTerms),
         productType: normalizeOptionalText(product.productType),
-        catalogueConfiguration: productCatalogueConfigurationSchema.safeParse(
-          product.catalogueConfiguration,
-        ).success
-          ? productCatalogueConfigurationSchema.parse(
-              product.catalogueConfiguration,
-            )
-          : inferLegacyProductCataloguePolicy(product),
+        catalogueConfiguration,
       }
     : null;
 
