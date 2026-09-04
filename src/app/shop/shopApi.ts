@@ -120,7 +120,10 @@ export async function getShopProductBySlugOrOpsProductId(slug: string, opsProduc
     const bySlug = products.find((product) => product.slug === slug) ?? null;
     if (bySlug) return bySlug;
 
-    return null;
+    // Canonical storefront URLs intentionally omit the internal Ops ID. A
+    // freshly published contributor product may not be in the cached listing
+    // yet, so resolve its slug directly before treating the page as missing.
+    return getOpsCatalogueProductMappedBySlug(slug);
   }
 
   if (normalizedOpsProductId) {
