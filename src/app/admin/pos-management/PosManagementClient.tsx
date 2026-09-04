@@ -870,24 +870,46 @@ export default function PosManagementClient({
       ) ?? null,
     [pickerCategory],
   );
-  const categoryPickerResults = useMemo(() => {
+  const categoryPickerItems = useMemo(() => {
+    if (pickerCategoryDefinition) {
+      return pickerCategoryDefinition.subcategories.map((subcategory) => ({
+        type: "subcategory" as const,
+        category: pickerCategoryDefinition,
+        subcategory,
+      }));
+    }
     const query = categoryPickerQuery.trim().toLowerCase();
-    if (!query) return SHOP_CATEGORY_DEFINITIONS;
-    return SHOP_CATEGORY_DEFINITIONS.filter((category) =>
-      [
-        category.label,
-        ...category.subcategories.flatMap((subcategory) => [
-          subcategory.label,
-          ...(subcategory.productTypes || []).map((productType) =>
-            productType.label,
-          ),
-        ]),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query),
-    );
-  }, [categoryPickerQuery]);
+    if (!query) {
+      return SHOP_CATEGORY_DEFINITIONS.map((category) => ({
+        type: "category" as const,
+        category,
+      }));
+    }
+    return SHOP_CATEGORY_DEFINITIONS.flatMap((category) => {
+      const matchingSubcategories = category.subcategories.filter(
+        (subcategory) =>
+          [
+            subcategory.label,
+            ...(subcategory.productTypes || []).map(
+              (productType) => productType.label,
+            ),
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(query),
+      );
+      return [
+        ...(category.label.toLowerCase().includes(query)
+          ? [{ type: "category" as const, category }]
+          : []),
+        ...matchingSubcategories.map((subcategory) => ({
+          type: "subcategory" as const,
+          category,
+          subcategory,
+        })),
+      ];
+    });
+  }, [pickerCategoryDefinition, categoryPickerQuery]);
   const availabilityPreview = useMemo(
     () => getAvailabilityPreviewMessage(draft.availabilityType),
     [draft.availabilityType],
@@ -1492,6 +1514,11 @@ export default function PosManagementClient({
       return showToast("Product name is required", "error");
     if (!draft.sellingPrice.trim())
       return showToast("Selling price is required", "error");
+    if (!draft.shopCategory || !draft.shopSubcategory)
+      return showToast(
+        "Select both a website category and subcategory",
+        "error",
+      );
     const transportIncluded =
       draft.catalogueConfiguration.transportMode === "INCLUDED" ||
       draft.catalogueConfiguration.transportMode === "FREE" ||
@@ -3627,39 +3654,36 @@ export default function PosManagementClient({
                 {pickerCategoryDefinition
                   ? "Subcategories"
                   : categoryPickerQuery
-                    ? "Matching categories"
+                    ? "Matching categories and subcategories"
                     : "All categories"}
               </h3>
               <p className="mt-1 text-sm text-slate-500">
                 {pickerCategoryDefinition
                   ? "Select a subcategory to complete the catalogue classification."
-                  : "Selecting a category immediately shows its subcategories."}
+                  : "Choose a category to continue, or select a subcategory directly."}
               </p>
               <div className="mt-3 space-y-1">
-                {(pickerCategoryDefinition
-                  ? pickerCategoryDefinition.subcategories
-                  : categoryPickerResults
-                ).map((item) => (
+                {categoryPickerItems.map((item) => (
                   <button
-                    key={item.value}
+                    key={`${item.type}-${item.category.value}-${item.type === "subcategory" ? item.subcategory.value : ""}`}
                     type="button"
                     onClick={() => {
-                      if (!pickerCategoryDefinition) {
+                      if (item.type === "category") {
                         setDraft((current) => ({
                           ...current,
-                          shopCategory: item.value,
+                          shopCategory: item.category.value,
                           shopSubcategory: "",
-                          productType: isGeneralShopCategory(item.value)
+                          productType: isGeneralShopCategory(item.category.value)
                             ? "WAREHOUSE_PRODUCT"
                             : current.productType,
                         }));
-                        setPickerCategory(item.value);
+                        setPickerCategory(item.category.value);
                         return;
                       }
                       setDraft((current) => ({
                         ...current,
-                        shopCategory: pickerCategoryDefinition.value,
-                        shopSubcategory: item.value,
+                        shopCategory: item.category.value,
+                        shopSubcategory: item.subcategory.value,
                       }));
                       setCategoryPickerOpen(false);
                       setPickerCategory(null);
@@ -3668,24 +3692,26 @@ export default function PosManagementClient({
                     className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left hover:bg-amber-50"
                   >
                     <span>
-                      <span className="block font-medium">{item.label}</span>
-                      {pickerCategoryDefinition && "productTypes" in item ? (
+                      <span className="block font-medium">
+                        {item.type === "subcategory"
+                          ? item.subcategory.label
+                          : item.category.label}
+                      </span>
+                      {item.type === "subcategory" ? (
                         <span className="mt-1 block text-xs font-normal text-slate-500">
-                          {item.productTypes?.length
-                            ? item.productTypes.map((productType) => productType.label).join(" · ")
-                            : "Final category"}
+                          {item.category.label}
+                          {item.subcategory.productTypes?.length
+                            ? ` · ${item.subcategory.productTypes.map((productType) => productType.label).join(" · ")}`
+                            : ""}
                         </span>
                       ) : null}
                     </span>
                     <span className="font-semibold text-amber-600">
-                      {pickerCategoryDefinition ? "Select" : "›"}
+                      {item.type === "subcategory" ? "Select" : "›"}
                     </span>
                   </button>
                 ))}
-                {!(pickerCategoryDefinition
-                  ? pickerCategoryDefinition.subcategories
-                  : categoryPickerResults
-                ).length ? (
+                {!categoryPickerItems.length ? (
                   <p className="px-4 py-3 text-sm text-slate-500">
                     No matching category.
                   </p>

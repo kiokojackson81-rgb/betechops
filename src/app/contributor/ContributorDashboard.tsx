@@ -244,19 +244,6 @@ export default function ContributorDashboard() {
       return next;
     });
   };
-  const chooseSubcategory = (shopSubcategory: string) => {
-    const category = pickerCategory || form.category;
-    if (!category) return;
-    setForm((current) => ({
-      ...current,
-      category,
-      shopSubcategory,
-      productType: "",
-    }));
-    setCategoryOpen(false);
-    setPickerCategory(null);
-    setCategoryQuery("");
-  };
   const filteredBrands = brands
     .filter((brand) => brand.toLowerCase().includes(form.brand.toLowerCase()))
     .slice(0, 8);
@@ -279,19 +266,58 @@ export default function ContributorDashboard() {
       (category) => category.value === pickerCategory,
     ) ?? null;
   const categorySearchResults = SHOP_CATEGORY_DEFINITIONS.filter((category) =>
-    [
-      category.label,
-      ...category.subcategories.flatMap((subcategory) => [
-        subcategory.label,
-        ...(subcategory.productTypes || []).map(
-          (productType) => productType.label,
-        ),
-      ]),
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(categoryQuery.toLowerCase()),
+    category.label.toLowerCase().includes(categoryQuery.toLowerCase()),
   );
+  const categoryPickerItems = pickerCategoryDefinition
+    ? pickerCategoryDefinition.subcategories.map((subcategory) => ({
+        type: "subcategory" as const,
+        category: pickerCategoryDefinition,
+        subcategory,
+      }))
+    : categoryQuery.trim()
+      ? SHOP_CATEGORY_DEFINITIONS.flatMap((category) => {
+          const query = categoryQuery.trim().toLowerCase();
+          const matchingSubcategories = category.subcategories.filter(
+            (subcategory) =>
+              [
+                subcategory.label,
+                ...(subcategory.productTypes || []).map(
+                  (productType) => productType.label,
+                ),
+              ]
+                .join(" ")
+                .toLowerCase()
+                .includes(query),
+          );
+          return [
+            ...(categorySearchResults.includes(category)
+              ? [{ type: "category" as const, category }]
+              : []),
+            ...matchingSubcategories.map((subcategory) => ({
+              type: "subcategory" as const,
+              category,
+              subcategory,
+            })),
+          ];
+        })
+      : SHOP_CATEGORY_DEFINITIONS.map((category) => ({
+          type: "category" as const,
+          category,
+        }));
+  const chooseCategoryAndSubcategory = (
+    category: string,
+    shopSubcategory: string,
+  ) => {
+    setForm((current) => ({
+      ...current,
+      category,
+      shopSubcategory,
+      productType: "",
+    }));
+    setCategoryOpen(false);
+    setPickerCategory(null);
+    setCategoryQuery("");
+  };
   const payload = () => ({
     ...form,
     sellingPrice: Number(form.sellingPrice),
@@ -310,6 +336,10 @@ export default function ContributorDashboard() {
 
   async function submitProduct(event: FormEvent) {
     event.preventDefault();
+    if (!form.category || !form.shopSubcategory) {
+      setNotice("Select both a website category and subcategory.");
+      return;
+    }
     setBusy(true);
     setNotice(null);
     const url = editingId
@@ -1298,7 +1328,7 @@ export default function ContributorDashboard() {
                   value={categoryQuery}
                   onChange={(e) => setCategoryQuery(e.target.value)}
                   className="mt-5 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-amber-500"
-                  placeholder="Search category"
+                  placeholder="Search category or subcategory"
                 />
               )}
               {!pickerCategoryDefinition &&
@@ -1329,48 +1359,51 @@ export default function ContributorDashboard() {
                   {pickerCategoryDefinition
                     ? "Subcategories"
                     : categoryQuery
-                      ? "Matching categories"
+                      ? "Matching categories and subcategories"
                       : "All categories"}
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">
                   {pickerCategoryDefinition
                     ? "Only the selected category's subcategories are shown."
-                    : "Select a category to see its subcategories."}
+                    : "Choose a category to continue, or select a subcategory directly."}
                 </p>
                 <div className="mt-3 space-y-1">
-                  {(pickerCategoryDefinition
-                    ? pickerCategoryDefinition.subcategories
-                    : categorySearchResults
-                  ).map((item) => (
+                  {categoryPickerItems.map((item) => (
                     <button
-                      key={item.value}
-                      onClick={() =>
-                        pickerCategoryDefinition
-                          ? chooseSubcategory(item.value)
-                          : selectCategory(item.value)
-                      }
-                      className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left hover:bg-amber-50 ${pickerCategoryDefinition ? (form.shopSubcategory === item.value ? "bg-amber-100 font-black" : "") : form.category === item.value ? "bg-amber-100 font-black" : ""}`}
+                      key={`${item.type}-${item.category.value}-${item.type === "subcategory" ? item.subcategory.value : ""}`}
+                      onClick={() => {
+                        if (item.type === "subcategory") {
+                          chooseCategoryAndSubcategory(
+                            item.category.value,
+                            item.subcategory.value,
+                          );
+                          return;
+                        }
+                        selectCategory(item.category.value);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left hover:bg-amber-50 ${item.type === "subcategory" ? (form.category === item.category.value && form.shopSubcategory === item.subcategory.value ? "bg-amber-100 font-black" : "") : form.category === item.category.value ? "bg-amber-100 font-black" : ""}`}
                     >
                       <span>
-                        <span className="block">{item.label}</span>
-                        {pickerCategoryDefinition ? (
+                        <span className="block">
+                          {item.type === "subcategory"
+                            ? item.subcategory.label
+                            : item.category.label}
+                        </span>
+                        {item.type === "subcategory" ? (
                           <span className="text-xs font-normal text-slate-500">
-                            {item.productTypes?.length
-                              ? `${item.productTypes.map((productType) => productType.label).join(" · ")}`
-                              : "Final category"}
+                            {item.category.label}
+                            {item.subcategory.productTypes?.length
+                              ? ` · ${item.subcategory.productTypes.map((productType) => productType.label).join(" · ")}`
+                              : ""}
                           </span>
                         ) : null}
                       </span>
                       <span className="text-amber-600">
-                        {pickerCategoryDefinition ? "Select" : "›"}
+                        {item.type === "subcategory" ? "Select" : "›"}
                       </span>
                     </button>
                   ))}
-                  {!(
-                    pickerCategoryDefinition
-                      ? pickerCategoryDefinition.subcategories
-                      : categorySearchResults
-                  ).length ? (
+                  {!categoryPickerItems.length ? (
                     <p className="px-4 py-3 text-sm text-slate-500">
                       No matching category.
                     </p>
