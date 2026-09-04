@@ -913,13 +913,75 @@ export function resolveShopSubcategory(
     .filter(Boolean)
     .join(" ");
 
-  return (
-    getShopSubcategoryOptions(categoryValue).find((subcategory) =>
-      subcategory.keywords.some((keyword) =>
-        normalizedHaystack.includes(keyword.toLowerCase()),
+  const matches = getShopSubcategoryOptions(categoryValue)
+    .map((subcategory) => ({
+      subcategory,
+      // Prefer the most specific match over a generic term such as "solar".
+      score: subcategory.keywords.reduce(
+        (total, keyword) =>
+          total +
+          (normalizedHaystack.includes(keyword.toLowerCase())
+            ? keyword.trim().split(/\s+/).length
+            : 0),
+        0,
       ),
-    ) ?? null
-  );
+    }))
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return matches[0]?.subcategory ?? null;
+}
+
+export type ShopTaxonomyDetectionInput = {
+  name?: string | null;
+  category?: string | null;
+  brand?: string | null;
+  specifications?: string | null;
+  shopCategory?: string | null;
+};
+
+export function detectShopCategoryAndSubcategory(
+  input: ShopTaxonomyDetectionInput,
+) {
+  const haystack = [
+    input.name,
+    input.category,
+    input.brand,
+    input.specifications,
+  ]
+    .join(" ")
+    .toLowerCase();
+  const directCategory =
+    SHOP_CATEGORY_DEFINITIONS.map((category) => ({
+      category,
+      score: category.keywords.reduce(
+        (total, keyword) =>
+          total +
+          (haystack.includes(keyword.toLowerCase())
+            ? keyword.trim().split(/\s+/).length
+            : 0),
+        0,
+      ),
+    }))
+      .filter((match) => match.score > 0)
+      .sort((a, b) => b.score - a.score)[0]?.category ??
+    getShopCategoryDefinition(input.shopCategory);
+
+  if (!directCategory) {
+    return { shopCategory: "", shopSubcategory: "" };
+  }
+
+  const subcategory = resolveShopSubcategory(directCategory.value, [
+    input.name,
+    input.category,
+    input.brand,
+    input.specifications,
+  ]);
+
+  return {
+    shopCategory: directCategory.value,
+    shopSubcategory: subcategory?.value ?? "",
+  };
 }
 
 export function expandShopSearchQuery(query: string | null | undefined) {

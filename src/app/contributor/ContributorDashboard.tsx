@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import ProductDescriptionEditor from "@/components/ProductDescriptionEditor";
 import {
+  detectShopCategoryAndSubcategory,
   getShopSubcategoryOptions,
   SHOP_CATEGORY_DEFINITIONS,
   SHOP_CATEGORY_OPTIONS,
@@ -535,31 +536,27 @@ export default function ContributorDashboard() {
                       value={form.name}
                       onChange={(e) => {
                         const name = e.target.value;
-                        set("name", name);
-                        if (!form.category) {
-                          const match = SHOP_CATEGORY_DEFINITIONS.map(
-                            (category) => ({
-                              category,
-                              score: category.keywords.filter((keyword) =>
-                                name.toLowerCase().includes(keyword),
-                              ).length,
-                            }),
-                          ).sort((a, b) => b.score - a.score)[0];
-                          if (match?.score)
-                            setForm((current) => ({
-                              ...current,
-                              name,
-                              category: match.category.value,
-                              shopSubcategory: "",
-                            }));
-                        }
+                        setForm((current) => {
+                          if (current.category) return { ...current, name };
+                          const suggestion = detectShopCategoryAndSubcategory({
+                            name,
+                            brand: current.brand,
+                            shopCategory: current.category,
+                          });
+                          return {
+                            ...current,
+                            name,
+                            category: suggestion.shopCategory,
+                            shopSubcategory: suggestion.shopSubcategory,
+                          };
+                        });
                       }}
                       className={input}
                       placeholder="e.g. 5kW Hybrid Solar Inverter"
                     />
                     <span className="mt-1 block text-xs text-amber-200">
-                      Category is suggested from the product name. You can
-                      change it below.
+                      Category and subcategory are suggested from the product
+                      name. You can change them below.
                     </span>
                   </label>
                   <label className={label}>

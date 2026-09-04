@@ -24,11 +24,11 @@ import {
   PRODUCT_GALLERY_AI_WIDTH,
 } from "@/lib/images/productGalleryAi";
 import {
+  detectShopCategoryAndSubcategory,
   getShopSubcategoryOptions,
   isGeneralShopCategory,
   SHOP_CATEGORY_DEFINITIONS,
   SHOP_CATEGORY_OPTIONS,
-  resolveShopSubcategory,
 } from "@/app/shop/shopCatalogConfig";
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import type { ProductCatalogueConfiguration } from "@/lib/productCataloguePolicy";
@@ -353,48 +353,6 @@ function hasProductWebsiteImage(
   return Boolean(
     String(product.mainImageUrl || product.shopImageUrl || "").trim(),
   );
-}
-
-function detectShopCategoryAndSubcategory(
-  input: Pick<
-    ProductDraft,
-    "name" | "category" | "brand" | "specifications" | "shopCategory"
-  >,
-) {
-  const haystack = [
-    input.name,
-    input.category,
-    input.brand,
-    input.specifications,
-  ]
-    .join(" ")
-    .toLowerCase();
-  const directCategory =
-    SHOP_CATEGORY_DEFINITIONS.find((category) =>
-      category.keywords.some((keyword) =>
-        haystack.includes(keyword.toLowerCase()),
-      ),
-    ) ??
-    SHOP_CATEGORY_DEFINITIONS.find(
-      (category) => category.value === input.shopCategory,
-    );
-
-  if (!directCategory) {
-    return { shopCategory: "", shopSubcategory: "" };
-  }
-
-  const subcategory =
-    resolveShopSubcategory(directCategory.value, [
-      input.name,
-      input.category,
-      input.brand,
-      input.specifications,
-    ]) ?? null;
-
-  return {
-    shopCategory: directCategory.value,
-    shopSubcategory: subcategory?.value ?? "",
-  };
 }
 
 function parseStringArray(value: unknown) {
@@ -2576,9 +2534,27 @@ export default function PosManagementClient({
                         ref={nameInputRef}
                         className={`${fieldClass} mt-1`}
                         value={draft.name}
-                        onChange={(e) =>
-                          setDraft((s) => ({ ...s, name: e.target.value }))
-                        }
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setDraft((current) => {
+                            if (current.shopCategory) {
+                              return { ...current, name };
+                            }
+                            const suggestion = detectShopCategoryAndSubcategory({
+                              name,
+                              category: current.category,
+                              brand: current.brand,
+                              specifications: current.specifications,
+                              shopCategory: current.shopCategory,
+                            });
+                            return {
+                              ...current,
+                              name,
+                              shopCategory: suggestion.shopCategory,
+                              shopSubcategory: suggestion.shopSubcategory,
+                            };
+                          });
+                        }}
                       />
                       <div className="mt-1 text-xs text-slate-500">
                         Fix spelling and clean up formatting before saving.
