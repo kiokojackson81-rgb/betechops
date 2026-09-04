@@ -8,7 +8,11 @@ import {
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { readReceiptProjectFlow, type ReceiptProjectStage } from "@/lib/receiptProjects";
-import { ensureReviewInvitationsForWebsiteOrder, syncReferralLinkForWebsiteOrder } from "@/lib/reviewsReferrals";
+import {
+  ensureReviewInvitationForReceipt,
+  ensureReviewInvitationsForWebsiteOrder,
+  syncReferralLinkForWebsiteOrder,
+} from "@/lib/reviewsReferrals";
 import { ensureWebsiteOrdersSchema } from "@/lib/websiteOrders";
 
 function readJsonObject(value: unknown) {
@@ -283,8 +287,12 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
       error: error instanceof Error ? error.message : String(error),
     });
   });
-  await ensureReviewInvitationsForWebsiteOrder(websiteOrder.id).catch((error) => {
-    console.error("[reviews] failed to provision review invitations after POS receipt sync", {
+  const reviewInvitation =
+    nextSource === "POS" && nextStatus === WebsiteOrderStatus.DELIVERED
+      ? ensureReviewInvitationForReceipt(receipt.id, { deliveryMode: deliveryMethod })
+      : ensureReviewInvitationsForWebsiteOrder(websiteOrder.id);
+  await reviewInvitation.catch((error) => {
+    console.error("[reviews] failed to provision review invitation after POS receipt sync", {
       websiteOrderId: websiteOrder.id,
       receiptId,
       error: error instanceof Error ? error.message : String(error),

@@ -1,5 +1,8 @@
 import { noStoreJson } from "@/lib/api";
-import { processDueReviewInvitations } from "@/lib/reviewsReferrals";
+import { backfillReviewInvitationsForRecentSales } from "@/lib/reviewsReferrals";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 async function handle(request: Request) {
   const url = new URL(request.url);
@@ -23,11 +26,13 @@ async function handle(request: Request) {
   const dryRun = ["1", "true", "yes"].includes(String(url.searchParams.get("dryRun") || "").toLowerCase());
 
   try {
-    const summary = await processDueReviewInvitations({
+    const backfill = await backfillReviewInvitationsForRecentSales({
+      lookbackDays: 90,
       limit: Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined,
       dryRun,
+      processDue: true,
     });
-    return noStoreJson({ ok: true, cron: true, dryRun, summary });
+    return noStoreJson({ ok: true, cron: true, dryRun, summary: backfill.dueProcessing, backfill });
   } catch (error) {
     return noStoreJson(
       { ok: false, error: error instanceof Error ? error.message : "Unable to process due review invitations." },

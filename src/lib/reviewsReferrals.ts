@@ -818,7 +818,7 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
       customerPhone: normalizeKenyanPhone(websiteOrder.customerPhone) || normalizedPhone,
       customerEmail: cleanOptional(websiteOrder.customerEmail),
       customerTown: websiteOrder.customerUser?.town || input.customerTown || null,
-      purchaseDate: websiteOrder.createdAt,
+      purchaseDate: input.purchaseDate || websiteOrder.createdAt,
       orderOrReceiptRef: websiteOrder.orderRef,
       deliveryMode: websiteOrder.deliveryMethod || input.deliveryMode || null,
       websiteOrderId: websiteOrder.id,
@@ -863,7 +863,7 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
       customerPhone: normalizeKenyanPhone(receipt.order.customerPhone || "") || normalizedPhone,
       customerEmail: cleanOptional(receipt.order.customerEmail),
       customerTown: input.customerTown || null,
-      purchaseDate: receipt.generatedAt,
+      purchaseDate: input.purchaseDate || receipt.generatedAt,
       orderOrReceiptRef: receipt.receiptNumber || receipt.order.orderNumber,
       deliveryMode: input.deliveryMode || null,
       websiteOrderId: null,
@@ -904,7 +904,7 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
       customerPhone: normalizeKenyanPhone(order.customerPhone || "") || normalizedPhone,
       customerEmail: cleanOptional(order.customerEmail),
       customerTown: input.customerTown || null,
-      purchaseDate: order.createdAt,
+      purchaseDate: input.purchaseDate || order.createdAt,
       orderOrReceiptRef: order.orderNumber,
       deliveryMode: input.deliveryMode || null,
       websiteOrderId: null,
@@ -1157,10 +1157,11 @@ function getInvitationBaseDateFromWebsiteOrder(order: {
   metadata?: Prisma.JsonValue | null;
 }) {
   const metadata = readJsonObject(order.metadata);
+  const deliveredAt = toDate(metadata.deliveredAt);
   const receiptIssuedAt = toDate(metadata.receiptIssuedAt);
   const paymentConfirmedAt = toDate(metadata.paymentConfirmedAt);
   const processingAt = toDate(metadata.processingAt);
-  return receiptIssuedAt || paymentConfirmedAt || processingAt || order.createdAt;
+  return deliveredAt || receiptIssuedAt || paymentConfirmedAt || processingAt || order.createdAt;
 }
 
 function presentReviewInvitationAdminRow(row: Record<string, unknown>): ReviewInvitationAdminRow {
@@ -1494,7 +1495,94 @@ export async function getReviewInvitationDetailsByToken(token: string) {
   return presentInvitationRow(row, token);
 }
 
-export async function ensureReviewInvitationsForWebsiteOrder(orderId: string) {
+type ReviewInvitationProvisionResult = {
+  created: number;
+  skipped: number;
+  reviewUrl: string | null;
+};
+
+async function getExistingReviewInvitationForPurchase(input: {
+  websiteOrderId?: string | null;
+  orderId?: string | null;
+  receiptId?: string | null;
+}) {
+  await ensureReviewReferralSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `
+      SELECT *
+      FROM "ReviewInvitation"
+      WHERE "websiteOrderId" = $1
+         OR "orderId" = $2
+         OR "receiptId" = $3
+      ORDER BY "createdAt" ASC
+      LIMIT 1
+    `,
+    input.websiteOrderId || null,
+    input.orderId || null,
+    input.receiptId || null,
+  );
+  return rows[0] || null;
+}
+
+async function getReviewUrlForExistingInvitation(row: Record<string, unknown>) {
+  const token = await ensureInvitationPublicToken(row);
+  return `https://www.betech.co.ke/review/${token}`;
+}
+
+export async function ensureReviewInvitationForReceipt(
+  receiptId: string,
+  options?: { completedAt?: Date; deliveryMode?: string | null },
+): Promise<ReviewInvitationProvisionResult> {
+  await ensureReviewReferralSchema();
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    include: {
+      order: {
+        include: {
+          items: {
+            include: { product: { select: { id: true, name: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!receipt?.order) return { created: 0, skipped: 1, reviewUrl: null };
+
+  const existing = await getExistingReviewInvitationForPurchase({
+    orderId: receipt.orderId,
+    receiptId: receipt.id,
+  });
+  if (existing) {
+    return { created: 0, skipped: 1, reviewUrl: await getReviewUrlForExistingInvitation(existing) };
+  }
+
+  const primaryItem = [...receipt.order.items]
+    .filter((item) => Boolean(item.productId))
+    .sort((left, right) => Number(right.sellingPrice || 0) * Math.max(1, right.quantity) - Number(left.sellingPrice || 0) * Math.max(1, left.quantity))[0];
+  if (!primaryItem?.productId) return { created: 0, skipped: receipt.order.items.length || 1, reviewUrl: null };
+
+  const completedAt = options?.completedAt || receipt.generatedAt || receipt.createdAt;
+  const created = await createReviewInvitation({
+    productId: primaryItem.productId,
+    websiteOrderId: null,
+    orderId: receipt.orderId,
+    receiptId: receipt.id,
+    customerUserId: null,
+    customerName: receipt.order.customerName || "Betech customer",
+    customerPhone: receipt.order.customerPhone || "",
+    customerEmail: receipt.order.customerEmail || null,
+    customerTown: null,
+    orderOrReceiptRef: receipt.receiptNumber || receipt.order.orderNumber,
+    purchaseDate: completedAt,
+    scheduledSendAt: getReviewSendDate(completedAt),
+    expiresAt: getReviewInvitationExpiry(completedAt),
+    deliveryMode: options?.deliveryMode || "pos",
+  });
+
+  return { created: 1, skipped: Math.max(0, receipt.order.items.length - 1), reviewUrl: created.reviewUrl };
+}
+
+export async function ensureReviewInvitationsForWebsiteOrder(orderId: string): Promise<ReviewInvitationProvisionResult> {
   await ensureReviewReferralSchema();
   const order = await prisma.websiteOrder.findUnique({
     where: { id: orderId },
@@ -1507,35 +1595,34 @@ export async function ensureReviewInvitationsForWebsiteOrder(orderId: string) {
     throw new Error("Website order not found.");
   }
   if (String(order.status || "").toUpperCase() === "CANCELLED") {
-    return { created: 0, skipped: 0 };
+    return { created: 0, skipped: 0, reviewUrl: null };
+  }
+  const status = String(order.status || "").toUpperCase();
+  if (!['DELIVERED', 'COMPLETED'].includes(status)) {
+    return { created: 0, skipped: order.items.length, reviewUrl: null };
   }
   const purchaseBaseDate = getInvitationBaseDateFromWebsiteOrder(order);
 
   const eligibleItems = order.items.filter((item) => cleanOptional(item.productId));
   if (!eligibleItems.length) {
-    return { created: 0, skipped: order.items.length };
+    return { created: 0, skipped: order.items.length, reviewUrl: null };
   }
 
-  const existingRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `
-      SELECT "id"
-      FROM "ReviewInvitation"
-      WHERE "websiteOrderId" = $1
-      LIMIT 1
-    `,
-    order.id,
-  );
-  if (existingRows[0]?.id) {
-    return { created: 0, skipped: eligibleItems.length };
+  const existing = await getExistingReviewInvitationForPurchase({
+    websiteOrderId: order.id,
+    receiptId: order.receiptId,
+  });
+  if (existing) {
+    return { created: 0, skipped: eligibleItems.length, reviewUrl: await getReviewUrlForExistingInvitation(existing) };
   }
 
   const primaryItem = pickPrimaryWebsiteOrderItem(eligibleItems as unknown as Array<Record<string, unknown>>);
   const productId = cleanOptional(primaryItem?.productId);
   if (!productId) {
-    return { created: 0, skipped: eligibleItems.length };
+    return { created: 0, skipped: eligibleItems.length, reviewUrl: null };
   }
 
-  await createReviewInvitation({
+  const created = await createReviewInvitation({
     productId,
     websiteOrderId: order.id,
     orderId: null,
@@ -1551,7 +1638,7 @@ export async function ensureReviewInvitationsForWebsiteOrder(orderId: string) {
     expiresAt: getReviewInvitationExpiry(purchaseBaseDate),
   });
 
-  return { created: 1, skipped: Math.max(0, eligibleItems.length - 1) };
+  return { created: 1, skipped: Math.max(0, eligibleItems.length - 1), reviewUrl: created.reviewUrl };
 }
 
 async function processReviewInvitationSend(
@@ -1779,9 +1866,7 @@ export async function backfillReviewInvitationsForRecentSales(input?: {
         gte: windowStart,
         lte: now,
       },
-      status: {
-        not: "CANCELLED",
-      },
+      status: { in: ["DELIVERED"] },
     },
     select: {
       id: true,
@@ -1795,20 +1880,46 @@ export async function backfillReviewInvitationsForRecentSales(input?: {
     take: limit,
   });
 
+  const receipts = await prisma.receipt.findMany({
+    where: {
+      generatedAt: {
+        gte: windowStart,
+        lte: now,
+      },
+    },
+    select: {
+      id: true,
+      generatedAt: true,
+      createdAt: true,
+      data: true,
+      order: { select: { metadata: true } },
+    },
+    orderBy: { generatedAt: "asc" },
+    take: limit,
+  });
+
   const summary = {
     lookbackDays,
     windowStart: windowStart.toISOString(),
     windowEnd: now.toISOString(),
     scannedOrders: orders.length,
+    scannedReceipts: receipts.length,
     createdInvitations: 0,
     skippedInvitations: 0,
     touchedOrders: 0,
+    touchedReceipts: 0,
     dueProcessing: null as null | Awaited<ReturnType<typeof processDueReviewInvitations>>,
     orders: [] as Array<{
       websiteOrderId: string;
       orderRef: string | null;
       createdAt: string;
       status: string;
+      created: number;
+      skipped: number;
+    }>,
+    receipts: [] as Array<{
+      receiptId: string;
+      createdAt: string;
       created: number;
       skipped: number;
     }>,
@@ -1825,6 +1936,38 @@ export async function backfillReviewInvitationsForRecentSales(input?: {
         orderRef: cleanOptional(order.orderRef),
         createdAt: order.createdAt.toISOString(),
         status: String(order.status || ""),
+        created: Number(result.created || 0),
+        skipped: Number(result.skipped || 0),
+      });
+    }
+
+    for (const receipt of receipts) {
+      const receiptData = readJsonObject(receipt.data);
+      const orderMetadata = readJsonObject(receipt.order?.metadata);
+      const projectFlow = readJsonObject(receiptData.projectFlow || orderMetadata.projectFlow);
+      const customerType = String(receiptData.customerType || orderMetadata.customerType || "").trim().toLowerCase();
+      const isProject = customerType === "project" || Boolean(projectFlow.isProject);
+      const podDelivery = readJsonObject(receiptData.podDelivery || orderMetadata.podDelivery);
+      const isPod = customerType === "pod";
+      const isCompletedProject = !isProject || String(projectFlow.stage || "").toUpperCase() === "COMPLETED_POSTED";
+      const isDeliveredPod = !isPod || String(podDelivery.status || "").trim().toLowerCase() === "delivered";
+      if (!isCompletedProject || !isDeliveredPod) continue;
+
+      const completedAt =
+        (isProject && toDate(projectFlow.updatedAt)) ||
+        (isPod && toDate(podDelivery.deliveredAt)) ||
+        receipt.generatedAt ||
+        receipt.createdAt;
+      const result = await ensureReviewInvitationForReceipt(receipt.id, {
+        completedAt,
+        deliveryMode: isProject ? "project" : isPod ? "pod" : "pos",
+      });
+      summary.touchedReceipts += 1;
+      summary.createdInvitations += Number(result.created || 0);
+      summary.skippedInvitations += Number(result.skipped || 0);
+      summary.receipts.push({
+        receiptId: receipt.id,
+        createdAt: receipt.generatedAt.toISOString(),
         created: Number(result.created || 0),
         skipped: Number(result.skipped || 0),
       });

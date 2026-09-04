@@ -6,7 +6,7 @@ import { sendTransactionalSms } from "@/lib/africasTalking";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
-import { createReviewInvitation } from "@/lib/reviewsReferrals";
+import { ensureReviewInvitationForReceipt } from "@/lib/reviewsReferrals";
 import { getPublicReceiptUrl } from "@/lib/publicReceiptLinks";
 import { resolveProjectStaffPhone } from "@/lib/projectHandlers";
 import {
@@ -517,41 +517,14 @@ async function buildReceiptAttachment(receiptId: string, fileName: string) {
 }
 
 async function ensureProjectReviewLink(receiptId: string) {
-  const existing = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT "publicToken" FROM "ReviewInvitation" WHERE "receiptId" = $1 ORDER BY "createdAt" DESC LIMIT 1`,
-    receiptId,
-  );
-  const existingToken = typeof existing[0]?.publicToken === "string" ? existing[0].publicToken.trim() : "";
-  if (existingToken) {
-    return `https://www.betech.co.ke/review/${existingToken}`;
-  }
-
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
-    include: {
-      order: {
-        include: {
-          items: { include: { product: { select: { id: true, name: true } } } },
-        },
-      },
-    },
+    select: { createdAt: true },
   });
-  if (!receipt?.order) return null;
-  const primaryItem = receipt.order.items.find((item) => item.productId) ?? receipt.order.items[0];
-  if (!primaryItem?.productId) return null;
+  if (!receipt) return null;
 
-  const review = await createReviewInvitation({
-    productId: primaryItem.productId,
-    websiteOrderId: null,
-    orderId: receipt.orderId,
-    receiptId,
-    customerUserId: null,
-    customerName: receipt.order.customerName,
-    customerPhone: receipt.order.customerPhone || "",
-    customerEmail: receipt.order.customerEmail || null,
-    customerTown: null,
-    orderOrReceiptRef: receipt.order.orderNumber,
-    purchaseDate: receipt.createdAt,
+  const review = await ensureReviewInvitationForReceipt(receiptId, {
+    completedAt: receipt.createdAt,
     deliveryMode: "project",
   });
   return review.reviewUrl;
