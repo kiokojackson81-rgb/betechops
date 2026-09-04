@@ -211,6 +211,28 @@ export default function ContributorDashboard() {
       .catch(() => undefined);
   }, []);
   useEffect(() => {
+    const title = form.name.trim();
+    if (!title || form.brand.trim()) return;
+    const timeout = window.setTimeout(() => {
+      void fetch(
+        `/api/contributor/brands?title=${encodeURIComponent(title)}`,
+        { cache: "no-store" },
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          const brand = typeof data.item === "string" ? data.item.trim() : "";
+          if (!brand) return;
+          setForm((current) =>
+            current.name.trim() === title && !current.brand.trim()
+              ? { ...current, brand }
+              : current,
+          );
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [form.brand, form.name]);
+  useEffect(() => {
     try {
       setRecentCategories(
         JSON.parse(

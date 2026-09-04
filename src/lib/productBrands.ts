@@ -42,10 +42,9 @@ function dedupeBrands(values: Array<string | null | undefined>) {
   return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
 }
 
-export async function getDistinctProductBrands(
+async function listDistinctProductBrands(
   prisma: PrismaClient,
   capabilities: ProductTableCapabilities,
-  input?: { q?: string | null; limit?: number | null },
 ) {
   const selectParts: string[] = [];
   if (capabilities.brand) {
@@ -58,11 +57,43 @@ export async function getDistinctProductBrands(
   if (!selectParts.length) return [] as string[];
 
   const rows = await prisma.$queryRawUnsafe<Array<{ value: string | null }>>(selectParts.join(" UNION ALL "));
-  const deduped = dedupeBrands(rows.map((row) => row.value));
+  return dedupeBrands(rows.map((row) => row.value));
+}
+
+export async function getDistinctProductBrands(
+  prisma: PrismaClient,
+  capabilities: ProductTableCapabilities,
+  input?: { q?: string | null; limit?: number | null },
+) {
+  const deduped = await listDistinctProductBrands(prisma, capabilities);
   const query = String(input?.q || "").trim().toLowerCase();
   const filtered = query ? deduped.filter((brand) => brand.toLowerCase().includes(query)) : deduped;
   const limit = Math.max(1, Math.min(Number(input?.limit || 12), 100));
   return filtered.slice(0, limit);
+}
+
+export async function findProductBrandMention(
+  prisma: PrismaClient,
+  capabilities: ProductTableCapabilities,
+  title: string | null | undefined,
+) {
+  const normalizedTitle = String(title || "").trim().toLowerCase();
+  if (!normalizedTitle) return null;
+
+  const brands = await listDistinctProductBrands(prisma, capabilities);
+  return (
+    brands
+      .sort((a, b) => b.length - a.length)
+      .find((brand) => {
+        const escaped = brand
+          .trim()
+          .toLowerCase()
+          .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i").test(
+          normalizedTitle,
+        );
+      }) ?? null
+  );
 }
 
 export async function resolveCanonicalProductBrand(

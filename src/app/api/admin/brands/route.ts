@@ -1,7 +1,12 @@
 import { noStoreJson, requireRoleOrBrendah } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
-import { getDistinctProductBrands, resolveCanonicalProductBrand, toCanonicalBrandName } from "@/lib/productBrands";
+import {
+  findProductBrandMention,
+  getDistinctProductBrands,
+  resolveCanonicalProductBrand,
+  toCanonicalBrandName,
+} from "@/lib/productBrands";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +21,13 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const search = String(searchParams.get("search") || "").trim();
+  const title = String(searchParams.get("title") || "").trim();
   const limit = Math.max(1, Math.min(Number(searchParams.get("limit") || "12"), 50));
   const capabilities = await getProductTableCapabilities(prisma);
+  if (title) {
+    const item = await findProductBrandMention(prisma, capabilities, title);
+    return noStoreJson({ item });
+  }
   const items = await getDistinctProductBrands(prisma, capabilities, { q: search, limit });
 
   return noStoreJson({ items });

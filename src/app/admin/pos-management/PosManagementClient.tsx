@@ -756,6 +756,41 @@ export default function PosManagementClient({
   }, [capabilities.brand, capabilities.shopBrand, draft.brand, editorOpen]);
 
   useEffect(() => {
+    const title = draft.name.trim();
+    if (
+      !editorOpen ||
+      !(capabilities.brand || capabilities.shopBrand) ||
+      !title ||
+      draft.brand.trim()
+    ) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      void fetch(`/api/admin/brands?title=${encodeURIComponent(title)}`, {
+        cache: "no-store",
+      })
+        .then((response) => response.json())
+        .then((json) => {
+          const brand = typeof json?.item === "string" ? json.item.trim() : "";
+          if (!brand) return;
+          setDraft((current) =>
+            current.name.trim() === title && !current.brand.trim()
+              ? { ...current, brand, shopBrand: brand }
+              : current,
+          );
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [
+    capabilities.brand,
+    capabilities.shopBrand,
+    draft.brand,
+    draft.name,
+    editorOpen,
+  ]);
+
+  useEffect(() => {
     const onMouseDown = (event: MouseEvent) => {
       if (!brandBoxRef.current?.contains(event.target as Node)) {
         setBrandOpen(false);
