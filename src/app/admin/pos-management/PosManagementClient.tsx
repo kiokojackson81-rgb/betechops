@@ -25,6 +25,7 @@ import {
 } from "@/lib/images/productGalleryAi";
 import {
   detectShopCategoryAndSubcategory,
+  getShopProductTypeOptions,
   getShopSubcategoryOptions,
   isGeneralShopCategory,
   SHOP_CATEGORY_DEFINITIONS,
@@ -898,6 +899,10 @@ export default function PosManagementClient({
     () => getShopSubcategoryOptions(draft.shopCategory),
     [draft.shopCategory],
   );
+  const specificCategoryOptions = useMemo(
+    () => getShopProductTypeOptions(draft.shopCategory, draft.shopSubcategory),
+    [draft.shopCategory, draft.shopSubcategory],
+  );
   const pickerCategoryDefinition = useMemo(
     () =>
       SHOP_CATEGORY_DEFINITIONS.find(
@@ -1565,6 +1570,11 @@ export default function PosManagementClient({
       [draft.warrantyPeriod, "warranty period", capabilities.warrantyPeriod || capabilities.shopWarranty],
       [draft.stockQuantity, "stock quantity", true],
       [draft.availabilityType, "availability", true],
+      [
+        draft.productType,
+        "specific category",
+        capabilities.productType && specificCategoryOptions.length > 0,
+      ],
       [draft.tiktokVideoUrl, "TikTok video link", capabilities.tiktokVideoUrl],
       [draft.mainImageUrl || draft.shopImageUrl, "main image", true],
     ];
@@ -2835,6 +2845,32 @@ export default function PosManagementClient({
                         Select a category and subcategory in the same side panel.
                       </div>
                     </div>
+
+                    {capabilities.productType && specificCategoryOptions.length ? (
+                      <label className="text-sm text-slate-300">
+                        Specific category *
+                        <select
+                          className={`${fieldClass} mt-2`}
+                          value={draft.productType}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              productType: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Select specific category</option>
+                          {specificCategoryOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="mt-1 block text-xs text-slate-500">
+                          Choose the most specific product group available.
+                        </span>
+                      </label>
+                    ) : null}
 
                     <label className="text-sm text-slate-300">
                       Brand *

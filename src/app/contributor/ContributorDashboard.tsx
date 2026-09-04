@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 import ProductDescriptionEditor from "@/components/ProductDescriptionEditor";
 import {
   detectShopCategoryAndSubcategory,
+  getShopProductTypeOptions,
   getShopSubcategoryOptions,
   SHOP_CATEGORY_DEFINITIONS,
   SHOP_CATEGORY_OPTIONS,
@@ -283,6 +284,10 @@ export default function ContributorDashboard() {
   const previousBrandSuggestion = [...products]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .find((product) => product.brand?.trim())?.brand?.trim();
+  const specificCategoryOptions = getShopProductTypeOptions(
+    form.category,
+    form.shopSubcategory,
+  );
   const pickerCategoryDefinition =
     SHOP_CATEGORY_DEFINITIONS.find(
       (category) => category.value === pickerCategory,
@@ -363,6 +368,11 @@ export default function ContributorDashboard() {
       [form.sellingPrice, "selling price"],
       [form.category, "website category"],
       [form.shopSubcategory, "website subcategory"],
+      [
+        form.productType,
+        "specific category",
+        specificCategoryOptions.length > 0,
+      ],
       [form.brand, "brand"],
       [form.shortDescription.replace(/<[^>]*>/g, " "), "product short description"],
       [form.description.replace(/<[^>]*>/g, " "), "product long description"],
@@ -372,7 +382,9 @@ export default function ContributorDashboard() {
       [form.tiktokVideoUrl, "TikTok video link"],
       [form.mainImageUrl, "main image"],
     ];
-    const missing = requiredFields.find(([value]) => !value.trim());
+    const missing = requiredFields.find(
+      ([value, , required = true]) => required && !String(value).trim(),
+    );
     if (missing) {
       setNotice(`Complete the required ${missing[1]} field.`);
       return;
@@ -769,6 +781,26 @@ export default function ContributorDashboard() {
                       Choose from the selected category only.
                     </span>
                   </div>
+                  {specificCategoryOptions.length ? (
+                    <label className={label}>
+                      Specific category *
+                      <select
+                        value={form.productType}
+                        onChange={(e) => set("productType", e.target.value)}
+                        className={input}
+                      >
+                        <option value="">Select specific category</option>
+                        {specificCategoryOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mt-1 block text-xs font-normal text-slate-400">
+                        Choose the most specific product group available.
+                      </span>
+                    </label>
+                  ) : null}
                   <div className="sm:col-span-2">
                     <span className={label}>Product short description *</span>
                     <div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
