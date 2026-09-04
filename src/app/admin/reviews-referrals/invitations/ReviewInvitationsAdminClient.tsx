@@ -43,6 +43,37 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat("en-KE", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+type SentRecency = "all" | "today" | "yesterday" | "week" | "older";
+
+function kenyaDateKey(value: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
+function getSentRecency(sentAt: string | null): Exclude<SentRecency, "all"> | null {
+  if (!sentAt) return null;
+  const today = kenyaDateKey(new Date());
+  const yesterday = kenyaDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const sent = kenyaDateKey(new Date(sentAt));
+  if (sent === today) return "today";
+  if (sent === yesterday) return "yesterday";
+  const sevenDaysAgo = kenyaDateKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  return sent >= sevenDaysAgo ? "week" : "older";
+}
+
+function sentRecencyLabel(sentAt: string | null) {
+  const recency = getSentRecency(sentAt);
+  if (!recency) return null;
+  if (recency === "today") return "sent today";
+  if (recency === "yesterday") return "sent yesterday";
+  if (recency === "week") return "sent in last 7 days";
+  return "sent earlier";
+}
+
 function badgeClass(status: string) {
   if (status === "sent") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
   if (status === "failed") return "border-rose-400/20 bg-rose-400/10 text-rose-200";
@@ -72,13 +103,17 @@ export default function ReviewInvitationsAdminClient({
 }) {
   const [rows, setRows] = useState(initialRows);
   const [filter, setFilter] = useState<"all" | "due" | "sent" | "failed">(initialFilter);
+  const [sentRecency, setSentRecency] = useState<SentRecency>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [testBusyKey, setTestBusyKey] = useState<string | null>(null);
   const [channelTests, setChannelTests] = useState<Record<string, ChannelTestResult | undefined>>({});
 
   const filteredRows = useMemo(
-    () => rows.filter((row) => filter === "all" || deriveQueue(row) === filter),
-    [rows, filter],
+    () => rows.filter((row) => {
+      if (filter !== "all" && deriveQueue(row) !== filter) return false;
+      return sentRecency === "all" || getSentRecency(row.sentAt) === sentRecency;
+    }),
+    [rows, filter, sentRecency],
   );
 
   async function retrySend(id: string) {
@@ -140,6 +175,23 @@ export default function ReviewInvitationsAdminClient({
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/50 p-3">
+        <span className="mr-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Sent recently</span>
+        {(["all", "today", "yesterday", "week", "older"] as const).map((option) => (
+          <button
+            key={option}
+            onClick={() => setSentRecency(option)}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              sentRecency === option
+                ? "bg-emerald-400 text-slate-950"
+                : "border border-white/10 bg-white/[0.04] text-slate-200"
+            }`}
+          >
+            {option === "all" ? "Any time" : option === "week" ? "Last 7 days" : option[0].toUpperCase() + option.slice(1)}
+          </button>
+        ))}
+      </div>
+
       {!filteredRows.length ? (
         <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-8 text-slate-300">
           <div className="text-lg font-semibold text-white">No invitations in this queue.</div>
@@ -164,6 +216,11 @@ export default function ReviewInvitationsAdminClient({
                   <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${badgeClass(queue)}`}>
                     {queue}
                   </span>
+                  {sentRecencyLabel(row.sentAt) ? (
+                    <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100">
+                      {sentRecencyLabel(row.sentAt)}
+                    </span>
+                  ) : null}
                   <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${String(row.reviewStatus || "").toUpperCase() === "SUBMITTED" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : "border-white/10 bg-white/[0.04] text-slate-200"}`}>
                     {String(row.reviewStatus || "").toUpperCase() === "SUBMITTED" ? "review submitted" : "awaiting review"}
                   </span>
