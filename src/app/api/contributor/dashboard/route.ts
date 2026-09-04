@@ -15,13 +15,13 @@ const productInput = z.object({
   name: z.string().trim().min(2).max(255),
   sellingPrice: z.coerce.number().min(0),
   category: z.string().trim().min(2).max(120),
-  shopSubcategory: z.string().trim().max(120).optional().nullable(),
+  shopSubcategory: z.string().trim().min(1).max(120),
   productType: z.string().trim().max(120).optional().nullable(),
-  brand: z.string().trim().max(120).optional().nullable(),
-  shortDescription: z.string().trim().max(3000).optional().nullable(),
-  description: z.string().trim().max(10000).optional().nullable(),
-  warrantyPeriod: z.string().trim().max(120).optional().nullable(),
-  tiktokVideoUrl: z.string().trim().url().max(500).optional().nullable(),
+  brand: z.string().trim().min(1).max(120),
+  shortDescription: z.string().trim().min(1).max(3000),
+  description: z.string().trim().min(1).max(10000),
+  warrantyPeriod: z.string().trim().min(1).max(120),
+  tiktokVideoUrl: z.string().trim().url().max(500),
   purchaseLink: z.string().trim().url().max(500).optional().nullable(),
   mainImageUrl: z.string().trim().url().max(500),
   galleryImageUrls: z
@@ -30,9 +30,8 @@ const productInput = z.object({
     .optional()
     .default([]),
   availabilityType: z
-    .enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"])
-    .default("WAREHOUSE"),
-  stockQuantity: z.coerce.number().int().min(0).max(100000).default(10000),
+    .enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]),
+  stockQuantity: z.coerce.number().int().min(0).max(100000),
   variableCost: z.boolean().default(false),
   lastBuyingPrice: z.coerce.number().min(0).nullable().optional(),
   requiresInstallation: z.boolean().default(false),
@@ -185,7 +184,7 @@ export async function POST(req: Request) {
     parsed.data.brand,
   );
   const product = await prisma.product.create({
-    data: productData({ ...parsed.data, brand }, sku),
+    data: productData({ ...parsed.data, brand: brand ?? parsed.data.brand }, sku),
   });
   await prisma.$executeRawUnsafe(
     `INSERT INTO "ProductContributorProduct" ("productId", "contributorId", "earningKes") VALUES ($1, $2, $3)`,

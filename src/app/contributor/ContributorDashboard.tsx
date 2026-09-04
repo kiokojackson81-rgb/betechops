@@ -358,8 +358,23 @@ export default function ContributorDashboard() {
 
   async function submitProduct(event: FormEvent) {
     event.preventDefault();
-    if (!form.category || !form.shopSubcategory) {
-      setNotice("Select both a website category and subcategory.");
+    const requiredFields = [
+      [form.name, "product name"],
+      [form.sellingPrice, "selling price"],
+      [form.category, "website category"],
+      [form.shopSubcategory, "website subcategory"],
+      [form.brand, "brand"],
+      [form.shortDescription.replace(/<[^>]*>/g, " "), "product short description"],
+      [form.description.replace(/<[^>]*>/g, " "), "product long description"],
+      [form.warrantyPeriod, "warranty period"],
+      [form.stockQuantity, "stock quantity"],
+      [form.availabilityType, "availability"],
+      [form.tiktokVideoUrl, "TikTok video link"],
+      [form.mainImageUrl, "main image"],
+    ];
+    const missing = requiredFields.find(([value]) => !value.trim());
+    if (missing) {
+      setNotice(`Complete the required ${missing[1]} field.`);
       return;
     }
     setBusy(true);
@@ -637,7 +652,7 @@ export default function ContributorDashboard() {
                     />
                   </label>
                   <div className={`${label} relative`}>
-                    Website category
+                    Website category *
                     <button
                       type="button"
                       onClick={() => setCategoryOpen(true)}
@@ -678,7 +693,7 @@ export default function ContributorDashboard() {
                     ) : null}
                   </div>
                   <div className={`${label} relative`}>
-                    Brand
+                    Brand *
                     <input
                       value={form.brand}
                       onFocus={() => setBrandOpen(true)}
@@ -733,7 +748,7 @@ export default function ContributorDashboard() {
                     ) : null}
                   </div>
                   <div className={`${label} relative`}>
-                    Website subcategory
+                    Website subcategory *
                     <button
                       type="button"
                       disabled={!form.category}
@@ -755,7 +770,7 @@ export default function ContributorDashboard() {
                     </span>
                   </div>
                   <div className="sm:col-span-2">
-                    <span className={label}>Product short description</span>
+                    <span className={label}>Product short description *</span>
                     <div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
                       <ProductDescriptionEditor
                         value={form.shortDescription}
@@ -768,7 +783,7 @@ export default function ContributorDashboard() {
                     </div>
                   </div>
                   <div className="sm:col-span-2">
-                    <span className={label}>Product long description</span>
+                    <span className={label}>Product long description *</span>
                     <div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
                       <ProductDescriptionEditor
                         value={form.description}
@@ -810,7 +825,7 @@ export default function ContributorDashboard() {
                     </label>
                   </div>
                   <label className={label}>
-                    Warranty period
+                    Warranty period *
                     <select
                       value={form.warrantyPeriod}
                       onChange={(e) => set("warrantyPeriod", e.target.value)}
@@ -829,7 +844,7 @@ export default function ContributorDashboard() {
                     </select>
                   </label>
                   <label className={label}>
-                    Stock quantity
+                    Stock quantity *
                     <input
                       min="0"
                       type="number"
@@ -839,7 +854,7 @@ export default function ContributorDashboard() {
                     />
                   </label>
                   <label className={label}>
-                    Availability
+                    Availability *
                     <select
                       value={form.availabilityType}
                       onChange={(e) => set("availabilityType", e.target.value)}
@@ -852,8 +867,9 @@ export default function ContributorDashboard() {
                     </select>
                   </label>
                   <label className="sm:col-span-2 text-sm font-semibold text-slate-200">
-                    TikTok video link
+                    TikTok video link *
                     <input
+                      required
                       type="url"
                       value={form.tiktokVideoUrl}
                       onChange={(e) => set("tiktokVideoUrl", e.target.value)}
@@ -988,7 +1004,7 @@ export default function ContributorDashboard() {
                     ) : null}
                   </section>
                   <div className="sm:col-span-2">
-                    <span className={label}>Product images</span>
+                    <span className={label}>Product images *</span>
                     <p className="mt-1 text-xs text-slate-400">
                       Add a clear main image, then optional gallery images. JPG,
                       PNG and WebP work best.

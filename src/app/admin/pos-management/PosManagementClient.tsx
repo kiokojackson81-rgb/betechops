@@ -1554,6 +1554,25 @@ export default function PosManagementClient({
         "Select both a website category and subcategory",
         "error",
       );
+    const requiredFields = [
+      [draft.brand, "brand", capabilities.brand || capabilities.shopBrand],
+      [
+        draft.shortDescription.replace(/<[^>]*>/g, " "),
+        "product short description",
+        capabilities.shortDescription || capabilities.shopShortDescription,
+      ],
+      [draft.description.replace(/<[^>]*>/g, " "), "product long description", capabilities.description],
+      [draft.warrantyPeriod, "warranty period", capabilities.warrantyPeriod || capabilities.shopWarranty],
+      [draft.stockQuantity, "stock quantity", true],
+      [draft.availabilityType, "availability", true],
+      [draft.tiktokVideoUrl, "TikTok video link", capabilities.tiktokVideoUrl],
+      [draft.mainImageUrl || draft.shopImageUrl, "main image", true],
+    ];
+    const missing = requiredFields.find(
+      ([value, , enabled]) => Boolean(enabled) && !String(value).trim(),
+    );
+    if (missing)
+      return showToast(`Complete the required ${missing[1]} field`, "error");
     const transportIncluded =
       draft.catalogueConfiguration.transportMode === "INCLUDED" ||
       draft.catalogueConfiguration.transportMode === "FREE" ||
@@ -2767,7 +2786,7 @@ export default function PosManagementClient({
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <div className="text-sm text-slate-300">
                       <div className="flex items-center justify-between gap-2">
-                        <span>Website category</span>
+                        <span>Website category *</span>
                         <button
                           type="button"
                           className="text-xs font-semibold text-emerald-200 hover:text-emerald-100"
@@ -2794,7 +2813,7 @@ export default function PosManagementClient({
                     </div>
 
                     <div className="text-sm text-slate-300">
-                      <span>Website subcategory</span>
+                      <span>Website subcategory *</span>
                       <button
                         type="button"
                         disabled={
@@ -2818,7 +2837,7 @@ export default function PosManagementClient({
                     </div>
 
                     <label className="text-sm text-slate-300">
-                      Brand
+                      Brand *
                       <div className="relative mt-1" ref={brandBoxRef}>
                         <input
                           className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-60`}
@@ -2932,7 +2951,7 @@ export default function PosManagementClient({
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="md:col-span-2">
                       <div className="text-sm font-semibold text-slate-200">
-                        Product short description
+                        Product short description *
                       </div>
                       <div className="mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
                         <ProductDescriptionEditor
@@ -2960,7 +2979,7 @@ export default function PosManagementClient({
                     <div className="md:col-span-2">
                       <div className="mb-2">
                         <div className="text-sm font-semibold text-slate-200">
-                          Product long description
+                          Product long description *
                         </div>
                         <div className="mt-1 text-xs leading-5 text-slate-500">
                           Use the toolbar instead of typing formatting syntax
@@ -2983,7 +3002,7 @@ export default function PosManagementClient({
                     </div>
 
                     <label className="text-sm text-slate-300">
-                      Warranty period
+                      Warranty period *
                       <select
                         className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
                         value={draft.warrantyPeriod}
@@ -3010,7 +3029,7 @@ export default function PosManagementClient({
                     </label>
 
                     <label className="text-sm text-slate-300">
-                      Stock quantity
+                      Stock quantity *
                       <input
                         className={`${fieldClass} mt-1`}
                         type="number"
@@ -3026,7 +3045,7 @@ export default function PosManagementClient({
                     </label>
 
                     <label className="text-sm text-slate-300 md:col-span-2">
-                      TikTok video link
+                      TikTok video link *
                       <input
                         className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
                         value={draft.tiktokVideoUrl}
@@ -3066,7 +3085,7 @@ export default function PosManagementClient({
                     </label>
 
                     <label className="text-sm text-slate-300 md:col-span-2">
-                      Availability
+                      Availability *
                       <div className="mt-1 grid gap-3 md:grid-cols-2">
                         <label className="rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-sm text-slate-200">
                           <div className="flex items-center gap-2">
@@ -3167,7 +3186,7 @@ export default function PosManagementClient({
                 <div className="mt-4 rounded-3xl border border-slate-700 bg-slate-900/60 p-4 sm:p-5">
                   <div className="text-sm text-slate-300">
                     <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">
-                      Product images
+                      Product images *
                     </div>
                     <div className="mt-1 text-xs leading-5 text-slate-500">
                       Add a clear main image, then optional gallery images.
