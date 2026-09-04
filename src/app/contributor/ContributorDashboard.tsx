@@ -260,6 +260,20 @@ export default function ContributorDashboard() {
   const filteredBrands = brands
     .filter((brand) => brand.toLowerCase().includes(form.brand.toLowerCase()))
     .slice(0, 8);
+  const mostRecentProduct = [...products].sort(
+    (a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  )[0];
+  const previousTaxonomySuggestion =
+    mostRecentProduct?.category && mostRecentProduct?.shopSubcategory
+      ? {
+          category: mostRecentProduct.category,
+          subcategory: mostRecentProduct.shopSubcategory,
+        }
+      : null;
+  const previousBrandSuggestion = [...products]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .find((product) => product.brand?.trim())?.brand?.trim();
   const pickerCategoryDefinition =
     SHOP_CATEGORY_DEFINITIONS.find(
       (category) => category.value === pickerCategory,
@@ -582,6 +596,34 @@ export default function ContributorDashboard() {
                       )?.label || "Select category"}
                       <span>⌄</span>
                     </button>
+                    {!form.category && previousTaxonomySuggestion ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            category: previousTaxonomySuggestion.category,
+                            shopSubcategory:
+                              previousTaxonomySuggestion.subcategory,
+                            productType: "",
+                          }))
+                        }
+                        className="mt-2 text-left text-xs font-semibold text-amber-200 hover:text-amber-100"
+                      >
+                        Use previous: {SHOP_CATEGORY_OPTIONS.find(
+                          (category) =>
+                            category.value === previousTaxonomySuggestion.category,
+                        )?.label || previousTaxonomySuggestion.category}
+                        {" · "}
+                        {getShopSubcategoryOptions(
+                          previousTaxonomySuggestion.category,
+                        ).find(
+                          (subcategory) =>
+                            subcategory.value ===
+                            previousTaxonomySuggestion.subcategory,
+                        )?.label || previousTaxonomySuggestion.subcategory}
+                      </button>
+                    ) : null}
                   </div>
                   <div className={`${label} relative`}>
                     Brand
@@ -598,6 +640,15 @@ export default function ContributorDashboard() {
                       className={input}
                       placeholder="Type to select or add a brand"
                     />
+                    {!form.brand && previousBrandSuggestion ? (
+                      <button
+                        type="button"
+                        onClick={() => set("brand", previousBrandSuggestion)}
+                        className="mt-2 text-left text-xs font-semibold text-amber-200 hover:text-amber-100"
+                      >
+                        Use last brand: {previousBrandSuggestion}
+                      </button>
+                    ) : null}
                     {brandOpen && form.brand.trim() ? (
                       <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl">
                         {filteredBrands.map((brand) => (
