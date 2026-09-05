@@ -1,8 +1,11 @@
 name: "Primary: Migrate and Deploy to Vercel"
 
 on:
+  # The storefront and Ops domains must be deployed from the branch that
+  # contains the shared WebsiteOrder flow. Keeping this limited to branch-3
+  # left the live checkout behind the Website Orders API and admin queue.
   push:
-    branches: ["branch-3"]
+    branches: ["branch-3", "pos-catalogue-only-production-safe"]
   workflow_dispatch: {}
 
 jobs:
