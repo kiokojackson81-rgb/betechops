@@ -10,7 +10,10 @@ import { prisma } from "@/lib/prisma";
 // Projects share the customer-account order table for tracking, but belong in
 // the Projects desk rather than the checkout-only Web Orders queues.
 export const websiteCheckoutOrderWhere = {
-  source: "WEBSITE",
+  // Older storefront deployments stored this text value as `website`, while
+  // the current checkout writes `WEBSITE`. Both are the same web-order
+  // source and must reach the admin queue.
+  source: { equals: "WEBSITE", mode: "insensitive" },
   NOT: [
     { metadata: { path: ["receiptFlowMode"], equals: "project" } },
     { metadata: { path: ["customerType"], equals: "project" } },
