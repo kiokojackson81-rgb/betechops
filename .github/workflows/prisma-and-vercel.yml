@@ -25,7 +25,11 @@ jobs:
         # existing mail integration while NextAuth declares Nodemailer 7 as
         # an optional peer. Install from the lockfile without re-resolving
         # that optional peer so migrations and the production build run.
-        run: npm ci --legacy-peer-deps
+        # `postinstall` resolves a Chromium binary for local PDF rendering.
+        # It is not needed to build or deploy this web app and can block a
+        # GitHub runner on a binary download. Prisma is generated explicitly
+        # in the next step.
+        run: npm ci --legacy-peer-deps --ignore-scripts
 
       - name: Generate Prisma client
         run: npx prisma generate
