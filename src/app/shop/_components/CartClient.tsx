@@ -1,5 +1,7 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import { MessageCircle, Minus, Plus, Trash2 } from "lucide-react";
 import {
   buildDetailedCart,
@@ -18,6 +20,25 @@ import { getShopProductHref, SHOP_CHECKOUT_LOGIN_HREF, SHOP_HOME_HREF, SHOP_REQU
 type CartClientProps = {
   products: ShopProduct[];
 };
+
+function CartProductImage({ product, className = "" }: { product: ShopProduct; className?: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (!product.image || imageFailed) {
+    return <ShopProductVisual visualType={product.visualType} productName={product.name} compact className={className} />;
+  }
+
+  return (
+    <Image
+      src={product.image}
+      alt={product.name}
+      fill
+      sizes="(max-width: 640px) 80px, 104px"
+      className={`object-contain ${className}`}
+      onError={() => setImageFailed(true)}
+    />
+  );
+}
 
 export default function CartClient({ products }: CartClientProps) {
   const items = useShopCartItems();
@@ -65,7 +86,7 @@ export default function CartClient({ products }: CartClientProps) {
           <article key={product.id} className="rounded-[18px] border border-[#7a0000]/10 bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
             <div className="flex items-start gap-3 sm:items-center">
               <div className="relative h-[5rem] w-[5rem] shrink-0 rounded-[14px] border border-[#7a0000]/8 bg-[#f6eee2] p-2 sm:h-[6.5rem] sm:w-[6.5rem]">
-                <ShopProductVisual visualType={product.visualType} productName={product.name} compact className="h-full w-full" />
+                <CartProductImage product={product} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#7a0000]/75">{product.category}</div>
@@ -162,8 +183,8 @@ export default function CartClient({ products }: CartClientProps) {
                   href={getShopProductHref(product.slug, product.opsProductId)}
                   className="flex items-center gap-3 rounded-[14px] border border-[#7a0000]/8 bg-[#fcfaf7] p-2.5 transition hover:border-[#7a0000]/20"
                 >
-                  <div className="h-14 w-14 shrink-0 rounded-[12px] bg-[#f6eee2] p-2">
-                    <ShopProductVisual visualType={product.visualType} productName={product.name} compact className="h-full w-full" />
+                  <div className="relative h-14 w-14 shrink-0 rounded-[12px] bg-[#f6eee2] p-2">
+                    <CartProductImage product={product} />
                   </div>
                   <div className="min-w-0">
                     <div className="line-clamp-2 text-xs font-black leading-4 text-slate-950">{product.name}</div>

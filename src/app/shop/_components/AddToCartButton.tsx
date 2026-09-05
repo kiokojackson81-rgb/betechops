@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ShoppingCart } from "lucide-react";
 import { addShopCartItem } from "@/app/shop/cartStore";
 import { trackAddToCart } from "@/app/shop/shopAnalytics";
+import { SHOP_CART_HREF } from "@/app/shop/storefrontPaths";
 
 type AddToCartButtonProps = {
   productId: string;
@@ -13,7 +14,7 @@ type AddToCartButtonProps = {
 };
 
 export default function AddToCartButton({ productId, productName, quantity = 1, className }: AddToCartButtonProps) {
-  const [added, setAdded] = useState(false);
+  const router = useRouter();
 
   return (
     <button
@@ -22,13 +23,12 @@ export default function AddToCartButton({ productId, productName, quantity = 1, 
       onClick={() => {
         addShopCartItem(productId, quantity);
         trackAddToCart({ productId, productName, quantity });
-        setAdded(true);
-        window.setTimeout(() => setAdded(false), 1600);
+        router.push(SHOP_CART_HREF);
       }}
       className={className}
     >
       <ShoppingCart className="h-4 w-4" />
-      {added ? "Added to Cart" : "Add to Cart"}
+      Add to Cart
     </button>
   );
 }
