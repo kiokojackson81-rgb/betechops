@@ -11,8 +11,8 @@ export type PublicTermsSection = {
   }>;
 };
 
-export const TERMS_EFFECTIVE_DATE = "29 August 2026";
-export const TERMS_VERSION = "1.3";
+export const TERMS_EFFECTIVE_DATE = "5 September 2026";
+export const TERMS_VERSION = "1.4";
 
 export const TERMS_TITLE =
   "Betech Solar Solutions Solar System Installation, Performance, Warranty & After-Sales Terms & Conditions";
@@ -123,17 +123,37 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 3,
     title: "Betech After-Sales Support",
     paragraphs: [
-      "Depending on the system size, package and installation type, Betech may provide a complimentary workmanship / after-sales support period, typically ranging from 6 months to 1 year. The applicable support period may depend on the specific transaction or installation scope.",
-      "This complimentary workmanship support is separate from the manufacturer’s product warranty.",
-      "Complimentary support may cover confirmed installation-related issues once the actual cause has been established.",
-      "Complimentary support does not automatically mean that every electrical problem becomes Betech’s responsibility, that immediate or same-day technician dispatch will occur, that internal house wiring repairs are free, that product replacement is automatic, that upgrades are free, that transport is always free, or that a refund automatically applies.",
+      "Betech provides six (6) months of complimentary after-sales technical workmanship support from the date of Installation and Commissioning, unless a different period is expressly agreed in writing.",
+      "This support is intended primarily for verified problems arising from Betech’s original Installation workmanship. It may include reasonable remote troubleshooting, technical guidance, configuration assistance and, where reasonably necessary, rectification of verified Betech workmanship defects.",
+      "The complimentary support period is not a maintenance contract and does not provide unlimited free technician visits, servicing, repairs or maintenance.",
     ],
-    bullets: [
-      "Installation connection issue",
-      "Incorrect Betech system-side wiring",
-      "Installation-related configuration issue",
-      "Loose connection attributable to Betech workmanship",
-      "Installation-related communication issue between compatible components",
+    subsections: [
+      {
+        title: "Qualifying Workmanship Matters",
+        bullets: [
+          "Installation connection issue",
+          "Incorrect Betech system-side wiring",
+          "Installation-related configuration issue",
+          "Loose connection attributable to Betech workmanship",
+          "Installation-related communication issue between compatible components",
+        ],
+      },
+      {
+        title: "Matters Outside Complimentary Workmanship Support",
+        paragraphs: [
+          "Even during the first six months, complimentary workmanship support does not automatically cover problems unrelated to Betech’s original Installation workmanship. Any applicable statutory or product-warranty rights remain unaffected.",
+        ],
+        bullets: [
+          "System overloading, additional appliances or increased consumption after Installation",
+          "Customer misuse, negligence or unauthorized changes to System settings",
+          "Third-party technician or electrician interference",
+          "Faults in Customer wiring outside Betech’s agreed Installation scope",
+          "Physical damage, pests or rodents, water or fire damage, theft or vandalism",
+          "Abnormal grid conditions",
+          "Routine cleaning, preventive maintenance, System expansion or upgrades",
+          "Other causes not attributable to Betech’s original workmanship",
+        ],
+      },
     ],
   },
   {
@@ -142,7 +162,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     paragraphs: [
       "Betech follows a technical review process intended to identify the actual cause of a reported issue before the remedy is determined.",
       "Customers must not open dangerous electrical equipment or undertake unsafe electrical work during remote troubleshooting.",
-      "If remote diagnosis cannot reasonably resolve the issue and a physical inspection of Betech’s installation appears necessary, Betech may arrange a technician site visit subject to practical scheduling and safety considerations.",
+      "Betech may continue providing reasonable basic remote technical assistance after the six-month complimentary period through telephone, WhatsApp, monitoring platforms or other available channels. Providing complimentary remote assistance or occasional goodwill support does not extend or restart the original six-month complimentary workmanship-support period.",
+      "If remote diagnosis cannot reasonably resolve the issue and physical technician attendance is required, Betech may arrange a site visit subject to practical scheduling, safety considerations and applicable after-sales service and deployment charges.",
     ],
     steps: [
       "Step 1: Customer reports the issue.",
@@ -157,26 +178,36 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 5,
     title: "Chargeable Site Visits",
     paragraphs: [
-      "Where a site visit is arranged under the above support process, and the technician determines that Betech’s installation is operating correctly and that the reported problem relates to something outside Betech’s workmanship or original installation scope, reasonable charges may apply.",
-      "Where practical, significant chargeable work should be communicated before it is undertaken.",
+      "After the six-month complimentary workmanship-support period, applicable manufacturer, product and statutory warranties continue according to their respective terms. Physical after-sales services may nevertheless be chargeable, including where the work concerns a warranty assessment or product-warranty claim.",
+      "Where a site visit is arranged and the technician determines that Betech’s installation is operating correctly, or that the reported problem relates to something outside Betech’s workmanship or original Installation scope, reasonable charges may apply even during the first six months.",
+      "Where reasonably practicable, Betech will communicate applicable charges before undertaking chargeable work.",
     ],
     bullets: [
-      "Internal house wiring",
-      "Faulty customer appliance",
-      "Customer overload",
-      "Added electrical loads",
-      "Third-party modifications",
-      "Customer-changed inverter settings",
-      "Grid/KPLC issue",
-      "Lightning or severe electrical surge",
-      "Physical damage",
-      "Work outside the original installation scope",
-      "Transport",
-      "Call-out",
-      "Diagnosis",
-      "Labour",
-      "Materials",
-      "Repair",
+      "Technician site visits, call-outs, technical diagnostics and labour",
+      "Transport, deployment and accommodation where required for distant locations",
+      "Preventive maintenance, solar-panel cleaning, inspections and System performance checks",
+      "Repairs, replacement parts or materials not covered by an applicable warranty",
+      "Equipment removal, reinstallation or System reconfiguration",
+      "Additional electrical works, internal house wiring or work outside the original Installation scope",
+      "Faulty Customer appliances, Customer overload or added electrical loads",
+      "Third-party modifications, Customer-changed inverter settings or grid/KPLC issues",
+      "Lightning, severe electrical surge, physical damage or other excluded causes",
+    ],
+    subsections: [
+      {
+        title: "Preventive Maintenance",
+        paragraphs: [
+          "Routine and preventive maintenance is separate from complimentary workmanship support and product warranty unless expressly included in the Customer’s quotation, service package or applicable warranty.",
+          "Betech may offer preventive maintenance, inspections, cleaning, System performance checks and other maintenance services separately at applicable rates.",
+        ],
+      },
+      {
+        title: "Goodwill Assistance",
+        paragraphs: [
+          "Betech may, at its discretion, waive a service charge, provide a complimentary visit or provide additional assistance as a goodwill gesture.",
+          "Goodwill assistance does not automatically extend the six-month complimentary support period or create an entitlement to future free services.",
+        ],
+      },
     ],
   },
   {
@@ -585,6 +616,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Warranty duration depends on the brand, model, product and manufacturer terms.",
       "Manufacturer warranty is separate from Betech’s complimentary workmanship support.",
       "Betech’s workmanship obligations concern the quality of the Installation work performed by Betech. Manufacturer or distributor Warranties concern qualifying Equipment defects and are administered according to their applicable terms.",
+      "The fact that a battery, inverter, solar panel or other component has a warranty extending beyond six months does not, by itself, mean Betech must provide free technician visits, transport, labour, maintenance, diagnostics, removal or reinstallation throughout the entire product-warranty period.",
+      "Betech may provide reasonable assistance with assessment and processing of legitimate warranty claims. Any product repair or replacement remains subject to the applicable warranty terms.",
       "Nothing in these Terms negates or varies an implied condition, statutory warranty or remedy that cannot lawfully be excluded under applicable Kenyan law.",
     ],
   },
@@ -641,10 +674,10 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
   },
   {
     number: 40,
-    title: "After Betech Complimentary Support Period",
+    title: "After the Complimentary Support Period",
     paragraphs: [
-      "Manufacturer warranty may continue after Betech’s complimentary support ends.",
-      "Betech may still provide reasonable guidance, but free site visits, removal or reinstallation are not automatically included for the full manufacturer warranty period.",
+      "Manufacturer, product and statutory warranties may continue after Betech’s six-month complimentary workmanship support ends.",
+      "Betech may still provide reasonable remote guidance, but free site attendance, diagnostics, maintenance, labour, transport, removal or reinstallation are not automatically included for the full manufacturer warranty period.",
     ],
   },
   {
@@ -659,7 +692,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 42,
     title: "Costs After Complimentary Support",
     paragraphs: [
-      "Unless covered by warranty or separately agreed, the customer may be responsible for equipment removal, reinstallation, electrician fees, technician travel, transport, courier and other service costs.",
+      "Unless expressly covered by an applicable warranty or separately agreed in writing, the Customer may be responsible for equipment removal, reinstallation, electrician fees, technician travel, transport, courier, labour, diagnostics, maintenance and other after-sales service costs.",
     ],
   },
   {
