@@ -65,11 +65,15 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
   const [order, setOrder] = useState<MockOrderRecord | null>(null);
   const [liveOrder, setLiveOrder] = useState<LiveOrderRecord | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(Boolean(orderRef));
 
   useEffect(() => {
     const stored = getLastMockOrder();
     if (!stored) return;
-    if (!orderRef || stored.orderRef === orderRef) {
+    // A URL carrying an order reference must be verified by the canonical
+    // order store. Local storage is only a convenience for legacy pages that
+    // do not have a server-issued reference.
+    if (!orderRef) {
       setOrder(stored);
     }
   }, [orderRef]);
@@ -77,6 +81,7 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
   useEffect(() => {
     if (!orderRef) return;
     let active = true;
+    setIsVerifying(true);
     fetch(`/api/shop/orders?ref=${encodeURIComponent(orderRef)}`, { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json().catch(() => null);
@@ -90,6 +95,10 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
       .catch((error: Error) => {
         if (!active) return;
         setStatusError(error.message);
+      })
+      .finally(() => {
+        if (!active) return;
+        setIsVerifying(false);
       });
 
     return () => {
@@ -104,6 +113,7 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
     )}`;
   }, [liveOrder, order, orderRef]);
 
+  const hasVerifiedOrder = Boolean(liveOrder);
   const summaryItems = liveOrder?.items?.length
     ? liveOrder.items.map((item) => ({
         productId: item.productId || item.id,
@@ -111,25 +121,37 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
         quantity: item.quantity,
         lineTotal: item.total,
       }))
-    : order?.items ?? [];
+    : !orderRef
+      ? order?.items ?? []
+      : [];
 
-  const currentStatus = liveOrder?.status || "PENDING";
-  const currentRef = liveOrder?.orderRef || order?.orderRef || orderRef || "BT-SHOP-REF";
-  const customerName = liveOrder?.customerName || order?.customerName;
-  const customerPhone = liveOrder?.customerPhone || order?.phone;
-  const deliveryMethod = liveOrder?.deliveryMethod || order?.deliveryMethod;
-  const paymentMethod = liveOrder?.paymentMethod || order?.paymentPreference;
-  const subtotal = liveOrder?.subtotal ?? order?.subtotal;
+  const currentStatus = liveOrder?.status || (isVerifying ? "VERIFYING" : "UNVERIFIED");
+  const currentRef = liveOrder?.orderRef || (!orderRef ? order?.orderRef : null) || orderRef || "BT-SHOP-REF";
+  const customerName = liveOrder?.customerName || (!orderRef ? order?.customerName : null);
+  const customerPhone = liveOrder?.customerPhone || (!orderRef ? order?.phone : null);
+  const deliveryMethod = liveOrder?.deliveryMethod || (!orderRef ? order?.deliveryMethod : null);
+  const paymentMethod = liveOrder?.paymentMethod || (!orderRef ? order?.paymentPreference : null);
+  const subtotal = liveOrder?.subtotal ?? (!orderRef ? order?.subtotal : undefined);
+  const heading = hasVerifiedOrder
+    ? "Your order has been received. Our Betech Solar team will confirm availability, delivery, and payment details shortly."
+    : isVerifying
+      ? "We are verifying your order with Betech Solar."
+      : "We could not verify your order with Betech Solar.";
+  const intro = hasVerifiedOrder
+    ? "Payment has not been processed automatically on this page. Your website checkout stays pending until a Betech Solar admin confirms the order and issues the correct receipt."
+    : isVerifying
+      ? "Please wait while we confirm that your order reached the customer service queue."
+      : "Your order has not been confirmed. Please return to checkout and try again, or contact Betech Solar with the reference shown below.";
 
   return (
     <div className="grid gap-5">
       <div className={`${shopStyles.darkPanel} p-6 sm:p-10`}>
         <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-          Order received
+          {hasVerifiedOrder ? "Order received" : isVerifying ? "Verifying order" : "Order verification needed"}
         </div>
-        <h1 className="mt-4 text-4xl font-black tracking-tight text-white">Your order has been received. Our Betech Solar team will confirm availability, delivery, and payment details shortly.</h1>
+        <h1 className="mt-4 text-4xl font-black tracking-tight text-white">{heading}</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-white/76">
-          Payment has not been processed automatically on this page. Your website checkout stays pending until a Betech Solar admin confirms the order and issues the correct receipt.
+          {intro}
         </p>
         <div className="mt-6 grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
           <div className="rounded-[26px] border border-white/10 bg-white/10 p-5">
@@ -169,7 +191,7 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
                 ) : null}
               </div>
             ) : null}
-            {statusError ? <div className="mt-4 text-sm text-amber-300">{statusError}</div> : null}
+            {statusError ? <div className="mt-4 text-sm text-amber-300">Order verification failed: {statusError}</div> : null}
           </div>
           <div className="rounded-[26px] border border-white/10 bg-white/10 p-5">
             <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#ffd761]">Order summary</div>

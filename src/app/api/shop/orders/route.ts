@@ -16,8 +16,58 @@ import {
 import { getShopProducts } from "@/app/shop/shopApi";
 import { getShopOrderSuccessHref } from "@/app/shop/storefrontPaths";
 import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
+import { getOpsBaseUrl, isOpsHost, isShopHost } from "@/lib/runtimeUrls";
 
 export const dynamic = "force-dynamic";
+
+function shouldUseOpsOrderStore(request: Request) {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  // Keep local development self-contained. In production, orders submitted on
+  // the public shop must be created in the Ops deployment because that is the
+  // database the Website Orders queue reads from.
+  return isShopHost(host) && !isOpsHost(host);
+}
+
+function getOpsOrderUrl(request: Request) {
+  const source = new URL(request.url);
+  const ops = new URL(getOpsBaseUrl());
+  return new URL(`${source.pathname}${source.search}`, ops);
+}
+
+function forwardedOrderHeaders(request: Request) {
+  const headers = new Headers({
+    Accept: "application/json",
+  });
+  const contentType = request.headers.get("content-type");
+  const cookie = request.headers.get("cookie");
+  if (contentType) headers.set("content-type", contentType);
+  if (cookie) headers.set("cookie", cookie);
+  return headers;
+}
+
+async function proxyOrderRequestToOps(request: Request, init?: RequestInit) {
+  try {
+    const response = await fetch(getOpsOrderUrl(request), {
+      ...init,
+      cache: "no-store",
+      headers: forwardedOrderHeaders(request),
+    });
+    const contentType = response.headers.get("content-type") || "application/json";
+    return new NextResponse(await response.text(), {
+      status: response.status,
+      headers: {
+        "content-type": contentType,
+        "cache-control": "no-store",
+      },
+    });
+  } catch (error) {
+    console.error("[website-orders] failed to reach the Ops order store", error);
+    return NextResponse.json(
+      { ok: false, error: "We could not save your order right now. Please try again." },
+      { status: 502 },
+    );
+  }
+}
 
 function buildEntityId() {
   return typeof crypto?.randomUUID === "function"
@@ -42,6 +92,13 @@ async function loadWebsiteOrderRow(id: string): Promise<WebsiteOrderListRow | nu
 }
 
 export async function POST(request: NextRequest) {
+  if (shouldUseOpsOrderStore(request)) {
+    return proxyOrderRequestToOps(request, {
+      method: "POST",
+      body: await request.text(),
+    });
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = websiteOrderCreateSchema.safeParse(body);
 
@@ -185,6 +242,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: Request) {
+  if (shouldUseOpsOrderStore(request)) {
+    return proxyOrderRequestToOps(request);
+  }
+
   await ensureWebsiteOrdersSchema();
   const url = request?.url ? new URL(request.url) : null;
   const orderRef = String(url?.searchParams.get("ref") || "").trim();
