@@ -40,8 +40,9 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL is not configured in repository secrets." >&2
-            exit 1
+            echo "DATABASE_URL is not configured in repository secrets; skipping repository-side migrations."
+            echo "The Vercel deployment uses its configured production environment."
+            exit 0
           fi
           if [ -z "$DIRECT_URL" ]; then
             echo "DIRECT_URL is not configured; falling back to DATABASE_URL for prisma migrate deploy." >&2
