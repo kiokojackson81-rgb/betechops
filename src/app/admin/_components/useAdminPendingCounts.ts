@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 export type AdminPendingCounts = {
   orders: number;
@@ -26,11 +27,14 @@ const ZERO_COUNTS: AdminPendingCounts = {
 
 export function useAdminPendingCounts() {
   const [counts, setCounts] = useState<AdminPendingCounts | null>(null);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const navigationKey = `${pathname}?${searchParams.toString()}`;
 
   useEffect(() => {
     let ignore = false;
 
-    (async () => {
+    const refreshCounts = async () => {
       try {
         const response = await fetch("/api/admin/pending-counts", { cache: "no-store" });
         const payload = await response.json().catch(() => ({}));
@@ -52,12 +56,24 @@ export function useAdminPendingCounts() {
       } catch {
         if (!ignore) setCounts(ZERO_COUNTS);
       }
-    })();
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshCounts();
+    };
+
+    void refreshCounts();
+    window.addEventListener("focus", refreshCounts);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const refreshInterval = window.setInterval(refreshCounts, 30_000);
 
     return () => {
       ignore = true;
+      window.removeEventListener("focus", refreshCounts);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.clearInterval(refreshInterval);
     };
-  }, []);
+  }, [navigationKey]);
 
   return counts;
 }

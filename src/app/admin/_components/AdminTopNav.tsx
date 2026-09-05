@@ -1,7 +1,7 @@
 "use client";
 // src/app/admin/_components/AdminTopNav.tsx
-import React, { useMemo } from "react";
-import { usePathname } from "next/navigation";
+import React, { useCallback, useMemo } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { NAV } from "./adminNav";
 import { useAdminPendingCounts } from "./useAdminPendingCounts";
 
@@ -9,7 +9,22 @@ type Props = { mobile?: boolean; className?: string };
 
 export default function AdminTopNav({ mobile = false, className = "" }: Props) {
   const pathname = usePathname() || "/admin";
+  const searchParams = useSearchParams();
   const counts = useAdminPendingCounts();
+
+  const matchesHref = useCallback((href: string) => {
+    const [targetPath, targetSearch = ""] = href.split("?");
+    if (pathname !== targetPath && !pathname.startsWith(`${targetPath}/`)) return false;
+
+    // Links that carry a query (such as Website Orders) are only active when
+    // the current query also matches. Without this, every /admin/receipts
+    // sub-tab looks selected while the normal Receipts overview is displayed.
+    if (!targetSearch) return true;
+    const expected = new URLSearchParams(targetSearch);
+    return Array.from(expected.entries()).every(
+      ([key, value]) => searchParams.get(key) === value,
+    );
+  }, [pathname, searchParams]);
 
   const withCount = (label: string, countKey?: string) => {
     if (!countKey || !counts) return label;
@@ -20,16 +35,12 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
 
   const isItemActive = useMemo(
     () => (href: string, children?: Array<{ href: string }>) => {
-      const matchesHref = pathname === href || pathname.startsWith(href + "/");
-      if (matchesHref) return true;
+      if (matchesHref(href)) return true;
       return Boolean(
-        children?.some((child) => {
-          const [childPath] = child.href.split("?");
-          return pathname === childPath || pathname.startsWith(childPath + "/");
-        }),
+        children?.some((child) => matchesHref(child.href)),
       );
     },
-    [pathname],
+    [matchesHref],
   );
 
   const activeGroup = useMemo(
@@ -97,8 +108,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
               aria-label={`${activeGroup.label} submenu`}
             >
               {activeGroup.children.map((child) => {
-                const [childPath] = child.href.split("?");
-                const childActive = pathname === childPath || pathname.startsWith(childPath + "/");
+                const childActive = matchesHref(child.href);
                 return (
                   <a
                     key={child.href}
