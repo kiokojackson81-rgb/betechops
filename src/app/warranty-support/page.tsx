@@ -4,79 +4,85 @@ import ShopInformationPage, { type ShopInformationSection } from "@/app/shop/_co
 
 export const metadata: Metadata = {
   title: "Warranty Support | Betech Solar Solutions",
-  description: "Understand Betech Solar product and installation warranties, what they cover, exclusions, and how to request warranty assessment and support.",
+  description: "Find out how your product or solar system warranty works, what may be covered, and how to get help if something goes wrong.",
   alternates: { canonical: "https://www.betech.co.ke/warranty-support" },
 };
 
 const sections: ShopInformationSection[] = [
   {
     id: "how-warranties-work",
-    title: "How our warranties work",
-    navigationTitle: "How Our Warranties Work",
+    title: "How Your Warranty Works",
     icon: ShieldCheck,
     paragraphs: [
-      "Warranty periods and terms differ by product, brand and installation package. The applicable warranty is the one shown on the product listing, quotation, invoice, receipt, warranty card or manufacturer documentation supplied with your order.",
-      "Some products carry a manufacturer warranty administered with our assistance, while installation workmanship may have separate cover. Keep your receipt and any serial-number or warranty documentation because these help us verify the purchase and assess a claim quickly.",
+      "Warranty periods and coverage vary depending on the product, brand and installation package.",
+      "Your specific warranty is shown on the relevant product information, quotation, invoice, receipt, warranty card or manufacturer documentation provided with your purchase.",
+      "Some products have manufacturer warranties that Betech can assist you with, while installed solar systems may also have separate workmanship coverage.",
+      "Keep your purchase and warranty documents so we can identify your product and assist you more quickly.",
     ],
   },
   {
     id: "what-is-covered",
-    title: "What a general warranty may cover",
+    title: "What May Be Covered",
     icon: PackageCheck,
-    paragraphs: ["Subject to the specific product terms, a valid warranty generally addresses confirmed faults that arise during normal use within the stated warranty period."],
+    paragraphs: ["Depending on the warranty provided with your product or project, coverage may include:"],
     bullets: [
       "Manufacturing defects in materials or workmanship.",
-      "A covered component that fails under normal operating conditions.",
-      "Repair or replacement of an eligible defective part after technical assessment.",
-      "Installation workmanship issues where a Betech workmanship warranty was included in the project agreement.",
+      "Covered components that fail during normal use.",
+      "Repair or replacement of an eligible defective component.",
+      "Installation workmanship issues where workmanship coverage was included with the project.",
     ],
-    note: "A warranty does not automatically guarantee an immediate replacement. The product or system must first be inspected and the fault confirmed under the applicable terms.",
+    note: "The product or system may need to be inspected or tested before we can confirm whether the reported problem is covered by warranty.",
   },
   {
     id: "what-is-not-covered",
-    title: "What is generally not covered",
+    title: "What May Not Be Covered",
     icon: AlertTriangle,
-    paragraphs: ["The exact exclusions depend on the brand and product, but warranties normally do not cover damage or failure caused by circumstances outside a manufacturing or covered workmanship defect."],
+    paragraphs: ["Coverage depends on the warranty provided with your specific product. Common exclusions may include:"],
     bullets: [
-      "Misuse, neglect, accidental damage, impact, fire, water ingress or improper storage.",
-      "Incorrect wiring, overloading, wrong voltage, power surges, lightning or unstable supply unless specifically covered.",
-      "Installation, opening, modification or repair by an unauthorized person.",
-      "Normal wear, consumables, cosmetic damage or expected reduction in performance over time.",
-      "Removed or altered serial numbers, seals, labels, receipts or warranty records.",
-      "Transport damage after collection or delivery acceptance unless reported promptly and verified.",
+      "Damage caused by misuse, neglect, accidents, fire, water or improper storage.",
+      "Damage caused by incorrect wiring, overloading, incorrect voltage, power surges or lightning where these are not covered.",
+      "Opening, modification, installation or repair by an unauthorized person.",
+      "Normal wear and tear, consumable items or cosmetic damage.",
+      "Removed or altered serial numbers, labels, seals or warranty information.",
+      "Transport or handling damage that occurs after collection or accepted delivery, subject to the applicable terms.",
     ],
   },
   {
     id: "request-support",
-    title: "How to request warranty support",
+    title: "How to Get Warranty Support",
     icon: ClipboardCheck,
-    paragraphs: ["Contact Betech Customer Service before sending, opening or repairing the item. Clear information helps our team identify the product and organize the right assessment."],
+    paragraphs: [
+      "If your product or solar installation develops a problem, submit a report through our support page before opening, repairing or returning the product.",
+      "To help us assist you, provide where available:",
+    ],
     bullets: [
-      "Share your name, phone number, receipt or order number and purchase date.",
-      "Provide the product model, serial number and a clear description of the fault.",
-      "Send clear photos or a short video showing the product and the reported problem where possible.",
-      "Follow the return, site-visit or diagnostic instructions provided by our support team.",
+      "Your name and phone number.",
+      "Receipt, order or project number.",
+      "Product model and serial number.",
+      "A description of the problem.",
+      "Photos or a short video showing the issue.",
     ],
   },
   {
     id: "assessment-resolution",
-    title: "Assessment and resolution",
+    title: "What Happens After You Report an Issue",
     icon: Wrench,
     paragraphs: [
-      "Our team or the relevant manufacturer will inspect or test the item. Depending on the confirmed fault and applicable terms, the resolution may be repair, replacement of a covered component, product replacement, further manufacturer review or a quotation for a non-warranty repair.",
-      "Assessment time depends on the product, fault, spare-parts availability, location and whether manufacturer approval is required. Delivery, collection, site-visit or transport costs are handled according to the applicable warranty and the outcome of the assessment.",
+      "Our support team will review the information you provide and advise you on the next step. Depending on the issue, we may provide troubleshooting guidance, request additional information, arrange an inspection, request that the product be brought in, arrange a site visit, or refer the matter to the manufacturer.",
+      "If the problem is covered by warranty, the available solution will depend on the warranty terms and the findings after inspection or testing. This may include repair, replacement of an eligible component, product replacement or manufacturer support.",
+      "Some issues may take longer to resolve where testing, spare parts, a site visit or manufacturer assistance is required. We will keep you updated through the support process.",
     ],
   },
   {
     id: "documents",
-    title: "Documents to keep",
+    title: "Documents to Keep",
     icon: FileCheck2,
     bullets: [
-      "Original receipt, invoice or order confirmation.",
+      "Receipt, invoice or order confirmation.",
       "Quotation and project agreement for installed systems.",
-      "Warranty card and manufacturer documentation.",
-      "Product model and serial-number records.",
-      "Installation, commissioning and service records where applicable.",
+      "Warranty card or manufacturer documentation.",
+      "Product model and serial number.",
+      "Installation, commissioning and service records.",
     ],
   },
 ];
@@ -84,18 +90,18 @@ const sections: ShopInformationSection[] = [
 export default function WarrantySupportPage() {
   return (
     <ShopInformationPage
-      eyebrow="Customer care"
-      title="Warranty support that starts with clear information."
-      introduction="Understand the warranty attached to your product or solar project, what is normally covered, common exclusions and the steps to request a fair technical assessment."
+      eyebrow="Customer Care"
+      title="Warranty Support"
+      introduction="Find out how your product or solar system warranty works, what may be covered, and how to get help if something goes wrong."
       heroIcon={ShieldCheck}
       highlights={[
-        { title: "Keep proof of purchase", copy: "Your receipt, order reference and serial number help us verify cover." },
-        { title: "Report the fault early", copy: "Contact us before opening, modifying or sending the product for repair." },
-        { title: "Assessment first", copy: "Repair or replacement follows technical confirmation and the applicable warranty." },
+        { title: "Keep Your Proof of Purchase", copy: "Keep your receipt, order number, warranty documents and product serial number where available. We may need these details when assisting you." },
+        { title: "Report Problems Early", copy: "If you notice a problem, report it as soon as possible. Please contact us before opening, modifying or attempting to repair the product." },
+        { title: "We’ll Check the Problem First", copy: "Our team will first assess the reported problem and advise you on the next step." },
       ]}
       sections={sections}
-      supportTitle="Need to report a product or installation fault?"
-      supportCopy="Submit the issue through our support form and include your receipt or order number, product details, serial number, and a clear description of the problem."
+      supportTitle="Need to report an issue?"
+      supportCopy="Report the issue through our support page and provide as much information as possible. This helps our team review the problem and advise you on the next step."
       whatsappMessage="Hello Betech Solar, I need warranty support for a product or solar installation."
       showWhatsAppSupport={false}
       primaryAction={{ label: "Report an Issue", href: "/support/report-issue" }}
