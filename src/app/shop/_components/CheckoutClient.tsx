@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { MessageCircle } from "lucide-react";
-import { buildDetailedCart, useShopCartItems } from "@/app/shop/cartStore";
+import { buildDetailedCart, useShopCart } from "@/app/shop/cartStore";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { createShopOrder } from "@/app/shop/shopSubmitApi";
 import { trackCheckoutStarted, trackOrderSubmitted } from "@/app/shop/shopAnalytics";
@@ -66,7 +66,7 @@ function getCheckoutAvailabilityCopy(product: ShopProduct) {
 
 export default function CheckoutClient({ products, isSignedIn, initialProfile }: CheckoutClientProps) {
   const router = useRouter();
-  const items = useShopCartItems();
+  const { items, hydrated: cartHydrated } = useShopCart();
   const detailedItems = useMemo(() => buildDetailedCart(items, products), [items, products]);
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const installationItems = useMemo(() => detailedItems.filter((item) => item.bookingType === "INSTALLATION"), [detailedItems]);
@@ -78,7 +78,6 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
-  const [hydrated, setHydrated] = useState(false);
   const [installationPricing, setInstallationPricing] = useState<InstallationPricing[]>([]);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [form, setForm] = useState({
@@ -105,7 +104,6 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const paymentDueNow = form.paymentPreference.startsWith("30%") ? depositAmount : projectTotal;
 
   useEffect(() => {
-    setHydrated(true);
     const profile = getShopCustomerProfile();
     const [storedCounty = "", storedTown = ""] = String(profile?.countyTown || "")
       .split("/")
@@ -187,7 +185,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     return Object.keys(nextErrors).length === 0;
   }
 
-  if (!hydrated) {
+  if (!cartHydrated) {
     return (
       <div className="rounded-[20px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
         <div className={shopStyles.sectionEyebrow}>Checkout</div>

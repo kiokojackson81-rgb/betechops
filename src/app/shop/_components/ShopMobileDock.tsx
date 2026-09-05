@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FileText, MessageCircle, ShoppingCart } from "lucide-react";
-import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
+import { useShopCart } from "@/app/shop/cartStore";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { SHOP_CART_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
@@ -10,8 +10,8 @@ const whatsappHref =
   "https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20need%20help%20choosing%20the%20right%20solar%20products.";
 
 export default function ShopMobileDock() {
-  useShopCartItems();
-  const cartCount = getShopCartCount();
+  const { items } = useShopCart();
+  const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#7a0000]/10 bg-white/96 px-3.5 pb-[calc(env(safe-area-inset-bottom)+0.85rem)] pt-2.5 shadow-[0_-18px_40px_rgba(15,23,42,0.10)] backdrop-blur sm:hidden">

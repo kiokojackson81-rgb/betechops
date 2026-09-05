@@ -9,6 +9,11 @@ export type ShopCartItem = {
   bookingType?: "INSTALLATION";
 };
 
+export type ShopCartState = {
+  items: ShopCartItem[];
+  hydrated: boolean;
+};
+
 const SHOP_CART_KEY = "betech-shop-cart";
 const SHOP_CART_EVENT = "betech-shop-cart-updated";
 
@@ -115,13 +120,13 @@ export function buildDetailedCart(items: ShopCartItem[], products: ShopProduct[]
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 }
 
-export function useShopCartItems() {
-  const [items, setItems] = useState<ShopCartItem[]>([]);
+export function useShopCart() {
+  const [cart, setCart] = useState<ShopCartState>({ items: [], hydrated: false });
 
   useEffect(() => {
-    setItems(readShopCart());
+    const sync = () => setCart({ items: readShopCart(), hydrated: true });
+    sync();
 
-    const sync = () => setItems(readShopCart());
     window.addEventListener("storage", sync);
     window.addEventListener(SHOP_CART_EVENT, sync as EventListener);
 
@@ -131,5 +136,9 @@ export function useShopCartItems() {
     };
   }, []);
 
-  return items;
+  return cart;
+}
+
+export function useShopCartItems() {
+  return useShopCart().items;
 }

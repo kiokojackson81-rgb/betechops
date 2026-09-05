@@ -7,7 +7,7 @@ import { ChevronDown, Grid2X2, Headphones, Menu, ShoppingCart, User2, WalletCard
 import ShopPreviewBanner from "@/app/shop/_components/ShopPreviewBanner";
 import ShopSearchBar from "@/app/shop/_components/ShopSearchBar";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
-import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
+import { useShopCart } from "@/app/shop/cartStore";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import type { ShopNavigationItem } from "@/app/shop/shopData";
 import {
@@ -39,8 +39,8 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [searchActive, setSearchActive] = useState(false);
-  useShopCartItems();
-  const cartCount = getShopCartCount();
+  const { items } = useShopCart();
+  const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <header className={`sticky top-0 z-50 ${shopStyles.headerGlass}`}>

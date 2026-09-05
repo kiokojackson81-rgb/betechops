@@ -7,7 +7,7 @@ import {
   buildDetailedCart,
   removeShopCartItem,
   updateShopCartQuantity,
-  useShopCartItems,
+  useShopCart,
 } from "@/app/shop/cartStore";
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
@@ -15,7 +15,7 @@ import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
-import { getShopProductHref, SHOP_CHECKOUT_LOGIN_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
+import { getShopProductHref, SHOP_CHECKOUT_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 type CartClientProps = {
   products: ShopProduct[];
@@ -41,7 +41,7 @@ function CartProductImage({ product, className = "" }: { product: ShopProduct; c
 }
 
 export default function CartClient({ products }: CartClientProps) {
-  const items = useShopCartItems();
+  const { items, hydrated: cartHydrated } = useShopCart();
   const detailedItems = buildDetailedCart(items, products);
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const hasWarehouseItems = detailedItems.some((item) => item.product.availabilityType === "WAREHOUSE");
@@ -62,6 +62,15 @@ export default function CartClient({ products }: CartClientProps) {
       .map((item) => `${item.product.name} x${item.quantity}`)
       .join(", ") || "my cart"}.`,
   )}`;
+
+  if (!cartHydrated) {
+    return (
+      <div className="rounded-[20px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
+        <div className={shopStyles.sectionEyebrow}>Cart</div>
+        <div className="mt-3 text-sm text-slate-600">Loading your Betech Solar cart...</div>
+      </div>
+    );
+  }
 
   if (!detailedItems.length) {
     return (
@@ -223,7 +232,7 @@ export default function CartClient({ products }: CartClientProps) {
           {availabilityNotice}
         </div>
         <div className="mt-4 grid gap-2.5">
-          <Link href={SHOP_CHECKOUT_LOGIN_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
+          <Link href={SHOP_CHECKOUT_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
             Proceed to Checkout
           </Link>
           <TrackedWhatsAppLink

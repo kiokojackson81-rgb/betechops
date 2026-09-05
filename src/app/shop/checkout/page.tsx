@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import CheckoutClient from "@/app/shop/_components/CheckoutClient";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
@@ -23,13 +22,9 @@ export default async function ShopCheckoutPage() {
   const session = await auth().catch(() => null);
   const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
 
-  if (!sessionUserId) {
-    redirect("/login/phone?callbackUrl=/checkout");
-  }
-
   const [products, customerProfile] = await Promise.all([
     getShopProducts(),
-    findSafeCustomerProfileByUserId(sessionUserId),
+    sessionUserId ? findSafeCustomerProfileByUserId(sessionUserId) : Promise.resolve(null),
   ]);
 
   return (
