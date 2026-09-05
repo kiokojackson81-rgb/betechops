@@ -50,6 +50,7 @@ type CheckoutFieldErrors = {
 type InstallationPricing = {
   productId: string;
   quantity: number;
+  bookingType?: "INSTALLATION";
   installation: { status: string; amount: number | null } | null;
   transport: { status: string; amount: number | null } | null;
   accessories: { status: string; amount: number | null; minimum?: number; maximum?: number } | null;
@@ -70,6 +71,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const detailedItems = useMemo(() => buildDetailedCart(items, products), [items, products]);
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const installationItems = useMemo(() => detailedItems.filter((item) => item.bookingType === "INSTALLATION"), [detailedItems]);
+  const priceableItems = useMemo(() => detailedItems.filter((item) => item.product.opsProductId), [detailedItems]);
   const hasInstallationBooking = installationItems.length > 0;
   const hasWarehouseItems = detailedItems.some((item) => item.product.availabilityType === "WAREHOUSE");
   const warehouseAvailabilityNotice = hasWarehouseItems
@@ -94,12 +96,15 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   });
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
   const deliveryZone = useMemo(() => getDeliveryZone(form.county, form.town), [form.county, form.town]);
-  const installationFee = installationPricing.reduce((sum, item) => sum + (item.installation?.amount ?? 0) * item.quantity, 0);
-  const accessoriesFee = installationPricing.reduce((sum, item) => sum + (item.accessories?.amount ?? 0) * item.quantity, 0);
+  const installationPricingItems = installationPricing.filter((item) => item.bookingType === "INSTALLATION");
+  const installationFee = installationPricingItems.reduce((sum, item) => sum + (item.installation?.amount ?? 0) * item.quantity, 0);
+  const accessoriesFee = installationPricingItems.reduce((sum, item) => sum + (item.accessories?.amount ?? 0) * item.quantity, 0);
   const transportFee = installationPricing.reduce((highest, item) => Math.max(highest, item.transport?.amount ?? 0), 0);
-  const accessoriesPendingAssessment = installationPricing.some((item) => item.accessories?.status === "ASSESSMENT");
-  const installationPendingAssessment = installationPricing.some((item) => item.installation?.status === "ASSESSMENT");
+  const hasConfiguredDeliveryFee = Boolean(deliveryZone) && installationPricing.some((item) => item.transport?.amount != null);
+  const accessoriesPendingAssessment = installationPricingItems.some((item) => item.accessories?.status === "ASSESSMENT");
+  const installationPendingAssessment = installationPricingItems.some((item) => item.installation?.status === "ASSESSMENT");
   const projectTotal = subtotal + installationFee + accessoriesFee + transportFee;
+  const estimatedTotal = hasInstallationBooking ? projectTotal : subtotal + (hasConfiguredDeliveryFee ? transportFee : 0);
   const depositAmount = Math.round(projectTotal * 0.3);
   const paymentDueNow = form.paymentPreference.startsWith("30%") ? depositAmount : projectTotal;
 
@@ -123,24 +128,24 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   }, [initialProfile]);
 
   useEffect(() => {
-    if (!hasInstallationBooking || !deliveryZone) {
+    if (!deliveryZone || !priceableItems.length) {
       setInstallationPricing([]);
       return;
     }
     const controller = new AbortController();
     setPricingLoading(true);
-    Promise.all(installationItems.map(async (item) => {
+    Promise.all(priceableItems.map(async (item) => {
       const productId = item.product.opsProductId;
       if (!productId) throw new Error(`${item.product.name} is missing its catalogue pricing link.`);
       const response = await fetch(`/api/shop/products/${encodeURIComponent(productId)}/pricing`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ zone: deliveryZone.id, includeInstallation: true }),
+        body: JSON.stringify({ zone: deliveryZone.id, includeInstallation: item.bookingType === "INSTALLATION" }),
         signal: controller.signal,
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(String(payload?.error || `Unable to price ${item.product.name}.`));
-      return { productId: item.product.id, quantity: item.quantity, ...payload } as InstallationPricing;
+      return { productId: item.product.id, quantity: item.quantity, bookingType: item.bookingType, ...payload } as InstallationPricing;
     }))
       .then(setInstallationPricing)
       .catch((pricingError) => {
@@ -149,7 +154,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
       })
       .finally(() => setPricingLoading(false));
     return () => controller.abort();
-  }, [deliveryZone, hasInstallationBooking, installationItems]);
+  }, [deliveryZone, priceableItems]);
 
   useEffect(() => {
     if (!hasInstallationBooking) return;
@@ -411,7 +416,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 </select>
                 {fieldErrors.town ? <span className="text-xs font-semibold text-red-600">{fieldErrors.town}</span> : null}
               </label>
-              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">Delivery Area</b><div className="mt-1 font-semibold">{form.town}, {form.county} County</div><div className="mt-1">Delivery charges will be calculated based on your selected location and delivery method.</div></div> : null}
+              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">Delivery Area</b><div className="mt-1 font-semibold">{form.town}, {form.county} County</div><div className="mt-1">{pricingLoading ? "Calculating your configured delivery fee..." : hasConfiguredDeliveryFee ? `Configured delivery fee: ${formatCurrency(transportFee)}.` : "Delivery charges will be calculated based on your selected location and delivery method."}</div></div> : null}
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
                 Specific Locality / Estate / Landmark
                 <input value={form.estateLandmark} onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))} className={resolveFieldClass()} />
@@ -496,7 +501,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           </div>
           <div className="flex items-center justify-between">
             <span>Delivery</span>
-            <span>{hasInstallationBooking && deliveryZone ? formatCurrency(transportFee) : "Calculated based on delivery location"}</span>
+            <span>{pricingLoading ? "Calculating..." : hasConfiguredDeliveryFee ? formatCurrency(transportFee) : "Calculated based on delivery location"}</span>
           </div>
           {hasInstallationBooking ? <>
             <div className="flex items-center justify-between"><span>Installation</span><span>{installationPendingAssessment ? "Site assessment required" : formatCurrency(installationFee)}</span></div>
@@ -504,7 +509,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           </> : null}
           <div className="flex items-center justify-between">
             <span>Estimated Total</span>
-            <span className="text-lg font-black text-slate-950">{pricingLoading ? "Calculating..." : hasInstallationBooking && deliveryZone ? formatCurrency(projectTotal) : `${formatCurrency(subtotal)} + delivery, where applicable`}</span>
+            <span className="text-lg font-black text-slate-950">{pricingLoading ? "Calculating..." : hasConfiguredDeliveryFee || hasInstallationBooking && deliveryZone ? formatCurrency(estimatedTotal) : `${formatCurrency(subtotal)} + delivery, where applicable`}</span>
           </div>
           {hasInstallationBooking ? <div className="mt-1 rounded-xl border border-[#7a0000]/10 bg-white p-3">
             <div className="flex items-center justify-between font-bold text-[#7a0000]"><span>Amount due before scheduling</span><span>{formatCurrency(paymentDueNow)}</span></div>

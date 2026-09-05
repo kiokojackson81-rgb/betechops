@@ -1,5 +1,6 @@
 import { noStoreJson } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import {
   calculateInstallationFee,
   calculateAccessoriesEstimate,
@@ -16,29 +17,46 @@ const requestSchema = z.object({
   includeInstallation: z.boolean().default(false),
 });
 
+const baseProductSelect = {
+  id: true,
+  name: true,
+  category: true,
+  shortDescription: true,
+  description: true,
+  specifications: true,
+  sellingPrice: true,
+  isActive: true,
+} as const;
+
+type ProductPricingRecord = {
+  id: string;
+  name: string;
+  category: string | null;
+  shortDescription: string | null;
+  description: string | null;
+  specifications: unknown;
+  sellingPrice: number;
+  catalogueConfiguration?: unknown;
+  isActive: boolean;
+};
+
 export async function POST(req: Request, context: { params: Promise<{ slug: string }> }) {
   // This endpoint is nested below the existing [slug] product route, but receives a product ID.
   const { slug: productId } = await context.params;
   const input = requestSchema.safeParse(await req.json().catch(() => ({})));
   if (!input.success) return noStoreJson({ error: input.error.flatten() }, { status: 400 });
 
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      shortDescription: true,
-      description: true,
-      specifications: true,
-      sellingPrice: true,
-      catalogueConfiguration: true,
-      isActive: true,
-    },
-  });
+  const capabilities = await getProductTableCapabilities(prisma);
+  const product: ProductPricingRecord | null = capabilities.catalogueConfiguration
+    ? await prisma.product.findUnique({
+      where: { id: productId },
+      select: { ...baseProductSelect, catalogueConfiguration: true },
+    })
+    : await prisma.product.findUnique({ where: { id: productId }, select: baseProductSelect });
   if (!product?.isActive) return noStoreJson({ error: "Product not found" }, { status: 404 });
 
-  const parsedPolicy = productCatalogueConfigurationSchema.safeParse(product.catalogueConfiguration);
+  const catalogueConfiguration = "catalogueConfiguration" in product ? product.catalogueConfiguration : null;
+  const parsedPolicy = productCatalogueConfigurationSchema.safeParse(catalogueConfiguration);
   const policy = parsedPolicy.success ? parsedPolicy.data : inferLegacyProductCataloguePolicy(product);
   if (!policy) {
     return noStoreJson({
