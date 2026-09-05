@@ -7,20 +7,14 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Projects share the customer-account order table for tracking, but belong in
-// the Projects desk rather than the checkout-only Web Orders queues.
 export const websiteCheckoutOrderWhere = {
-  // Older storefront deployments have used differing source values, but all
-  // customer product checkouts receive the canonical BT-WEB reference. Keep
-  // the source match for normal records and include that unambiguous legacy
-  // reference pattern so valid checkouts do not disappear from Ops.
+  // The cart checkout stamps this source marker. BT-WEB keeps legacy cart
+  // orders visible too. Other WebsiteOrder workflows use neither marker.
+  // Avoid JSON `NOT` checks here: a missing JSON field evaluates as SQL NULL,
+  // which was filtering out valid cart checkouts before the queue rendered.
   OR: [
-    { source: { equals: "WEBSITE", mode: "insensitive" } },
+    { metadata: { path: ["checkoutSource"], equals: "shop" } },
     { orderRef: { startsWith: "BT-WEB-" } },
-  ],
-  NOT: [
-    { metadata: { path: ["receiptFlowMode"], equals: "project" } },
-    { metadata: { path: ["customerType"], equals: "project" } },
   ],
 } satisfies Prisma.WebsiteOrderWhereInput;
 
