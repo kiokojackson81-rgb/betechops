@@ -57,6 +57,13 @@ type InstallationPricing = {
 
 const inputBaseClass = "min-h-[3rem] rounded-[16px] border bg-white px-4 outline-none transition";
 
+function getCheckoutAvailabilityCopy(product: ShopProduct) {
+  if (product.availabilityType === "WAREHOUSE") {
+    return "Available from warehouse - pickup or dispatch within 1 business day.";
+  }
+  return getProductAvailabilityMessage(product);
+}
+
 export default function CheckoutClient({ products, isSignedIn, initialProfile }: CheckoutClientProps) {
   const router = useRouter();
   const items = useShopCartItems();
@@ -65,9 +72,9 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const installationItems = useMemo(() => detailedItems.filter((item) => item.bookingType === "INSTALLATION"), [detailedItems]);
   const hasInstallationBooking = installationItems.length > 0;
   const hasWarehouseItems = detailedItems.some((item) => item.product.availabilityType === "WAREHOUSE");
-  const availabilityNotice = hasWarehouseItems
-    ? "Some items in your order are available from warehouse. Pickup or delivery will be available after 1 day."
-    : "All items are available for immediate shop pickup.";
+  const warehouseAvailabilityNotice = hasWarehouseItems
+    ? "Warehouse items are available for pickup or dispatch within 1 business day."
+    : null;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
@@ -209,9 +216,14 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     );
   }
 
-  const summaryWhatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(
+  const whatsappCheckoutMessage = [
     `Hello Betech Solar, I want to complete checkout for ${detailedItems.map((item) => `${item.product.name} x${item.quantity}`).join(", ")}.`,
-  )}`;
+    form.fullName.trim() ? `Customer: ${form.fullName.trim()}.` : "",
+    form.town.trim() || form.county.trim()
+      ? `Delivery location: ${[form.town.trim(), form.county.trim()].filter(Boolean).join(", ")}.`
+      : "",
+  ].filter(Boolean).join(" ");
+  const summaryWhatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(whatsappCheckoutMessage)}`;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_340px]">
@@ -311,57 +323,52 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
             clearCartAfterOrder();
             router.push(orderResponse.successUrl || getShopOrderSuccessHref(savedOrder.orderRef));
           } catch (submissionError) {
-            setError(submissionError instanceof Error ? submissionError.message : "Unable to create the order request.");
+            setError(submissionError instanceof Error ? submissionError.message : "Unable to place your order.");
           } finally {
             setSubmitting(false);
           }
         }}
       >
-        <div className={shopStyles.sectionEyebrow}>Checkout</div>
-        <h1 className="mt-3 text-[1.75rem] font-black tracking-tight text-slate-950 sm:text-[2rem]">Complete your Betech Solar checkout.</h1>
-        <p className="mt-2 text-[13px] leading-5 text-slate-600 sm:text-[15px] sm:leading-6">
-          Customer details, delivery preferences, and payment intent are collected here first. Payment is not processed automatically on this page, and a Betech Solar team member confirms the next steps with you directly.
-        </p>
-        <div className="mt-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
-          {availabilityNotice}
-        </div>
+        {warehouseAvailabilityNotice ? <div className="rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
+          {warehouseAvailabilityNotice}
+        </div> : null}
 
-        <div className="mt-4 grid gap-4">
+        <div className={`${warehouseAvailabilityNotice ? "mt-4" : ""} grid gap-4`}>
           <section className="rounded-[16px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
-            <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Customer details</div>
+            <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Customer Details</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Full name
+                Full Name
                 <input value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} className={resolveFieldClass(fieldErrors.fullName)} />
                 {fieldErrors.fullName ? <span className="text-xs font-semibold text-red-600">{fieldErrors.fullName}</span> : null}
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Phone number
+                Phone Number
                 <input value={form.phoneNumber} onChange={(event) => setForm((current) => ({ ...current, phoneNumber: event.target.value }))} className={resolveFieldClass(fieldErrors.phoneNumber)} />
                 {fieldErrors.phoneNumber ? <span className="text-xs font-semibold text-red-600">{fieldErrors.phoneNumber}</span> : null}
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                WhatsApp number
+                WhatsApp Number
                 <input value={form.whatsappNumber} onChange={(event) => setForm((current) => ({ ...current, whatsappNumber: event.target.value }))} className={resolveFieldClass(fieldErrors.whatsappNumber)} />
                 {fieldErrors.whatsappNumber ? <span className="text-xs font-semibold text-red-600">{fieldErrors.whatsappNumber}</span> : null}
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Email address
+                Email Address
                 <input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className={resolveFieldClass()} />
               </label>
             </div>
           </section>
 
           <section className="rounded-[16px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
-            <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Delivery and location</div>
+            <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Delivery Details</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Delivery method
+                Delivery Method
                 <select value={form.deliveryMethod} onChange={(event) => setForm((current) => ({ ...current, deliveryMethod: event.target.value }))} className={resolveFieldClass(fieldErrors.deliveryMethod)}>
                   <option value="">Select delivery method</option>
-                  <option>Nairobi rider delivery</option>
-                  <option>Shop pickup</option>
-                  <option>Countrywide courier</option>
+                  <option value="Nairobi rider delivery">Nairobi Rider Delivery</option>
+                  <option value="Shop pickup">Shop Pickup</option>
+                  <option value="Countrywide courier">Countrywide Courier</option>
                 </select>
                 {fieldErrors.deliveryMethod ? <span className="text-xs font-semibold text-red-600">{fieldErrors.deliveryMethod}</span> : null}
               </label>
@@ -390,14 +397,14 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 {fieldErrors.county ? <span className="text-xs font-semibold text-red-600">{fieldErrors.county}</span> : null}
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Town / city
+                Town / City
                 <select
                   value={form.town}
                   onChange={(event) => setForm((current) => ({ ...current, town: event.target.value }))}
                   disabled={!form.county}
                   className={resolveFieldClass(fieldErrors.town)}
                 >
-                  <option value="">{form.county ? "Select town / city" : "Choose county first"}</option>
+                  <option value="">{form.county ? "Select town or city" : "Choose county first"}</option>
                   {availableTowns.map((town) => (
                     <option key={town} value={town}>
                       {town}
@@ -406,27 +413,28 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 </select>
                 {fieldErrors.town ? <span className="text-xs font-semibold text-red-600">{fieldErrors.town}</span> : null}
               </label>
-              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">{deliveryZone.name}</b><div className="mt-1">Destination: {form.town}, {form.county} County. Your delivery charge is calculated separately using the existing delivery rules.</div></div> : null}
+              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">Delivery Area</b><div className="mt-1 font-semibold">{form.town}, {form.county} County</div><div className="mt-1">Delivery charges will be calculated based on your selected location and delivery method.</div></div> : null}
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Specific locality / estate / landmark
+                Specific Locality / Estate / Landmark
                 <input value={form.estateLandmark} onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))} className={resolveFieldClass()} />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Delivery notes
+                Delivery Notes
                 <textarea rows={3} value={form.locationNotes} onChange={(event) => setForm((current) => ({ ...current, locationNotes: event.target.value }))} className="rounded-[16px] border border-[#7a0000]/10 bg-white px-4 py-3 outline-none" />
+                <span className="text-xs font-medium text-slate-500">Optional instructions to help us locate or deliver your order.</span>
               </label>
             </div>
           </section>
 
           <section className="rounded-[16px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
-            <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Payment preference</div>
+            <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Payment Method</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Choose payment arrangement
+                Choose your preferred payment option
                 <select value={form.paymentPreference} onChange={(event) => setForm((current) => ({ ...current, paymentPreference: event.target.value }))} className={resolveFieldClass(fieldErrors.paymentPreference)}>
-                  <option value="">Select payment preference</option>
-                  {hasInstallationBooking ? <option>30% deposit, balance after installation</option> : <><option>Pay on delivery where available</option><option>Pay transport fee first</option><option>Pay deposit</option></>}
-                  <option>Pay full amount</option>
+                  <option value="">Choose your preferred payment option</option>
+                  {hasInstallationBooking ? <option value="30% deposit, balance after installation">Pay Deposit</option> : <><option value="Pay on delivery where available">Pay on Delivery - where available</option><option value="Pay transport fee first">Pay Transport Fee First</option><option value="Pay deposit">Pay Deposit</option></>}
+                  <option value="Pay full amount">Pay in Full</option>
                 </select>
                 {fieldErrors.paymentPreference ? <span className="text-xs font-semibold text-red-600">{fieldErrors.paymentPreference}</span> : null}
               </label>
@@ -437,17 +445,17 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 disabled={submitting}
                 className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]"
               >
-                {submitting ? "Submitting Website Order..." : "Place Order"}
+                {submitting ? "Placing Order..." : "Place Order"}
               </button>
               <TrackedWhatsAppLink
                 href={summaryWhatsappHref}
                 className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(15,157,88,0.22)] transition"
                 label="Checkout WhatsApp follow-up"
                 context="checkout_summary"
-                ariaLabel="Order via WhatsApp"
+                ariaLabel="Checkout on WhatsApp"
               >
                 <MessageCircle className="h-4 w-4" />
-                Order via WhatsApp
+                WhatsApp Checkout
               </TrackedWhatsAppLink>
               <Link href={SHOP_CART_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
                 Back to Cart
@@ -461,7 +469,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
 
         <div className="mt-5 hidden flex-col gap-2.5 xl:flex xl:flex-row">
           <button type="submit" disabled={submitting} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
-            {submitting ? "Submitting Website Order..." : "Place Order Request"}
+            {submitting ? "Placing Order..." : "Place Order"}
           </button>
           <Link href={SHOP_CART_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
             Back to Cart
@@ -477,7 +485,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               <div>
                 <div className="text-sm font-black text-slate-950">{item.product.name}</div>
                 <div className="mt-1 text-xs text-slate-500">Qty {item.quantity}</div>
-                <div className="mt-1 text-[11px] font-medium text-slate-500">{getProductAvailabilityMessage(item.product)}</div>
+                <div className="mt-1 text-[11px] font-medium text-slate-500">{getCheckoutAvailabilityCopy(item.product)}</div>
               </div>
               <div className="text-sm font-semibold text-slate-950">{formatCurrency(item.lineTotal)}</div>
             </div>
@@ -490,24 +498,21 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           </div>
           <div className="flex items-center justify-between">
             <span>Delivery</span>
-            <span>{hasInstallationBooking ? deliveryZone ? formatCurrency(transportFee) : "Select location" : "Confirmed by team"}</span>
+            <span>{hasInstallationBooking && deliveryZone ? formatCurrency(transportFee) : "Calculated based on delivery location"}</span>
           </div>
           {hasInstallationBooking ? <>
             <div className="flex items-center justify-between"><span>Installation</span><span>{installationPendingAssessment ? "Site assessment required" : formatCurrency(installationFee)}</span></div>
-            <div className="flex items-center justify-between"><span>Accessories</span><span>{accessoriesPendingAssessment ? "Confirmed after assessment" : `${formatCurrency(accessoriesFee)} preliminary`}</span></div>
+            <div className="flex items-center justify-between"><span>Accessories</span><span>{accessoriesPendingAssessment ? "Site assessment required" : `${formatCurrency(accessoriesFee)} estimate`}</span></div>
           </> : null}
           <div className="flex items-center justify-between">
-            <span>{hasInstallationBooking ? "Project total" : "Estimated total"}</span>
-            <span className="text-lg font-black text-slate-950">{pricingLoading ? "Calculating..." : formatCurrency(hasInstallationBooking ? projectTotal : subtotal)}</span>
+            <span>Estimated Total</span>
+            <span className="text-lg font-black text-slate-950">{pricingLoading ? "Calculating..." : hasInstallationBooking && deliveryZone ? formatCurrency(projectTotal) : `${formatCurrency(subtotal)} + delivery, where applicable`}</span>
           </div>
           {hasInstallationBooking ? <div className="mt-1 rounded-xl border border-[#7a0000]/10 bg-white p-3">
             <div className="flex items-center justify-between font-bold text-[#7a0000]"><span>Amount due before scheduling</span><span>{formatCurrency(paymentDueNow)}</span></div>
             {form.paymentPreference.startsWith("30%") ? <div className="mt-1 flex items-center justify-between text-xs"><span>Balance after installation</span><span>{formatCurrency(projectTotal - depositAmount)}</span></div> : null}
-            <div className="mt-2 border-t border-[#7a0000]/10 pt-2 text-xs leading-5 text-slate-600">Accessories are preliminary and the final materials scope is confirmed before installation.</div>
+            <div className="mt-2 border-t border-[#7a0000]/10 pt-2 text-xs leading-5 text-slate-600">Accessories are estimated and the final materials scope is agreed before installation.</div>
           </div> : null}
-        </div>
-        <div className="mt-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
-          {availabilityNotice}
         </div>
         <div className="mt-4 hidden gap-2.5 xl:grid">
           <button
@@ -516,7 +521,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
             disabled={submitting}
             className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)]"
           >
-            Place Order Request
+            {submitting ? "Placing Order..." : "Place Order"}
           </button>
           <TrackedWhatsAppLink
             href={summaryWhatsappHref}

@@ -10,8 +10,9 @@ export default function ShopSupportStrip() {
             <MessageCircle className="h-4 w-4" />
           </span>
           <div>
-            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-xs">WhatsApp Support</div>
+            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-xs">Need Help?</div>
             <div className="mt-0.5 text-sm leading-5 text-slate-600">
+              <span className="font-semibold text-slate-950">WhatsApp Support: </span>
               <TrackedWhatsAppLink
                 href="https://wa.me/254722151083"
                 className="font-semibold text-slate-950"
@@ -41,7 +42,7 @@ export default function ShopSupportStrip() {
           <div>
             <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-xs">Shop Location</div>
             <div className="mt-0.5 text-sm leading-5 text-slate-600">
-              Pramukh Plaza, Third Floor, Shop No. 3 at Junction of Munyu Road and Sheikh Karume, Nairobi CBD
+              Pramukh Plaza, Third Floor, Shop No. 3, Junction of Munyu Road and Sheikh Karume Road, Nairobi CBD.
             </div>
           </div>
         </div>
@@ -51,7 +52,7 @@ export default function ShopSupportStrip() {
           </span>
           <div>
             <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-xs">Countrywide Delivery</div>
-            <div className="mt-0.5 text-sm leading-5 text-slate-600">We can arrange Nairobi rider delivery or courier delivery across Kenya.</div>
+            <div className="mt-0.5 text-sm leading-5 text-slate-600">Nairobi rider delivery and courier delivery are available across Kenya.</div>
           </div>
         </div>
       </div>

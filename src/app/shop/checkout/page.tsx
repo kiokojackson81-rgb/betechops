@@ -16,7 +16,7 @@ import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Checkout",
-  description: "Submit your Betech Solar order details with delivery and payment preferences for team confirmation.",
+  description: "Complete your Betech Solar order with your delivery and payment options.",
 });
 
 export default async function ShopCheckoutPage() {
@@ -40,9 +40,9 @@ export default async function ShopCheckoutPage() {
           <ShopBreadcrumbs items={[{ label: "Shop", href: SHOP_HOME_HREF }, { label: "Cart", href: SHOP_CART_HREF }, { label: "Checkout" }]} />
           <div className="mt-3">
             <div className={shopStyles.sectionEyebrow}>Checkout</div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Checkout for Betech Solar Online Store</h1>
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Complete Your Betech Solar Order</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
-              This flow collects customer, delivery, and payment preference details, but does not create a live POS record or process payment automatically yet.
+              Enter your details below and choose your preferred delivery and payment method. Once you submit your order, our team will confirm availability, delivery charges where applicable, and payment details.
             </p>
           </div>
           <div className="mt-4">
