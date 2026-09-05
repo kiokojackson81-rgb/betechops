@@ -10,10 +10,14 @@ import { prisma } from "@/lib/prisma";
 // Projects share the customer-account order table for tracking, but belong in
 // the Projects desk rather than the checkout-only Web Orders queues.
 export const websiteCheckoutOrderWhere = {
-  // Older storefront deployments stored this text value as `website`, while
-  // the current checkout writes `WEBSITE`. Both are the same web-order
-  // source and must reach the admin queue.
-  source: { equals: "WEBSITE", mode: "insensitive" },
+  // Older storefront deployments have used differing source values, but all
+  // customer product checkouts receive the canonical BT-WEB reference. Keep
+  // the source match for normal records and include that unambiguous legacy
+  // reference pattern so valid checkouts do not disappear from Ops.
+  OR: [
+    { source: { equals: "WEBSITE", mode: "insensitive" } },
+    { orderRef: { startsWith: "BT-WEB-" } },
+  ],
   NOT: [
     { metadata: { path: ["receiptFlowMode"], equals: "project" } },
     { metadata: { path: ["customerType"], equals: "project" } },
