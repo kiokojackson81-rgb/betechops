@@ -21,7 +21,11 @@ jobs:
           node-version: 20
 
       - name: Install deps
-        run: npm ci
+        # The checked-in lockfile intentionally retains Nodemailer 6 for the
+        # existing mail integration while NextAuth declares Nodemailer 7 as
+        # an optional peer. Install from the lockfile without re-resolving
+        # that optional peer so migrations and the production build run.
+        run: npm ci --legacy-peer-deps
 
       - name: Generate Prisma client
         run: npx prisma generate
