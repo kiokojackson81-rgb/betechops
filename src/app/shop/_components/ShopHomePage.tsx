@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgeCheck, Bike, Clock3, CreditCard, Headphones, MapPin, PackageCheck, ShieldCheck, Store, Truck } from "lucide-react";
+import { BadgeCheck, Bike, CreditCard, Headphones, MapPin, PackageCheck, ShieldCheck, Store, Truck } from "lucide-react";
 import CategoryScroller from "@/app/shop/_components/CategoryScroller";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ProductSection from "@/app/shop/_components/ProductSection";
@@ -65,7 +65,7 @@ export default async function ShopHomePage({
     { title: "Warranty support", icon: ShieldCheck },
     { title: "Expert solar guidance", icon: Headphones },
     { title: "Nairobi CBD shop", icon: MapPin },
-    { title: "Preview checkout only", icon: Clock3 },
+    { title: "Countrywide delivery", icon: Truck },
   ];
   const paymentOptions = [
     {
