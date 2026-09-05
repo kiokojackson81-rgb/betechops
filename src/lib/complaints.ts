@@ -43,7 +43,7 @@ export const complaintCategoryLabels: Record<ComplaintCategory, string> = {
   DELIVERY_ISSUE: "Delivery issue",
   PAYMENT_OR_RECEIPT: "Payment or receipt",
   WARRANTY_CLAIM: "Warranty claim",
-  SOLAR_PERFORMANCE: "Solar performance",
+  SOLAR_PERFORMANCE: "Solar System Performance",
   WRONG_OR_MISSING_ITEM: "Wrong or missing item",
   CUSTOMER_SERVICE: "Customer service",
   OTHER: "Other",
@@ -136,7 +136,7 @@ async function notifyComplaintQueue(input: { id: string; reference: string; titl
 async function resolveOwnedRecord(identity: CustomerAccountIdentity, routeId: string | null) {
   if (!routeId) return { orderId: null, receiptId: null, websiteOrderId: null, relatedReference: null };
   const detail = await getCustomerAccountOrderDetail({ ...identity, routeId });
-  if (!detail) throw new Error("The selected order or receipt is not linked to your account.");
+  if (!detail) throw new Error("The selected purchase or project is not available in your account.");
   if (routeId.startsWith("website-")) {
     return { orderId: null, receiptId: detail.receiptId, websiteOrderId: routeId.slice(8), relatedReference: detail.orderRef };
   }
@@ -153,7 +153,7 @@ export async function createCustomerComplaint(args: {
   const data = validateComplaintInput(args.input);
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
   const recentCount = await prisma.complaint.count({ where: { customerId: args.identity.userId, createdAt: { gte: tenMinutesAgo } } });
-  if (recentCount >= 3) throw new Error("Too many cases were submitted recently. Please wait a few minutes and try again.");
+  if (recentCount >= 3) throw new Error("Too many reports were submitted recently. Please wait a few minutes and try again.");
   const related = await resolveOwnedRecord(args.identity, data.relatedRecordId);
   const duplicate = await prisma.complaint.findFirst({
     where: {

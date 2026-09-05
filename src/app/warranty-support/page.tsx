@@ -12,6 +12,7 @@ const sections: ShopInformationSection[] = [
   {
     id: "how-warranties-work",
     title: "How our warranties work",
+    navigationTitle: "How Our Warranties Work",
     icon: ShieldCheck,
     paragraphs: [
       "Warranty periods and terms differ by product, brand and installation package. The applicable warranty is the one shown on the product listing, quotation, invoice, receipt, warranty card or manufacturer documentation supplied with your order.",
@@ -94,8 +95,10 @@ export default function WarrantySupportPage() {
       ]}
       sections={sections}
       supportTitle="Need to report a product or installation fault?"
-      supportCopy="Send our Customer Service Team your receipt or order number, product details, serial number and a clear description of the issue."
+      supportCopy="Submit the issue through our support form and include your receipt or order number, product details, serial number, and a clear description of the problem."
       whatsappMessage="Hello Betech Solar, I need warranty support for a product or solar installation."
+      showWhatsAppSupport={false}
+      primaryAction={{ label: "Report an Issue", href: "/support/report-issue" }}
     />
   );
 }

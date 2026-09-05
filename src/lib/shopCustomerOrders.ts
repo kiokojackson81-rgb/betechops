@@ -131,8 +131,7 @@ function matchesEmailIdentity(emailValue: string | null | undefined, normalizedE
   return normalizedEmails.includes(normalizedEmail);
 }
 
-function canAccessPosLinkedOrder(args: {
-  source: "WEBSITE" | "POS";
+export function canCustomerAccessAccountOrder(args: {
   customerUserId?: string | null;
   customerPhone?: string | null;
   customerEmail?: string | null;
@@ -140,14 +139,8 @@ function canAccessPosLinkedOrder(args: {
   phoneVariants: string[];
   normalizedEmails: string[];
 }) {
-  if (args.source !== "POS") {
-    return (
-      args.customerUserId === args.userId ||
-      matchesPhoneIdentity(args.customerPhone, args.phoneVariants) ||
-      matchesEmailIdentity(args.customerEmail, args.normalizedEmails)
-    );
-  }
-
+  // An explicit account association always wins. Never let a shared or
+  // recycled phone/email grant access to a record belonging to another user.
   if (args.customerUserId) {
     return args.customerUserId === args.userId;
   }
@@ -158,6 +151,32 @@ function canAccessPosLinkedOrder(args: {
   }
 
   return matchesEmailIdentity(args.customerEmail, args.normalizedEmails);
+}
+
+function isInternalTestRecord(input: {
+  orderRef: string;
+  itemPreview: Array<{ productName: string }>;
+  metadata: unknown;
+}) {
+  const metadata = readJsonObject(input.metadata);
+  if (
+    metadata.isTest === true ||
+    metadata.isInternal === true ||
+    metadata.customerVisible === false ||
+    metadata.hideFromCustomer === true
+  ) {
+    return true;
+  }
+
+  const labels = [input.orderRef, ...input.itemPreview.map((item) => item.productName)]
+    .map((value) => String(value || "").trim().toLowerCase());
+  return labels.some(
+    (value) =>
+      value === "test" ||
+      value.startsWith("test-") ||
+      value.startsWith("test ") ||
+      value.includes("project verification package"),
+  );
 }
 
 function buildSummaryFromWebsiteOrder(order: {
@@ -277,12 +296,20 @@ export async function listCustomerAccountOrders(args: {
 }) {
   await ensureWebsiteOrdersSchema();
 
+  const legacyWebsiteIdentityWhere: Prisma.WebsiteOrderWhereInput[] = [
+    ...(args.phoneVariants.length ? [{ customerPhone: { in: args.phoneVariants } }] : []),
+    ...(args.normalizedEmails.length ? [{ customerEmail: { in: args.normalizedEmails } }] : []),
+  ];
+
   const recentOrders = await prisma.websiteOrder.findMany({
     where: {
       OR: [
         { customerUserId: args.userId },
-        ...(args.phoneVariants.length ? [{ customerPhone: { in: args.phoneVariants } }] : []),
-        ...(args.normalizedEmails.length ? [{ customerEmail: { in: args.normalizedEmails } }] : []),
+        // Legacy orders have no account id. Their recorded phone/email must
+        // match this signed-in customer's verified account identity.
+        ...(legacyWebsiteIdentityWhere.length
+          ? [{ customerUserId: null, OR: legacyWebsiteIdentityWhere }]
+          : []),
       ],
     },
     orderBy: { createdAt: "desc" },
@@ -367,14 +394,20 @@ export async function listCustomerAccountOrders(args: {
 
   const websiteSummaries = recentOrders
     .filter((order) =>
-      canAccessPosLinkedOrder({
-        source: order.source === "POS" ? "POS" : "WEBSITE",
+      canCustomerAccessAccountOrder({
         customerUserId: order.customerUserId,
         customerPhone: order.customerPhone,
         customerEmail: order.customerEmail,
         userId: args.userId,
         phoneVariants: args.phoneVariants,
         normalizedEmails: args.normalizedEmails,
+      }),
+    )
+    .filter((order) =>
+      !isInternalTestRecord({
+        orderRef: order.orderRef,
+        itemPreview: order.items,
+        metadata: order.metadata,
       }),
     )
     .map(buildSummaryFromWebsiteOrder);
@@ -390,6 +423,13 @@ export async function listCustomerAccountOrders(args: {
       const orderRef = receipt.order?.orderNumber || receipt.receiptNumber || receipt.id;
       return !recentOrders.some((order) => order.receiptId === receipt.id || order.orderRef === orderRef);
     })
+    .filter((receipt) =>
+      !isInternalTestRecord({
+        orderRef: receipt.order?.orderNumber || receipt.receiptNumber || receipt.id,
+        itemPreview: receipt.order?.items.map((item) => ({ productName: item.product?.name || "" })) || [],
+        metadata: receipt.order?.metadata,
+      }),
+    )
     .map(buildSummaryFromReceipt);
 
   return [...websiteSummaries, ...fallbackSummaries]
@@ -548,8 +588,7 @@ export async function getCustomerAccountOrderDetail(args: {
 
   if (!websiteOrder) return null;
 
-  const canAccessWebsiteOrder = canAccessPosLinkedOrder({
-    source: websiteOrder.source === "POS" ? "POS" : "WEBSITE",
+  const canAccessWebsiteOrder = canCustomerAccessAccountOrder({
     customerUserId: websiteOrder.customerUserId,
     customerPhone: websiteOrder.customerPhone,
     customerEmail: websiteOrder.customerEmail,

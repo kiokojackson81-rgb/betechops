@@ -19,6 +19,6 @@ export async function POST(request: Request) {
     if ("duplicate" in result) return NextResponse.json(result, { status: 409 });
     return NextResponse.json({ complaint: result.complaint }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not submit complaint." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not submit report." }, { status: 400 });
   }
 }

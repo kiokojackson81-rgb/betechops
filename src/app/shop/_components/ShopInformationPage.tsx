@@ -10,6 +10,7 @@ import { shopNavLinks } from "@/app/shop/shopData";
 export type ShopInformationSection = {
   id: string;
   title: string;
+  navigationTitle?: string;
   icon: LucideIcon;
   paragraphs?: string[];
   bullets?: string[];
@@ -26,6 +27,7 @@ type ShopInformationPageProps = {
   supportTitle: string;
   supportCopy: string;
   whatsappMessage: string;
+  showWhatsAppSupport?: boolean;
   primaryAction?: {
     label: string;
     href: string;
@@ -42,6 +44,7 @@ export default function ShopInformationPage({
   supportTitle,
   supportCopy,
   whatsappMessage,
+  showWhatsAppSupport = true,
   primaryAction,
 }: ShopInformationPageProps) {
   const whatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(whatsappMessage)}`;
@@ -89,7 +92,7 @@ export default function ShopInformationPage({
               <nav className="mt-3 grid gap-1.5">
                 {sections.map((section) => (
                   <a key={section.id} href={`#${section.id}`} className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]">
-                    {section.title}
+                    {section.navigationTitle || section.title}
                     <ArrowRight className="h-3.5 w-3.5" />
                   </a>
                 ))}
@@ -144,10 +147,12 @@ export default function ShopInformationPage({
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   ) : null}
-                  <Link href={whatsappHref} target="_blank" rel="noreferrer" className={`${shopStyles.whatsappButton} shrink-0`}>
-                    <MessageCircle className="h-4 w-4" />
-                    Contact customer service
-                  </Link>
+                  {showWhatsAppSupport ? (
+                    <Link href={whatsappHref} target="_blank" rel="noreferrer" className={`${shopStyles.whatsappButton} shrink-0`}>
+                      <MessageCircle className="h-4 w-4" />
+                      Contact customer service
+                    </Link>
+                  ) : null}
                 </div>
               </section>
             </div>
