@@ -193,6 +193,14 @@ export const websiteOrderCreateSchema = z.object({
   townSource: z.enum(["predefined", "manual"]).optional(),
   nearestMajorTown: z.string().trim().min(1).max(160).optional(),
   paymentMethod: z.string().trim().min(2),
+  paymentOption: z.enum([
+    "PAY_ON_DELIVERY",
+    "PAY_ON_PICKUP",
+    "PAY_10_PERCENT_COMMITMENT",
+    "PAY_30_PERCENT_DEPOSIT",
+    "PAY_TRANSPORT_FEE_FIRST",
+    "PAY_IN_FULL",
+  ]).optional(),
   notes: z.string().trim().max(4000).optional(),
   projectBooking: z
     .object({
@@ -332,6 +340,16 @@ export type SerializedWebsiteOrder = {
     source: "predefined" | "manual" | null;
     nearestMajorTown: string | null;
   };
+  checkoutPaymentDetails: {
+    fulfilmentSource: "SHOP" | "WAREHOUSE" | "MIXED" | "UNAVAILABLE" | null;
+    paymentOption: string | null;
+    paymentPercentage: number | null;
+    amountDueNow: number | null;
+    amountPaid: number | null;
+    remainingProductBalance: number | null;
+    remainingDeliveryBalance: number | null;
+    totalOutstanding: number | null;
+  };
   paymentMethod: string;
   orderType: WebsiteOrderType;
   status: WebsiteOrderStatus;
@@ -447,6 +465,10 @@ function readWebsiteOrderMetadata(metadata: unknown) {
     const value = base[key];
     return typeof value === "string" && value.trim() ? value.trim() : null;
   };
+  const readNumber = (key: string) => {
+    const value = Number(base[key]);
+    return Number.isFinite(value) ? value : null;
+  };
 
   const receiptFlowModeRaw = readString("receiptFlowMode");
   const deliveryZone = readString("deliveryZone");
@@ -469,6 +491,18 @@ function readWebsiteOrderMetadata(metadata: unknown) {
       zone: deliveryZone === "ZONE_1" || deliveryZone === "ZONE_2" || deliveryZone === "ZONE_3" ? deliveryZone : null,
       source: townSource === "predefined" || townSource === "manual" ? townSource : null,
       nearestMajorTown: readString("nearestMajorTown"),
+    },
+    checkoutPaymentDetails: {
+      fulfilmentSource: ["SHOP", "WAREHOUSE", "MIXED", "UNAVAILABLE"].includes(readString("fulfilmentSource") || "")
+        ? readString("fulfilmentSource") as "SHOP" | "WAREHOUSE" | "MIXED" | "UNAVAILABLE"
+        : null,
+      paymentOption: readString("paymentOption"),
+      paymentPercentage: readNumber("paymentPercentage"),
+      amountDueNow: readNumber("amountDueNow"),
+      amountPaid: readNumber("amountPaid"),
+      remainingProductBalance: readNumber("remainingProductBalance"),
+      remainingDeliveryBalance: readNumber("remainingDeliveryBalance"),
+      totalOutstanding: readNumber("totalOutstanding"),
     },
   } as const;
 }
@@ -561,6 +595,7 @@ function serializeWebsiteOrderRow(
       : null,
     deliveryMethod: order.deliveryMethod,
     deliveryLocationDetails: lifecycle.deliveryLocationDetails,
+    checkoutPaymentDetails: lifecycle.checkoutPaymentDetails,
     paymentMethod: order.paymentMethod,
     orderType: order.orderType,
     status: order.status,

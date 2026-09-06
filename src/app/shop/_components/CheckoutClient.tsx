@@ -28,6 +28,15 @@ import {
 } from "@/lib/agents/kenyaMarkets";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
 import { getShopOrderSuccessHref, SHOP_CART_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
+import {
+  calculateCheckoutPaymentPlan,
+  getCheckoutDeliveryMethodLabel,
+  getEligibleCheckoutPaymentOptions,
+  getEligibleDeliveryMethods,
+  normalizeCheckoutDeliveryMethod,
+  summarizeCheckoutFulfilment,
+  type CheckoutPaymentOption,
+} from "@/lib/checkoutDeliveryPayment";
 
 type CheckoutClientProps = {
   products: ShopProduct[];
@@ -114,7 +123,8 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const availableTowns = useMemo(() => searchCheckoutTowns(form.county, townSearch), [form.county, townSearch]);
   const deliveryZone = resolvedTown?.zone ?? (isManualTown ? getDeliveryZone(form.county, UNLISTED_TOWN_OPTION) : getDeliveryZone(form.county, form.town));
   const effectiveTown = resolvedTown?.town ?? (isManualTown ? form.manualTown.trim() : form.town.trim());
-  const isShopPickup = form.deliveryMethod.toLowerCase().includes("pickup");
+  const selectedDeliveryMethod = normalizeCheckoutDeliveryMethod(form.deliveryMethod);
+  const isShopPickup = selectedDeliveryMethod === "SHOP_PICKUP";
   const installationPricingItems = installationPricing.filter((item) => item.bookingType === "INSTALLATION");
   const installationFee = installationPricingItems.reduce((sum, item) => sum + (item.installation?.amount ?? 0) * item.quantity, 0);
   const accessoriesFee = installationPricingItems.reduce((sum, item) => sum + (item.accessories?.amount ?? 0) * item.quantity, 0);
@@ -124,7 +134,32 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const accessoriesPendingAssessment = installationPricingItems.some((item) => item.accessories?.status === "ASSESSMENT");
   const installationPendingAssessment = installationPricingItems.some((item) => item.installation?.status === "ASSESSMENT");
   const projectTotal = subtotal + installationFee + accessoriesFee + transportFee;
-  const estimatedTotal = hasInstallationBooking ? projectTotal : subtotal + (hasConfiguredDeliveryFee ? transportFee : 0);
+  const orderDeliveryFee = isShopPickup ? 0 : hasConfiguredDeliveryFee ? transportFee : 0;
+  const fulfilment = useMemo(() => summarizeCheckoutFulfilment(detailedItems.map((item) => ({
+    quantity: item.quantity,
+    unitPrice: item.product.price,
+    availabilityType: item.product.availabilityType,
+    warehouseFulfillmentSource: item.product.warehouseFulfillmentSource,
+  }))), [detailedItems]);
+  const eligibleDeliveryMethods = useMemo(() => getEligibleDeliveryMethods(deliveryZone?.id), [deliveryZone?.id]);
+  const eligiblePaymentOptions = useMemo(() => getEligibleCheckoutPaymentOptions({
+    zone: deliveryZone?.id,
+    deliveryMethod: selectedDeliveryMethod,
+    fulfilment,
+    deliveryFee: orderDeliveryFee,
+    // Courier COD is deliberately unavailable until it is configured for a carrier.
+    supportsCourierPayOnDelivery: false,
+  }), [deliveryZone?.id, fulfilment, orderDeliveryFee, selectedDeliveryMethod]);
+  const selectedPaymentOption = eligiblePaymentOptions.includes(form.paymentPreference as CheckoutPaymentOption)
+    ? form.paymentPreference as CheckoutPaymentOption
+    : null;
+  const paymentPlan = selectedPaymentOption ? calculateCheckoutPaymentPlan({
+    option: selectedPaymentOption,
+    productSubtotal: subtotal,
+    deliveryFee: orderDeliveryFee,
+    fulfilment,
+  }) : null;
+  const estimatedTotal = hasInstallationBooking ? projectTotal : subtotal + orderDeliveryFee;
   const depositAmount = Math.round(projectTotal * 0.3);
   const paymentDueNow = form.paymentPreference.startsWith("30%") ? depositAmount : projectTotal;
 
@@ -185,9 +220,23 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   }, [deliveryZone, priceableItems]);
 
   useEffect(() => {
-    if (!hasInstallationBooking) return;
-    setForm((current) => current.paymentPreference ? current : { ...current, paymentPreference: "30% deposit, balance after installation" });
-  }, [hasInstallationBooking]);
+    setForm((current) => {
+      const deliveryMethod = normalizeCheckoutDeliveryMethod(current.deliveryMethod);
+      if (deliveryMethod && eligibleDeliveryMethods.includes(deliveryMethod)) return current;
+      if (!current.deliveryMethod && !current.paymentPreference) return current;
+      return { ...current, deliveryMethod: "", paymentPreference: "" };
+    });
+  }, [eligibleDeliveryMethods]);
+
+  useEffect(() => {
+    setForm((current) => (
+      eligiblePaymentOptions.includes(current.paymentPreference as CheckoutPaymentOption)
+        ? current
+        : current.paymentPreference
+          ? { ...current, paymentPreference: "" }
+          : current
+    ));
+  }, [eligiblePaymentOptions]);
 
   useEffect(() => {
     if (!detailedItems.length) return;
@@ -210,11 +259,12 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     if (!form.town.trim()) nextErrors.town = "Please select the customer town or area.";
     if (isManualTown && !form.manualTown.trim()) nextErrors.manualTown = "Enter your town or area so we can confirm delivery.";
     if (form.town.trim() && !resolvedTown) nextErrors.town = "Choose a valid town or enter your unlisted area.";
-    if (!form.deliveryMethod.trim()) nextErrors.deliveryMethod = "Please choose how you want Betech Solar to deliver or prepare pickup.";
-    if (!form.paymentPreference.trim()) nextErrors.paymentPreference = "Please choose your preferred payment arrangement.";
-    if (hasInstallationBooking && (!deliveryZone || pricingLoading)) nextErrors.deliveryMethod = pricingLoading
-      ? "Please wait while installation pricing is calculated."
-      : "Select a valid county and town to calculate the project transport fee.";
+    if (!resolvedTown) nextErrors.town = "Select a valid town or enter your area before choosing delivery.";
+    if (!selectedDeliveryMethod) nextErrors.deliveryMethod = "Choose an available delivery method for your area.";
+    if (selectedDeliveryMethod && !eligibleDeliveryMethods.includes(selectedDeliveryMethod)) nextErrors.deliveryMethod = "Choose one of the delivery methods available for your area.";
+    if (pricingLoading) nextErrors.deliveryMethod = "Please wait while your delivery fee is calculated.";
+    if (fulfilment.unavailableSubtotal > 0) nextErrors.cart = "Your cart includes an unavailable item. Please update the cart before checkout.";
+    if (!selectedPaymentOption) nextErrors.paymentPreference = "Choose an eligible payment option for this order.";
     if (!detailedItems.length) nextErrors.cart = "Your cart is empty. Add products before submitting this order.";
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -305,13 +355,14 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               deliveryTown: effectiveTown,
               townSource: resolvedTown?.townSource,
               nearestMajorTown: isManualTown ? form.nearestMajorTown.trim() || undefined : undefined,
-              paymentMethod: form.paymentPreference,
+              paymentMethod: paymentPlan?.label || form.paymentPreference,
+              paymentOption: selectedPaymentOption || undefined,
               notes: [form.locationNotes.trim(), `WhatsApp: ${form.whatsappNumber.trim()}`, form.email.trim() ? `Email: ${form.email.trim()}` : ""]
                 .filter(Boolean)
                 .join(" | "),
               projectBooking: hasInstallationBooking && deliveryZone ? {
                 zone: deliveryZone.id,
-                paymentStructure: form.paymentPreference.startsWith("30%") ? "DEPOSIT_30" : "FULL_UPFRONT",
+                paymentStructure: selectedPaymentOption === "PAY_30_PERCENT_DEPOSIT" ? "DEPOSIT_30" : "FULL_UPFRONT",
               } : undefined,
             });
 
@@ -336,7 +387,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               estateLandmark: form.estateLandmark.trim() || undefined,
               locationNotes: form.locationNotes.trim() || undefined,
               deliveryMethod: form.deliveryMethod,
-              paymentPreference: form.paymentPreference,
+              paymentPreference: paymentPlan?.label || form.paymentPreference,
               notes: form.locationNotes.trim() || undefined,
               subtotal: hasInstallationBooking ? projectTotal : subtotal,
               source: "website",
@@ -400,16 +451,6 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           <section className="rounded-[16px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
             <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Delivery Details</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Delivery Method
-                <select value={form.deliveryMethod} onChange={(event) => setForm((current) => ({ ...current, deliveryMethod: event.target.value }))} className={resolveFieldClass(fieldErrors.deliveryMethod)}>
-                  <option value="">Select delivery method</option>
-                  <option value="Nairobi rider delivery">Nairobi Rider Delivery</option>
-                  <option value="Shop pickup">Shop Pickup</option>
-                  <option value="Countrywide courier">Countrywide Courier</option>
-                </select>
-                {fieldErrors.deliveryMethod ? <span className="text-xs font-semibold text-red-600">{fieldErrors.deliveryMethod}</span> : null}
-              </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
                 County
                 <select
@@ -484,7 +525,22 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 </label>
                 <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm leading-6 text-slate-700 sm:col-span-2">We will confirm delivery availability and timing for your area. Your delivery fee still uses the selected county’s service zone.</div>
               </> : null}
-              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">Delivery Area</b><div className="mt-1 font-semibold">{effectiveTown || "Select your town or area"}{form.county ? `, ${form.county} County` : ""}</div><div className="mt-1">{isShopPickup ? "Shop pickup selected — no delivery fee." : pricingLoading ? "Calculating your configured delivery fee..." : hasConfiguredDeliveryFee ? `Configured delivery fee: ${formatCurrency(transportFee)}.` : "Delivery charges will be calculated based on your selected location and delivery method."}</div></div> : null}
+              {resolvedTown && deliveryZone ? <>
+                <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2">
+                  <b className="text-[#7a0000]">Delivery Area</b>
+                  <div className="mt-1 font-semibold">{effectiveTown}, {form.county} County</div>
+                  <div className="mt-1">{deliveryZone.name}</div>
+                </div>
+                <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+                  Delivery Method
+                  <select value={form.deliveryMethod} onChange={(event) => setForm((current) => ({ ...current, deliveryMethod: event.target.value, paymentPreference: "" }))} className={resolveFieldClass(fieldErrors.deliveryMethod)}>
+                    <option value="">Select delivery method</option>
+                    {eligibleDeliveryMethods.map((method) => <option key={method} value={method}>{getCheckoutDeliveryMethodLabel(method)}</option>)}
+                  </select>
+                  <span className="text-xs font-medium text-slate-500">{isShopPickup ? "Shop Pickup — Betech Solar Solutions, Pramukh Plaza, 3rd Floor, Shop 3, Munyu Road & Sheikh Karume Road, Nairobi CBD. No delivery fee." : pricingLoading ? "Calculating the configured delivery fee..." : hasConfiguredDeliveryFee ? `Configured delivery fee: ${formatCurrency(transportFee)}.` : "Select a delivery method to see the applicable delivery charge."}</span>
+                  {fieldErrors.deliveryMethod ? <span className="text-xs font-semibold text-red-600">{fieldErrors.deliveryMethod}</span> : null}
+                </label>
+              </> : <div className="rounded-[16px] border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 sm:col-span-2">Select your county and town / area first. We will then show only the delivery methods available for your location.</div>}
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
                 Specific locality / estate / village / landmark
                 <input value={form.estateLandmark} onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))} className={resolveFieldClass()} />
@@ -499,17 +555,22 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
 
           <section className="rounded-[16px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
             <h2 className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Payment Method</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Choose your preferred payment option
-                <select value={form.paymentPreference} onChange={(event) => setForm((current) => ({ ...current, paymentPreference: event.target.value }))} className={resolveFieldClass(fieldErrors.paymentPreference)}>
-                  <option value="">Choose your preferred payment option</option>
-                  {hasInstallationBooking ? <option value="30% deposit, balance after installation">Pay Deposit</option> : <><option value="Pay on delivery where available">Pay on Delivery - where available</option><option value="Pay transport fee first">Pay Transport Fee First</option><option value="Pay deposit">Pay Deposit</option></>}
-                  <option value="Pay full amount">Pay in Full</option>
-                </select>
-                {fieldErrors.paymentPreference ? <span className="text-xs font-semibold text-red-600">{fieldErrors.paymentPreference}</span> : null}
-              </label>
-            </div>
+            {!resolvedTown || !selectedDeliveryMethod ? <div className="mt-3 rounded-[16px] border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">Choose a valid delivery area and delivery method first. We will then show only payment options available for this order.</div> : pricingLoading ? <div className="mt-3 rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700">Calculating delivery and payment options...</div> : fulfilment.unavailableSubtotal > 0 ? <div className="mt-3 rounded-[16px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">An item in this cart is unavailable. Update the cart before checkout.</div> : <>
+              {fulfilment.commitmentEligibleSubtotal > 0 ? <div className="mt-3 rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm leading-6 text-slate-700">Warehouse or order-on-request items total {formatCurrency(fulfilment.commitmentEligibleSubtotal)}. A 10% commitment payment is required before we reserve or transfer those items.</div> : null}
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {eligiblePaymentOptions.map((option) => {
+                  const plan = calculateCheckoutPaymentPlan({ option, productSubtotal: subtotal, deliveryFee: orderDeliveryFee, fulfilment });
+                  const selected = selectedPaymentOption === option;
+                  return <button key={option} type="button" onClick={() => setForm((current) => ({ ...current, paymentPreference: option }))} className={`rounded-[16px] border p-3 text-left transition ${selected ? "border-[#7a0000] bg-[#fff6ed] ring-2 ring-[#7a0000]/10" : "border-[#7a0000]/10 bg-white hover:border-[#7a0000]/30"}`}>
+                    <div className="font-bold text-slate-950">{plan.label}</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-600">{plan.description}</div>
+                    <div className="mt-2 text-sm font-black text-[#7a0000]">Pay now: {formatCurrency(plan.amountDueNow)}</div>
+                  </button>;
+                })}
+              </div>
+              {fieldErrors.paymentPreference ? <span className="mt-2 block text-xs font-semibold text-red-600">{fieldErrors.paymentPreference}</span> : null}
+              {paymentPlan ? <div className="mt-3 rounded-[16px] border border-emerald-300/40 bg-emerald-50 p-3 text-sm text-slate-700"><div className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-800">Payment Summary</div><div className="mt-2 grid gap-1"><div className="flex justify-between"><span>Products</span><b>{formatCurrency(subtotal)}</b></div><div className="flex justify-between"><span>Delivery / transport</span><b>{formatCurrency(orderDeliveryFee)}</b></div><div className="flex justify-between border-t border-emerald-900/10 pt-2 text-base"><span>Amount due now</span><b className="text-emerald-900">{formatCurrency(paymentPlan.amountDueNow)}</b></div><div className="flex justify-between"><span>Remaining product balance</span><b>{formatCurrency(paymentPlan.remainingProductBalance)}</b></div><div className="flex justify-between"><span>Remaining delivery balance</span><b>{formatCurrency(paymentPlan.remainingDeliveryBalance)}</b></div></div></div> : null}
+            </>}
             <div className="mt-5 grid gap-2.5 xl:hidden">
               <button
                 type="submit"
@@ -569,7 +630,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           </div>
           <div className="flex items-center justify-between">
             <span>Delivery</span>
-            <span>{isShopPickup ? "Included — shop pickup" : pricingLoading ? "Calculating..." : hasConfiguredDeliveryFee ? formatCurrency(transportFee) : "Calculated based on delivery location"}</span>
+            <span>{isShopPickup ? "KSh 0 — shop pickup" : pricingLoading ? "Calculating..." : resolvedTown && hasConfiguredDeliveryFee ? formatCurrency(orderDeliveryFee) : "Select delivery area and method"}</span>
           </div>
           {hasInstallationBooking ? <>
             <div className="flex items-center justify-between"><span>Installation</span><span>{installationPendingAssessment ? "Site assessment required" : formatCurrency(installationFee)}</span></div>
@@ -577,11 +638,12 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           </> : null}
           <div className="flex items-center justify-between">
             <span>Estimated Total</span>
-            <span className="text-lg font-black text-slate-950">{pricingLoading ? "Calculating..." : hasConfiguredDeliveryFee || hasInstallationBooking && deliveryZone ? formatCurrency(estimatedTotal) : `${formatCurrency(subtotal)} + delivery, where applicable`}</span>
+            <span className="text-lg font-black text-slate-950">{pricingLoading ? "Calculating..." : isShopPickup || hasConfiguredDeliveryFee ? formatCurrency(estimatedTotal) : `${formatCurrency(subtotal)} + delivery, where applicable`}</span>
           </div>
+          {paymentPlan ? <div className="mt-1 rounded-xl border border-[#7a0000]/10 bg-white p-3"><div className="flex items-center justify-between text-xs font-bold uppercase tracking-wide text-[#7a0000]"><span>{paymentPlan.label}</span><span>Pay now</span></div><div className="mt-1 flex items-center justify-between text-lg font-black text-slate-950"><span>{formatCurrency(paymentPlan.amountDueNow)}</span><span>Later: {formatCurrency(paymentPlan.totalOutstanding)}</span></div></div> : null}
           {hasInstallationBooking ? <div className="mt-1 rounded-xl border border-[#7a0000]/10 bg-white p-3">
             <div className="flex items-center justify-between font-bold text-[#7a0000]"><span>Amount due before scheduling</span><span>{formatCurrency(paymentDueNow)}</span></div>
-            {form.paymentPreference.startsWith("30%") ? <div className="mt-1 flex items-center justify-between text-xs"><span>Balance after installation</span><span>{formatCurrency(projectTotal - depositAmount)}</span></div> : null}
+            {selectedPaymentOption === "PAY_30_PERCENT_DEPOSIT" ? <div className="mt-1 flex items-center justify-between text-xs"><span>Balance after installation</span><span>{formatCurrency(projectTotal - depositAmount)}</span></div> : null}
             <div className="mt-2 border-t border-[#7a0000]/10 pt-2 text-xs leading-5 text-slate-600">Accessories are estimated and the final materials scope is agreed before installation.</div>
           </div> : null}
         </div>

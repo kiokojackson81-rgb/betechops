@@ -22,6 +22,7 @@ export type ShopOrderInput = {
   townSource?: "predefined" | "manual";
   nearestMajorTown?: string;
   paymentMethod: string;
+  paymentOption?: "PAY_ON_DELIVERY" | "PAY_ON_PICKUP" | "PAY_10_PERCENT_COMMITMENT" | "PAY_30_PERCENT_DEPOSIT" | "PAY_TRANSPORT_FEE_FIRST" | "PAY_IN_FULL";
   notes?: string;
   projectBooking?: {
     zone: "ZONE_1" | "ZONE_2" | "ZONE_3";

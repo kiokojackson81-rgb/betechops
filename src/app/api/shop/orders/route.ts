@@ -23,6 +23,14 @@ import {
   productCatalogueConfigurationSchema,
 } from "@/lib/productCataloguePolicy";
 import { resolveCheckoutTown, UNLISTED_TOWN_OPTION } from "@/lib/agents/kenyaMarkets";
+import {
+  calculateCheckoutPaymentPlan,
+  getCheckoutDeliveryMethodLabel,
+  getEligibleCheckoutPaymentOptions,
+  getEligibleDeliveryMethods,
+  normalizeCheckoutDeliveryMethod,
+  summarizeCheckoutFulfilment,
+} from "@/lib/checkoutDeliveryPayment";
 import { getOpsBaseUrl, isOpsHost, isShopHost } from "@/lib/runtimeUrls";
 
 export const dynamic = "force-dynamic";
@@ -159,8 +167,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "One or more products were not found." }, { status: 400 });
   }
 
+  if (!resolvedDeliveryZone || !deliveryLocation) {
+    return NextResponse.json({ ok: false, error: "Select a valid delivery county and town before choosing delivery and payment." }, { status: 400 });
+  }
+  const deliveryMethod = normalizeCheckoutDeliveryMethod(data.deliveryMethod);
+  if (!deliveryMethod || !getEligibleDeliveryMethods(resolvedDeliveryZone).includes(deliveryMethod)) {
+    return NextResponse.json({ ok: false, error: "The selected delivery method is not available for this delivery area." }, { status: 400 });
+  }
+
   const orderRef = await buildUniqueOrderRef();
-  const orderType = deriveWebsiteOrderType(data.deliveryMethod, data.paymentMethod);
   const items = data.items.map((item) => {
     const product = productMap.get(item.productId)!;
     const quantity = Math.max(1, item.quantity);
@@ -178,7 +193,7 @@ export async function POST(request: NextRequest) {
     };
   });
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const isShopPickup = data.deliveryMethod.toLowerCase().includes("pickup");
+  const isShopPickup = deliveryMethod === "SHOP_PICKUP";
   let deliveryFee: number | null = isShopPickup ? 0 : null;
 
   if (resolvedDeliveryZone && !isShopPickup) {
@@ -225,6 +240,37 @@ export async function POST(request: NextRequest) {
     }, 0);
   }
   const total = subtotal + (deliveryFee ?? 0);
+  const fulfilment = summarizeCheckoutFulfilment(items.map((item) => {
+    const storefrontProduct = productMap.get(item.cartProductId);
+    return {
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      availabilityType: storefrontProduct?.availabilityType,
+      warehouseFulfillmentSource: storefrontProduct?.warehouseFulfillmentSource,
+    };
+  }));
+  if (fulfilment.unavailableSubtotal > 0) {
+    return NextResponse.json({ ok: false, error: "One or more items in this order are currently unavailable. Please update your cart." }, { status: 400 });
+  }
+  const eligiblePaymentOptions = getEligibleCheckoutPaymentOptions({
+    zone: resolvedDeliveryZone,
+    deliveryMethod,
+    fulfilment,
+    deliveryFee: deliveryFee ?? 0,
+    // No courier COD capability is configured yet, so never promise it here.
+    supportsCourierPayOnDelivery: false,
+  });
+  if (!data.paymentOption || !eligiblePaymentOptions.includes(data.paymentOption)) {
+    return NextResponse.json({ ok: false, error: "The selected payment option is not available for this order." }, { status: 400 });
+  }
+  const paymentPlan = calculateCheckoutPaymentPlan({
+    option: data.paymentOption,
+    productSubtotal: subtotal,
+    deliveryFee: deliveryFee ?? 0,
+    fulfilment,
+  });
+  const deliveryMethodLabel = getCheckoutDeliveryMethodLabel(deliveryMethod);
+  const orderType = deriveWebsiteOrderType(deliveryMethodLabel, paymentPlan.label);
   const customerIdentity = await findOrCreateCustomerIdentityUser({
     customerName: data.customerName.trim(),
     customerPhone: data.customerPhone.trim(),
@@ -244,8 +290,8 @@ export async function POST(request: NextRequest) {
       customerPhone: data.customerPhone.trim(),
       customerLocation: data.customerLocation.trim(),
       customerEmail: data.customerEmail?.trim() || null,
-      deliveryMethod: data.deliveryMethod.trim(),
-      paymentMethod: data.paymentMethod.trim(),
+      deliveryMethod: deliveryMethodLabel,
+      paymentMethod: paymentPlan.label,
       orderType,
       status: "PENDING",
       subtotal,
@@ -270,6 +316,27 @@ export async function POST(request: NextRequest) {
         deliveryTown: deliveryLocation?.town ?? null,
         townSource: deliveryLocation?.townSource ?? null,
         nearestMajorTown: deliveryLocation?.nearestMajorTown ?? null,
+        fulfilmentSource: fulfilment.source,
+        fulfilmentLines: items.map((item, index) => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          source: fulfilment.lineSources[index],
+          lineSubtotal: item.total,
+        })),
+        shopStockSubtotal: fulfilment.shopStockSubtotal,
+        warehouseStockSubtotal: fulfilment.warehouseStockSubtotal,
+        orderOnRequestSubtotal: fulfilment.orderOnRequestSubtotal,
+        commitmentEligibleSubtotal: fulfilment.commitmentEligibleSubtotal,
+        productSubtotal: subtotal,
+        paymentOption: paymentPlan.option,
+        paymentPercentage: paymentPlan.paymentPercentage,
+        amountDueNow: paymentPlan.amountDueNow,
+        amountPaid: 0,
+        remainingProductBalance: paymentPlan.remainingProductBalance,
+        remainingDeliveryBalance: paymentPlan.remainingDeliveryBalance,
+        totalOutstanding: paymentPlan.totalOutstanding,
+        paymentSummary: paymentPlan.description,
       },
       items: {
         create: items.map((item) => ({

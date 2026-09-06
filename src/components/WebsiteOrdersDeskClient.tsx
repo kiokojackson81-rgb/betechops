@@ -453,6 +453,10 @@ export default function WebsiteOrdersDeskClient({
                               <div><span className="text-slate-500">Service zone:</span> {order.deliveryLocationDetails.zone?.replace("_", " ") || "-"}</div>
                               {order.deliveryLocationDetails.nearestMajorTown ? <div><span className="text-slate-500">Nearest major town:</span> {order.deliveryLocationDetails.nearestMajorTown}</div> : null}
                               <div><span className="text-slate-500">Full delivery address:</span> {order.customerLocation}</div>
+                              <div><span className="text-slate-500">Fulfilment:</span> {order.checkoutPaymentDetails.fulfilmentSource?.replace("_", " ") || "-"}</div>
+                              <div><span className="text-slate-500">Checkout payment option:</span> {order.checkoutPaymentDetails.paymentOption?.replaceAll("_", " ") || order.paymentMethod}</div>
+                              {order.checkoutPaymentDetails.amountDueNow != null ? <div><span className="text-slate-500">Amount due now:</span> {formatCurrency(order.checkoutPaymentDetails.amountDueNow)}</div> : null}
+                              {order.checkoutPaymentDetails.totalOutstanding != null ? <div><span className="text-slate-500">Balance due later:</span> {formatCurrency(order.checkoutPaymentDetails.totalOutstanding)}</div> : null}
                               <div><span className="text-slate-500">Order type:</span> {order.orderType.replace(/_/g, " ")}</div>
                               <div><span className="text-slate-500">Payment confirmed:</span> {order.paymentConfirmationMethod ? `${order.paymentConfirmationMethod}${order.paymentConfirmationReference ? ` · ${order.paymentConfirmationReference}` : ""}` : "-"}</div>
                               <div><span className="text-slate-500">Notes:</span> {order.notes || "-"}</div>
