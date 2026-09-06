@@ -187,6 +187,7 @@ export const websiteOrderCreateSchema = z.object({
   customerEmail: z.string().trim().email().optional().or(z.literal("")),
   customerLocation: z.string().trim().min(2),
   deliveryMethod: z.string().trim().min(2),
+  deliveryZone: z.enum(["ZONE_1", "ZONE_2", "ZONE_3"]).optional(),
   paymentMethod: z.string().trim().min(2),
   notes: z.string().trim().max(4000).optional(),
   projectBooking: z

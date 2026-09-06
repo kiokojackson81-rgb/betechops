@@ -16,6 +16,7 @@ export type ShopOrderInput = {
   customerEmail?: string;
   customerLocation: string;
   deliveryMethod: string;
+  deliveryZone?: "ZONE_1" | "ZONE_2" | "ZONE_3";
   paymentMethod: string;
   notes?: string;
   projectBooking?: {

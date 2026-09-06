@@ -96,11 +96,13 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   });
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
   const deliveryZone = useMemo(() => getDeliveryZone(form.county, form.town), [form.county, form.town]);
+  const isShopPickup = form.deliveryMethod.toLowerCase().includes("pickup");
   const installationPricingItems = installationPricing.filter((item) => item.bookingType === "INSTALLATION");
   const installationFee = installationPricingItems.reduce((sum, item) => sum + (item.installation?.amount ?? 0) * item.quantity, 0);
   const accessoriesFee = installationPricingItems.reduce((sum, item) => sum + (item.accessories?.amount ?? 0) * item.quantity, 0);
-  const transportFee = installationPricing.reduce((highest, item) => Math.max(highest, item.transport?.amount ?? 0), 0);
-  const hasConfiguredDeliveryFee = Boolean(deliveryZone) && installationPricing.some((item) => item.transport?.amount != null);
+  const calculatedTransportFee = installationPricing.reduce((highest, item) => Math.max(highest, item.transport?.amount ?? 0), 0);
+  const transportFee = isShopPickup ? 0 : calculatedTransportFee;
+  const hasConfiguredDeliveryFee = !isShopPickup && Boolean(deliveryZone) && installationPricing.some((item) => item.transport?.amount != null);
   const accessoriesPendingAssessment = installationPricingItems.some((item) => item.accessories?.status === "ASSESSMENT");
   const installationPendingAssessment = installationPricingItems.some((item) => item.installation?.status === "ASSESSMENT");
   const projectTotal = subtotal + installationFee + accessoriesFee + transportFee;
@@ -270,6 +272,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               customerEmail: form.email.trim() || undefined,
               customerLocation: locationSummary || countyTownLabel,
               deliveryMethod: form.deliveryMethod,
+              deliveryZone: deliveryZone?.id,
               paymentMethod: form.paymentPreference,
               notes: [form.locationNotes.trim(), `WhatsApp: ${form.whatsappNumber.trim()}`, form.email.trim() ? `Email: ${form.email.trim()}` : ""]
                 .filter(Boolean)
@@ -416,7 +419,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 </select>
                 {fieldErrors.town ? <span className="text-xs font-semibold text-red-600">{fieldErrors.town}</span> : null}
               </label>
-              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">Delivery Area</b><div className="mt-1 font-semibold">{form.town}, {form.county} County</div><div className="mt-1">{pricingLoading ? "Calculating your configured delivery fee..." : hasConfiguredDeliveryFee ? `Configured delivery fee: ${formatCurrency(transportFee)}.` : "Delivery charges will be calculated based on your selected location and delivery method."}</div></div> : null}
+              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">Delivery Area</b><div className="mt-1 font-semibold">{form.town}, {form.county} County</div><div className="mt-1">{isShopPickup ? "Shop pickup selected — no delivery fee." : pricingLoading ? "Calculating your configured delivery fee..." : hasConfiguredDeliveryFee ? `Configured delivery fee: ${formatCurrency(transportFee)}.` : "Delivery charges will be calculated based on your selected location and delivery method."}</div></div> : null}
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
                 Specific Locality / Estate / Landmark
                 <input value={form.estateLandmark} onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))} className={resolveFieldClass()} />
@@ -501,7 +504,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           </div>
           <div className="flex items-center justify-between">
             <span>Delivery</span>
-            <span>{pricingLoading ? "Calculating..." : hasConfiguredDeliveryFee ? formatCurrency(transportFee) : "Calculated based on delivery location"}</span>
+            <span>{isShopPickup ? "Included — shop pickup" : pricingLoading ? "Calculating..." : hasConfiguredDeliveryFee ? formatCurrency(transportFee) : "Calculated based on delivery location"}</span>
           </div>
           {hasInstallationBooking ? <>
             <div className="flex items-center justify-between"><span>Installation</span><span>{installationPendingAssessment ? "Site assessment required" : formatCurrency(installationFee)}</span></div>

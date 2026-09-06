@@ -58,6 +58,18 @@ export type ProductCatalogueSettings = {
   zone3TransportFee: number;
 };
 
+export const DEFAULT_TRANSPORT_FEES_BY_ZONE = {
+  ZONE_1: 500,
+  ZONE_2: 1000,
+  ZONE_3: 1500,
+} as const;
+
+export type ServiceZone = keyof typeof DEFAULT_TRANSPORT_FEES_BY_ZONE;
+
+export function getDefaultTransportFee(zone: ServiceZone) {
+  return DEFAULT_TRANSPORT_FEES_BY_ZONE[zone];
+}
+
 type LegacyCatalogueProduct = {
   name?: string | null;
   category?: string | null;
@@ -131,12 +143,18 @@ export function calculateInstallationFee(price: number, policy: ProductCatalogue
   return { status: "PRICED" as const, amount: settings.installationBand4Fee };
 }
 
-export function calculateTransportFee(zone: "ZONE_1" | "ZONE_2" | "ZONE_3", policy: ProductCatalogueConfiguration, settings: ProductCatalogueSettings) {
+export function calculateTransportFee(zone: ServiceZone, policy: ProductCatalogueConfiguration) {
   if (policy.transportMode === "INCLUDED" || policy.transportMode === "FREE") return { status: "INCLUDED" as const, amount: 0 };
   if (policy.transportMode === "PICKUP") return { status: "PICKUP" as const, amount: null };
   if (policy.transportMode === "CUSTOM") return { status: "QUOTE" as const, amount: null };
   const key = zone === "ZONE_1" ? "zone1TransportFee" : zone === "ZONE_2" ? "zone2TransportFee" : "zone3TransportFee";
-  const amount = policy.useDefaultTransportRates ? settings[key] : policy[key] ?? settings[key];
+  const configuredAmount = policy[key];
+  // Delivery is priced from the product's own service-zone configuration. The
+  // published fallback applies only when that product has no value for a zone;
+  // global catalogue settings must never inflate storefront transport fees.
+  const amount = typeof configuredAmount === "number" && Number.isFinite(configuredAmount)
+    ? configuredAmount
+    : getDefaultTransportFee(zone);
   return { status: "PRICED" as const, amount };
 }
 

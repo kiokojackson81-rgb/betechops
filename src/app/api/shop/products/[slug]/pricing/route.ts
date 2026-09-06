@@ -4,6 +4,7 @@ import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import {
   calculateInstallationFee,
   calculateAccessoriesEstimate,
+  getDefaultTransportFee,
   calculateTransportFee,
   inferLegacyProductCataloguePolicy,
   productCatalogueConfigurationSchema,
@@ -59,12 +60,16 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
   const parsedPolicy = productCatalogueConfigurationSchema.safeParse(catalogueConfiguration);
   const policy = parsedPolicy.success ? parsedPolicy.data : inferLegacyProductCataloguePolicy(product);
   if (!policy) {
+    const transport = input.data.zone
+      ? { status: "PRICED" as const, amount: getDefaultTransportFee(input.data.zone) }
+      : null;
     return noStoreJson({
       configured: false,
       product: product.sellingPrice,
       installation: null,
-      transport: null,
-      estimatedTotal: product.sellingPrice,
+      transport,
+      estimatedTotal: product.sellingPrice + (transport?.amount ?? 0),
+      accessories: null,
     });
   }
 
@@ -77,7 +82,7 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
     ? calculateInstallationFee(product.sellingPrice, policy, settings)
     : null;
   const transport = input.data.zone
-    ? calculateTransportFee(input.data.zone, policy, settings)
+    ? calculateTransportFee(input.data.zone, policy)
     : null;
   const estimatedTotal = product.sellingPrice + (installation?.amount ?? 0) + (transport?.amount ?? 0);
   const accessories = calculateAccessoriesEstimate(product.sellingPrice, policy);

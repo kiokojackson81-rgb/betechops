@@ -77,8 +77,8 @@ const blank = () => ({
   installationIncluded: false,
   transportIncluded: false,
   zone1TransportFee: "500",
-  zone2TransportFee: "750",
-  zone3TransportFee: "1000",
+  zone2TransportFee: "1000",
+  zone3TransportFee: "1500",
 });
 
 const warrantyOptions = [
@@ -152,8 +152,8 @@ function toForm(product: Product) {
     transportIncluded:
       policy.transportMode === "INCLUDED" || policy.transportMode === "FREE",
     zone1TransportFee: String(policy.zone1TransportFee ?? 500),
-    zone2TransportFee: String(policy.zone2TransportFee ?? 750),
-    zone3TransportFee: String(policy.zone3TransportFee ?? 1000),
+    zone2TransportFee: String(policy.zone2TransportFee ?? 1000),
+    zone3TransportFee: String(policy.zone3TransportFee ?? 1500),
   };
 }
 

@@ -16,6 +16,12 @@ import {
 import { getShopProducts } from "@/app/shop/shopApi";
 import { getShopOrderSuccessHref } from "@/app/shop/storefrontPaths";
 import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
+import {
+  calculateTransportFee,
+  getDefaultTransportFee,
+  inferLegacyProductCataloguePolicy,
+  productCatalogueConfigurationSchema,
+} from "@/lib/productCataloguePolicy";
 import { getOpsBaseUrl, isOpsHost, isShopHost } from "@/lib/runtimeUrls";
 
 export const dynamic = "force-dynamic";
@@ -142,6 +148,53 @@ export async function POST(request: NextRequest) {
     };
   });
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const isShopPickup = data.deliveryMethod.toLowerCase().includes("pickup");
+  let deliveryFee: number | null = isShopPickup ? 0 : null;
+
+  if (data.deliveryZone && !isShopPickup) {
+    const opsProductIds = Array.from(
+      new Set(
+        items
+          .map((item) => item.productId)
+          .filter((productId): productId is string => Boolean(productId)),
+      ),
+    );
+    const configuredProducts = opsProductIds.length
+      ? await prisma.product.findMany({
+          where: { id: { in: opsProductIds } },
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            shortDescription: true,
+            description: true,
+            specifications: true,
+            sellingPrice: true,
+            catalogueConfiguration: true,
+          },
+        })
+      : [];
+    const configuredProductsById = new Map(configuredProducts.map((product) => [product.id, product]));
+    deliveryFee = items.reduce((highestFee, item) => {
+      const storefrontProduct = productMap.get(item.cartProductId);
+      const configuredProduct = item.productId ? configuredProductsById.get(item.productId) : null;
+      const parsedPolicy = configuredProduct
+        ? productCatalogueConfigurationSchema.safeParse(configuredProduct.catalogueConfiguration)
+        : null;
+      const policy = parsedPolicy?.success
+        ? parsedPolicy.data
+        : configuredProduct
+          ? inferLegacyProductCataloguePolicy(configuredProduct)
+          : storefrontProduct
+            ? inferLegacyProductCataloguePolicy(storefrontProduct)
+            : null;
+      const transport = policy
+        ? calculateTransportFee(data.deliveryZone!, policy)
+        : { amount: getDefaultTransportFee(data.deliveryZone!) };
+      return Math.max(highestFee, Number(transport.amount ?? 0));
+    }, 0);
+  }
+  const total = subtotal + (deliveryFee ?? 0);
   const customerIdentity = await findOrCreateCustomerIdentityUser({
     customerName: data.customerName.trim(),
     customerPhone: data.customerPhone.trim(),
@@ -166,8 +219,8 @@ export async function POST(request: NextRequest) {
       orderType,
       status: "PENDING",
       subtotal,
-      deliveryFee: null,
-      total: subtotal,
+      deliveryFee,
+      total,
       notes: data.notes?.trim() || null,
       source: "WEBSITE",
       referredByAgentId: resolvedReferral?.agentUserId ?? null,
@@ -182,6 +235,7 @@ export async function POST(request: NextRequest) {
         attributionCodeUsed: resolvedReferral?.referralCode ?? null,
         customerReferralCode: customerReferralCode || null,
         orderIntent: "PRODUCT_ORDER",
+        deliveryZone: data.deliveryZone ?? null,
       },
       items: {
         create: items.map((item) => ({

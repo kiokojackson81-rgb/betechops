@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const transport = calculateTransportFee(input.zone, policy, settings);
+  const transport = calculateTransportFee(input.zone, policy);
   const accessories = calculateAccessoriesEstimate(storefrontProduct.price, policy);
   const productAmount = Number(storefrontProduct.price || 0);
   const installationFee = Number(installation.amount || 0);
