@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import CheckoutClient from "@/app/shop/_components/CheckoutClient";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
@@ -62,7 +61,6 @@ export default async function ShopCheckoutPage() {
         </div>
       </section>
       <ShopFooter />
-      <FloatingWhatsApp />
     </div>
   );
 }
