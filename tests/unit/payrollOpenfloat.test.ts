@@ -1,4 +1,5 @@
 import { buildOpenfloatReviewRow } from "@/lib/payrollOpenfloatShared";
+import { buildCashAdvanceOpenfloatRow } from "@/lib/cashAdvanceOpenfloat";
 
 describe("buildOpenfloatReviewRow", () => {
   const period = {
@@ -95,5 +96,36 @@ describe("buildOpenfloatReviewRow", () => {
     expect(row.isSkipped).toBe(true);
     expect(row.skipReason).toBe("Negative payroll balance");
     expect(row.validationErrors).toEqual([]);
+  });
+
+  test("uses the validated payout profile and a cash-advance remark", () => {
+    const row = buildCashAdvanceOpenfloatRow(
+      {
+        id: "cash-advance-123",
+        approvedAmount: 20000,
+        user: {
+          id: "u4",
+          name: "Jonathan Mugira",
+          email: "jonathan@betech.co.ke",
+          attendantCategory: "MARKETING_OPS",
+          isActive: true,
+          bankName: null,
+          bankAccountNumber: null,
+          payoutMethod: "MPESA",
+          payoutAccountName: "Jonathan Mugira",
+          mobileMoneyPhoneNumber: "254722607174",
+          tillPaybillNumber: null,
+          tillPaybillBusinessName: null,
+          paybillAccountNumber: null,
+          notificationPhoneNumber: "254722607174",
+        },
+      },
+      period,
+    );
+
+    expect(row.amount).toBe(20000);
+    expect(row.accountType).toBe("Mpesa");
+    expect(row.remark).toBe("Cash advance cash-advance-123 2026-06-25_2026-07-24");
+    expect(row.isValid).toBe(true);
   });
 });

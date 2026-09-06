@@ -93,6 +93,7 @@ const dateFmt = new Intl.DateTimeFormat("en-KE", {
 export default function AdminWellnessClient() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [downloadingCashAdvanceFile, setDownloadingCashAdvanceFile] = useState(false);
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [leaveComments, setLeaveComments] = useState<Record<string, string>>({});
   const [advanceForms, setAdvanceForms] = useState<Record<string, { approvedAmount: string; repaymentPeriod: string; hrComment: string }>>({});
@@ -283,6 +284,34 @@ export default function AdminWellnessClient() {
       toast(error instanceof Error ? error.message : "Failed to process due installments", "error");
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const downloadCashAdvanceOpenfloatFile = async () => {
+    setDownloadingCashAdvanceFile(true);
+    try {
+      const res = await fetch("/api/admin/wellness/cash-advances/openfloat", { cache: "no-store" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(String(body?.detail ?? body?.error ?? "Failed to prepare the OpenFloat file"));
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? "openfloat-cash-advances.xlsx";
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      toast("OpenFloat cash advance file downloaded", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to download the OpenFloat file", "error");
+    } finally {
+      setDownloadingCashAdvanceFile(false);
     }
   };
 
@@ -587,7 +616,21 @@ export default function AdminWellnessClient() {
 
           {recentWellnessTab === "cash" ? (
             <section className="space-y-3">
-              <div className="text-sm font-semibold text-slate-200">Cash advances</div>
+              <div className="flex flex-col gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-100">Cash advances</div>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    Download approved advances from the current payroll period as an OpenFloat-ready Excel file, then upload it in OpenFloat to pay them.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => void downloadCashAdvanceOpenfloatFile()}
+                  disabled={loading || downloadingCashAdvanceFile}
+                >
+                  {downloadingCashAdvanceFile ? "Preparing OpenFloat file..." : "Download OpenFloat file"}
+                </Button>
+              </div>
               {(data?.recentCashAdvances ?? []).length ? (
                 <div className="space-y-3">
                   {(data?.recentCashAdvances ?? []).slice(0, 12).map((row) => {
