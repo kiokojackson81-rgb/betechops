@@ -17,6 +17,10 @@ export type ShopOrderInput = {
   customerLocation: string;
   deliveryMethod: string;
   deliveryZone?: "ZONE_1" | "ZONE_2" | "ZONE_3";
+  deliveryCounty?: string;
+  deliveryTown?: string;
+  townSource?: "predefined" | "manual";
+  nearestMajorTown?: string;
   paymentMethod: string;
   notes?: string;
   projectBooking?: {

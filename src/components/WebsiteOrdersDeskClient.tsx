@@ -447,6 +447,12 @@ export default function WebsiteOrdersDeskClient({
                             </div>
                             <div className="mt-3 grid gap-2 text-sm text-slate-200">
                               <div><span className="text-slate-500">Email:</span> {order.customerEmail || "-"}</div>
+                              <div><span className="text-slate-500">County:</span> {order.deliveryLocationDetails.county || "-"}</div>
+                              <div><span className="text-slate-500">Town / area:</span> {order.deliveryLocationDetails.town || order.customerLocation}</div>
+                              <div><span className="text-slate-500">Location source:</span> {order.deliveryLocationDetails.source ? order.deliveryLocationDetails.source === "manual" ? "Manual area" : "Listed town" : "-"}</div>
+                              <div><span className="text-slate-500">Service zone:</span> {order.deliveryLocationDetails.zone?.replace("_", " ") || "-"}</div>
+                              {order.deliveryLocationDetails.nearestMajorTown ? <div><span className="text-slate-500">Nearest major town:</span> {order.deliveryLocationDetails.nearestMajorTown}</div> : null}
+                              <div><span className="text-slate-500">Full delivery address:</span> {order.customerLocation}</div>
                               <div><span className="text-slate-500">Order type:</span> {order.orderType.replace(/_/g, " ")}</div>
                               <div><span className="text-slate-500">Payment confirmed:</span> {order.paymentConfirmationMethod ? `${order.paymentConfirmationMethod}${order.paymentConfirmationReference ? ` · ${order.paymentConfirmationReference}` : ""}` : "-"}</div>
                               <div><span className="text-slate-500">Notes:</span> {order.notes || "-"}</div>

@@ -17,7 +17,15 @@ import {
   saveMockOrder,
   saveShopCustomerProfile,
 } from "@/app/shop/shopStorage";
-import { getDeliveryZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import {
+  getDeliveryZone,
+  isKnownTownForCounty,
+  isUnlistedTownSelection,
+  kenyaCountyOptions,
+  resolveCheckoutTown,
+  searchCheckoutTowns,
+  UNLISTED_TOWN_OPTION,
+} from "@/lib/agents/kenyaMarkets";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
 import { getShopOrderSuccessHref, SHOP_CART_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
@@ -42,6 +50,7 @@ type CheckoutFieldErrors = {
   whatsappNumber?: string;
   county?: string;
   town?: string;
+  manualTown?: string;
   deliveryMethod?: string;
   paymentPreference?: string;
   cart?: string;
@@ -91,11 +100,20 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     paymentPreference: "",
     county: initialProfile.county,
     town: initialProfile.town,
+    manualTown: "",
+    nearestMajorTown: "",
     estateLandmark: initialProfile.estateLandmark,
     locationNotes: initialProfile.locationNotes,
   });
-  const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
-  const deliveryZone = useMemo(() => getDeliveryZone(form.county, form.town), [form.county, form.town]);
+  const [townSearch, setTownSearch] = useState("");
+  const isManualTown = isUnlistedTownSelection(form.town);
+  const resolvedTown = useMemo(
+    () => resolveCheckoutTown(form.county, form.town, form.manualTown),
+    [form.county, form.manualTown, form.town],
+  );
+  const availableTowns = useMemo(() => searchCheckoutTowns(form.county, townSearch), [form.county, townSearch]);
+  const deliveryZone = resolvedTown?.zone ?? (isManualTown ? getDeliveryZone(form.county, UNLISTED_TOWN_OPTION) : getDeliveryZone(form.county, form.town));
+  const effectiveTown = resolvedTown?.town ?? (isManualTown ? form.manualTown.trim() : form.town.trim());
   const isShopPickup = form.deliveryMethod.toLowerCase().includes("pickup");
   const installationPricingItems = installationPricing.filter((item) => item.bookingType === "INSTALLATION");
   const installationFee = installationPricingItems.reduce((sum, item) => sum + (item.installation?.amount ?? 0) * item.quantity, 0);
@@ -116,17 +134,25 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
       .split("/")
       .map((value) => value.trim())
       .filter(Boolean);
-    setForm((current) => ({
-      ...current,
-      fullName: initialProfile.fullName || profile?.fullName || current.fullName,
-      phoneNumber: initialProfile.phoneNumber || profile?.phone || current.phoneNumber,
-      whatsappNumber: initialProfile.whatsappNumber || profile?.whatsappNumber || profile?.phone || current.whatsappNumber,
-      email: initialProfile.email || profile?.email || current.email,
-      county: initialProfile.county || storedCounty || current.county,
-      town: initialProfile.town || storedTown || current.town,
-      estateLandmark: initialProfile.estateLandmark || profile?.estateLandmark || current.estateLandmark,
-      locationNotes: initialProfile.locationNotes || profile?.locationNotes || current.locationNotes,
-    }));
+    setForm((current) => {
+      const county = initialProfile.county || storedCounty || current.county;
+      const storedTownValue = initialProfile.town || storedTown || current.town;
+      // Earlier profiles store only the actual town. Treat a value outside the
+      // expanded list as a manual area so it remains usable at checkout.
+      const storedTownIsKnown = isKnownTownForCounty(county, storedTownValue);
+      return {
+        ...current,
+        fullName: initialProfile.fullName || profile?.fullName || current.fullName,
+        phoneNumber: initialProfile.phoneNumber || profile?.phone || current.phoneNumber,
+        whatsappNumber: initialProfile.whatsappNumber || profile?.whatsappNumber || profile?.phone || current.whatsappNumber,
+        email: initialProfile.email || profile?.email || current.email,
+        county,
+        town: storedTownValue && !storedTownIsKnown ? UNLISTED_TOWN_OPTION : storedTownValue,
+        manualTown: storedTownValue && !storedTownIsKnown ? storedTownValue : current.manualTown,
+        estateLandmark: initialProfile.estateLandmark || profile?.estateLandmark || current.estateLandmark,
+        locationNotes: initialProfile.locationNotes || profile?.locationNotes || current.locationNotes,
+      };
+    });
   }, [initialProfile]);
 
   useEffect(() => {
@@ -181,7 +207,9 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     if (!form.phoneNumber.trim()) nextErrors.phoneNumber = "Please enter a phone number so our solar team can confirm the order.";
     if (!form.whatsappNumber.trim()) nextErrors.whatsappNumber = "Please enter a WhatsApp number for fast order follow-up.";
     if (!form.county.trim()) nextErrors.county = "Please select the customer county.";
-    if (!form.town.trim()) nextErrors.town = "Please select the customer town.";
+    if (!form.town.trim()) nextErrors.town = "Please select the customer town or area.";
+    if (isManualTown && !form.manualTown.trim()) nextErrors.manualTown = "Enter your town or area so we can confirm delivery.";
+    if (form.town.trim() && !resolvedTown) nextErrors.town = "Choose a valid town or enter your unlisted area.";
     if (!form.deliveryMethod.trim()) nextErrors.deliveryMethod = "Please choose how you want Betech Solar to deliver or prepare pickup.";
     if (!form.paymentPreference.trim()) nextErrors.paymentPreference = "Please choose your preferred payment arrangement.";
     if (hasInstallationBooking && (!deliveryZone || pricingLoading)) nextErrors.deliveryMethod = pricingLoading
@@ -224,8 +252,8 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const whatsappCheckoutMessage = [
     `Hello Betech Solar, I want to complete checkout for ${detailedItems.map((item) => `${item.product.name} x${item.quantity}`).join(", ")}.`,
     form.fullName.trim() ? `Customer: ${form.fullName.trim()}.` : "",
-    form.town.trim() || form.county.trim()
-      ? `Delivery location: ${[form.town.trim(), form.county.trim()].filter(Boolean).join(", ")}.`
+    effectiveTown || form.county.trim()
+      ? `Delivery location: ${[effectiveTown, form.county.trim()].filter(Boolean).join(", ")}.`
       : "",
   ].filter(Boolean).join(" ");
   const summaryWhatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(whatsappCheckoutMessage)}`;
@@ -242,8 +270,8 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           setError(null);
 
           try {
-            const countyTownLabel = [form.county.trim(), form.town.trim()].filter(Boolean).join(" / ");
-            const locationSummary = [form.town.trim(), form.county.trim(), form.estateLandmark.trim()].filter(Boolean).join(" - ");
+            const countyTownLabel = [form.county.trim(), effectiveTown].filter(Boolean).join(" / ");
+            const locationSummary = [effectiveTown, form.county.trim(), form.estateLandmark.trim()].filter(Boolean).join(" - ");
             if (isSignedIn) {
               await fetch("/api/account/complete-profile", {
                 method: "POST",
@@ -254,7 +282,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                   whatsappNumber: form.whatsappNumber.trim(),
                   email: form.email.trim(),
                   county: form.county.trim(),
-                  town: form.town.trim(),
+                  town: effectiveTown,
                   estateLandmark: form.estateLandmark.trim(),
                   locationNotes: form.locationNotes.trim(),
                 }),
@@ -273,6 +301,10 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               customerLocation: locationSummary || countyTownLabel,
               deliveryMethod: form.deliveryMethod,
               deliveryZone: deliveryZone?.id,
+              deliveryCounty: form.county.trim(),
+              deliveryTown: effectiveTown,
+              townSource: resolvedTown?.townSource,
+              nearestMajorTown: isManualTown ? form.nearestMajorTown.trim() || undefined : undefined,
               paymentMethod: form.paymentPreference,
               notes: [form.locationNotes.trim(), `WhatsApp: ${form.whatsappNumber.trim()}`, form.email.trim() ? `Email: ${form.email.trim()}` : ""]
                 .filter(Boolean)
@@ -384,11 +416,13 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                   value={form.county}
                   onChange={(event) => {
                     const nextCounty = event.target.value;
-                    const nextTowns = getTownsForCounty(nextCounty);
+                    setTownSearch("");
                     setForm((current) => ({
                       ...current,
                       county: nextCounty,
-                      town: nextTowns.some((town) => town === current.town) ? current.town : "",
+                      town: "",
+                      manualTown: "",
+                      nearestMajorTown: "",
                     }));
                   }}
                   className={resolveFieldClass(fieldErrors.county)}
@@ -403,14 +437,33 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 {fieldErrors.county ? <span className="text-xs font-semibold text-red-600">{fieldErrors.county}</span> : null}
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Town / City
+                Search town / area
+                <input
+                  value={townSearch}
+                  onChange={(event) => setTownSearch(event.target.value)}
+                  disabled={!form.county}
+                  placeholder={form.county ? "Type to filter towns and areas" : "Choose county first"}
+                  className={resolveFieldClass()}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                Town / City / Area
                 <select
                   value={form.town}
-                  onChange={(event) => setForm((current) => ({ ...current, town: event.target.value }))}
+                  onChange={(event) => {
+                    const nextTown = event.target.value;
+                    setTownSearch("");
+                    setForm((current) => ({
+                      ...current,
+                      town: nextTown,
+                      manualTown: isUnlistedTownSelection(nextTown) ? current.manualTown : "",
+                      nearestMajorTown: isUnlistedTownSelection(nextTown) ? current.nearestMajorTown : "",
+                    }));
+                  }}
                   disabled={!form.county}
                   className={resolveFieldClass(fieldErrors.town)}
                 >
-                  <option value="">{form.county ? "Select town or city" : "Choose county first"}</option>
+                  <option value="">{form.county ? "Select town, city or area" : "Choose county first"}</option>
                   {availableTowns.map((town) => (
                     <option key={town} value={town}>
                       {town}
@@ -419,9 +472,21 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 </select>
                 {fieldErrors.town ? <span className="text-xs font-semibold text-red-600">{fieldErrors.town}</span> : null}
               </label>
-              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">Delivery Area</b><div className="mt-1 font-semibold">{form.town}, {form.county} County</div><div className="mt-1">{isShopPickup ? "Shop pickup selected — no delivery fee." : pricingLoading ? "Calculating your configured delivery fee..." : hasConfiguredDeliveryFee ? `Configured delivery fee: ${formatCurrency(transportFee)}.` : "Delivery charges will be calculated based on your selected location and delivery method."}</div></div> : null}
+              {isManualTown ? <>
+                <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+                  Enter your town / area
+                  <input value={form.manualTown} onChange={(event) => setForm((current) => ({ ...current, manualTown: event.target.value }))} className={resolveFieldClass(fieldErrors.manualTown)} />
+                  {fieldErrors.manualTown ? <span className="text-xs font-semibold text-red-600">{fieldErrors.manualTown}</span> : null}
+                </label>
+                <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+                  Nearest major town <span className="font-normal text-slate-500">(optional)</span>
+                  <input value={form.nearestMajorTown} onChange={(event) => setForm((current) => ({ ...current, nearestMajorTown: event.target.value }))} className={resolveFieldClass()} />
+                </label>
+                <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm leading-6 text-slate-700 sm:col-span-2">We will confirm delivery availability and timing for your area. Your delivery fee still uses the selected county’s service zone.</div>
+              </> : null}
+              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">Delivery Area</b><div className="mt-1 font-semibold">{effectiveTown || "Select your town or area"}{form.county ? `, ${form.county} County` : ""}</div><div className="mt-1">{isShopPickup ? "Shop pickup selected — no delivery fee." : pricingLoading ? "Calculating your configured delivery fee..." : hasConfiguredDeliveryFee ? `Configured delivery fee: ${formatCurrency(transportFee)}.` : "Delivery charges will be calculated based on your selected location and delivery method."}</div></div> : null}
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Specific Locality / Estate / Landmark
+                Specific locality / estate / village / landmark
                 <input value={form.estateLandmark} onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))} className={resolveFieldClass()} />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">

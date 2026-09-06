@@ -188,6 +188,10 @@ export const websiteOrderCreateSchema = z.object({
   customerLocation: z.string().trim().min(2),
   deliveryMethod: z.string().trim().min(2),
   deliveryZone: z.enum(["ZONE_1", "ZONE_2", "ZONE_3"]).optional(),
+  deliveryCounty: z.string().trim().min(2).max(120).optional(),
+  deliveryTown: z.string().trim().min(1).max(160).optional(),
+  townSource: z.enum(["predefined", "manual"]).optional(),
+  nearestMajorTown: z.string().trim().min(1).max(160).optional(),
   paymentMethod: z.string().trim().min(2),
   notes: z.string().trim().max(4000).optional(),
   projectBooking: z
@@ -321,6 +325,13 @@ export type SerializedWebsiteOrder = {
     referralCode: string | null;
   } | null;
   deliveryMethod: string;
+  deliveryLocationDetails: {
+    county: string | null;
+    town: string | null;
+    zone: "ZONE_1" | "ZONE_2" | "ZONE_3" | null;
+    source: "predefined" | "manual" | null;
+    nearestMajorTown: string | null;
+  };
   paymentMethod: string;
   orderType: WebsiteOrderType;
   status: WebsiteOrderStatus;
@@ -438,6 +449,8 @@ function readWebsiteOrderMetadata(metadata: unknown) {
   };
 
   const receiptFlowModeRaw = readString("receiptFlowMode");
+  const deliveryZone = readString("deliveryZone");
+  const townSource = readString("townSource");
   return {
     processingAt: readString("processingAt"),
     receiptIssuedAt: readString("receiptIssuedAt"),
@@ -450,6 +463,13 @@ function readWebsiteOrderMetadata(metadata: unknown) {
       receiptFlowModeRaw === "pod" || receiptFlowModeRaw === "normal"
         ? receiptFlowModeRaw
         : null,
+    deliveryLocationDetails: {
+      county: readString("deliveryCounty"),
+      town: readString("deliveryTown"),
+      zone: deliveryZone === "ZONE_1" || deliveryZone === "ZONE_2" || deliveryZone === "ZONE_3" ? deliveryZone : null,
+      source: townSource === "predefined" || townSource === "manual" ? townSource : null,
+      nearestMajorTown: readString("nearestMajorTown"),
+    },
   } as const;
 }
 
@@ -540,6 +560,7 @@ function serializeWebsiteOrderRow(
       ? (referralAgentsById.get(referredByAgentId) ?? null)
       : null,
     deliveryMethod: order.deliveryMethod,
+    deliveryLocationDetails: lifecycle.deliveryLocationDetails,
     paymentMethod: order.paymentMethod,
     orderType: order.orderType,
     status: order.status,

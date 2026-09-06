@@ -22,6 +22,7 @@ import {
   inferLegacyProductCataloguePolicy,
   productCatalogueConfigurationSchema,
 } from "@/lib/productCataloguePolicy";
+import { resolveCheckoutTown, UNLISTED_TOWN_OPTION } from "@/lib/agents/kenyaMarkets";
 import { getOpsBaseUrl, isOpsHost, isShopHost } from "@/lib/runtimeUrls";
 
 export const dynamic = "force-dynamic";
@@ -119,6 +120,35 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  let resolvedDeliveryZone = data.deliveryZone;
+  let deliveryLocation: {
+    county: string;
+    town: string;
+    townSource: "predefined" | "manual";
+    nearestMajorTown: string | null;
+  } | null = null;
+  if (data.deliveryCounty || data.deliveryTown || data.townSource) {
+    if (!data.deliveryCounty || !data.deliveryTown) {
+      return NextResponse.json({ ok: false, error: "Please provide a valid delivery county and town." }, { status: 400 });
+    }
+    const isManualTown = data.townSource === "manual";
+    const resolvedTown = resolveCheckoutTown(
+      data.deliveryCounty,
+      isManualTown ? UNLISTED_TOWN_OPTION : data.deliveryTown,
+      isManualTown ? data.deliveryTown : undefined,
+    );
+    if (!resolvedTown) {
+      return NextResponse.json({ ok: false, error: "Please select a valid delivery town or enter your area." }, { status: 400 });
+    }
+    resolvedDeliveryZone = resolvedTown.zone.id;
+    deliveryLocation = {
+      county: data.deliveryCounty.trim(),
+      town: resolvedTown.town,
+      townSource: resolvedTown.townSource,
+      nearestMajorTown: isManualTown ? data.nearestMajorTown?.trim() || null : null,
+    };
+  }
   await ensureWebsiteOrdersSchema();
   await ensureAttributionSchema();
   const products = await getShopProducts();
@@ -151,7 +181,7 @@ export async function POST(request: NextRequest) {
   const isShopPickup = data.deliveryMethod.toLowerCase().includes("pickup");
   let deliveryFee: number | null = isShopPickup ? 0 : null;
 
-  if (data.deliveryZone && !isShopPickup) {
+  if (resolvedDeliveryZone && !isShopPickup) {
     const opsProductIds = Array.from(
       new Set(
         items
@@ -189,8 +219,8 @@ export async function POST(request: NextRequest) {
             ? inferLegacyProductCataloguePolicy(storefrontProduct)
             : null;
       const transport = policy
-        ? calculateTransportFee(data.deliveryZone!, policy)
-        : { amount: getDefaultTransportFee(data.deliveryZone!) };
+        ? calculateTransportFee(resolvedDeliveryZone, policy)
+        : { amount: getDefaultTransportFee(resolvedDeliveryZone) };
       return Math.max(highestFee, Number(transport.amount ?? 0));
     }, 0);
   }
@@ -235,7 +265,11 @@ export async function POST(request: NextRequest) {
         attributionCodeUsed: resolvedReferral?.referralCode ?? null,
         customerReferralCode: customerReferralCode || null,
         orderIntent: "PRODUCT_ORDER",
-        deliveryZone: data.deliveryZone ?? null,
+        deliveryZone: resolvedDeliveryZone ?? null,
+        deliveryCounty: deliveryLocation?.county ?? null,
+        deliveryTown: deliveryLocation?.town ?? null,
+        townSource: deliveryLocation?.townSource ?? null,
+        nearestMajorTown: deliveryLocation?.nearestMajorTown ?? null,
       },
       items: {
         create: items.map((item) => ({
