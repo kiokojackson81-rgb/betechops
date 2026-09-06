@@ -93,7 +93,7 @@ const dateFmt = new Intl.DateTimeFormat("en-KE", {
 export default function AdminWellnessClient() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [downloadingCashAdvanceFile, setDownloadingCashAdvanceFile] = useState(false);
+  const [downloadingCashAdvanceId, setDownloadingCashAdvanceId] = useState<string | null>(null);
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [leaveComments, setLeaveComments] = useState<Record<string, string>>({});
   const [advanceForms, setAdvanceForms] = useState<Record<string, { approvedAmount: string; repaymentPeriod: string; hrComment: string }>>({});
@@ -287,10 +287,13 @@ export default function AdminWellnessClient() {
     }
   };
 
-  const downloadCashAdvanceOpenfloatFile = async () => {
-    setDownloadingCashAdvanceFile(true);
+  const downloadCashAdvanceOpenfloatFile = async (cashAdvanceId: string) => {
+    setDownloadingCashAdvanceId(cashAdvanceId);
     try {
-      const res = await fetch("/api/admin/wellness/cash-advances/openfloat", { cache: "no-store" });
+      const res = await fetch(
+        `/api/admin/wellness/cash-advances/openfloat?cashAdvanceId=${encodeURIComponent(cashAdvanceId)}`,
+        { cache: "no-store" },
+      );
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(String(body?.detail ?? body?.error ?? "Failed to prepare the OpenFloat file"));
@@ -298,7 +301,7 @@ export default function AdminWellnessClient() {
 
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition") ?? "";
-      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? "openfloat-cash-advances.xlsx";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? "openfloat-cash-advance.xlsx";
       const objectUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
@@ -307,11 +310,11 @@ export default function AdminWellnessClient() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(objectUrl);
-      toast("OpenFloat cash advance file downloaded", "success");
+      toast("OpenFloat file for this cash advance downloaded", "success");
     } catch (error) {
       toast(error instanceof Error ? error.message : "Failed to download the OpenFloat file", "error");
     } finally {
-      setDownloadingCashAdvanceFile(false);
+      setDownloadingCashAdvanceId(null);
     }
   };
 
@@ -616,20 +619,13 @@ export default function AdminWellnessClient() {
 
           {recentWellnessTab === "cash" ? (
             <section className="space-y-3">
-              <div className="flex flex-col gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
                 <div>
                   <div className="text-sm font-semibold text-slate-100">Cash advances</div>
                   <p className="mt-1 text-xs leading-5 text-slate-400">
-                    Download approved advances from the current payroll period as an OpenFloat-ready Excel file, then upload it in OpenFloat to pay them.
+                    Open an approved request and download its own OpenFloat-ready Excel file. Each download contains only that one cash advance.
                   </p>
                 </div>
-                <Button
-                  variant="secondary"
-                  onClick={() => void downloadCashAdvanceOpenfloatFile()}
-                  disabled={loading || downloadingCashAdvanceFile}
-                >
-                  {downloadingCashAdvanceFile ? "Preparing OpenFloat file..." : "Download OpenFloat file"}
-                </Button>
               </div>
               {(data?.recentCashAdvances ?? []).length ? (
                 <div className="space-y-3">
@@ -748,6 +744,17 @@ export default function AdminWellnessClient() {
                                     <Button onClick={() => void decideAdvance(row.id, "APPROVED")}>Approve</Button>
                                     <Button variant="secondary" onClick={() => void decideAdvance(row.id, "REJECTED")}>Reject</Button>
                                   </>
+                                ) : null}
+                                {String(row.status).toUpperCase() === "APPROVED" ? (
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => void downloadCashAdvanceOpenfloatFile(row.id)}
+                                    disabled={downloadingCashAdvanceId !== null}
+                                  >
+                                    {downloadingCashAdvanceId === row.id
+                                      ? "Preparing OpenFloat file..."
+                                      : "Download OpenFloat file"}
+                                  </Button>
                                 ) : null}
                                 <Button variant="secondary" onClick={() => void updateRecentAdvance(row.id)}>Save changes</Button>
                                 <Button variant="secondary" onClick={() => void deleteRecentAdvance(row.id)}>Delete</Button>
