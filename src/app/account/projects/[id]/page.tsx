@@ -6,6 +6,7 @@ import { getCustomerAccountOrderDetail } from "@/lib/shopCustomerOrders";
 import { prisma } from "@/lib/prisma";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { notFound } from "next/navigation";
+import ProjectCompletionActions from "@/app/account/projects/ProjectCompletionActions";
 
 const stages = [
   ["RECEIPT_CREATED", "Request Received"],
@@ -37,7 +38,7 @@ export default async function CustomerProjectPage({ params }: { params: Promise<
   const order = await getCustomerAccountOrderDetail({ routeId: `receipt-${id}`, ...identity });
   if (!order) notFound();
 
-  const receipt = await prisma.receipt.findUnique({ where: { id }, select: { data: true } });
+  const receipt = await prisma.receipt.findUnique({ where: { id }, select: { data: true, commissioningSession: { select: { status: true, certificateNo: true, customerAcknowledgedAt: true, customerTermsAcceptedAt: true } } } });
   const data = receipt?.data && typeof receipt.data === "object" && !Array.isArray(receipt.data) ? receipt.data as Record<string, unknown> : {};
   const flow = readReceiptProjectFlow(data.projectFlow);
   if (!flow?.isProject) notFound();
@@ -54,6 +55,7 @@ export default async function CustomerProjectPage({ params }: { params: Promise<
       <div className={`${shopStyles.lightCard} p-5`}><h2 className="font-black text-[#7a0000]">Project Details</h2><dl className="mt-4 grid gap-3 text-sm">{[["Project value", formatCurrency(flow.projectValue)], ["Payment terms", flow.paymentTerm.replaceAll("_", " ")], ["Amount paid", formatCurrency(flow.totalPaidAmount)], ["Outstanding balance", formatCurrency(flow.remainingAmount)], ["Payment status", flow.paymentStatus.replaceAll("_", " ")], ["Request submitted", formatDate(order.createdAt)]].map(([key, value]) => <div key={key} className="flex justify-between gap-4"><dt className="text-slate-500">{key}</dt><dd className="text-right font-bold">{value}</dd></div>)}</dl></div>
       <div className={`${shopStyles.lightCard} p-5`}><h2 className="flex items-center gap-2 font-black text-[#7a0000]"><CalendarDays className="h-4 w-4" /> Installation Details</h2><dl className="mt-4 grid gap-3 text-sm"><div><dt className="text-slate-500">Installation location</dt><dd className="mt-1 font-bold">{order.customerLocation}</dd></div><div><dt className="text-slate-500">Preferred installation date</dt><dd className="mt-1 font-bold">{formatDate(preferredDate)}</dd></div><div><dt className="text-slate-500">Confirmed installation date</dt><dd className="mt-1 font-bold">{formatDate(flow.scheduledDate)}</dd></div>{flow.assignedHandlers.length ? <div><dt className="flex items-center gap-2 text-slate-500"><Wrench className="h-4 w-4" /> Assigned technician/team</dt><dd className="mt-1 font-bold">{flow.assignedHandlers.map((handler) => handler.staffName || handler.externalAgentName).filter(Boolean).join(", ")}</dd></div> : null}</dl></div>
     </section>
+    {receipt?.commissioningSession?.status === "ISSUED" ? <ProjectCompletionActions receiptId={id} acknowledged={Boolean(receipt.commissioningSession.customerAcknowledgedAt && receipt.commissioningSession.customerTermsAcceptedAt)} /> : null}
     <Link href="/account/orders" className={`${shopStyles.secondaryButton} w-fit`}><MapPin className="h-4 w-4" /> Back to account orders</Link>
   </div>;
 }

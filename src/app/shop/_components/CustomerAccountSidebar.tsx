@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BellRing,
   CalendarCheck2,
+  FileCheck2,
   MapPin,
   Package,
   ShieldCheck,
@@ -30,6 +31,7 @@ export default function CustomerAccountSidebar({
     },
     { icon: MapPin, label: "Address details", href: "/account/address" },
     { icon: Package, label: "Recent orders", href: "/account/orders" },
+    { icon: FileCheck2, label: "My certificates", href: "/account/certificates" },
     {
       icon: WalletCards,
       label: "Lipa Pole Pole",

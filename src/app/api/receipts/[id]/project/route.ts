@@ -23,7 +23,14 @@ import {
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { publishProjectNotification } from "@/services/project-notifications/project-notification.service";
 import {
-  hasProjectAssignedHandler,
+  appendCommissioningAudit,
+  commissioningExpiry,
+  commissioningUrl,
+  createCommissioningToken,
+  encryptCommissioningToken,
+  hashCommissioningToken,
+} from "@/lib/commissioning";
+import {
   hasProjectBookingDate,
   resolveProjectNotificationEvents,
   shouldSendProjectAssigned,
@@ -109,6 +116,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const existing = await prisma.receipt.findUnique({
     where: { id },
     include: {
+      commissioningSession: true,
       order: {
         select: {
           totalAmount: true,
@@ -294,6 +302,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const isCompleted = nextProjectFlow.stage === "COMPLETED_POSTED";
   const isBooked = hasProjectBookingDate(nextProjectFlow);
 
+  let replacementCommissioningToken: string | null = null;
   const updated = await prisma.$transaction(async (tx) => {
     const receipt = await tx.receipt.update({
       where: { id },
@@ -332,6 +341,33 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
 
     if (nextProjectFlow.stage === "COMPLETED_POSTED" && tx.supportDailyEntry && tx.supportReceipt) {
       await syncCompletedProjectReceiptToPricing(tx, receipt, nextProjectFlow);
+    }
+
+    // A draft link is scoped to its technician assignment. If an admin removes
+    // that technician, rotate it once for the replacement while keeping every
+    // saved answer, photo reference, signature and audit entry intact.
+    const currentCommissioning = existing.commissioningSession;
+    const technicianWasUnassigned = Boolean(
+      currentCommissioning?.technicianId &&
+      !nextHandlerStaffIds.includes(currentCommissioning.technicianId),
+    );
+    if (currentCommissioning?.status === "DRAFT" && technicianWasUnassigned && nextHandlerStaffIds[0]) {
+      replacementCommissioningToken = createCommissioningToken();
+      await tx.commissioningSession.update({
+        where: { id: currentCommissioning.id },
+        data: {
+          technicianId: nextHandlerStaffIds[0],
+          tokenHash: hashCommissioningToken(replacementCommissioningToken),
+          tokenCiphertext: encryptCommissioningToken(replacementCommissioningToken),
+          expiresAt: commissioningExpiry(),
+          audit: appendCommissioningAudit(currentCommissioning.audit, {
+            at: new Date().toISOString(),
+            action: "TECHNICIAN_REASSIGNED_AND_TOKEN_REPLACED",
+            actorId,
+            detail: { previousTechnicianId: currentCommissioning.technicianId, technicianId: nextHandlerStaffIds[0] },
+          }),
+        },
+      });
     }
 
     return receipt;
@@ -401,5 +437,6 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     receipt: updated,
     projectSaved: true,
     notificationResults,
+    commissioningLink: replacementCommissioningToken ? commissioningUrl(replacementCommissioningToken, new URL(req.url).origin) : null,
   });
 }

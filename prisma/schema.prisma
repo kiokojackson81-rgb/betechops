@@ -88,6 +88,7 @@ model User {
   lipaPolePoleEvents                   LipaPolePoleEvent[]             @relation("LipaPolePoleEventActor")
   orders                               Order[]
   issuedReceipts                       Receipt[]                       @relation("issuedBy")
+  commissioningSessions                CommissioningSession[]          @relation("CommissioningTechnician")
   confirmedWebsiteOrders               WebsiteOrder[]                  @relation("websiteOrderConfirmedBy")
   returnsApproved                      ReturnCase[]                    @relation("ReturnApprovedBy")
   returnsCreated                       ReturnCase[]                    @relation("ReturnCreatedBy")
@@ -1585,6 +1586,45 @@ model Receipt {
   projectNotifications          ProjectNotificationLog[]
   websiteOrders                 WebsiteOrder[]
   complaints                    Complaint[]
+  commissioningSession          CommissioningSession?
+}
+
+enum CommissioningSessionStatus {
+  DRAFT
+  ISSUED
+  REVOKED
+}
+
+/// One durable field-commissioning workspace per existing project receipt.
+/// The opaque token is stored only as a hash so it cannot be recovered from the database.
+model CommissioningSession {
+  id             String                     @id @default(cuid())
+  receiptId      String                     @unique
+  technicianId   String?
+  tokenHash      String                     @unique
+  tokenCiphertext String
+  customerTokenHash String?                 @unique
+  customerTokenCiphertext String?
+  status         CommissioningSessionStatus @default(DRAFT)
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  lastAccessedAt DateTime?
+  lastStep       String                     @default("panel-identification")
+  progress       Int                        @default(0)
+  data           Json?
+  audit          Json?
+  certificateNo  String?                    @unique
+  issuedAt       DateTime?
+  customerDeliveredAt DateTime?
+  customerAcknowledgedAt DateTime?
+  customerTermsAcceptedAt DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  receipt        Receipt                    @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  technician     User?                      @relation("CommissioningTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+
+  @@index([technicianId])
+  @@index([status, expiresAt])
 }
 
 enum ProjectNotificationEventType {

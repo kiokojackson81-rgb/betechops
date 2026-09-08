@@ -85,6 +85,12 @@ type ProjectEditor = {
   externalAgentIds: string[];
 };
 
+type CommissioningLinkState = {
+  link: string;
+  status?: string;
+  progress?: number;
+};
+
 type ProjectsOperationsClientProps = {
   scope?: "admin" | "technical";
   viewerId?: string | null;
@@ -376,6 +382,7 @@ export default function ProjectsOperationsClient({
   const [newAgentPhone, setNewAgentPhone] = useState("");
   const [agentSaving, setAgentSaving] = useState(false);
   const [sendingReceiptId, setSendingReceiptId] = useState<string | null>(null);
+  const [commissioningLinks, setCommissioningLinks] = useState<Record<string, CommissioningLinkState>>({});
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [assignmentModal, setAssignmentModal] = useState<AssignmentModalState>(null);
@@ -617,6 +624,14 @@ export default function ProjectsOperationsClient({
       if (!res.ok) {
         throw new Error(payload?.error || "Failed to update project");
       }
+      if (payload?.commissioningLink) {
+        setCommissioningLinks((current) => ({
+          ...current,
+          [receiptId]: { link: payload.commissioningLink, status: "DRAFT" },
+        }));
+        await navigator.clipboard?.writeText(payload.commissioningLink).catch(() => undefined);
+        showToast("Technician changed: the old commissioning link was invalidated and the replacement link copied.", "success");
+      }
       showToast(
         override?.stage === "COMPLETED_POSTED"
           ? "Project marked complete and left in POS for normal pricing flow"
@@ -743,6 +758,52 @@ export default function ProjectsOperationsClient({
       showToast(error instanceof Error ? error.message : "Failed to resend project receipt", "error");
     } finally {
       setSendingReceiptId(null);
+    }
+  };
+
+  const manageCommissioningLink = async (
+    row: ProjectRow,
+    action: "create" | "resend" | "regenerate" | "revoke" | "reassign" | "deliver-certificate",
+    technicianId?: string,
+  ) => {
+    setSavingId(row.id);
+    try {
+      const res = await fetch(`/api/receipts/${row.id}/commissioning`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action, technicianId }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Unable to update commissioning link");
+      if (payload?.link) {
+        if (action !== "deliver-certificate") {
+          setCommissioningLinks((current) => ({
+            ...current,
+            [row.id]: { link: payload.link, status: payload.session?.status, progress: payload.session?.progress },
+          }));
+        }
+        await navigator.clipboard?.writeText(payload.link).catch(() => undefined);
+        showToast(
+          action === "deliver-certificate"
+            ? "Customer certificate delivery was triggered and its secure link was copied."
+            : payload.reused
+              ? "Existing commissioning link copied — no new token was created."
+              : "Commissioning link copied.",
+          "success",
+        );
+      } else {
+        setCommissioningLinks((current) => {
+          const next = { ...current };
+          delete next[row.id];
+          return next;
+        });
+        showToast(payload?.message || "Commissioning link revoked.", "success");
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to update commissioning link", "error");
+    } finally {
+      setSavingId(null);
     }
   };
 
@@ -1436,6 +1497,49 @@ export default function ProjectsOperationsClient({
                                         </div>
                                       ))
                                     )}
+                                  </div>
+                                  <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                                    <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Commissioning & certificate</div>
+                                    {assignedStaff.length > 0 ? (
+                                      <>
+                                        <p className="mt-2 text-sm text-slate-300">One persistent, secure link is reused until the certificate is issued or access is deliberately changed.</p>
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                          <button
+                                            type="button"
+                                            disabled={savingId === row.id}
+                                            onClick={() => void manageCommissioningLink(row, commissioningLinks[row.id] ? "resend" : "create", assignedStaff[0]?.staffId || undefined)}
+                                            className="rounded-xl bg-cyan-400 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50"
+                                          >
+                                            {savingId === row.id ? "Working…" : commissioningLinks[row.id] ? "Copy / Send Link" : "Create & Copy Link"}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={savingId === row.id}
+                                            onClick={() => void manageCommissioningLink(row, "regenerate")}
+                                            className="rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-200 disabled:opacity-50"
+                                          >
+                                            Replace Token
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={savingId === row.id}
+                                            onClick={() => void manageCommissioningLink(row, "revoke")}
+                                            className="rounded-xl border border-rose-400/30 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-50"
+                                          >
+                                            Revoke Access
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={savingId === row.id}
+                                            onClick={() => void manageCommissioningLink(row, "deliver-certificate")}
+                                            className="rounded-xl border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-200 disabled:opacity-50"
+                                          >
+                                            Send Certificate to Customer
+                                          </button>
+                                        </div>
+                                        {commissioningLinks[row.id] ? <div className="mt-3 break-all rounded-xl bg-[#08111d] p-3 text-xs text-cyan-100">{commissioningLinks[row.id].link}</div> : null}
+                                      </>
+                                    ) : <p className="mt-2 text-sm text-slate-500">Assign an internal technician to create a commissioning link.</p>}
                                   </div>
                                 </div>
 
