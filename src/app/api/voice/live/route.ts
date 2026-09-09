@@ -24,6 +24,7 @@ export async function GET(request: Request) {
       const encoder = new TextEncoder();
       const selectedCallId = url.searchParams.get("selectedCallId");
       const selectedPhone = url.searchParams.get("selectedPhone");
+      const historyRange = url.searchParams.get("range");
 
       const stream = new ReadableStream<Uint8Array>({
         async start(controller) {
@@ -31,7 +32,11 @@ export async function GET(request: Request) {
           const writeEvent = (event: string, data: unknown) => {
             if (closed) return;
             try {
-              controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+              controller.enqueue(
+                encoder.encode(
+                  `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
+                ),
+              );
             } catch (error) {
               console.error("[voice.live.sse_push_failed]", error);
               safeClose();
@@ -55,6 +60,7 @@ export async function GET(request: Request) {
               selectedCallId,
               selectedPhone,
               scope: url.searchParams.get("scope") === "mine" ? "mine" : "all",
+              historyRange,
             });
             writeEvent("snapshot", { reason, snapshot });
           };
@@ -110,6 +116,7 @@ export async function GET(request: Request) {
       selectedCallId: url.searchParams.get("selectedCallId"),
       selectedPhone: url.searchParams.get("selectedPhone"),
       scope: url.searchParams.get("scope") === "mine" ? "mine" : "all",
+      historyRange: url.searchParams.get("range"),
     });
 
     return NextResponse.json(snapshot, { status: 200 });

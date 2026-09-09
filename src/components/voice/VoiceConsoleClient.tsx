@@ -30,7 +30,11 @@ import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { summarizeVoiceQueueItems } from "@/lib/operationsWorkQueue";
 import { normalizeKenyanPhone } from "@/lib/phone";
-import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import {
+  getVoiceHistoryDateRange,
+  normalizeVoiceHistoryRange,
+  type VoiceHistoryRange,
+} from "@/lib/voiceHistoryRange";
 import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
 
 type VoiceConsoleClientProps = {
@@ -44,11 +48,24 @@ type VoiceConsoleClientProps = {
 };
 
 const MANUAL_PRESENCE_STATUSES = ["AVAILABLE", "OFFLINE"] as const;
-const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents", "feedback", "settings"] as const;
-const VOICE_DISPOSITIONS = ["SALE", "QUOTE", "SUPPORT", "WRONG_NUMBER", "FOLLOW_UP_NEEDED"] as const;
+const VOICE_CONSOLE_TABS = [
+  "operations",
+  "recent",
+  "recordings",
+  "followups",
+  "agents",
+  "feedback",
+  "settings",
+] as const;
+const VOICE_DISPOSITIONS = [
+  "SALE",
+  "QUOTE",
+  "SUPPORT",
+  "WRONG_NUMBER",
+  "FOLLOW_UP_NEEDED",
+] as const;
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
-const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
-type VoiceDateFilter = (typeof VOICE_DATE_FILTERS)[number];
+type VoiceDateFilter = VoiceHistoryRange;
 type VoiceQueueView = "all" | "waiting" | "missed" | "contacted";
 
 function formatDateTime(value: string | null | undefined) {
@@ -108,35 +125,72 @@ function formatRelative(seconds: number | null | undefined) {
 
 function getRecentCallBucket(value: string | null | undefined) {
   if (!value) return "Earlier";
-  const callDate = new Date(value);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday);
-  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-  const startOfWeek = new Date(startOfToday);
-  startOfWeek.setDate(startOfWeek.getDate() - 7);
-  if (callDate >= startOfToday) return "Today";
-  if (callDate >= startOfYesterday) return "Yesterday";
-  if (callDate >= startOfWeek) return "This Week";
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return "Earlier";
+  const today = getVoiceHistoryDateRange("today");
+  const yesterday = getVoiceHistoryDateRange("yesterday");
+  const week = getVoiceHistoryDateRange("week");
+  if (timestamp >= today.start.getTime()) return "Today";
+  if (timestamp >= yesterday.start.getTime()) return "Yesterday";
+  if (timestamp >= week.start.getTime()) return "This Week";
   return "Earlier";
 }
 
 function statusTone(status: string | null | undefined) {
   const normalized = String(status || "").toLowerCase();
-  if (["available", "answered", "completed", "resolved", "contacted", "registered", "live", "success"].includes(normalized)) {
+  if (
+    [
+      "available",
+      "answered",
+      "completed",
+      "resolved",
+      "contacted",
+      "registered",
+      "live",
+      "success",
+    ].includes(normalized)
+  ) {
     return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
   }
-  if (["busy", "ringing", "queued", "pending", "in_progress", "pending_follow_up", "away", "waiting", "connecting", "attempted_call", "attempted call"].includes(normalized)) {
+  if (
+    [
+      "busy",
+      "ringing",
+      "queued",
+      "pending",
+      "in_progress",
+      "pending_follow_up",
+      "away",
+      "waiting",
+      "connecting",
+      "attempted_call",
+      "attempted call",
+    ].includes(normalized)
+  ) {
     return "border-amber-500/30 bg-amber-500/10 text-amber-100";
   }
-  if (["offline", "break", "missed", "aborted", "failed", "closed", "error", "cancelled", "disconnected"].includes(normalized)) {
+  if (
+    [
+      "offline",
+      "break",
+      "missed",
+      "aborted",
+      "failed",
+      "closed",
+      "error",
+      "cancelled",
+      "disconnected",
+    ].includes(normalized)
+  ) {
     return "border-rose-500/30 bg-rose-500/10 text-rose-100";
   }
   return "border-white/10 bg-white/[0.04] text-slate-200";
 }
 
 function followUpReasonTone(kind: string | null | undefined) {
-  const normalized = String(kind || "").trim().toLowerCase();
+  const normalized = String(kind || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "requested_callback") {
     return "border-lime-500/30 bg-lime-500/10 text-lime-100";
   }
@@ -175,55 +229,34 @@ function getInitials(value: string | null | undefined) {
 }
 
 function normalizeVoiceTab(value: string | null): VoiceConsoleTab {
-  return VOICE_CONSOLE_TABS.includes(value as VoiceConsoleTab) ? (value as VoiceConsoleTab) : "operations";
-}
-
-function normalizeVoiceDateFilter(value: string | null): VoiceDateFilter {
-  return VOICE_DATE_FILTERS.includes(value as VoiceDateFilter) ? (value as VoiceDateFilter) : "today";
+  return VOICE_CONSOLE_TABS.includes(value as VoiceConsoleTab)
+    ? (value as VoiceConsoleTab)
+    : "operations";
 }
 
 function normalizeQueueView(value: string | null): VoiceQueueView {
-  return value === "waiting" || value === "missed" || value === "contacted" ? value : "all";
+  return value === "waiting" || value === "missed" || value === "contacted"
+    ? value
+    : "all";
 }
 
 function getVoiceDateFilterMeta(
   filter: VoiceDateFilter,
   now = new Date(),
 ): { label: string; start: Date; end: Date; detail?: string } {
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayEnd = new Date(todayStart);
-  todayEnd.setHours(23, 59, 59, 999);
-
-  if (filter === "today") {
-    return { label: "Today", start: todayStart, end: todayEnd };
-  }
-
-  if (filter === "yesterday") {
-    const start = new Date(todayStart);
-    start.setDate(start.getDate() - 1);
-    const end = new Date(start);
-    end.setHours(23, 59, 59, 999);
-    return { label: "Yesterday", start, end };
-  }
-
-  if (filter === "week") {
-    const dayOfWeek = todayStart.getDay();
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const start = new Date(todayStart);
-    start.setDate(start.getDate() + diffToMonday);
-    return { label: "This Week", start, end: todayEnd };
-  }
-
-  const tradingPeriod = getTradingPeriodFor(now);
+  const range = getVoiceHistoryDateRange(filter, now);
   return {
-    label: "Trading Period",
-    start: tradingPeriod.start,
-    end: tradingPeriod.end,
-    detail: tradingPeriod.label,
+    label: range.label,
+    start: range.start,
+    end: new Date(range.endExclusive.getTime() - 1),
+    detail: range.detail,
   };
 }
 
-function isWithinVoiceDateFilter(value: string | null | undefined, filter: VoiceDateFilter) {
+function isWithinVoiceDateFilter(
+  value: string | null | undefined,
+  filter: VoiceDateFilter,
+) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
   if (Number.isNaN(timestamp)) return false;
@@ -231,7 +264,10 @@ function isWithinVoiceDateFilter(value: string | null | undefined, filter: Voice
   return timestamp >= range.start.getTime() && timestamp <= range.end.getTime();
 }
 
-function isFreshIncomingCall(value: string | null | undefined, maxAgeMs = 5 * 60 * 1000) {
+function isFreshIncomingCall(
+  value: string | null | undefined,
+  maxAgeMs = 5 * 60 * 1000,
+) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
   if (Number.isNaN(timestamp)) return false;
@@ -241,7 +277,12 @@ function isFreshIncomingCall(value: string | null | undefined, maxAgeMs = 5 * 60
 function isDeveloperPlaceholderPhone(phone: string | null | undefined) {
   const normalized = String(phone || "").replace(/\s+/g, "");
   if (!normalized) return false;
-  if (["+254711111111", "0711111111", "+254700000001", "0700000001"].includes(normalized)) return true;
+  if (
+    ["+254711111111", "0711111111", "+254700000001", "0700000001"].includes(
+      normalized,
+    )
+  )
+    return true;
   return /^(\+254|0)7(\d)\2{7,}$/.test(normalized);
 }
 
@@ -249,12 +290,20 @@ function isMeaningfulVoicePhone(phone: string | null | undefined) {
   return Boolean(phone) && !isDeveloperPlaceholderPhone(phone);
 }
 
-function formatPresenceChoiceLabel(status: (typeof MANUAL_PRESENCE_STATUSES)[number]) {
+function formatPresenceChoiceLabel(
+  status: (typeof MANUAL_PRESENCE_STATUSES)[number],
+) {
   return status === "AVAILABLE" ? "Available" : "Offline";
 }
 
-function formatDispositionLabel(value: (typeof VOICE_DISPOSITIONS)[number] | string | null | undefined) {
-  return String(value || "").replace(/_/g, " ").trim() || "Not set";
+function formatDispositionLabel(
+  value: (typeof VOICE_DISPOSITIONS)[number] | string | null | undefined,
+) {
+  return (
+    String(value || "")
+      .replace(/_/g, " ")
+      .trim() || "Not set"
+  );
 }
 
 function isInternalVoiceHref(value: string | null | undefined) {
@@ -267,13 +316,28 @@ function buildInlineFollowUpTitle(call: {
   statusLabel?: string | null;
 }) {
   const label = call.customer?.customerName || call.callerNumber || "customer";
-  const normalizedStatus = String(call.statusLabel || "").trim().toLowerCase();
-  return normalizedStatus === "missed" ? `Missed call follow-up for ${label}` : `Follow up with ${label}`;
+  const normalizedStatus = String(call.statusLabel || "")
+    .trim()
+    .toLowerCase();
+  return normalizedStatus === "missed"
+    ? `Missed call follow-up for ${label}`
+    : `Follow up with ${label}`;
 }
 
 function isMissedVoiceOutcome(status: string | null | undefined) {
-  const normalized = String(status || "").trim().toLowerCase();
-  return ["missed", "no answer", "no_answer", "unanswered", "not answered", "not_answered", "busy", "failed"].includes(normalized);
+  const normalized = String(status || "")
+    .trim()
+    .toLowerCase();
+  return [
+    "missed",
+    "no answer",
+    "no_answer",
+    "unanswered",
+    "not answered",
+    "not_answered",
+    "busy",
+    "failed",
+  ].includes(normalized);
 }
 
 type ChatraceActivityData = {
@@ -300,9 +364,17 @@ function formatChatraceLastChat(value: string | null | undefined) {
   if (Number.isNaN(date.getTime())) return "No recent chat";
 
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
   const yesterday = today - 24 * 60 * 60 * 1000;
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const target = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  ).getTime();
 
   if (target === today) return "Today";
   if (target === yesterday) return "Yesterday";
@@ -329,16 +401,26 @@ function ChatraceActivityCard({
   const isUnavailable = Boolean(data?.sourceError) && !isFound;
 
   return (
-    <div className={`rounded-[20px] border border-slate-800 bg-slate-900/70 p-4 ${className}`.trim()}>
+    <div
+      className={`rounded-[20px] border border-slate-800 bg-slate-900/70 p-4 ${className}`.trim()}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Chatrace Activity</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Chatrace Activity
+          </div>
           <div className="mt-1 text-base font-semibold text-white">
-            {isUnavailable ? "Chatrace unavailable" : isFound ? "Recently chatted: Yes" : "Recently chatted: No"}
+            {isUnavailable
+              ? "Chatrace unavailable"
+              : isFound
+                ? "Recently chatted: Yes"
+                : "Recently chatted: No"}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(isFound ? "available" : isUnavailable ? "busy" : "offline")}`}>
+          <span
+            className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(isFound ? "available" : isUnavailable ? "busy" : "offline")}`}
+          >
             {isFound ? "Matched" : isUnavailable ? "Unavailable" : "No match"}
           </span>
           {data?.channel ? (
@@ -349,32 +431,51 @@ function ChatraceActivityCard({
         </div>
       </div>
 
-      <div className={`mt-4 grid gap-3 ${compact ? "md:grid-cols-2" : "xl:grid-cols-2"}`}>
+      <div
+        className={`mt-4 grid gap-3 ${compact ? "md:grid-cols-2" : "xl:grid-cols-2"}`}
+      >
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Last Chat</div>
-          <div className="mt-1 text-sm font-semibold text-white">{formatChatraceLastChat(data?.lastInteractionAt)}</div>
-          <div className="mt-1 text-xs text-slate-500">{data?.name || data?.phone || "No Chatrace contact found"}</div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+            Last Chat
+          </div>
+          <div className="mt-1 text-sm font-semibold text-white">
+            {formatChatraceLastChat(data?.lastInteractionAt)}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            {data?.name || data?.phone || "No Chatrace contact found"}
+          </div>
         </div>
         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Tags</div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+            Tags
+          </div>
           {tags.length ? (
             <div className="mt-2 flex flex-wrap gap-2">
               {tags.slice(0, compact ? 3 : 6).map((tag) => (
-                <span key={tag} className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100">
+                <span
+                  key={tag}
+                  className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100"
+                >
                   {tag}
                 </span>
               ))}
             </div>
           ) : (
-            <div className="mt-1 text-sm text-slate-500">No tags synced from Chatrace.</div>
+            <div className="mt-1 text-sm text-slate-500">
+              No tags synced from Chatrace.
+            </div>
           )}
         </div>
       </div>
 
       {hasPreview ? (
         <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Last Message Preview</div>
-          <div className="mt-1 text-sm text-slate-200">{data?.lastMessagePreview}</div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+            Last Message Preview
+          </div>
+          <div className="mt-1 text-sm text-slate-200">
+            {data?.lastMessagePreview}
+          </div>
         </div>
       ) : null}
 
@@ -386,7 +487,8 @@ function ChatraceActivityCard({
 
       {!hasPreview && isFound ? (
         <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-4 text-sm text-slate-300">
-          Chatrace interaction found for this contact. Open the inbox to review the full conversation history.
+          Chatrace interaction found for this contact. Open the inbox to review
+          the full conversation history.
         </div>
       ) : null}
 
@@ -432,8 +534,12 @@ export default function VoiceConsoleClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [data, setData] = useState(initialData);
-  const [selectedCallId, setSelectedCallId] = useState<string | null>(initialData.selectedCallId ?? null);
-  const [selectedPhone, setSelectedPhone] = useState<string | null>(initialData.selectedPhone ?? null);
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(
+    initialData.selectedCallId ?? null,
+  );
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(
+    initialData.selectedPhone ?? null,
+  );
   const [lastRefreshAt, setLastRefreshAt] = useState(initialData.generatedAt);
   const [noteDraft, setNoteDraft] = useState("");
   const [followUpTitle, setFollowUpTitle] = useState("");
@@ -443,9 +549,15 @@ export default function VoiceConsoleClient({
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [presencePending, setPresencePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "offline">("connecting");
-  const [dismissedIncomingIds, setDismissedIncomingIds] = useState<string[]>([]);
-  const [contextTab, setContextTab] = useState<"customer" | "timeline" | "agent" | "recording">("customer");
+  const [liveStatus, setLiveStatus] = useState<
+    "connecting" | "live" | "offline"
+  >("connecting");
+  const [dismissedIncomingIds, setDismissedIncomingIds] = useState<string[]>(
+    [],
+  );
+  const [contextTab, setContextTab] = useState<
+    "customer" | "timeline" | "agent" | "recording"
+  >("customer");
   const [queueSearch, setQueueSearch] = useState("");
   const [showWorkspaceDialPad, setShowWorkspaceDialPad] = useState(false);
   const [showTransferPanel, setShowTransferPanel] = useState(false);
@@ -453,59 +565,105 @@ export default function VoiceConsoleClient({
   const [transferPhone, setTransferPhone] = useState("");
   const [transferPending, setTransferPending] = useState(false);
   const [recentSearch, setRecentSearch] = useState("");
-  const [recentFilter, setRecentFilter] = useState<"all" | "INBOUND" | "OUTBOUND" | "with_recording">("all");
-  const [expandedRecentCallId, setExpandedRecentCallId] = useState<string | null>(null);
+  const [recentFilter, setRecentFilter] = useState<
+    "all" | "INBOUND" | "OUTBOUND" | "with_recording"
+  >("all");
+  const [expandedRecentCallId, setExpandedRecentCallId] = useState<
+    string | null
+  >(null);
   const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => {
     const nextTab = normalizeVoiceTab(searchParams.get("tab"));
     return mode === "admin" || nextTab !== "agents" ? nextTab : "operations";
   });
-  const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
-  const [queueView, setQueueView] = useState<VoiceQueueView>(() => normalizeQueueView(searchParams.get("queue")));
+  const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() =>
+    normalizeVoiceHistoryRange(searchParams.get("range")),
+  );
+  const [queueView, setQueueView] = useState<VoiceQueueView>(() =>
+    normalizeQueueView(searchParams.get("queue")),
+  );
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [dispositionPending, setDispositionPending] = useState(false);
-  const [callAssignmentDrafts, setCallAssignmentDrafts] = useState<Record<string, string>>({});
-  const [queueAssignmentDrafts, setQueueAssignmentDrafts] = useState<Record<string, string>>({});
-  const [historyNoteDrafts, setHistoryNoteDrafts] = useState<Record<string, string>>({});
-  const [historyFollowUpDrafts, setHistoryFollowUpDrafts] = useState<Record<string, string>>({});
-  const [historyNotePendingKey, setHistoryNotePendingKey] = useState<string | null>(null);
-  const [historyFollowUpPendingKey, setHistoryFollowUpPendingKey] = useState<string | null>(null);
-  const [assignmentPendingKey, setAssignmentPendingKey] = useState<string | null>(null);
-  const [routingPreferencePendingKey, setRoutingPreferencePendingKey] = useState<string | null>(null);
+  const [callAssignmentDrafts, setCallAssignmentDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [queueAssignmentDrafts, setQueueAssignmentDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [historyNoteDrafts, setHistoryNoteDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [historyFollowUpDrafts, setHistoryFollowUpDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [historyNotePendingKey, setHistoryNotePendingKey] = useState<
+    string | null
+  >(null);
+  const [historyFollowUpPendingKey, setHistoryFollowUpPendingKey] = useState<
+    string | null
+  >(null);
+  const [assignmentPendingKey, setAssignmentPendingKey] = useState<
+    string | null
+  >(null);
+  const [routingPreferencePendingKey, setRoutingPreferencePendingKey] =
+    useState<string | null>(null);
   const [routingConfigPending, setRoutingConfigPending] = useState(false);
-  const [overflowUserIdDraft, setOverflowUserIdDraft] = useState(initialData.routingConfig?.overflowUserId ?? "");
-  const [overflowPhoneDraft, setOverflowPhoneDraft] = useState(initialData.routingConfig?.overflowPhone ?? "");
+  const [overflowUserIdDraft, setOverflowUserIdDraft] = useState(
+    initialData.routingConfig?.overflowUserId ?? "",
+  );
+  const [overflowPhoneDraft, setOverflowPhoneDraft] = useState(
+    initialData.routingConfig?.overflowPhone ?? "",
+  );
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const liveStatusTimeoutRef = useRef<number | null>(null);
 
   const visibleActiveCalls = useMemo(
-    () => data.activeCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
+    () =>
+      data.activeCalls.filter((call) =>
+        isMeaningfulVoicePhone(call.callerNumber),
+      ),
     [data.activeCalls],
   );
   const visibleRecentCalls = useMemo(
-    () => data.recentCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
+    () =>
+      data.recentCalls.filter((call) =>
+        isMeaningfulVoicePhone(call.callerNumber),
+      ),
     [data.recentCalls],
   );
   const visibleWaitingCalls = useMemo(
-    () => data.waitingCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
+    () =>
+      data.waitingCalls.filter((call) =>
+        isMeaningfulVoicePhone(call.callerNumber),
+      ),
     [data.waitingCalls],
   );
   const visibleCallQueue = useMemo(
     () =>
       data.callQueue.filter((item: any) =>
-        isMeaningfulVoicePhone(item.callerNumber || item.phone || data.selectedPhone),
+        isMeaningfulVoicePhone(
+          item.callerNumber || item.phone || data.selectedPhone,
+        ),
       ),
     [data.callQueue, data.selectedPhone],
   );
 
-  const dateFilterMeta = useMemo(() => getVoiceDateFilterMeta(dateFilter), [dateFilter]);
+  const dateFilterMeta = useMemo(
+    () => getVoiceDateFilterMeta(dateFilter),
+    [dateFilter],
+  );
 
   const filteredRecentCalls = useMemo(() => {
     const query = recentSearch.trim().toLowerCase();
     return visibleRecentCalls.filter((call) => {
-      if (!isWithinVoiceDateFilter(call.startedAt || call.createdAt, dateFilter)) return false;
+      if (
+        !isWithinVoiceDateFilter(call.startedAt || call.createdAt, dateFilter)
+      )
+        return false;
       const matchesFilter =
         recentFilter === "all" ||
-        (recentFilter === "with_recording" ? Boolean(call.recordingUrl) : call.direction === recentFilter);
+        (recentFilter === "with_recording"
+          ? Boolean(call.recordingUrl)
+          : call.direction === recentFilter);
       if (!matchesFilter) return false;
       if (!query) return true;
       return [
@@ -521,14 +679,21 @@ export default function VoiceConsoleClient({
   }, [dateFilter, recentFilter, recentSearch, visibleRecentCalls]);
 
   const filteredRecordings = useMemo(
-    () => data.recentRecordings.filter((call) => isWithinVoiceDateFilter(call.startedAt || call.createdAt, dateFilter)),
+    () =>
+      data.recentRecordings.filter((call) =>
+        isWithinVoiceDateFilter(call.startedAt || call.createdAt, dateFilter),
+      ),
     [data.recentRecordings, dateFilter],
   );
 
   const filteredFollowUps = useMemo(
     () =>
       visibleCallQueue.filter((item: any) =>
-        ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase()),
+        ["pending", "open", "pending_follow_up"].includes(
+          String(item.status || "")
+            .trim()
+            .toLowerCase(),
+        ),
       ),
     [visibleCallQueue],
   );
@@ -536,7 +701,11 @@ export default function VoiceConsoleClient({
   const missedFollowUpsCount = useMemo(
     () =>
       filteredFollowUps.filter((item: any) =>
-        ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase()),
+        ["pending", "open", "pending_follow_up"].includes(
+          String(item.status || "")
+            .trim()
+            .toLowerCase(),
+        ),
       ).length,
     [filteredFollowUps],
   );
@@ -550,8 +719,12 @@ export default function VoiceConsoleClient({
     }
     if (queueView === "missed") {
       return filteredFollowUps.filter((item: any) => {
-        const normalizedStatus = String(item.status || "").trim().toLowerCase();
-        return ["pending", "open", "pending_follow_up"].includes(normalizedStatus);
+        const normalizedStatus = String(item.status || "")
+          .trim()
+          .toLowerCase();
+        return ["pending", "open", "pending_follow_up"].includes(
+          normalizedStatus,
+        );
       });
     }
     return filteredFollowUps;
@@ -559,8 +732,10 @@ export default function VoiceConsoleClient({
 
   useEffect(() => {
     const nextTab = normalizeVoiceTab(searchParams.get("tab"));
-    setActiveTab(mode === "admin" || nextTab !== "agents" ? nextTab : "operations");
-    setDateFilter(normalizeVoiceDateFilter(searchParams.get("range")));
+    setActiveTab(
+      mode === "admin" || nextTab !== "agents" ? nextTab : "operations",
+    );
+    setDateFilter(normalizeVoiceHistoryRange(searchParams.get("range")));
     setQueueView(normalizeQueueView(searchParams.get("queue")));
   }, [mode, searchParams]);
 
@@ -581,7 +756,10 @@ export default function VoiceConsoleClient({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [detailModalOpen]);
 
-  const switchTab = (tab: VoiceConsoleTab, nextQueueView?: VoiceQueueView | null) => {
+  const switchTab = (
+    tab: VoiceConsoleTab,
+    nextQueueView?: VoiceQueueView | null,
+  ) => {
     setActiveTab(tab);
     if (nextQueueView) {
       setQueueView(nextQueueView);
@@ -622,14 +800,21 @@ export default function VoiceConsoleClient({
     window.location.assign(nextHref);
   };
 
-  const refreshSnapshot = async (nextCallId?: string | null, nextPhone?: string | null) => {
+  const refreshSnapshot = async (
+    nextCallId?: string | null,
+    nextPhone?: string | null,
+  ) => {
     const params = new URLSearchParams();
+    params.set("range", dateFilter);
     if (nextCallId) params.set("selectedCallId", nextCallId);
     if (nextPhone) params.set("selectedPhone", nextPhone);
     const separator = pollBaseHref.includes("?") ? "&" : "?";
-    const response = await fetch(`${pollBaseHref}${params.toString() ? `${separator}${params.toString()}` : ""}`, {
-      cache: "no-store",
-    });
+    const response = await fetch(
+      `${pollBaseHref}${params.toString() ? `${separator}${params.toString()}` : ""}`,
+      {
+        cache: "no-store",
+      },
+    );
 
     if (!response.ok) {
       throw new Error(`snapshot_${response.status}`);
@@ -667,10 +852,13 @@ export default function VoiceConsoleClient({
   useEffect(() => {
     const params = new URLSearchParams();
     params.set("stream", "1");
+    params.set("range", dateFilter);
     if (selectedCallId) params.set("selectedCallId", selectedCallId);
     if (selectedPhone) params.set("selectedPhone", selectedPhone);
     const separator = pollBaseHref.includes("?") ? "&" : "?";
-    const eventSource = new EventSource(`${pollBaseHref}${separator}${params.toString()}`);
+    const eventSource = new EventSource(
+      `${pollBaseHref}${separator}${params.toString()}`,
+    );
     if (liveStatusTimeoutRef.current) {
       window.clearTimeout(liveStatusTimeoutRef.current);
       liveStatusTimeoutRef.current = null;
@@ -698,7 +886,9 @@ export default function VoiceConsoleClient({
 
     eventSource.addEventListener("snapshot", (event) => {
       try {
-        const payload = JSON.parse((event as MessageEvent).data) as { snapshot?: VoiceLiveSnapshot };
+        const payload = JSON.parse((event as MessageEvent).data) as {
+          snapshot?: VoiceLiveSnapshot;
+        };
         if (!payload.snapshot) return;
         setData(payload.snapshot);
         setSelectedCallId(payload.snapshot.selectedCallId);
@@ -718,7 +908,7 @@ export default function VoiceConsoleClient({
         eventSource.close();
       } catch {}
     };
-  }, [pollBaseHref, selectedCallId, selectedPhone]);
+  }, [dateFilter, pollBaseHref, selectedCallId, selectedPhone]);
 
   const selectedCall = useMemo(() => {
     return (
@@ -730,7 +920,11 @@ export default function VoiceConsoleClient({
   }, [activeTab, selectedCallId, visibleActiveCalls, visibleRecentCalls]);
 
   const activeInteractionCall = useMemo(() => {
-    return visibleActiveCalls.find((call) => call.id === selectedCallId) || visibleActiveCalls[0] || null;
+    return (
+      visibleActiveCalls.find((call) => call.id === selectedCallId) ||
+      visibleActiveCalls[0] ||
+      null
+    );
   }, [selectedCallId, visibleActiveCalls]);
 
   useEffect(() => {
@@ -755,13 +949,17 @@ export default function VoiceConsoleClient({
   }, [filteredRecentCalls]);
 
   const myPresence = useMemo(() => {
-    return data.agents.find((agent) => agent.id === data.viewer.targetUserId) || null;
+    return (
+      data.agents.find((agent) => agent.id === data.viewer.targetUserId) || null
+    );
   }, [data.agents, data.viewer.targetUserId]);
 
   const incomingCall = useMemo(() => {
     const calls =
       mode === "staff"
-        ? visibleWaitingCalls.filter((call) => call.assignedToId === data.viewer.targetUserId)
+        ? visibleWaitingCalls.filter(
+            (call) => call.assignedToId === data.viewer.targetUserId,
+          )
         : visibleWaitingCalls;
     return (
       calls.find((call) => {
@@ -769,7 +967,12 @@ export default function VoiceConsoleClient({
         return isFreshIncomingCall(call.startedAt || call.createdAt);
       }) || null
     );
-  }, [data.viewer.targetUserId, dismissedIncomingIds, mode, visibleWaitingCalls]);
+  }, [
+    data.viewer.targetUserId,
+    dismissedIncomingIds,
+    mode,
+    visibleWaitingCalls,
+  ]);
 
   useEffect(() => {
     if (!incomingCall) return;
@@ -788,41 +991,68 @@ export default function VoiceConsoleClient({
   }, [selectedCall, selectedPhone]);
 
   const selectedCustomerLinks = useMemo(() => {
-    const phone = selectedCall?.callerNumber || (isMeaningfulVoicePhone(selectedPhone) ? selectedPhone : "") || "";
+    const phone =
+      selectedCall?.callerNumber ||
+      (isMeaningfulVoicePhone(selectedPhone) ? selectedPhone : "") ||
+      "";
     const customerHref = buildAdminCustomerProfileHref({
-      customerUserId: selectedCall?.customer?.matchedCustomerId || data.selectedContext?.matchedCustomerId || null,
+      customerUserId:
+        selectedCall?.customer?.matchedCustomerId ||
+        data.selectedContext?.matchedCustomerId ||
+        null,
       phone,
       phones: phone ? [phone] : [],
-      email: selectedCall?.customer?.email || data.selectedContext?.email || null,
-      displayName: selectedCall?.customer?.customerName || data.selectedContext?.customerName || null,
+      email:
+        selectedCall?.customer?.email || data.selectedContext?.email || null,
+      displayName:
+        selectedCall?.customer?.customerName ||
+        data.selectedContext?.customerName ||
+        null,
       impersonateId: data.viewer.impersonateId,
     });
 
     const receiptParams = new URLSearchParams();
     receiptParams.set("tab", "pos");
-    if (data.selectedContext?.latestReceiptId) receiptParams.set("receiptId", data.selectedContext.latestReceiptId);
-    if (data.viewer.impersonateId) receiptParams.set("impersonateId", data.viewer.impersonateId);
+    if (data.selectedContext?.latestReceiptId)
+      receiptParams.set("receiptId", data.selectedContext.latestReceiptId);
+    if (data.viewer.impersonateId)
+      receiptParams.set("impersonateId", data.viewer.impersonateId);
 
     const quoteParams = new URLSearchParams();
     quoteParams.set("tab", "quotations");
-    if (data.selectedContext?.latestQuotationId) quoteParams.set("quoteId", data.selectedContext.latestQuotationId);
-    if (data.viewer.impersonateId) quoteParams.set("impersonateId", data.viewer.impersonateId);
+    if (data.selectedContext?.latestQuotationId)
+      quoteParams.set("quoteId", data.selectedContext.latestQuotationId);
+    if (data.viewer.impersonateId)
+      quoteParams.set("impersonateId", data.viewer.impersonateId);
 
     return {
       customer: selectedCall?.links.customer || customerHref,
-      receipt: selectedCall?.links.receipt || `/marketing/receipts?${receiptParams.toString()}`,
-      quote: selectedCall?.links.quote || `/marketing/receipts?${quoteParams.toString()}`,
+      receipt:
+        selectedCall?.links.receipt ||
+        `/marketing/receipts?${receiptParams.toString()}`,
+      quote:
+        selectedCall?.links.quote ||
+        `/marketing/receipts?${quoteParams.toString()}`,
       callBack: selectedCall?.links.callBack || (phone ? `tel:${phone}` : "#"),
     };
-  }, [data.selectedContext, data.viewer.impersonateId, selectedCall, selectedPhone]);
+  }, [
+    data.selectedContext,
+    data.viewer.impersonateId,
+    selectedCall,
+    selectedPhone,
+  ]);
 
   const selectedContextData = useMemo(() => {
-    if (!selectedCall || !isMeaningfulVoicePhone(selectedCall.callerNumber)) return null;
+    if (!selectedCall || !isMeaningfulVoicePhone(selectedCall.callerNumber))
+      return null;
     return data.selectedContext;
   }, [data.selectedContext, selectedCall]);
 
-  const selectedChatraceActivity = selectedContextData?.chatrace || selectedCall?.customer?.chatrace || null;
-  const selectedRecentQuotations = Array.isArray((selectedContextData as any)?.recentQuotations)
+  const selectedChatraceActivity =
+    selectedContextData?.chatrace || selectedCall?.customer?.chatrace || null;
+  const selectedRecentQuotations = Array.isArray(
+    (selectedContextData as any)?.recentQuotations,
+  )
     ? ((selectedContextData as any).recentQuotations as Array<any>)
     : [];
 
@@ -843,7 +1073,10 @@ export default function VoiceConsoleClient({
   };
 
   useEffect(() => {
-    if (selectedCall?.customer && isMeaningfulVoicePhone(selectedCall.callerNumber)) {
+    if (
+      selectedCall?.customer &&
+      isMeaningfulVoicePhone(selectedCall.callerNumber)
+    ) {
       softphone.seedCustomerContext({
         name: selectedCall.customer.customerName || selectedCall.callerNumber,
         phone: selectedCall.callerNumber,
@@ -852,7 +1085,10 @@ export default function VoiceConsoleClient({
         recentOrders: selectedCall.customer.linkedRecords.webOrders || 0,
         recentQuotes: selectedCall.customer.linkedRecords.quotations || 0,
         recentReceipts: selectedCall.customer.linkedRecords.receipts || 0,
-        notes: selectedContextData?.recentNotes?.slice(0, 2).map((note) => note.note) || [],
+        notes:
+          selectedContextData?.recentNotes
+            ?.slice(0, 2)
+            .map((note) => note.note) || [],
       });
       return;
     }
@@ -876,7 +1112,11 @@ export default function VoiceConsoleClient({
     nextPhone?: string | null,
   ) => {
     setContextTab(tab);
-    if (nextCallId && nextPhone && (selectedCallId !== nextCallId || selectedPhone !== nextPhone)) {
+    if (
+      nextCallId &&
+      nextPhone &&
+      (selectedCallId !== nextCallId || selectedPhone !== nextPhone)
+    ) {
       handleSelectCall(nextCallId, nextPhone);
     }
     setDetailModalOpen(true);
@@ -893,7 +1133,17 @@ export default function VoiceConsoleClient({
   const handleExportRecentCalls = () => {
     if (typeof window === "undefined") return;
     const rows = [
-      ["Bucket", "Time", "Caller", "Direction", "Routed To", "Status", "Duration Seconds", "Cost", "Recording Url"],
+      [
+        "Bucket",
+        "Time",
+        "Caller",
+        "Direction",
+        "Routed To",
+        "Status",
+        "Duration Seconds",
+        "Cost",
+        "Recording Url",
+      ],
       ...filteredRecentCalls.map((call) => [
         getRecentCallBucket(call.startedAt || call.createdAt),
         call.startedAt || call.createdAt,
@@ -906,7 +1156,11 @@ export default function VoiceConsoleClient({
         call.recordingUrl || "",
       ]),
     ];
-    const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = rows
+      .map((row) =>
+        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","),
+      )
+      .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const href = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -916,20 +1170,25 @@ export default function VoiceConsoleClient({
     URL.revokeObjectURL(href);
   };
 
-  const handlePresenceUpdate = async (status: (typeof MANUAL_PRESENCE_STATUSES)[number]) => {
+  const handlePresenceUpdate = async (
+    status: (typeof MANUAL_PRESENCE_STATUSES)[number],
+  ) => {
     setPresencePending(true);
     setError(null);
     try {
       softphone.setAvailability(status);
       await softphone.syncPresenceNow(status);
-      const response = await fetch(`${pollBaseHref.replace("/live", "/presence")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status,
-          currentCallId: selectedCall?.id ?? null,
-        }),
-      });
+      const response = await fetch(
+        `${pollBaseHref.replace("/live", "/presence")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status,
+            currentCallId: selectedCall?.id ?? null,
+          }),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(String(payload.error || "presence_failed"));
@@ -974,19 +1233,24 @@ export default function VoiceConsoleClient({
     }
   };
 
-  const handleSetDisposition = async (disposition: (typeof VOICE_DISPOSITIONS)[number]) => {
+  const handleSetDisposition = async (
+    disposition: (typeof VOICE_DISPOSITIONS)[number],
+  ) => {
     if (!selectedCall?.id) return;
     setDispositionPending(true);
     setError(null);
     try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/notes")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          voiceCallId: selectedCall.id,
-          note: `Disposition: ${disposition}`,
-        }),
-      });
+      const response = await fetch(
+        `${pollBaseHref.replace("/live", "/notes")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            voiceCallId: selectedCall.id,
+            note: `Disposition: ${disposition}`,
+          }),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(String(payload.error || "disposition_failed"));
@@ -1007,17 +1271,20 @@ export default function VoiceConsoleClient({
     dueAt?: string | null;
     notes?: string | null;
   }) => {
-    const response = await fetch(`${pollBaseHref.replace("/live", "/follow-ups")}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        voiceCallId: input.voiceCallId ?? null,
-        phone: input.phone ?? null,
-        title: input.title,
-        dueAt: input.dueAt || null,
-        notes: input.notes || null,
-      }),
-    });
+    const response = await fetch(
+      `${pollBaseHref.replace("/live", "/follow-ups")}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voiceCallId: input.voiceCallId ?? null,
+          phone: input.phone ?? null,
+          title: input.title,
+          dueAt: input.dueAt || null,
+          notes: input.notes || null,
+        }),
+      },
+    );
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(String(payload.error || "follow_up_failed"));
@@ -1051,14 +1318,17 @@ export default function VoiceConsoleClient({
   const handleResolveTask = async (taskId: string) => {
     setError(null);
     try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/follow-ups")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: taskId,
-          status: "resolved",
-        }),
-      });
+      const response = await fetch(
+        `${pollBaseHref.replace("/live", "/follow-ups")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: taskId,
+            status: "resolved",
+          }),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(String(payload.error || "resolve_failed"));
@@ -1077,14 +1347,21 @@ export default function VoiceConsoleClient({
     assignedToId: string;
   }) => {
     setError(null);
-    const pendingKey = input.callId ? `call:${input.callId}` : input.queueId && input.queueType ? `${input.queueType}:${input.queueId}` : "reassign";
+    const pendingKey = input.callId
+      ? `call:${input.callId}`
+      : input.queueId && input.queueType
+        ? `${input.queueType}:${input.queueId}`
+        : "reassign";
     setAssignmentPendingKey(pendingKey);
     try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/calls")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
+      const response = await fetch(
+        `${pollBaseHref.replace("/live", "/calls")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(String(payload.error || "reassign_failed"));
@@ -1126,19 +1403,24 @@ export default function VoiceConsoleClient({
     try {
       const selectedAgent =
         visibleAgents.find((agent) => agent.id === transferAssigneeId) || null;
-      const response = await fetch(`${pollBaseHref.replace("/live", "/transfer")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          callId: activeInteractionCall.id,
-          targetUserId: transferAssigneeId || null,
-          targetPhone: normalizedTransferPhone || selectedAgent?.phone || null,
-          targetLabel:
-            selectedAgent
-              ? (selectedAgent as any).displayName || selectedAgent.name || selectedAgent.phone
+      const response = await fetch(
+        `${pollBaseHref.replace("/live", "/transfer")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            callId: activeInteractionCall.id,
+            targetUserId: transferAssigneeId || null,
+            targetPhone:
+              normalizedTransferPhone || selectedAgent?.phone || null,
+            targetLabel: selectedAgent
+              ? (selectedAgent as any).displayName ||
+                selectedAgent.name ||
+                selectedAgent.phone
               : normalizedTransferPhone || null,
-        }),
-      });
+          }),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(String(payload.error || "transfer_failed"));
@@ -1162,17 +1444,22 @@ export default function VoiceConsoleClient({
     setRoutingPreferencePendingKey(userId);
     setError(null);
     try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/routing")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          ...patch,
-        }),
-      });
+      const response = await fetch(
+        `${pollBaseHref.replace("/live", "/routing")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            ...patch,
+          }),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(String(payload.error || "voice_routing_preference_failed"));
+        throw new Error(
+          String(payload.error || "voice_routing_preference_failed"),
+        );
       }
       await refreshSnapshot(selectedCallId, selectedPhone);
     } catch (routingError) {
@@ -1187,14 +1474,17 @@ export default function VoiceConsoleClient({
     setRoutingConfigPending(true);
     setError(null);
     try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/routing")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          overflowUserId: overflowUserIdDraft || null,
-          overflowPhone: overflowPhoneDraft || null,
-        }),
-      });
+      const response = await fetch(
+        `${pollBaseHref.replace("/live", "/routing")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            overflowUserId: overflowUserIdDraft || null,
+            overflowPhone: overflowPhoneDraft || null,
+          }),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(String(payload.error || "voice_routing_config_failed"));
@@ -1209,17 +1499,32 @@ export default function VoiceConsoleClient({
   };
 
   const filteredAnsweredCount = filteredRecentCalls.filter((call) =>
-    ["answered", "connected", "transferred"].includes(String(call.status || "").trim().toLowerCase()),
+    ["answered", "connected", "transferred"].includes(
+      String(call.status || "")
+        .trim()
+        .toLowerCase(),
+    ),
   ).length;
 
   const filteredMissedCount = useMemo(
-    () => summarizeVoiceQueueItems(filteredFollowUps as Array<{ type?: string | null }>).missedCount,
+    () =>
+      summarizeVoiceQueueItems(
+        filteredFollowUps as Array<{ type?: string | null }>,
+      ).missedCount,
     [filteredFollowUps],
   );
 
   const filteredAverageTalkTime =
-    filteredRecentCalls.reduce((sum, call) => sum + Number(call.durationInSeconds || 0), 0) /
-    Math.max(1, filteredRecentCalls.filter((call) => Number(call.durationInSeconds || 0) > 0).length);
+    filteredRecentCalls.reduce(
+      (sum, call) => sum + Number(call.durationInSeconds || 0),
+      0,
+    ) /
+    Math.max(
+      1,
+      filteredRecentCalls.filter(
+        (call) => Number(call.durationInSeconds || 0) > 0,
+      ).length,
+    );
 
   const visibleAgents = useMemo(() => {
     const routingAliases = [
@@ -1230,11 +1535,22 @@ export default function VoiceConsoleClient({
     const preferredByAlias = new Map<string, (typeof data.agents)[number]>();
 
     for (const agent of data.agents) {
-      const displayName = String((agent as any).displayName || agent.name || "").trim().toLowerCase();
-      const email = String(agent.email || "").trim().toLowerCase();
-      const role = String(agent.role || "").trim().toLowerCase();
+      const displayName = String((agent as any).displayName || agent.name || "")
+        .trim()
+        .toLowerCase();
+      const email = String(agent.email || "")
+        .trim()
+        .toLowerCase();
+      const role = String(agent.role || "")
+        .trim()
+        .toLowerCase();
       const alias = routingAliases.find((entry) =>
-        entry.match.some((needle) => displayName.includes(needle) || email.includes(needle) || role === needle),
+        entry.match.some(
+          (needle) =>
+            displayName.includes(needle) ||
+            email.includes(needle) ||
+            role === needle,
+        ),
       )?.key;
 
       if (!alias) continue;
@@ -1267,11 +1583,14 @@ export default function VoiceConsoleClient({
 
     return Array.from(preferredByAlias.values())
       .map((agent) => {
-        if (agent.id !== data.viewer.targetUserId || !normalizedCurrentStatus) return agent;
+        if (agent.id !== data.viewer.targetUserId || !normalizedCurrentStatus)
+          return agent;
         return {
           ...agent,
           status: normalizedCurrentStatus,
-          isAvailableForRouting: (agent as any).routingEnabled !== false && normalizedCurrentStatus === "AVAILABLE",
+          isAvailableForRouting:
+            (agent as any).routingEnabled !== false &&
+            normalizedCurrentStatus === "AVAILABLE",
           lastSeenAt: softphone.lastHeartbeatAt || (agent as any).lastSeenAt,
           isWebrtcRegistered:
             softphone.transportMode === "webrtc"
@@ -1286,12 +1605,12 @@ export default function VoiceConsoleClient({
         };
       })
       .sort(
-      (left, right) =>
-        (((left as any).routingPriority as number | undefined) ?? 99) -
-          (((right as any).routingPriority as number | undefined) ?? 99) ||
-        String((left as any).displayName || left.name || "").localeCompare(
-          String((right as any).displayName || right.name || ""),
-        ),
+        (left, right) =>
+          (((left as any).routingPriority as number | undefined) ?? 99) -
+            (((right as any).routingPriority as number | undefined) ?? 99) ||
+          String((left as any).displayName || left.name || "").localeCompare(
+            String((right as any).displayName || right.name || ""),
+          ),
       );
   }, [
     data.agents,
@@ -1305,7 +1624,10 @@ export default function VoiceConsoleClient({
 
   const queueItems = useMemo(() => {
     const query = queueSearch.trim().toLowerCase();
-    const allItems = [...visibleWaitingCalls, ...filteredFollowUps] as Array<any>;
+    const allItems = [
+      ...visibleWaitingCalls,
+      ...filteredFollowUps,
+    ] as Array<any>;
     return allItems.filter((item) => {
       if (!query) return true;
       return [
@@ -1323,18 +1645,27 @@ export default function VoiceConsoleClient({
   }, [filteredFollowUps, queueSearch, visibleWaitingCalls]);
 
   const queueItemsByView = useMemo(() => {
-    if (queueView === "waiting") return queueItems.filter((item: any) => Boolean(item.callerNumber));
+    if (queueView === "waiting")
+      return queueItems.filter((item: any) => Boolean(item.callerNumber));
     if (queueView === "missed") {
       return queueItems.filter((item: any) => {
         if (Boolean(item.callerNumber)) return false;
-        const normalizedStatus = String(item.status || "").trim().toLowerCase();
-        return ["pending", "open", "pending_follow_up"].includes(normalizedStatus);
+        const normalizedStatus = String(item.status || "")
+          .trim()
+          .toLowerCase();
+        return ["pending", "open", "pending_follow_up"].includes(
+          normalizedStatus,
+        );
       });
     }
     if (queueView === "contacted") {
       return queueItems.filter((item: any) => {
         if (Boolean(item.callerNumber)) return false;
-        return String(item.status || "").trim().toLowerCase() === "contacted";
+        return (
+          String(item.status || "")
+            .trim()
+            .toLowerCase() === "contacted"
+        );
       });
     }
     return queueItems;
@@ -1362,7 +1693,10 @@ export default function VoiceConsoleClient({
     return `${pathname}?${params.toString()}`;
   }, [data.viewer.impersonateId, pathname]);
 
-  const activeCallPreview = useMemo(() => visibleActiveCalls.slice(0, 6), [visibleActiveCalls]);
+  const activeCallPreview = useMemo(
+    () => visibleActiveCalls.slice(0, 6),
+    [visibleActiveCalls],
+  );
 
   const selectedAgent =
     visibleAgents.find((agent) => agent.id === selectedCall?.assignedToId) ||
@@ -1370,28 +1704,39 @@ export default function VoiceConsoleClient({
     visibleAgents[0] ||
     null;
 
-  const timelineItems = (data.selectedCallDetail?.timeline?.length
-    ? data.selectedCallDetail.timeline
-    : selectedContextData?.recentTimeline || []) as Array<any>;
+  const timelineItems = (
+    data.selectedCallDetail?.timeline?.length
+      ? data.selectedCallDetail.timeline
+      : selectedContextData?.recentTimeline || []
+  ) as Array<any>;
 
   const consoleNav = [
     { key: "operations", label: "Live Desk", icon: PhoneCall },
     { key: "recent", label: "Call History", icon: History },
     { key: "recordings", label: "Recordings", icon: Radio },
     { key: "followups", label: "Follow-ups", icon: ClipboardList },
-    ...(mode === "admin" ? ([{ key: "agents", label: "Agents", icon: Users }] as const) : []),
+    ...(mode === "admin"
+      ? ([{ key: "agents", label: "Agents", icon: Users }] as const)
+      : []),
     { key: "feedback", label: "Feedback", icon: Star },
     { key: "settings", label: "Settings", icon: Settings2 },
   ] as const;
 
   const activeTabDescriptionMap: Record<VoiceConsoleTab, string> = {
-    operations: "Live queue, active call handling, recordings, follow-ups, and routing visibility in one console.",
-    recent: "Review completed and in-progress calls with detailed history, actions, and CRM-linked context.",
-    recordings: "Monitor saved call recordings, playback, and download access across the selected period.",
-    followups: "Track callback work, pending customer actions, and reassignment across the voice desk.",
-    agents: "Watch routing readiness, browser registration, workload, and fallback lines for each routing agent.",
-    feedback: "Review customer ratings, contact requests, and linked call history after successful calls.",
-    settings: "Control browser calling, devices, registration, and operator preferences from one place.",
+    operations:
+      "Live queue, active call handling, recordings, follow-ups, and routing visibility in one console.",
+    recent:
+      "Review completed and in-progress calls with detailed history, actions, and CRM-linked context.",
+    recordings:
+      "Monitor saved call recordings, playback, and download access across the selected period.",
+    followups:
+      "Track callback work, pending customer actions, and reassignment across the voice desk.",
+    agents:
+      "Watch routing readiness, browser registration, workload, and fallback lines for each routing agent.",
+    feedback:
+      "Review customer ratings, contact requests, and linked call history after successful calls.",
+    settings:
+      "Control browser calling, devices, registration, and operator preferences from one place.",
   };
 
   const topMetrics =
@@ -1399,28 +1744,54 @@ export default function VoiceConsoleClient({
       ? [
           { label: "Calls Today", value: String(filteredRecentCalls.length) },
           { label: "Waiting", value: String(visibleWaitingCalls.length) },
-          { label: "Missed Calls", value: String(filteredMissedCount), action: () => switchTab("followups", "missed") },
+          {
+            label: "Missed Calls",
+            value: String(filteredMissedCount),
+            action: () => switchTab("followups", "missed"),
+          },
           {
             label: "Avg Talk Time",
-            value: formatDuration(Number.isFinite(filteredAverageTalkTime) ? Math.round(filteredAverageTalkTime) : 0),
+            value: formatDuration(
+              Number.isFinite(filteredAverageTalkTime)
+                ? Math.round(filteredAverageTalkTime)
+                : 0,
+            ),
           },
         ]
       : [
           { label: "My Calls", value: String(filteredRecentCalls.length) },
           { label: "My Waiting", value: String(visibleWaitingCalls.length) },
-          { label: "Missed Calls", value: String(filteredMissedCount), action: () => switchTab("followups", "missed") },
+          {
+            label: "Missed Calls",
+            value: String(filteredMissedCount),
+            action: () => switchTab("followups", "missed"),
+          },
           {
             label: "Avg Talk Time",
-            value: formatDuration(Number.isFinite(filteredAverageTalkTime) ? Math.round(filteredAverageTalkTime) : 0),
+            value: formatDuration(
+              Number.isFinite(filteredAverageTalkTime)
+                ? Math.round(filteredAverageTalkTime)
+                : 0,
+            ),
           },
         ];
 
-  const adminWallboard = data.viewer.isAdmin ? (data.summary as any).wallboard : null;
-  const supervisorMetrics = data.viewer.isAdmin ? (data.summary as any).supervisor : null;
+  const adminWallboard = data.viewer.isAdmin
+    ? (data.summary as any).wallboard
+    : null;
+  const supervisorMetrics = data.viewer.isAdmin
+    ? (data.summary as any).supervisor
+    : null;
 
   const contextQuickCards = [
-    { label: "Phone Number", value: selectedCall?.callerNumber || "No active call" },
-    { label: "Location", value: selectedContextData?.location || "No location saved" },
+    {
+      label: "Phone Number",
+      value: selectedCall?.callerNumber || "No active call",
+    },
+    {
+      label: "Location",
+      value: selectedContextData?.location || "No location saved",
+    },
     {
       label: "Assigned Agent",
       value:
@@ -1429,19 +1800,38 @@ export default function VoiceConsoleClient({
         (selectedAgent as any)?.displayName ||
         "Unassigned",
     },
-    { label: "First Seen", value: formatDateTime(selectedCall?.startedAt || selectedCall?.createdAt || null) },
-    { label: "Queue Reason", value: (data.selectedCallDetail as any)?.queueReasonLabel || (selectedCall as any)?.queueReasonLabel || "Live queue" },
+    {
+      label: "First Seen",
+      value: formatDateTime(
+        selectedCall?.startedAt || selectedCall?.createdAt || null,
+      ),
+    },
+    {
+      label: "Queue Reason",
+      value:
+        (data.selectedCallDetail as any)?.queueReasonLabel ||
+        (selectedCall as any)?.queueReasonLabel ||
+        "Live queue",
+    },
   ];
 
   const selectedCallLabel =
-    selectedCall?.customer.customerName || selectedContextData?.customerName || selectedCall?.callerNumber || "No active call";
+    selectedCall?.customer.customerName ||
+    selectedContextData?.customerName ||
+    selectedCall?.callerNumber ||
+    "No active call";
 
   const activeCallLabel =
-    activeInteractionCall?.customer.customerName || activeInteractionCall?.callerNumber || "No active call";
+    activeInteractionCall?.customer.customerName ||
+    activeInteractionCall?.callerNumber ||
+    "No active call";
 
   const selectedCallSubLabel = selectedCall
     ? `${selectedCall.direction === "INBOUND" ? "Inbound call" : "Outbound call"} · ${
-        selectedCall.routedToDisplay || selectedCall.assignedToName || selectedCall.assignedToEmail || "Route pending"
+        selectedCall.routedToDisplay ||
+        selectedCall.assignedToName ||
+        selectedCall.assignedToEmail ||
+        "Route pending"
       }`
     : "Choose a live caller or callback task to begin work.";
 
@@ -1449,7 +1839,9 @@ export default function VoiceConsoleClient({
     softphone.availability === "AVAILABLE"
       ? "AVAILABLE"
       : myPresence?.status &&
-          MANUAL_PRESENCE_STATUSES.includes(myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
+          MANUAL_PRESENCE_STATUSES.includes(
+            myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number],
+          )
         ? (myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
         : "OFFLINE";
 
@@ -1460,23 +1852,42 @@ export default function VoiceConsoleClient({
     softphone.startOutgoingCall(normalizedPhone);
   };
 
-  const applyContactedUpdateLocally = (input: { id?: string | null; voiceLeadId?: string | null; queueType: "task" | "lead" }) => {
+  const applyContactedUpdateLocally = (input: {
+    id?: string | null;
+    voiceLeadId?: string | null;
+    queueType: "task" | "lead";
+  }) => {
     setData((current) => {
       const nextData = { ...(current as any) };
 
       if (Array.isArray(nextData.callQueue)) {
         nextData.callQueue = nextData.callQueue.map((item: any) => {
-          if (input.queueType === "task" && input.id && item.type === "task" && item.id === input.id) {
+          if (
+            input.queueType === "task" &&
+            input.id &&
+            item.type === "task" &&
+            item.id === input.id
+          ) {
             return { ...item, status: "contacted" };
           }
-          if (input.queueType === "lead" && input.voiceLeadId && item.type === "lead" && item.voiceLeadId === input.voiceLeadId) {
+          if (
+            input.queueType === "lead" &&
+            input.voiceLeadId &&
+            item.type === "lead" &&
+            item.voiceLeadId === input.voiceLeadId
+          ) {
             return { ...item, status: "contacted" };
           }
           return item;
         });
       }
 
-      if (nextData.selectedCallDetail && Array.isArray(nextData.selectedCallDetail.followUps) && input.queueType === "task" && input.id) {
+      if (
+        nextData.selectedCallDetail &&
+        Array.isArray(nextData.selectedCallDetail.followUps) &&
+        input.queueType === "task" &&
+        input.id
+      ) {
         nextData.selectedCallDetail = {
           ...nextData.selectedCallDetail,
           followUps: nextData.selectedCallDetail.followUps.map((task: any) =>
@@ -1489,26 +1900,36 @@ export default function VoiceConsoleClient({
     });
   };
 
-  const handleMarkContacted = async (input: { id?: string | null; voiceLeadId?: string | null; queueType: "task" | "lead" }) => {
+  const handleMarkContacted = async (input: {
+    id?: string | null;
+    voiceLeadId?: string | null;
+    queueType: "task" | "lead";
+  }) => {
     setError(null);
     try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/follow-ups")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: input.id ?? null,
-          voiceLeadId: input.voiceLeadId ?? null,
-          queueType: input.queueType,
-          status: "contacted",
-        }),
-      });
+      const response = await fetch(
+        `${pollBaseHref.replace("/live", "/follow-ups")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: input.id ?? null,
+            voiceLeadId: input.voiceLeadId ?? null,
+            queueType: input.queueType,
+            status: "contacted",
+          }),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(String(payload.error || "mark_contacted_failed"));
       }
       applyContactedUpdateLocally(input);
       refreshSnapshot(selectedCallId, selectedPhone).catch((refreshError) => {
-        console.error("[voice.console.mark_contacted_refresh_failed]", refreshError);
+        console.error(
+          "[voice.console.mark_contacted_refresh_failed]",
+          refreshError,
+        );
       });
     } catch (markError) {
       console.error("[voice.console.mark_contacted_failed]", markError);
@@ -1564,7 +1985,11 @@ export default function VoiceConsoleClient({
           </div>
         ) : null}
 
-        <section className={cardShell("relative z-0 overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
+        <section
+          className={cardShell(
+            "relative z-0 overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.35)]",
+          )}
+        >
           <div className="grid min-h-0 lg:grid-cols-[220px_minmax(0,1fr)]">
             <aside className="border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
               <div className="flex items-center gap-2 border-b border-slate-800/90 px-4 py-4">
@@ -1572,8 +1997,13 @@ export default function VoiceConsoleClient({
                   <PhoneCall className="h-4.5 w-4.5 text-cyan-100" />
                 </div>
                 <div>
-                  <div className="text-base font-semibold text-white">BetechOps</div>
-                  <Link href={voiceHomeHref} className="text-xs text-cyan-200 transition hover:text-cyan-100">
+                  <div className="text-base font-semibold text-white">
+                    BetechOps
+                  </div>
+                  <Link
+                    href={voiceHomeHref}
+                    className="text-xs text-cyan-200 transition hover:text-cyan-100"
+                  >
                     Go Home
                   </Link>
                 </div>
@@ -1581,7 +2011,9 @@ export default function VoiceConsoleClient({
 
               <div className="space-y-5 px-3 py-4">
                 <div>
-                  <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Voice Console</div>
+                  <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                    Voice Console
+                  </div>
                   <div className="mt-2 space-y-1">
                     {consoleNav.map((item) => {
                       const Icon = item.icon;
@@ -1598,7 +2030,9 @@ export default function VoiceConsoleClient({
                           }`}
                         >
                           <Icon className="h-4 w-4 shrink-0" />
-                          <span className="text-[13px] font-medium">{item.label}</span>
+                          <span className="text-[13px] font-medium">
+                            {item.label}
+                          </span>
                         </button>
                       );
                     })}
@@ -1606,7 +2040,9 @@ export default function VoiceConsoleClient({
                 </div>
 
                 <div className="border-t border-slate-800/90 pt-4">
-                  <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Quick Actions</div>
+                  <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                    Quick Actions
+                  </div>
                   <div className="mt-2 space-y-1">
                     <button
                       type="button"
@@ -1617,7 +2053,9 @@ export default function VoiceConsoleClient({
                       className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
                     >
                       <PhoneCall className="h-4 w-4 shrink-0" />
-                      <span className="text-[13px] font-medium">Open Dialer</span>
+                      <span className="text-[13px] font-medium">
+                        Open Dialer
+                      </span>
                     </button>
                     <button
                       type="button"
@@ -1633,7 +2071,9 @@ export default function VoiceConsoleClient({
                       className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
                     >
                       <PhoneOff className="h-4 w-4 shrink-0" />
-                      <span className="text-[13px] font-medium">Missed Calls</span>
+                      <span className="text-[13px] font-medium">
+                        Missed Calls
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -1648,12 +2088,17 @@ export default function VoiceConsoleClient({
                       <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-slate-800/90 bg-slate-950/80 px-3 py-2.5">
                         <Search className="h-4.5 w-4.5 shrink-0 text-slate-500" />
                         <input
-                          value={activeTab === "recent" ? recentSearch : queueSearch}
+                          value={
+                            activeTab === "recent" ? recentSearch : queueSearch
+                          }
                           onChange={(event) =>
-                            activeTab === "recent" ? setRecentSearch(event.target.value) : setQueueSearch(event.target.value)
+                            activeTab === "recent"
+                              ? setRecentSearch(event.target.value)
+                              : setQueueSearch(event.target.value)
                           }
                           onKeyDown={(event) => {
-                            if (event.key !== "Enter" || activeTab === "recent") return;
+                            if (event.key !== "Enter" || activeTab === "recent")
+                              return;
                             void handleVoiceSearch(queueSearch);
                           }}
                           placeholder="Search customer or number..."
@@ -1688,13 +2133,22 @@ export default function VoiceConsoleClient({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                      <span className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${statusTone(liveStatus)}`}>
-                        {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline"}
+                      <span
+                        className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${statusTone(liveStatus)}`}
+                      >
+                        {liveStatus === "live"
+                          ? "Live"
+                          : liveStatus === "connecting"
+                            ? "Connecting"
+                            : "Offline"}
                       </span>
                       <select
                         value={statusSelectValue}
                         onChange={(event) =>
-                          handlePresenceUpdate(event.target.value as (typeof MANUAL_PRESENCE_STATUSES)[number])
+                          handlePresenceUpdate(
+                            event.target
+                              .value as (typeof MANUAL_PRESENCE_STATUSES)[number],
+                          )
                         }
                         disabled={presencePending}
                         className={`rounded-full px-4 py-1.5 text-sm font-semibold outline-none ${
@@ -1710,7 +2164,9 @@ export default function VoiceConsoleClient({
                         ))}
                       </select>
                       <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm text-slate-300">
-                        {new Date(lastRefreshAt || Date.now()).toLocaleTimeString("en-KE", {
+                        {new Date(
+                          lastRefreshAt || Date.now(),
+                        ).toLocaleTimeString("en-KE", {
                           timeZone: "Africa/Nairobi",
                           hour: "2-digit",
                           minute: "2-digit",
@@ -1734,11 +2190,14 @@ export default function VoiceConsoleClient({
                       </div>
                       <div className="min-w-0">
                         <div className="truncate text-[30px] font-semibold tracking-tight text-white">
-                          {activeTab === "operations" ? "Live Operations Center" : title || "Voice Center"}
+                          {activeTab === "operations"
+                            ? "Live Operations Center"
+                            : title || "Voice Center"}
                         </div>
                         <div className="truncate text-[13px] text-slate-400">
                           {activeTab === "operations"
-                            ? subtitle || "Clean live view for active calls, queue pressure, and recent voice activity."
+                            ? subtitle ||
+                              "Clean live view for active calls, queue pressure, and recent voice activity."
                             : activeTabDescriptionMap[activeTab]}
                         </div>
                       </div>
@@ -1757,11 +2216,17 @@ export default function VoiceConsoleClient({
                           onClick={metric.action}
                           disabled={!metric.action}
                           className={`min-w-[96px] rounded-xl border border-slate-800/90 bg-slate-950/85 px-3 py-2.5 text-left ${
-                            metric.action ? "transition hover:border-cyan-500/30 hover:bg-cyan-500/10" : ""
+                            metric.action
+                              ? "transition hover:border-cyan-500/30 hover:bg-cyan-500/10"
+                              : ""
                           }`}
                         >
-                          <div className="text-xs text-slate-500">{metric.label}</div>
-                          <div className="mt-1 text-xl font-semibold text-white">{metric.value}</div>
+                          <div className="text-xs text-slate-500">
+                            {metric.label}
+                          </div>
+                          <div className="mt-1 text-xl font-semibold text-white">
+                            {metric.value}
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -1788,59 +2253,122 @@ export default function VoiceConsoleClient({
                                   <PhoneCall className="h-7 w-7" />
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="truncate text-2xl font-semibold tracking-tight text-white">{activeCallLabel}</div>
+                                  <div className="truncate text-2xl font-semibold tracking-tight text-white">
+                                    {activeCallLabel}
+                                  </div>
                                   <div className="mt-1 text-sm text-slate-400">
-                                    {activeInteractionCall.customer.location || "Customer location not captured"}
+                                    {activeInteractionCall.customer.location ||
+                                      "Customer location not captured"}
                                   </div>
                                   <div className="mt-1.5 flex flex-wrap gap-2">
                                     <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">
-                                      {activeInteractionCall.direction === "INBOUND" ? "Inbound Call" : "Outbound Call"}
+                                      {activeInteractionCall.direction ===
+                                      "INBOUND"
+                                        ? "Inbound Call"
+                                        : "Outbound Call"}
                                     </span>
                                     <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300">
-                                      {activeInteractionCall.queueReasonLabel || "Live queue"}
+                                      {activeInteractionCall.queueReasonLabel ||
+                                        "Live queue"}
                                     </span>
                                   </div>
                                 </div>
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="text-lg font-medium text-slate-300">{formatDuration(activeInteractionCall.durationInSeconds)}</div>
+                              <div className="text-lg font-medium text-slate-300">
+                                {formatDuration(
+                                  activeInteractionCall.durationInSeconds,
+                                )}
+                              </div>
                               <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                                {formatDateTime(activeInteractionCall.startedAt || activeInteractionCall.createdAt)}
+                                {formatDateTime(
+                                  activeInteractionCall.startedAt ||
+                                    activeInteractionCall.createdAt,
+                                )}
                               </div>
                             </div>
                           </div>
 
                           <div className="mt-4 grid gap-2 sm:grid-cols-3">
                             <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">First Response</div>
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                First Response
+                              </div>
                               <div className="mt-1 text-sm font-semibold text-white">
-                                {formatDuration((activeInteractionCall as any).sla?.firstResponseSeconds)}
+                                {formatDuration(
+                                  (activeInteractionCall as any).sla
+                                    ?.firstResponseSeconds,
+                                )}
                               </div>
                             </div>
                             <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Ring Time</div>
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                Ring Time
+                              </div>
                               <div className="mt-1 text-sm font-semibold text-white">
-                                {formatDuration((activeInteractionCall as any).sla?.ringSeconds)}
+                                {formatDuration(
+                                  (activeInteractionCall as any).sla
+                                    ?.ringSeconds,
+                                )}
                               </div>
                             </div>
                             <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Talk Time</div>
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                Talk Time
+                              </div>
                               <div className="mt-1 text-sm font-semibold text-white">
-                                {formatDuration((activeInteractionCall as any).sla?.talkSeconds)}
+                                {formatDuration(
+                                  (activeInteractionCall as any).sla
+                                    ?.talkSeconds,
+                                )}
                               </div>
                             </div>
                           </div>
 
-                          <ChatraceActivityCard data={activeInteractionCall.customer.chatrace} compact className="mt-4" />
+                          <ChatraceActivityCard
+                            data={activeInteractionCall.customer.chatrace}
+                            compact
+                            className="mt-4"
+                          />
 
                           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
                             {[
-                              { label: softphone.currentCall?.muted ? "Unmute" : "Mute", onClick: softphone.toggleMute, icon: Mic },
-                              { label: softphone.currentCall?.held ? "Resume" : "Hold", onClick: softphone.toggleHold, icon: PhoneOff },
-                              { label: showWorkspaceDialPad ? "Hide Keypad" : "Keypad", onClick: () => setShowWorkspaceDialPad((value) => !value), icon: Grip },
-                              { label: "Answer", onClick: softphone.answerCall, icon: PhoneCall },
-                              { label: showTransferPanel ? "Hide Transfer" : "Transfer", onClick: () => setShowTransferPanel((value) => !value), icon: ArrowRightLeft },
+                              {
+                                label: softphone.currentCall?.muted
+                                  ? "Unmute"
+                                  : "Mute",
+                                onClick: softphone.toggleMute,
+                                icon: Mic,
+                              },
+                              {
+                                label: softphone.currentCall?.held
+                                  ? "Resume"
+                                  : "Hold",
+                                onClick: softphone.toggleHold,
+                                icon: PhoneOff,
+                              },
+                              {
+                                label: showWorkspaceDialPad
+                                  ? "Hide Keypad"
+                                  : "Keypad",
+                                onClick: () =>
+                                  setShowWorkspaceDialPad((value) => !value),
+                                icon: Grip,
+                              },
+                              {
+                                label: "Answer",
+                                onClick: softphone.answerCall,
+                                icon: PhoneCall,
+                              },
+                              {
+                                label: showTransferPanel
+                                  ? "Hide Transfer"
+                                  : "Transfer",
+                                onClick: () =>
+                                  setShowTransferPanel((value) => !value),
+                                icon: ArrowRightLeft,
+                              },
                             ].map((action) => {
                               const Icon = action.icon;
                               return (
@@ -1867,7 +2395,11 @@ export default function VoiceConsoleClient({
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleCallback(selectedCall?.callerNumber || selectedPhone)}
+                              onClick={() =>
+                                handleCallback(
+                                  selectedCall?.callerNumber || selectedPhone,
+                                )
+                              }
                               className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
                             >
                               Call Back
@@ -1884,37 +2416,54 @@ export default function VoiceConsoleClient({
                             <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                               <div className="flex flex-col gap-3">
                                 <div>
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transfer Call</div>
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                    Transfer Call
+                                  </div>
                                   <div className="mt-1 text-sm text-slate-300">
-                                    Reassign this live call to admin, another routing agent, or log an external transfer number.
+                                    Reassign this live call to admin, another
+                                    routing agent, or log an external transfer
+                                    number.
                                   </div>
                                 </div>
                                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                                   <select
                                     value={transferAssigneeId}
-                                    onChange={(event) => setTransferAssigneeId(event.target.value)}
+                                    onChange={(event) =>
+                                      setTransferAssigneeId(event.target.value)
+                                    }
                                     className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none"
                                   >
-                                    <option value="">Transfer to routing agent / admin</option>
+                                    <option value="">
+                                      Transfer to routing agent / admin
+                                    </option>
                                     {visibleAgents.map((agent) => (
                                       <option key={agent.id} value={agent.id}>
-                                        {(agent as any).displayName || agent.name}
+                                        {(agent as any).displayName ||
+                                          agent.name}
                                       </option>
                                     ))}
                                   </select>
                                   <input
                                     value={transferPhone}
-                                    onChange={(event) => setTransferPhone(event.target.value)}
+                                    onChange={(event) =>
+                                      setTransferPhone(event.target.value)
+                                    }
                                     placeholder="Or enter external phone number"
                                     className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
                                   />
                                   <button
                                     type="button"
                                     onClick={handleTransferCall}
-                                    disabled={transferPending || (!transferAssigneeId && !transferPhone.trim())}
+                                    disabled={
+                                      transferPending ||
+                                      (!transferAssigneeId &&
+                                        !transferPhone.trim())
+                                    }
                                     className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                                   >
-                                    {transferPending ? "Transferring..." : "Confirm Transfer"}
+                                    {transferPending
+                                      ? "Transferring..."
+                                      : "Confirm Transfer"}
                                   </button>
                                 </div>
                               </div>
@@ -1928,10 +2477,16 @@ export default function VoiceConsoleClient({
                               <PhoneCall className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Active Call</div>
-                              <div className="mt-1 text-base font-semibold text-white">No live call right now</div>
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                Active Call
+                              </div>
+                              <div className="mt-1 text-base font-semibold text-white">
+                                No live call right now
+                              </div>
                               <div className="mt-1 text-sm text-slate-400">
-                                Incoming calls route directly to fallback phones. Use recent calls, follow-ups, or the popup strip when a live fallback call is active.
+                                Incoming calls route directly to fallback
+                                phones. Use recent calls, follow-ups, or the
+                                popup strip when a live fallback call is active.
                               </div>
                             </div>
                           </div>
@@ -1941,8 +2496,12 @@ export default function VoiceConsoleClient({
                       <section className={cardShell("p-4")}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Recent Call Preview</div>
-                            <div className="mt-1 text-base font-semibold text-white">Latest interactions</div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Recent Call Preview
+                            </div>
+                            <div className="mt-1 text-base font-semibold text-white">
+                              Latest interactions
+                            </div>
                           </div>
                           <button
                             type="button"
@@ -1962,35 +2521,63 @@ export default function VoiceConsoleClient({
                           </div>
                           {filteredRecentCalls.slice(0, 4).length ? (
                             filteredRecentCalls.slice(0, 4).map((call) => (
-                              <div key={call.id} className="grid grid-cols-[88px_minmax(0,1.2fr)_minmax(0,0.8fr)_110px_96px] gap-3 border-b border-slate-800/80 px-3 py-3 text-sm last:border-b-0">
-                                <div className="whitespace-nowrap text-slate-300">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
+                              <div
+                                key={call.id}
+                                className="grid grid-cols-[88px_minmax(0,1.2fr)_minmax(0,0.8fr)_110px_96px] gap-3 border-b border-slate-800/80 px-3 py-3 text-sm last:border-b-0"
+                              >
+                                <div className="whitespace-nowrap text-slate-300">
+                                  {formatTimeOnly(
+                                    call.startedAt || call.createdAt,
+                                  )}
+                                </div>
                                 <div className="min-w-0">
                                   {mode === "admin" ? (
                                     <Link
                                       href={buildVoiceCustomerProfileHref({
-                                        customerUserId: call.customer?.matchedCustomerId || null,
+                                        customerUserId:
+                                          call.customer?.matchedCustomerId ||
+                                          null,
                                         phone: call.callerNumber,
-                                        displayName: call.customer?.customerName || null,
+                                        displayName:
+                                          call.customer?.customerName || null,
                                       })}
                                       className="block truncate font-semibold text-white transition hover:text-cyan-200"
                                     >
-                                      {call.customer.customerName || call.callerNumber}
+                                      {call.customer.customerName ||
+                                        call.callerNumber}
                                     </Link>
                                   ) : (
-                                    <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                    <div className="truncate font-semibold text-white">
+                                      {call.customer.customerName ||
+                                        call.callerNumber}
+                                    </div>
                                   )}
-                                  <div className="truncate text-xs text-slate-400">{call.callerNumber}</div>
+                                  <div className="truncate text-xs text-slate-400">
+                                    {call.callerNumber}
+                                  </div>
                                 </div>
-                                <div className="truncate text-slate-300">{call.assignedToName || call.routedToDisplay || "Unassigned"}</div>
+                                <div className="truncate text-slate-300">
+                                  {call.assignedToName ||
+                                    call.routedToDisplay ||
+                                    "Unassigned"}
+                                </div>
                                 <div>
-                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(call.status)}`}>
+                                  <span
+                                    className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(call.status)}`}
+                                  >
                                     {call.statusLabel}
                                   </span>
                                 </div>
                                 <div>
                                   <button
                                     type="button"
-                                    onClick={() => openDetailModal("customer", call.id, call.callerNumber)}
+                                    onClick={() =>
+                                      openDetailModal(
+                                        "customer",
+                                        call.id,
+                                        call.callerNumber,
+                                      )
+                                    }
                                     className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
                                   >
                                     Open
@@ -1999,61 +2586,126 @@ export default function VoiceConsoleClient({
                               </div>
                             ))
                           ) : (
-                            <div className="px-3 py-6 text-sm text-slate-500">No recent calls match the current filter.</div>
+                            <div className="px-3 py-6 text-sm text-slate-500">
+                              No recent calls match the current filter.
+                            </div>
                           )}
                         </div>
                       </section>
 
                       {data.viewer.isAdmin ? <CallCentreHealthPanel /> : null}
 
-                      {data.viewer.isAdmin && (adminWallboard || supervisorMetrics) ? (
+                      {data.viewer.isAdmin &&
+                      (adminWallboard || supervisorMetrics) ? (
                         <section className={cardShell("p-4")}>
                           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div className="min-w-0">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Wallboard</div>
-                              <div className="mt-1 text-base font-semibold text-white">Live queue and service health</div>
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                Wallboard
+                              </div>
+                              <div className="mt-1 text-base font-semibold text-white">
+                                Live queue and service health
+                              </div>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                               {[
-                                ["Live Queue", String(adminWallboard?.liveQueue || 0)],
-                                ["Longest Waiting", formatDuration(adminWallboard?.longestWaitingSeconds || 0)],
-                                ["Agents Ready", String(adminWallboard?.availableAgents || 0)],
-                                ["Answered vs Missed", `${adminWallboard?.answeredToday || 0}/${adminWallboard?.missedToday || 0}`],
+                                [
+                                  "Live Queue",
+                                  String(adminWallboard?.liveQueue || 0),
+                                ],
+                                [
+                                  "Longest Waiting",
+                                  formatDuration(
+                                    adminWallboard?.longestWaitingSeconds || 0,
+                                  ),
+                                ],
+                                [
+                                  "Agents Ready",
+                                  String(adminWallboard?.availableAgents || 0),
+                                ],
+                                [
+                                  "Answered vs Missed",
+                                  `${adminWallboard?.answeredToday || 0}/${adminWallboard?.missedToday || 0}`,
+                                ],
                               ].map(([label, value]) => (
-                                <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
-                                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
-                                  <div className="mt-1 text-sm font-semibold text-white">{value}</div>
+                                <div
+                                  key={label}
+                                  className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5"
+                                >
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                    {label}
+                                  </div>
+                                  <div className="mt-1 text-sm font-semibold text-white">
+                                    {value}
+                                  </div>
                                 </div>
                               ))}
                             </div>
                           </div>
                           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
                             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Supervisor KPIs</div>
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Supervisor KPIs
+                              </div>
                               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                 {[
-                                  ["Answer Rate", `${Math.round(Number(supervisorMetrics?.answerRate || 0) * 100)}%`],
-                                  ["Transfer Rate", `${Math.round(Number(supervisorMetrics?.transferRate || 0) * 100)}%`],
-                                  ["Callback Completion", `${Math.round(Number(supervisorMetrics?.callbackCompletionRate || 0) * 100)}%`],
-                                  ["Overdue Callbacks", String(supervisorMetrics?.callbackOverdueCount || 0)],
+                                  [
+                                    "Answer Rate",
+                                    `${Math.round(Number(supervisorMetrics?.answerRate || 0) * 100)}%`,
+                                  ],
+                                  [
+                                    "Transfer Rate",
+                                    `${Math.round(Number(supervisorMetrics?.transferRate || 0) * 100)}%`,
+                                  ],
+                                  [
+                                    "Callback Completion",
+                                    `${Math.round(Number(supervisorMetrics?.callbackCompletionRate || 0) * 100)}%`,
+                                  ],
+                                  [
+                                    "Overdue Callbacks",
+                                    String(
+                                      supervisorMetrics?.callbackOverdueCount ||
+                                        0,
+                                    ),
+                                  ],
                                 ].map(([label, value]) => (
-                                  <div key={label} className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5">
-                                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
-                                    <div className="mt-1 text-sm font-semibold text-white">{value}</div>
+                                  <div
+                                    key={label}
+                                    className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5"
+                                  >
+                                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                      {label}
+                                    </div>
+                                    <div className="mt-1 text-sm font-semibold text-white">
+                                      {value}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
                             </div>
                             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Missed By Agent</div>
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Missed By Agent
+                              </div>
                               <div className="mt-3 space-y-2">
-                                {Array.isArray(supervisorMetrics?.missedByAgent) && supervisorMetrics.missedByAgent.length ? (
-                                  supervisorMetrics.missedByAgent.slice(0, 5).map((row: any) => (
-                                    <div key={row.agent} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm">
-                                      <span className="truncate text-slate-300">{row.agent}</span>
-                                      <span className="font-semibold text-white">{row.count}</span>
-                                    </div>
-                                  ))
+                                {Array.isArray(
+                                  supervisorMetrics?.missedByAgent,
+                                ) && supervisorMetrics.missedByAgent.length ? (
+                                  supervisorMetrics.missedByAgent
+                                    .slice(0, 5)
+                                    .map((row: any) => (
+                                      <div
+                                        key={row.agent}
+                                        className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm"
+                                      >
+                                        <span className="truncate text-slate-300">
+                                          {row.agent}
+                                        </span>
+                                        <span className="font-semibold text-white">
+                                          {row.count}
+                                        </span>
+                                      </div>
+                                    ))
                                 ) : (
                                   <div className="rounded-xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
                                     No missed-call backlog right now.
@@ -2070,8 +2722,12 @@ export default function VoiceConsoleClient({
                       <div className={cardShell("p-4")}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Incoming Queue</div>
-                            <div className="mt-1 text-base font-semibold text-white">Compact preview</div>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Incoming Queue
+                            </div>
+                            <div className="mt-1 text-base font-semibold text-white">
+                              Compact preview
+                            </div>
                           </div>
                           <span className="rounded-full border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-xs text-slate-300">
                             {queueItemsByView.length}
@@ -2081,13 +2737,21 @@ export default function VoiceConsoleClient({
                         <div className="mt-3 flex flex-wrap gap-2">
                           {[
                             { key: "all", label: `All (${queueItems.length})` },
-                            { key: "waiting", label: `Waiting (${visibleWaitingCalls.length})` },
-                            { key: "missed", label: `Missed (${missedFollowUpsCount})` },
+                            {
+                              key: "waiting",
+                              label: `Waiting (${visibleWaitingCalls.length})`,
+                            },
+                            {
+                              key: "missed",
+                              label: `Missed (${missedFollowUpsCount})`,
+                            },
                           ].map((item) => (
                             <button
                               key={item.key}
                               type="button"
-                              onClick={() => setQueueView(item.key as typeof queueView)}
+                              onClick={() =>
+                                setQueueView(item.key as typeof queueView)
+                              }
                               className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
                                 queueView === item.key
                                   ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
@@ -2104,35 +2768,60 @@ export default function VoiceConsoleClient({
                             queueItemsByView.slice(0, 6).map((item) => {
                               const queueItem = item as any;
                               const id = String(queueItem.id);
-                              const phone = String(queueItem.callerNumber || queueItem.phone || "");
+                              const phone = String(
+                                queueItem.callerNumber || queueItem.phone || "",
+                              );
                               const isCall = Boolean(queueItem.callerNumber);
                               return (
-                                <div key={`${isCall ? "call" : "queue"}-${id}`} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                                <div
+                                  key={`${isCall ? "call" : "queue"}-${id}`}
+                                  className="rounded-xl border border-slate-800 bg-slate-900/70 p-3"
+                                >
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="min-w-0">
                                       {mode === "admin" ? (
                                         <Link
                                           href={buildVoiceCustomerProfileHref({
-                                            customerUserId: queueItem.customer?.matchedCustomerId || null,
+                                            customerUserId:
+                                              queueItem.customer
+                                                ?.matchedCustomerId || null,
                                             phone,
-                                            displayName: queueItem.customer?.customerName || null,
+                                            displayName:
+                                              queueItem.customer
+                                                ?.customerName || null,
                                           })}
                                           className="block truncate text-sm font-semibold text-white transition hover:text-cyan-200"
                                         >
-                                          {queueItem.customer?.customerName || phone}
+                                          {queueItem.customer?.customerName ||
+                                            phone}
                                         </Link>
                                       ) : (
-                                        <div className="truncate text-sm font-semibold text-white">{queueItem.customer?.customerName || phone}</div>
+                                        <div className="truncate text-sm font-semibold text-white">
+                                          {queueItem.customer?.customerName ||
+                                            phone}
+                                        </div>
                                       )}
                                       <div className="truncate text-xs text-slate-400">
-                                        {(queueItem.assignedToName || queueItem.assignedToEmail || queueItem.routedToDisplay || "Unassigned") +
+                                        {(queueItem.assignedToName ||
+                                          queueItem.assignedToEmail ||
+                                          queueItem.routedToDisplay ||
+                                          "Unassigned") +
                                           " · " +
                                           (isCall
-                                            ? formatTimeOnly(queueItem.startedAt || queueItem.createdAt)
-                                            : formatTimeOnly(queueItem.dueAt || queueItem.updatedAt))}
+                                            ? formatTimeOnly(
+                                                queueItem.startedAt ||
+                                                  queueItem.createdAt,
+                                              )
+                                            : formatTimeOnly(
+                                                queueItem.dueAt ||
+                                                  queueItem.updatedAt,
+                                              ))}
                                       </div>
                                       <div className="mt-1 truncate text-[11px] text-slate-500">
-                                        {queueItem.queueReasonLabel || (isCall ? "Live queue" : "Follow-up queue")}
+                                        {queueItem.queueReasonLabel ||
+                                          (isCall
+                                            ? "Live queue"
+                                            : "Follow-up queue")}
                                       </div>
                                     </div>
                                     <button
@@ -2147,14 +2836,27 @@ export default function VoiceConsoleClient({
                                     </button>
                                   </div>
                                   <div className="mt-2 flex items-center justify-between gap-2">
-                                    <span className="truncate text-xs text-slate-300">{phone}</span>
-                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(queueItem.status || queueItem.direction)}`}>
-                                      {isCall ? queueItem.statusLabel : queueItem.statusLabel || queueItem.type}
+                                    <span className="truncate text-xs text-slate-300">
+                                      {phone}
+                                    </span>
+                                    <span
+                                      className={`inline-flex whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(queueItem.status || queueItem.direction)}`}
+                                    >
+                                      {isCall
+                                        ? queueItem.statusLabel
+                                        : queueItem.statusLabel ||
+                                          queueItem.type}
                                     </span>
                                   </div>
-                                  {!isCall && Number(queueItem.callbackOverdueSeconds || 0) > 0 ? (
+                                  {!isCall &&
+                                  Number(
+                                    queueItem.callbackOverdueSeconds || 0,
+                                  ) > 0 ? (
                                     <div className="mt-2 text-[11px] text-amber-200">
-                                      Callback overdue by {formatRelative(queueItem.callbackOverdueSeconds)}
+                                      Callback overdue by{" "}
+                                      {formatRelative(
+                                        queueItem.callbackOverdueSeconds,
+                                      )}
                                     </div>
                                   ) : null}
                                 </div>
@@ -2194,21 +2896,28 @@ export default function VoiceConsoleClient({
                   <section className="flex h-full min-h-0 flex-col gap-5 overflow-hidden">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Call History</div>
-                        <h2 className="mt-1 text-3xl font-semibold text-white">Recent calls</h2>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Call History
+                        </div>
+                        <h2 className="mt-1 text-3xl font-semibold text-white">
+                          Recent calls
+                        </h2>
                         <p className="mt-2 text-sm text-slate-400">
-                          Review every voice interaction with drill-down actions and CRM-linked context.
+                          Review every voice interaction with drill-down actions
+                          and CRM-linked context.
                         </p>
                       </div>
                       <div className="grid max-w-full gap-3 sm:grid-cols-2 xl:w-[min(100%,520px)]">
                         <div className="rounded-[24px] border border-slate-800 bg-slate-900/70 p-4 sm:col-span-2">
                           <div className="grid gap-2 sm:grid-cols-4">
-                            {([
-                              ["today", "Today"],
-                              ["yesterday", "Yesterday"],
-                              ["week", "This Week"],
-                              ["period", "Trading Period"],
-                            ] as Array<[VoiceDateFilter, string]>).map(([key, label]) => (
+                            {(
+                              [
+                                ["today", "Today"],
+                                ["yesterday", "Yesterday"],
+                                ["week", "This Week"],
+                                ["period", "Trading Period"],
+                              ] as Array<[VoiceDateFilter, string]>
+                            ).map(([key, label]) => (
                               <button
                                 key={key}
                                 type="button"
@@ -2226,13 +2935,19 @@ export default function VoiceConsoleClient({
                         </div>
                         <input
                           value={recentSearch}
-                          onChange={(event) => setRecentSearch(event.target.value)}
+                          onChange={(event) =>
+                            setRecentSearch(event.target.value)
+                          }
                           placeholder="Search caller, route, or status"
                           className="w-full rounded-2xl border border-slate-800 bg-slate-900/75 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
                         />
                         <select
                           value={recentFilter}
-                          onChange={(event) => setRecentFilter(event.target.value as typeof recentFilter)}
+                          onChange={(event) =>
+                            setRecentFilter(
+                              event.target.value as typeof recentFilter,
+                            )
+                          }
                           className="rounded-2xl border border-slate-800 bg-slate-900/75 px-3 py-3 text-sm text-white outline-none"
                         >
                           <option value="all">All directions</option>
@@ -2243,9 +2958,15 @@ export default function VoiceConsoleClient({
                       </div>
                     </div>
 
-                    <section className={cardShell("flex min-h-0 flex-1 flex-col overflow-hidden p-5")}>
+                    <section
+                      className={cardShell(
+                        "flex min-h-0 flex-1 flex-col overflow-hidden p-5",
+                      )}
+                    >
                       <div className="mb-4 flex items-center justify-between gap-3">
-                        <div className="text-sm text-slate-400">{formatRefreshStamp(lastRefreshAt)}</div>
+                        <div className="text-sm text-slate-400">
+                          {formatRefreshStamp(lastRefreshAt)}
+                        </div>
                         <button
                           type="button"
                           onClick={handleExportRecentCalls}
@@ -2258,455 +2979,862 @@ export default function VoiceConsoleClient({
                         {groupedRecentCalls.length ? (
                           groupedRecentCalls.map(([bucket, calls]) => (
                             <div key={bucket} className="space-y-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{bucket}</div>
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                {bucket}
+                              </div>
                               <div className="rounded-2xl border border-slate-800 bg-slate-900/60">
-                                  <div className="grid grid-cols-[72px_84px_minmax(0,1.1fr)_120px_minmax(0,1fr)_110px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                    <div>View</div>
-                                    <div>Time</div>
-                                    <div>Caller</div>
-                                    <div>Direction</div>
-                                    <div>Agent</div>
-                                    <div>Status</div>
-                                  </div>
-                                  {calls.map((call) => {
-                                    const isExpanded = expandedRecentCallId === call.id;
-                                    const expandedDetail = isExpanded && selectedCallId === call.id ? data.selectedCallDetail : null;
-                                    return (
-                                      <div key={call.id} className="border-b border-slate-800/80 last:border-b-0">
-                                        <div className="grid grid-cols-[72px_84px_minmax(0,1.1fr)_120px_minmax(0,1fr)_110px] gap-3 px-4 py-4 transition hover:bg-white/[0.02]">
-                                          <div className="flex items-center">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleToggleRecentCall(call.id, call.callerNumber)}
-                                              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-100 transition hover:border-cyan-400/40 hover:bg-cyan-500/10"
-                                              aria-expanded={isExpanded}
-                                              aria-label={isExpanded ? "Hide call details" : "Show call details"}
-                                            >
-                                              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                            </button>
-                                          </div>
-                                          <div className="whitespace-nowrap text-sm text-slate-200">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
-                                          <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                              {mode === "admin" ? (
-                                                <Link
-                                                  href={buildVoiceCustomerProfileHref({
-                                                    customerUserId: call.customer?.matchedCustomerId || null,
+                                <div className="grid grid-cols-[72px_84px_minmax(0,1.1fr)_120px_minmax(0,1fr)_110px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  <div>View</div>
+                                  <div>Time</div>
+                                  <div>Caller</div>
+                                  <div>Direction</div>
+                                  <div>Agent</div>
+                                  <div>Status</div>
+                                </div>
+                                {calls.map((call) => {
+                                  const isExpanded =
+                                    expandedRecentCallId === call.id;
+                                  const expandedDetail =
+                                    isExpanded && selectedCallId === call.id
+                                      ? data.selectedCallDetail
+                                      : null;
+                                  return (
+                                    <div
+                                      key={call.id}
+                                      className="border-b border-slate-800/80 last:border-b-0"
+                                    >
+                                      <div className="grid grid-cols-[72px_84px_minmax(0,1.1fr)_120px_minmax(0,1fr)_110px] gap-3 px-4 py-4 transition hover:bg-white/[0.02]">
+                                        <div className="flex items-center">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleToggleRecentCall(
+                                                call.id,
+                                                call.callerNumber,
+                                              )
+                                            }
+                                            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-100 transition hover:border-cyan-400/40 hover:bg-cyan-500/10"
+                                            aria-expanded={isExpanded}
+                                            aria-label={
+                                              isExpanded
+                                                ? "Hide call details"
+                                                : "Show call details"
+                                            }
+                                          >
+                                            {isExpanded ? (
+                                              <ChevronUp className="h-4 w-4" />
+                                            ) : (
+                                              <ChevronDown className="h-4 w-4" />
+                                            )}
+                                          </button>
+                                        </div>
+                                        <div className="whitespace-nowrap text-sm text-slate-200">
+                                          {formatTimeOnly(
+                                            call.startedAt || call.createdAt,
+                                          )}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            {mode === "admin" ? (
+                                              <Link
+                                                href={buildVoiceCustomerProfileHref(
+                                                  {
+                                                    customerUserId:
+                                                      call.customer
+                                                        ?.matchedCustomerId ||
+                                                      null,
                                                     phone: call.callerNumber,
-                                                    displayName: call.customer?.customerName || null,
-                                                  })}
-                                                  className="truncate font-semibold text-white transition hover:text-cyan-200"
-                                                >
-                                                  {call.customer.customerName || call.callerNumber}
-                                                </Link>
-                                              ) : (
-                                                <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
-                                              )}
-                                              {call.isTestNumber ? (
-                                                <span className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${testNumberTone(call.isTestNumber)}`}>
-                                                  {call.testNumberLabel || "Test number"}
-                                                </span>
-                                              ) : null}
-                                            </div>
-                                            <div className="whitespace-nowrap text-sm text-slate-400">{call.callerNumber}</div>
+                                                    displayName:
+                                                      call.customer
+                                                        ?.customerName || null,
+                                                  },
+                                                )}
+                                                className="truncate font-semibold text-white transition hover:text-cyan-200"
+                                              >
+                                                {call.customer.customerName ||
+                                                  call.callerNumber}
+                                              </Link>
+                                            ) : (
+                                              <div className="truncate font-semibold text-white">
+                                                {call.customer.customerName ||
+                                                  call.callerNumber}
+                                              </div>
+                                            )}
+                                            {call.isTestNumber ? (
+                                              <span
+                                                className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${testNumberTone(call.isTestNumber)}`}
+                                              >
+                                                {call.testNumberLabel ||
+                                                  "Test number"}
+                                              </span>
+                                            ) : null}
                                           </div>
-                                          <div>
-                                            <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.direction)}`}>
-                                              {call.direction}
-                                            </span>
-                                          </div>
-                                          <div className="min-w-0">
-                                            <div className="truncate text-sm text-slate-200">{call.routedToDisplay || call.assignedToName || call.assignedToEmail || "-"}</div>
-                                            <div className="truncate text-xs text-slate-500">
-                                              {isMissedVoiceOutcome(call.statusLabel || call.status)
-                                                ? `Callback owner ${call.assignedToName || call.assignedToEmail || "Unassigned"}`
-                                                : call.providerStatusLabel && call.providerStatusLabel !== call.statusLabel
-                                                  ? `Provider ${call.providerStatusLabel}`
-                                                  : call.routeType || "Direct route"}
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.status)}`}>
-                                              {call.statusLabel}
-                                            </span>
+                                          <div className="whitespace-nowrap text-sm text-slate-400">
+                                            {call.callerNumber}
                                           </div>
                                         </div>
+                                        <div>
+                                          <span
+                                            className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.direction)}`}
+                                          >
+                                            {call.direction}
+                                          </span>
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="truncate text-sm text-slate-200">
+                                            {call.routedToDisplay ||
+                                              call.assignedToName ||
+                                              call.assignedToEmail ||
+                                              "-"}
+                                          </div>
+                                          <div className="truncate text-xs text-slate-500">
+                                            {isMissedVoiceOutcome(
+                                              call.statusLabel || call.status,
+                                            )
+                                              ? `Callback owner ${call.assignedToName || call.assignedToEmail || "Unassigned"}`
+                                              : call.providerStatusLabel &&
+                                                  call.providerStatusLabel !==
+                                                    call.statusLabel
+                                                ? `Provider ${call.providerStatusLabel}`
+                                                : call.routeType ||
+                                                  "Direct route"}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <span
+                                            className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.status)}`}
+                                          >
+                                            {call.statusLabel}
+                                          </span>
+                                        </div>
+                                      </div>
 
-                                        {isExpanded ? (
-                                          <div className="border-t border-slate-800 bg-slate-950/80 px-5 py-5">
-                                            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                                              <div className="space-y-4">
-                                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                                  <div>
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Call review</div>
-                                                    {mode === "admin" ? (
-                                                      <Link
-                                                        href={buildVoiceCustomerProfileHref({
-                                                          customerUserId: call.customer?.matchedCustomerId || null,
-                                                          phone: call.callerNumber,
-                                                          displayName: call.customer?.customerName || null,
-                                                        })}
-                                                        className="mt-1 block text-xl font-semibold text-white transition hover:text-cyan-200"
-                                                      >
-                                                        {call.customer.customerName || call.callerNumber}
-                                                      </Link>
-                                                    ) : (
-                                                      <div className="mt-1 text-xl font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
-                                                    )}
-                                                    <div className="mt-1 text-sm text-slate-400">
-                                                      {call.callerNumber} · {call.direction} · {call.statusLabel}
-                                                    </div>
-                                                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
-                                                      {call.isTestNumber ? (
-                                                        <span className={`rounded-full border px-3 py-1 font-semibold uppercase tracking-[0.16em] ${testNumberTone(call.isTestNumber)}`}>
-                                                          {call.testNumberLabel || "Test number"}
-                                                        </span>
-                                                      ) : null}
-                                                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
-                                                        {call.queueReasonLabel || "Live queue"}
-                                                      </span>
-                                                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
-                                                        Ring {formatDuration((call as any).sla?.ringSeconds)}
-                                                      </span>
-                                                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
-                                                        Talk {formatDuration((call as any).sla?.talkSeconds)}
-                                                      </span>
-                                                      {isMissedVoiceOutcome(call.statusLabel || call.status) ? (
-                                                        <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-semibold text-cyan-100">
-                                                          Callback owner {call.assignedToName || call.assignedToEmail || "Unassigned"}
-                                                        </span>
-                                                      ) : null}
-                                                    </div>
+                                      {isExpanded ? (
+                                        <div className="border-t border-slate-800 bg-slate-950/80 px-5 py-5">
+                                          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                                            <div className="space-y-4">
+                                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                                <div>
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                                    Call review
                                                   </div>
-                                                  <div className="flex flex-wrap gap-2">
-                                                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
-                                                      Duration {formatDuration(call.durationInSeconds)}
-                                                    </div>
-                                                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
-                                                      Cost {formatMoney(call.amount, call.currencyCode)}
-                                                    </div>
-                                                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
-                                                      Provider {call.providerStatusLabel || call.statusLabel}
-                                                    </div>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => openDetailModal("customer", call.id, call.callerNumber)}
-                                                      className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                                                    >
-                                                      Review
-                                                    </button>
-                                                    <a
-                                                      href={call.links.callBack}
-                                                      className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                                                    >
-                                                      Call back
-                                                    </a>
-                                                    <a
-                                                      href={`sms:${call.callerNumber}`}
-                                                      className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                                                    >
-                                                      Send SMS
-                                                    </a>
+                                                  {mode === "admin" ? (
                                                     <Link
-                                                      href={call.links.customer}
-                                                      className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                                      href={buildVoiceCustomerProfileHref(
+                                                        {
+                                                          customerUserId:
+                                                            call.customer
+                                                              ?.matchedCustomerId ||
+                                                            null,
+                                                          phone:
+                                                            call.callerNumber,
+                                                          displayName:
+                                                            call.customer
+                                                              ?.customerName ||
+                                                            null,
+                                                        },
+                                                      )}
+                                                      className="mt-1 block text-xl font-semibold text-white transition hover:text-cyan-200"
                                                     >
-                                                      Open customer
+                                                      {call.customer
+                                                        .customerName ||
+                                                        call.callerNumber}
                                                     </Link>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => {
-                                                        handleSelectCall(call.id, call.callerNumber);
-                                                        switchTab("operations");
-                                                      }}
-                                                      className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
-                                                    >
-                                                      Open live desk
-                                                    </button>
+                                                  ) : (
+                                                    <div className="mt-1 text-xl font-semibold text-white">
+                                                      {call.customer
+                                                        .customerName ||
+                                                        call.callerNumber}
+                                                    </div>
+                                                  )}
+                                                  <div className="mt-1 text-sm text-slate-400">
+                                                    {call.callerNumber} ·{" "}
+                                                    {call.direction} ·{" "}
+                                                    {call.statusLabel}
+                                                  </div>
+                                                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
+                                                    {call.isTestNumber ? (
+                                                      <span
+                                                        className={`rounded-full border px-3 py-1 font-semibold uppercase tracking-[0.16em] ${testNumberTone(call.isTestNumber)}`}
+                                                      >
+                                                        {call.testNumberLabel ||
+                                                          "Test number"}
+                                                      </span>
+                                                    ) : null}
+                                                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                                      {call.queueReasonLabel ||
+                                                        "Live queue"}
+                                                    </span>
+                                                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                                      Ring{" "}
+                                                      {formatDuration(
+                                                        (call as any).sla
+                                                          ?.ringSeconds,
+                                                      )}
+                                                    </span>
+                                                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                                      Talk{" "}
+                                                      {formatDuration(
+                                                        (call as any).sla
+                                                          ?.talkSeconds,
+                                                      )}
+                                                    </span>
+                                                    {isMissedVoiceOutcome(
+                                                      call.statusLabel ||
+                                                        call.status,
+                                                    ) ? (
+                                                      <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-semibold text-cyan-100">
+                                                        Callback owner{" "}
+                                                        {call.assignedToName ||
+                                                          call.assignedToEmail ||
+                                                          "Unassigned"}
+                                                      </span>
+                                                    ) : null}
                                                   </div>
                                                 </div>
-
-                                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                                      {isMissedVoiceOutcome(call.statusLabel || call.status) ? "Assigned Callback Owner" : "Who received"}
-                                                    </div>
-                                                    <div className="mt-2 text-sm font-semibold text-white">{call.assignedToName || call.assignedToEmail || call.routedToDisplay || "Unassigned"}</div>
-                                                    <div className="mt-1 text-xs text-slate-500">
-                                                      {isMissedVoiceOutcome(call.statusLabel || call.status)
-                                                        ? "This is the agent responsible for the callback follow-up."
-                                                        : call.queueReasonLabel || call.routeType || "Direct route"}
-                                                    </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                  <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                                                    Duration{" "}
+                                                    {formatDuration(
+                                                      call.durationInSeconds,
+                                                    )}
                                                   </div>
-                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Disposition</div>
-                                                    <div className="mt-2 text-sm font-semibold text-white">
-                                                      {formatDispositionLabel((expandedDetail as any)?.disposition)}
-                                                    </div>
-                                                    <div className="mt-1 text-xs text-slate-500">Outcome code saved after answered calls</div>
+                                                  <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                                                    Cost{" "}
+                                                    {formatMoney(
+                                                      call.amount,
+                                                      call.currencyCode,
+                                                    )}
                                                   </div>
-                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Orders</div>
-                                                    <div className="mt-2 text-lg font-semibold text-white">{call.customer.linkedRecords.webOrders}</div>
-                                                    <div className="mt-1 text-xs text-slate-500">Previous orders linked to caller</div>
+                                                  <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                                                    Provider{" "}
+                                                    {call.providerStatusLabel ||
+                                                      call.statusLabel}
                                                   </div>
-                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Open quotes</div>
-                                                    <div className="mt-2 text-lg font-semibold text-white">{call.customer.openQuotations}</div>
-                                                    <div className="mt-1 text-xs text-slate-500">Quotations still pending</div>
-                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      openDetailModal(
+                                                        "customer",
+                                                        call.id,
+                                                        call.callerNumber,
+                                                      )
+                                                    }
+                                                    className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                                  >
+                                                    Review
+                                                  </button>
+                                                  <a
+                                                    href={call.links.callBack}
+                                                    className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                                  >
+                                                    Call back
+                                                  </a>
+                                                  <a
+                                                    href={`sms:${call.callerNumber}`}
+                                                    className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                                  >
+                                                    Send SMS
+                                                  </a>
+                                                  <Link
+                                                    href={call.links.customer}
+                                                    className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                                  >
+                                                    Open customer
+                                                  </Link>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      handleSelectCall(
+                                                        call.id,
+                                                        call.callerNumber,
+                                                      );
+                                                      switchTab("operations");
+                                                    }}
+                                                    className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                                                  >
+                                                    Open live desk
+                                                  </button>
                                                 </div>
-
-                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                  <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Customer activity</div>
-                                                      <div className="mt-1 text-sm text-white">{call.linkedSummaryText}</div>
-                                                    </div>
-                                                    <div className="text-xs text-slate-500">{formatDateTime(call.startedAt || call.createdAt)}</div>
-                                                  </div>
-                                                  <div className="mt-4 space-y-3">
-                                                    {(expandedDetail?.timeline?.length ? expandedDetail.timeline : call.customer.recentTimeline)
-                                                      .slice(0, 5)
-                                                      .map((item: any) => (
-                                                        <div key={item.id} className="rounded-2xl border border-slate-800/80 bg-slate-950/70 px-3 py-3">
-                                                          <div className="text-sm font-semibold text-white">{item.title}</div>
-                                                          <div className="mt-1 text-xs text-slate-400">
-                                                            {item.detail || "No extra detail"} · {formatDateTime(item.at)}
-                                                          </div>
-                                                        </div>
-                                                      ))}
-                                                  </div>
-                                                </div>
-
-                                                {(expandedDetail as any)?.hopAudit?.length ? (
-                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Per-hop audit</div>
-                                                    <div className="mt-3 space-y-2">
-                                                      {(expandedDetail as any).hopAudit.map((hop: any) => (
-                                                        <div key={hop.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5">
-                                                          <div className="min-w-0">
-                                                            <div className="truncate text-sm font-semibold text-white">{hop.title}</div>
-                                                            <div className="truncate text-xs text-slate-500">{hop.detail || "Dial attempt"}</div>
-                                                          </div>
-                                                          <div className="text-right">
-                                                            <div className="text-xs font-semibold text-slate-200">{hop.status}</div>
-                                                            <div className="text-[11px] text-slate-500">{formatDateTime(hop.at)}</div>
-                                                          </div>
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  </div>
-                                                ) : null}
                                               </div>
 
-                                              <div className="space-y-4">
-                                                {data.viewer.isAdmin ? (
-                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Reassign</div>
-                                                    <div className="mt-2 text-sm text-slate-300">Move this call to another agent for ownership and follow-up.</div>
-                                                    {(() => {
-                                                      const draftValue = callAssignmentDrafts[call.id] ?? call.assignedToId ?? "";
-                                                      const isDirty = draftValue !== (call.assignedToId ?? "");
-                                                      const pendingKey = `call:${call.id}`;
-                                                      return (
-                                                        <>
-                                                    <select
-                                                      value={draftValue}
-                                                      onChange={(event) => {
-                                                        const assignedToId = event.target.value;
-                                                        setCallAssignmentDrafts((current) => ({ ...current, [call.id]: assignedToId }));
-                                                      }}
-                                                      className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
-                                                    >
-                                                      <option value="">Select agent</option>
-                                                      {visibleAgents.map((agent) => (
-                                                        <option key={agent.id} value={agent.id}>
-                                                          {(agent as any).displayName || agent.name}
-                                                        </option>
-                                                      ))}
-                                                    </select>
-                                                    <div className="mt-3 flex items-center justify-between gap-3">
-                                                      <div className="text-xs text-slate-500">
-                                                        {isDirty ? "Assignment changed. Save to persist future routing." : "Current owner is already saved."}
-                                                      </div>
-                                                      <button
-                                                        type="button"
-                                                        disabled={!draftValue || !isDirty || assignmentPendingKey === pendingKey}
-                                                        onClick={() => void handleReassign({ callId: call.id, assignedToId: draftValue })}
-                                                        className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                                                      >
-                                                        {assignmentPendingKey === pendingKey ? "Saving..." : "Save Assignment"}
-                                                      </button>
-                                                    </div>
-                                                        </>
-                                                      );
-                                                    })()}
-                                                  </div>
-                                                ) : null}
-
+                                              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                                 <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Customer Workspace</div>
-                                                  <div className="mt-2 text-sm text-slate-300">
-                                                    Keep the full customer history workflow here. Save a quick note or create a follow-up with one note and submit.
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    {isMissedVoiceOutcome(
+                                                      call.statusLabel ||
+                                                        call.status,
+                                                    )
+                                                      ? "Assigned Callback Owner"
+                                                      : "Who received"}
                                                   </div>
-                                                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                                    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                                                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Customer details</div>
-                                                      <div className="mt-2 space-y-2 text-sm text-slate-300">
-                                                        <div>Location: {call.customer.location || "Not captured"}</div>
-                                                        <div>Total spent: {formatMoney(call.customer.totalPurchasesValue, "KES")}</div>
-                                                        <div>Receipts: {call.customer.linkedRecords.receipts || 0}</div>
-                                                        <div>Quotes: {call.customer.linkedRecords.quotations || 0}</div>
+                                                  <div className="mt-2 text-sm font-semibold text-white">
+                                                    {call.assignedToName ||
+                                                      call.assignedToEmail ||
+                                                      call.routedToDisplay ||
+                                                      "Unassigned"}
+                                                  </div>
+                                                  <div className="mt-1 text-xs text-slate-500">
+                                                    {isMissedVoiceOutcome(
+                                                      call.statusLabel ||
+                                                        call.status,
+                                                    )
+                                                      ? "This is the agent responsible for the callback follow-up."
+                                                      : call.queueReasonLabel ||
+                                                        call.routeType ||
+                                                        "Direct route"}
+                                                  </div>
+                                                </div>
+                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    Disposition
+                                                  </div>
+                                                  <div className="mt-2 text-sm font-semibold text-white">
+                                                    {formatDispositionLabel(
+                                                      (expandedDetail as any)
+                                                        ?.disposition,
+                                                    )}
+                                                  </div>
+                                                  <div className="mt-1 text-xs text-slate-500">
+                                                    Outcome code saved after
+                                                    answered calls
+                                                  </div>
+                                                </div>
+                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    Orders
+                                                  </div>
+                                                  <div className="mt-2 text-lg font-semibold text-white">
+                                                    {
+                                                      call.customer
+                                                        .linkedRecords.webOrders
+                                                    }
+                                                  </div>
+                                                  <div className="mt-1 text-xs text-slate-500">
+                                                    Previous orders linked to
+                                                    caller
+                                                  </div>
+                                                </div>
+                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    Open quotes
+                                                  </div>
+                                                  <div className="mt-2 text-lg font-semibold text-white">
+                                                    {
+                                                      call.customer
+                                                        .openQuotations
+                                                    }
+                                                  </div>
+                                                  <div className="mt-1 text-xs text-slate-500">
+                                                    Quotations still pending
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                <div className="flex items-center justify-between gap-3">
+                                                  <div>
+                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                      Customer activity
+                                                    </div>
+                                                    <div className="mt-1 text-sm text-white">
+                                                      {call.linkedSummaryText}
+                                                    </div>
+                                                  </div>
+                                                  <div className="text-xs text-slate-500">
+                                                    {formatDateTime(
+                                                      call.startedAt ||
+                                                        call.createdAt,
+                                                    )}
+                                                  </div>
+                                                </div>
+                                                <div className="mt-4 space-y-3">
+                                                  {(expandedDetail?.timeline
+                                                    ?.length
+                                                    ? expandedDetail.timeline
+                                                    : call.customer
+                                                        .recentTimeline
+                                                  )
+                                                    .slice(0, 5)
+                                                    .map((item: any) => (
+                                                      <div
+                                                        key={item.id}
+                                                        className="rounded-2xl border border-slate-800/80 bg-slate-950/70 px-3 py-3"
+                                                      >
+                                                        <div className="text-sm font-semibold text-white">
+                                                          {item.title}
+                                                        </div>
+                                                        <div className="mt-1 text-xs text-slate-400">
+                                                          {item.detail ||
+                                                            "No extra detail"}{" "}
+                                                          ·{" "}
+                                                          {formatDateTime(
+                                                            item.at,
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    ))}
+                                                </div>
+                                              </div>
+
+                                              {(expandedDetail as any)?.hopAudit
+                                                ?.length ? (
+                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    Per-hop audit
+                                                  </div>
+                                                  <div className="mt-3 space-y-2">
+                                                    {(
+                                                      expandedDetail as any
+                                                    ).hopAudit.map(
+                                                      (hop: any) => (
+                                                        <div
+                                                          key={hop.id}
+                                                          className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5"
+                                                        >
+                                                          <div className="min-w-0">
+                                                            <div className="truncate text-sm font-semibold text-white">
+                                                              {hop.title}
+                                                            </div>
+                                                            <div className="truncate text-xs text-slate-500">
+                                                              {hop.detail ||
+                                                                "Dial attempt"}
+                                                            </div>
+                                                          </div>
+                                                          <div className="text-right">
+                                                            <div className="text-xs font-semibold text-slate-200">
+                                                              {hop.status}
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-500">
+                                                              {formatDateTime(
+                                                                hop.at,
+                                                              )}
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                      ),
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              ) : null}
+                                            </div>
+
+                                            <div className="space-y-4">
+                                              {data.viewer.isAdmin ? (
+                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    Reassign
+                                                  </div>
+                                                  <div className="mt-2 text-sm text-slate-300">
+                                                    Move this call to another
+                                                    agent for ownership and
+                                                    follow-up.
+                                                  </div>
+                                                  {(() => {
+                                                    const draftValue =
+                                                      callAssignmentDrafts[
+                                                        call.id
+                                                      ] ??
+                                                      call.assignedToId ??
+                                                      "";
+                                                    const isDirty =
+                                                      draftValue !==
+                                                      (call.assignedToId ?? "");
+                                                    const pendingKey = `call:${call.id}`;
+                                                    return (
+                                                      <>
+                                                        <select
+                                                          value={draftValue}
+                                                          onChange={(event) => {
+                                                            const assignedToId =
+                                                              event.target
+                                                                .value;
+                                                            setCallAssignmentDrafts(
+                                                              (current) => ({
+                                                                ...current,
+                                                                [call.id]:
+                                                                  assignedToId,
+                                                              }),
+                                                            );
+                                                          }}
+                                                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
+                                                        >
+                                                          <option value="">
+                                                            Select agent
+                                                          </option>
+                                                          {visibleAgents.map(
+                                                            (agent) => (
+                                                              <option
+                                                                key={agent.id}
+                                                                value={agent.id}
+                                                              >
+                                                                {(agent as any)
+                                                                  .displayName ||
+                                                                  agent.name}
+                                                              </option>
+                                                            ),
+                                                          )}
+                                                        </select>
+                                                        <div className="mt-3 flex items-center justify-between gap-3">
+                                                          <div className="text-xs text-slate-500">
+                                                            {isDirty
+                                                              ? "Assignment changed. Save to persist future routing."
+                                                              : "Current owner is already saved."}
+                                                          </div>
+                                                          <button
+                                                            type="button"
+                                                            disabled={
+                                                              !draftValue ||
+                                                              !isDirty ||
+                                                              assignmentPendingKey ===
+                                                                pendingKey
+                                                            }
+                                                            onClick={() =>
+                                                              void handleReassign(
+                                                                {
+                                                                  callId:
+                                                                    call.id,
+                                                                  assignedToId:
+                                                                    draftValue,
+                                                                },
+                                                              )
+                                                            }
+                                                            className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                          >
+                                                            {assignmentPendingKey ===
+                                                            pendingKey
+                                                              ? "Saving..."
+                                                              : "Save Assignment"}
+                                                          </button>
+                                                        </div>
+                                                      </>
+                                                    );
+                                                  })()}
+                                                </div>
+                                              ) : null}
+
+                                              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                  Customer Workspace
+                                                </div>
+                                                <div className="mt-2 text-sm text-slate-300">
+                                                  Keep the full customer history
+                                                  workflow here. Save a quick
+                                                  note or create a follow-up
+                                                  with one note and submit.
+                                                </div>
+                                                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                                      Customer details
+                                                    </div>
+                                                    <div className="mt-2 space-y-2 text-sm text-slate-300">
+                                                      <div>
+                                                        Location:{" "}
+                                                        {call.customer
+                                                          .location ||
+                                                          "Not captured"}
+                                                      </div>
+                                                      <div>
+                                                        Total spent:{" "}
+                                                        {formatMoney(
+                                                          call.customer
+                                                            .totalPurchasesValue,
+                                                          "KES",
+                                                        )}
+                                                      </div>
+                                                      <div>
+                                                        Receipts:{" "}
+                                                        {call.customer
+                                                          .linkedRecords
+                                                          .receipts || 0}
+                                                      </div>
+                                                      <div>
+                                                        Quotes:{" "}
+                                                        {call.customer
+                                                          .linkedRecords
+                                                          .quotations || 0}
                                                       </div>
                                                     </div>
-                                                    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                                                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Quick note</div>
-                                                      <textarea
-                                                        value={historyNoteDrafts[call.id] ?? ""}
-                                                        onChange={(event) =>
-                                                          setHistoryNoteDrafts((current) => ({ ...current, [call.id]: event.target.value }))
-                                                        }
-                                                        rows={4}
-                                                        placeholder="Add an internal note about this customer or call"
-                                                        className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
-                                                      />
-                                                      <button
-                                                        type="button"
-                                                        disabled={!historyNoteDrafts[call.id]?.trim() || historyNotePendingKey === call.id}
-                                                        onClick={() => void handleSaveHistoryNote(call.id)}
-                                                        className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-                                                      >
-                                                        {historyNotePendingKey === call.id ? "Saving..." : "Save Note"}
-                                                      </button>
-                                                    </div>
                                                   </div>
-                                                  <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                                                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Simple follow-up</div>
-                                                    <div className="mt-1 text-xs text-slate-500">
-                                                      Enter follow-up notes only. The system will create the task under this customer automatically.
+                                                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                                      Quick note
                                                     </div>
                                                     <textarea
-                                                      value={historyFollowUpDrafts[call.id] ?? ""}
+                                                      value={
+                                                        historyNoteDrafts[
+                                                          call.id
+                                                        ] ?? ""
+                                                      }
                                                       onChange={(event) =>
-                                                        setHistoryFollowUpDrafts((current) => ({ ...current, [call.id]: event.target.value }))
+                                                        setHistoryNoteDrafts(
+                                                          (current) => ({
+                                                            ...current,
+                                                            [call.id]:
+                                                              event.target
+                                                                .value,
+                                                          }),
+                                                        )
                                                       }
                                                       rows={4}
-                                                      placeholder="Enter follow-up notes or callback instruction"
+                                                      placeholder="Add an internal note about this customer or call"
                                                       className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
                                                     />
                                                     <button
                                                       type="button"
-                                                      disabled={!historyFollowUpDrafts[call.id]?.trim() || historyFollowUpPendingKey === call.id}
-                                                      onClick={() => void handleCreateHistoryFollowUp(call)}
-                                                      className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                      disabled={
+                                                        !historyNoteDrafts[
+                                                          call.id
+                                                        ]?.trim() ||
+                                                        historyNotePendingKey ===
+                                                          call.id
+                                                      }
+                                                      onClick={() =>
+                                                        void handleSaveHistoryNote(
+                                                          call.id,
+                                                        )
+                                                      }
+                                                      className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                                                     >
-                                                      {historyFollowUpPendingKey === call.id ? "Submitting..." : "Submit Follow-up"}
+                                                      {historyNotePendingKey ===
+                                                      call.id
+                                                        ? "Saving..."
+                                                        : "Save Note"}
                                                     </button>
                                                   </div>
                                                 </div>
-
-                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Follow-up Actions</div>
-                                                  <div className="mt-2 text-sm text-slate-300">
-                                                    Manage callback work linked to this call without leaving call history.
+                                                <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                                    Simple follow-up
                                                   </div>
-                                                  <div className="mt-3 space-y-3">
-                                                    {(expandedDetail as any)?.followUps?.length ? (
-                                                      (expandedDetail as any).followUps.map((task: any) => {
-                                                        const normalizedStatus = String(task.status || "").trim().toLowerCase();
-                                                        const isResolved = ["resolved", "closed"].includes(normalizedStatus);
-                                                        const isContacted = normalizedStatus === "contacted";
+                                                  <div className="mt-1 text-xs text-slate-500">
+                                                    Enter follow-up notes only.
+                                                    The system will create the
+                                                    task under this customer
+                                                    automatically.
+                                                  </div>
+                                                  <textarea
+                                                    value={
+                                                      historyFollowUpDrafts[
+                                                        call.id
+                                                      ] ?? ""
+                                                    }
+                                                    onChange={(event) =>
+                                                      setHistoryFollowUpDrafts(
+                                                        (current) => ({
+                                                          ...current,
+                                                          [call.id]:
+                                                            event.target.value,
+                                                        }),
+                                                      )
+                                                    }
+                                                    rows={4}
+                                                    placeholder="Enter follow-up notes or callback instruction"
+                                                    className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                                                  />
+                                                  <button
+                                                    type="button"
+                                                    disabled={
+                                                      !historyFollowUpDrafts[
+                                                        call.id
+                                                      ]?.trim() ||
+                                                      historyFollowUpPendingKey ===
+                                                        call.id
+                                                    }
+                                                    onClick={() =>
+                                                      void handleCreateHistoryFollowUp(
+                                                        call,
+                                                      )
+                                                    }
+                                                    className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                  >
+                                                    {historyFollowUpPendingKey ===
+                                                    call.id
+                                                      ? "Submitting..."
+                                                      : "Submit Follow-up"}
+                                                  </button>
+                                                </div>
+                                              </div>
+
+                                              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                  Follow-up Actions
+                                                </div>
+                                                <div className="mt-2 text-sm text-slate-300">
+                                                  Manage callback work linked to
+                                                  this call without leaving call
+                                                  history.
+                                                </div>
+                                                <div className="mt-3 space-y-3">
+                                                  {(expandedDetail as any)
+                                                    ?.followUps?.length ? (
+                                                    (
+                                                      expandedDetail as any
+                                                    ).followUps.map(
+                                                      (task: any) => {
+                                                        const normalizedStatus =
+                                                          String(
+                                                            task.status || "",
+                                                          )
+                                                            .trim()
+                                                            .toLowerCase();
+                                                        const isResolved = [
+                                                          "resolved",
+                                                          "closed",
+                                                        ].includes(
+                                                          normalizedStatus,
+                                                        );
+                                                        const isContacted =
+                                                          normalizedStatus ===
+                                                          "contacted";
                                                         return (
-                                                          <div key={task.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                                          <div
+                                                            key={task.id}
+                                                            className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3"
+                                                          >
                                                             <div className="flex flex-col gap-3">
                                                               <div className="flex items-start justify-between gap-3">
                                                                 <div className="min-w-0">
-                                                                  <div className="truncate text-sm font-semibold text-white">{task.title || "Follow-up task"}</div>
+                                                                  <div className="truncate text-sm font-semibold text-white">
+                                                                    {task.title ||
+                                                                      "Follow-up task"}
+                                                                  </div>
                                                                   <div className="mt-1 text-xs text-slate-400">
-                                                                    {(task.assignedToName || task.assignedToEmail || "Unassigned") +
+                                                                    {(task.assignedToName ||
+                                                                      task.assignedToEmail ||
+                                                                      "Unassigned") +
                                                                       " · " +
-                                                                      (task.dueAt ? formatDateTime(task.dueAt) : "No due date")}
+                                                                      (task.dueAt
+                                                                        ? formatDateTime(
+                                                                            task.dueAt,
+                                                                          )
+                                                                        : "No due date")}
                                                                   </div>
                                                                   {task.notes ? (
-                                                                    <div className="mt-2 text-xs text-slate-500">{task.notes}</div>
+                                                                    <div className="mt-2 text-xs text-slate-500">
+                                                                      {
+                                                                        task.notes
+                                                                      }
+                                                                    </div>
                                                                   ) : null}
                                                                 </div>
-                                                                <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(task.status)}`}>
-                                                                  {String(task.status || "pending").replace(/_/g, " ")}
+                                                                <span
+                                                                  className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(task.status)}`}
+                                                                >
+                                                                  {String(
+                                                                    task.status ||
+                                                                      "pending",
+                                                                  ).replace(
+                                                                    /_/g,
+                                                                    " ",
+                                                                  )}
                                                                 </span>
                                                               </div>
                                                               <div className="flex flex-wrap gap-2">
                                                                 <button
                                                                   type="button"
-                                                                  onClick={() => handleCallback(call.callerNumber)}
+                                                                  onClick={() =>
+                                                                    handleCallback(
+                                                                      call.callerNumber,
+                                                                    )
+                                                                  }
                                                                   className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
                                                                 >
                                                                   Callback
                                                                 </button>
                                                                 <button
                                                                   type="button"
-                                                                  disabled={isResolved || isContacted}
+                                                                  disabled={
+                                                                    isResolved ||
+                                                                    isContacted
+                                                                  }
                                                                   onClick={() =>
-                                                                    handleMarkContacted({
-                                                                      id: task.id,
-                                                                      queueType: "task",
-                                                                    })
+                                                                    handleMarkContacted(
+                                                                      {
+                                                                        id: task.id,
+                                                                        queueType:
+                                                                          "task",
+                                                                      },
+                                                                    )
                                                                   }
                                                                   className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                                                                 >
-                                                                  {isContacted ? "Contacted" : "Mark Contacted"}
+                                                                  {isContacted
+                                                                    ? "Contacted"
+                                                                    : "Mark Contacted"}
                                                                 </button>
                                                                 <button
                                                                   type="button"
-                                                                  disabled={isResolved}
-                                                                  onClick={() => handleResolveTask(task.id)}
+                                                                  disabled={
+                                                                    isResolved
+                                                                  }
+                                                                  onClick={() =>
+                                                                    handleResolveTask(
+                                                                      task.id,
+                                                                    )
+                                                                  }
                                                                   className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                                                                 >
-                                                                  {isResolved ? "Resolved" : "Resolve"}
+                                                                  {isResolved
+                                                                    ? "Resolved"
+                                                                    : "Resolve"}
                                                                 </button>
                                                               </div>
                                                             </div>
                                                           </div>
                                                         );
-                                                      })
-                                                    ) : (
-                                                      <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
-                                                        No linked follow-up task for this call yet.
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                </div>
-
-                                                <ChatraceActivityCard data={call.customer.chatrace} compact />
-
-                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Recording</div>
-                                                  {call.recordingUrl ? (
-                                                    <div className="mt-3 space-y-3">
-                                                      <audio controls preload="none" className="w-full" src={call.recordingUrl} />
-                                                      <a
-                                                        href={call.recordingUrl}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
-                                                      >
-                                                        Play / download
-                                                      </a>
-                                                    </div>
+                                                      },
+                                                    )
                                                   ) : (
-                                                    <div className="mt-3 rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                                                      No recording attached to this call.
+                                                    <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
+                                                      No linked follow-up task
+                                                      for this call yet.
                                                     </div>
                                                   )}
                                                 </div>
                                               </div>
+
+                                              <ChatraceActivityCard
+                                                data={call.customer.chatrace}
+                                                compact
+                                              />
+
+                                              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                  Recording
+                                                </div>
+                                                {call.recordingUrl ? (
+                                                  <div className="mt-3 space-y-3">
+                                                    <audio
+                                                      controls
+                                                      preload="none"
+                                                      className="w-full"
+                                                      src={call.recordingUrl}
+                                                    />
+                                                    <a
+                                                      href={call.recordingUrl}
+                                                      target="_blank"
+                                                      rel="noreferrer"
+                                                      className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                                                    >
+                                                      Play / download
+                                                    </a>
+                                                  </div>
+                                                ) : (
+                                                  <div className="mt-3 rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                                                    No recording attached to
+                                                    this call.
+                                                  </div>
+                                                )}
+                                              </div>
                                             </div>
                                           </div>
-                                        ) : null}
-                                      </div>
-                                    );
-                                  })}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           ))
@@ -2721,11 +3849,19 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "recordings" ? (
-                  <section className={cardShell("flex h-full min-h-0 flex-col overflow-hidden p-5")}>
+                  <section
+                    className={cardShell(
+                      "flex h-full min-h-0 flex-col overflow-hidden p-5",
+                    )}
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Recordings</div>
-                        <h2 className="mt-1 text-2xl font-semibold text-white">Saved call recordings</h2>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Recordings
+                        </div>
+                        <h2 className="mt-1 text-2xl font-semibold text-white">
+                          Saved call recordings
+                        </h2>
                       </div>
                       <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
                         {filteredRecordings.length}
@@ -2734,28 +3870,52 @@ export default function VoiceConsoleClient({
                     <div className="mt-4 grid min-h-0 flex-1 gap-4 overflow-y-auto overflow-x-hidden pr-1 xl:grid-cols-2">
                       {filteredRecordings.length ? (
                         filteredRecordings.map((call) => (
-                          <div key={call.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                          <div
+                            key={call.id}
+                            className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
+                          >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 {mode === "admin" ? (
                                   <Link
                                     href={buildVoiceCustomerProfileHref({
-                                      customerUserId: call.customer?.matchedCustomerId || null,
+                                      customerUserId:
+                                        call.customer?.matchedCustomerId ||
+                                        null,
                                       phone: call.callerNumber,
-                                      displayName: call.customer?.customerName || null,
+                                      displayName:
+                                        call.customer?.customerName || null,
                                     })}
                                     className="block truncate font-semibold text-white transition hover:text-cyan-200"
                                   >
-                                    {call.customer.customerName || call.callerNumber}
+                                    {call.customer.customerName ||
+                                      call.callerNumber}
                                   </Link>
                                 ) : (
-                                  <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                  <div className="truncate font-semibold text-white">
+                                    {call.customer.customerName ||
+                                      call.callerNumber}
+                                  </div>
                                 )}
-                                <div className="mt-1 text-sm text-slate-400">{call.callerNumber}</div>
+                                <div className="mt-1 text-sm text-slate-400">
+                                  {call.callerNumber}
+                                </div>
                                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400">
-                                  <span>{call.assignedToName || call.assignedToEmail || call.routedToDisplay || "Unassigned"}</span>
-                                  <span>{formatDuration(call.durationInSeconds)}</span>
-                                  <span>{formatMoney(call.amount, call.currencyCode)}</span>
+                                  <span>
+                                    {call.assignedToName ||
+                                      call.assignedToEmail ||
+                                      call.routedToDisplay ||
+                                      "Unassigned"}
+                                  </span>
+                                  <span>
+                                    {formatDuration(call.durationInSeconds)}
+                                  </span>
+                                  <span>
+                                    {formatMoney(
+                                      call.amount,
+                                      call.currencyCode,
+                                    )}
+                                  </span>
                                 </div>
                               </div>
                               {call.recordingUrl ? (
@@ -2770,7 +3930,12 @@ export default function VoiceConsoleClient({
                               ) : null}
                             </div>
                             {call.recordingUrl ? (
-                              <audio controls preload="none" className="mt-4 w-full" src={call.recordingUrl} />
+                              <audio
+                                controls
+                                preload="none"
+                                className="mt-4 w-full"
+                                src={call.recordingUrl}
+                              />
                             ) : (
                               <div className="mt-4 rounded-2xl border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500">
                                 Recording URL unavailable.
@@ -2788,11 +3953,19 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "followups" ? (
-                  <section className={cardShell("flex h-full min-h-0 flex-col overflow-hidden p-5")}>
+                  <section
+                    className={cardShell(
+                      "flex h-full min-h-0 flex-col overflow-hidden p-5",
+                    )}
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Follow-ups</div>
-                        <h2 className="mt-1 text-2xl font-semibold text-white">Callback and reassignment queue</h2>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Follow-ups
+                        </div>
+                        <h2 className="mt-1 text-2xl font-semibold text-white">
+                          Callback and reassignment queue
+                        </h2>
                       </div>
                       <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
                         {filteredFollowUpsByView.length}
@@ -2800,13 +3973,21 @@ export default function VoiceConsoleClient({
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {[
-                        { key: "all", label: `All (${filteredFollowUps.length})` },
-                        { key: "missed", label: `Missed (${missedFollowUpsCount})` },
+                        {
+                          key: "all",
+                          label: `All (${filteredFollowUps.length})`,
+                        },
+                        {
+                          key: "missed",
+                          label: `Missed (${missedFollowUpsCount})`,
+                        },
                       ].map((item) => (
                         <button
                           key={item.key}
                           type="button"
-                          onClick={() => setQueueViewWithUrl(item.key as VoiceQueueView)}
+                          onClick={() =>
+                            setQueueViewWithUrl(item.key as VoiceQueueView)
+                          }
                           className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
                             queueView === item.key
                               ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
@@ -2820,26 +4001,38 @@ export default function VoiceConsoleClient({
                     <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1">
                       {filteredFollowUpsByView.length ? (
                         filteredFollowUpsByView.map((item) => (
-                          <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                          <div
+                            key={item.id}
+                            className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
+                          >
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                   {mode === "admin" ? (
                                     <Link
                                       href={buildVoiceCustomerProfileHref({
-                                        customerUserId: item.customer?.matchedCustomerId || null,
+                                        customerUserId:
+                                          item.customer?.matchedCustomerId ||
+                                          null,
                                         phone: item.phone,
-                                        displayName: item.customer?.customerName || null,
+                                        displayName:
+                                          item.customer?.customerName || null,
                                       })}
                                       className="truncate font-semibold text-white transition hover:text-cyan-200"
                                     >
                                       {item.customer.customerName || item.phone}
                                     </Link>
                                   ) : (
-                                    <div className="truncate font-semibold text-white">{item.customer.customerName || item.phone}</div>
+                                    <div className="truncate font-semibold text-white">
+                                      {item.customer.customerName || item.phone}
+                                    </div>
                                   )}
-                                  <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${followUpReasonTone((item as any).queueReasonKind)}`}>
-                                    {(item as any).queueReasonDisplayLabel || (item as any).queueReasonLabel || "Follow-up"}
+                                  <span
+                                    className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${followUpReasonTone((item as any).queueReasonKind)}`}
+                                  >
+                                    {(item as any).queueReasonDisplayLabel ||
+                                      (item as any).queueReasonLabel ||
+                                      "Follow-up"}
                                   </span>
                                   {(item as any).callbackRequestedAt ? (
                                     <span className="rounded-full border border-lime-500/30 bg-lime-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-lime-100">
@@ -2847,21 +4040,39 @@ export default function VoiceConsoleClient({
                                     </span>
                                   ) : null}
                                 </div>
-                                <div className="mt-1 text-sm text-slate-400">{item.phone} · {item.title}</div>
+                                <div className="mt-1 text-sm text-slate-400">
+                                  {item.phone} · {item.title}
+                                </div>
                                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
                                   <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
                                     Assigned to {item.assignedAgentLabel}
                                   </span>
-                                  <span>Opened {formatDateTime(item.createdAt)}</span>
-                                  <span>{item.dueAt ? `Due ${formatDateTime(item.dueAt)}` : `Updated ${formatDateTime(item.updatedAt)}`}</span>
+                                  <span>
+                                    Opened {formatDateTime(item.createdAt)}
+                                  </span>
+                                  <span>
+                                    {item.dueAt
+                                      ? `Due ${formatDateTime(item.dueAt)}`
+                                      : `Updated ${formatDateTime(item.updatedAt)}`}
+                                  </span>
                                   {(item as any).callbackRequestedAt ? (
-                                    <span>Requested {formatDateTime((item as any).callbackRequestedAt)}</span>
+                                    <span>
+                                      Requested{" "}
+                                      {formatDateTime(
+                                        (item as any).callbackRequestedAt,
+                                      )}
+                                    </span>
                                   ) : null}
-                                  <span>{(item as any).queueReasonLabel || "Follow-up queue"}</span>
+                                  <span>
+                                    {(item as any).queueReasonLabel ||
+                                      "Follow-up queue"}
+                                  </span>
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(item.status)}`}>
+                                <span
+                                  className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(item.status)}`}
+                                >
                                   {item.statusLabel}
                                 </span>
                                 <button
@@ -2876,7 +4087,10 @@ export default function VoiceConsoleClient({
                                   onClick={() =>
                                     handleMarkContacted({
                                       id: item.type === "task" ? item.id : null,
-                                      voiceLeadId: item.type === "lead" ? item.voiceLeadId : null,
+                                      voiceLeadId:
+                                        item.type === "lead"
+                                          ? item.voiceLeadId
+                                          : null,
                                       queueType: item.type,
                                     })
                                   }
@@ -2884,46 +4098,67 @@ export default function VoiceConsoleClient({
                                 >
                                   Mark Contacted
                                 </button>
-                                {data.viewer.isAdmin ? (
-                                  (() => {
-                                    const queueKey = `${item.type}:${item.id}`;
-                                    const draftValue = queueAssignmentDrafts[queueKey] ?? item.assignedToId ?? "";
-                                    const isDirty = draftValue !== (item.assignedToId ?? "");
-                                    return (
-                                      <div className="flex items-center gap-2">
-                                        <select
-                                          value={draftValue}
-                                          onChange={(event) => {
-                                            const assignedToId = event.target.value;
-                                            setQueueAssignmentDrafts((current) => ({ ...current, [queueKey]: assignedToId }));
-                                          }}
-                                          className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
-                                        >
-                                          <option value="">Reassign</option>
-                                          {visibleAgents.map((agent) => (
-                                            <option key={agent.id} value={agent.id}>
-                                              {(agent as any).displayName || agent.name}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <button
-                                          type="button"
-                                          disabled={!draftValue || !isDirty || assignmentPendingKey === queueKey}
-                                          onClick={() =>
-                                            void handleReassign({
-                                              queueId: item.id,
-                                              queueType: item.type,
-                                              assignedToId: draftValue,
-                                            })
-                                          }
-                                          className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                          {assignmentPendingKey === queueKey ? "Saving..." : "Save"}
-                                        </button>
-                                      </div>
-                                    );
-                                  })()
-                                ) : null}
+                                {data.viewer.isAdmin
+                                  ? (() => {
+                                      const queueKey = `${item.type}:${item.id}`;
+                                      const draftValue =
+                                        queueAssignmentDrafts[queueKey] ??
+                                        item.assignedToId ??
+                                        "";
+                                      const isDirty =
+                                        draftValue !==
+                                        (item.assignedToId ?? "");
+                                      return (
+                                        <div className="flex items-center gap-2">
+                                          <select
+                                            value={draftValue}
+                                            onChange={(event) => {
+                                              const assignedToId =
+                                                event.target.value;
+                                              setQueueAssignmentDrafts(
+                                                (current) => ({
+                                                  ...current,
+                                                  [queueKey]: assignedToId,
+                                                }),
+                                              );
+                                            }}
+                                            className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
+                                          >
+                                            <option value="">Reassign</option>
+                                            {visibleAgents.map((agent) => (
+                                              <option
+                                                key={agent.id}
+                                                value={agent.id}
+                                              >
+                                                {(agent as any).displayName ||
+                                                  agent.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <button
+                                            type="button"
+                                            disabled={
+                                              !draftValue ||
+                                              !isDirty ||
+                                              assignmentPendingKey === queueKey
+                                            }
+                                            onClick={() =>
+                                              void handleReassign({
+                                                queueId: item.id,
+                                                queueType: item.type,
+                                                assignedToId: draftValue,
+                                              })
+                                            }
+                                            className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                          >
+                                            {assignmentPendingKey === queueKey
+                                              ? "Saving..."
+                                              : "Save"}
+                                          </button>
+                                        </div>
+                                      );
+                                    })()
+                                  : null}
                                 {item.type === "task" ? (
                                   <button
                                     type="button"
@@ -2935,7 +4170,11 @@ export default function VoiceConsoleClient({
                                 ) : null}
                               </div>
                             </div>
-                            <ChatraceActivityCard data={(item as any).customer?.chatrace} compact className="mt-4" />
+                            <ChatraceActivityCard
+                              data={(item as any).customer?.chatrace}
+                              compact
+                              className="mt-4"
+                            />
                           </div>
                         ))
                       ) : (
@@ -2948,11 +4187,19 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "agents" && mode === "admin" ? (
-                  <section className={cardShell("flex h-full min-h-0 flex-col overflow-hidden p-5")}>
+                  <section
+                    className={cardShell(
+                      "flex h-full min-h-0 flex-col overflow-hidden p-5",
+                    )}
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Agents</div>
-                        <h2 className="mt-1 text-2xl font-semibold text-white">Routing status for active voice operators</h2>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Agents
+                        </div>
+                        <h2 className="mt-1 text-2xl font-semibold text-white">
+                          Routing status for active voice operators
+                        </h2>
                       </div>
                       <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
                         {visibleAgents.length}
@@ -2961,20 +4208,29 @@ export default function VoiceConsoleClient({
                     <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Overflow Routing</div>
-                          <div className="mt-1 text-base font-semibold text-white">Backup destination when main routing is unavailable</div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Overflow Routing
+                          </div>
+                          <div className="mt-1 text-base font-semibold text-white">
+                            Backup destination when main routing is unavailable
+                          </div>
                           <div className="mt-1 text-sm text-slate-400">
-                            Use this when admin is off, agents are out of office, or you need a manual after-hours receiver.
+                            Use this when admin is off, agents are out of
+                            office, or you need a manual after-hours receiver.
                           </div>
                         </div>
                         <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
-                          {data.routingConfig?.overflowUserLabel || data.routingConfig?.overflowPhone || "Not configured"}
+                          {data.routingConfig?.overflowUserLabel ||
+                            data.routingConfig?.overflowPhone ||
+                            "Not configured"}
                         </span>
                       </div>
                       <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                         <select
                           value={overflowUserIdDraft}
-                          onChange={(event) => setOverflowUserIdDraft(event.target.value)}
+                          onChange={(event) =>
+                            setOverflowUserIdDraft(event.target.value)
+                          }
                           className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
                         >
                           <option value="">No fallback user selected</option>
@@ -2988,7 +4244,9 @@ export default function VoiceConsoleClient({
                         </select>
                         <input
                           value={overflowPhoneDraft}
-                          onChange={(event) => setOverflowPhoneDraft(event.target.value)}
+                          onChange={(event) =>
+                            setOverflowPhoneDraft(event.target.value)
+                          }
                           placeholder="Optional direct fallback number"
                           className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
                         />
@@ -3006,28 +4264,45 @@ export default function VoiceConsoleClient({
                       {visibleAgents.length ? (
                         visibleAgents.map((agent) => {
                           const row = agent as any;
-                          const routingPending = routingPreferencePendingKey === row.id;
+                          const routingPending =
+                            routingPreferencePendingKey === row.id;
                           return (
-                            <div key={row.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                            <div
+                              key={row.id}
+                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
+                            >
                               <div className="flex items-center gap-3">
                                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
                                   {getInitials(row.displayName || row.name)}
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="truncate text-lg font-semibold text-white">{row.displayName || row.name}</div>
-                                  <div className="truncate text-sm text-slate-400">{row.displayRoleLabel}</div>
+                                  <div className="truncate text-lg font-semibold text-white">
+                                    {row.displayName || row.name}
+                                  </div>
+                                  <div className="truncate text-sm text-slate-400">
+                                    {row.displayRoleLabel}
+                                  </div>
                                 </div>
                               </div>
                               <div className="mt-4 space-y-3 text-sm text-slate-300">
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Status</span>
-                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(row.isAvailableForRouting ? "available" : "offline")}`}>
-                                    {row.isAvailableForRouting ? "Available" : "Offline"}
+                                  <span
+                                    className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(row.isAvailableForRouting ? "available" : "offline")}`}
+                                  >
+                                    {row.isAvailableForRouting
+                                      ? "Available"
+                                      : "Offline"}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Browser</span>
-                                  <span className="text-right text-slate-400">{row.isWebrtcRegistered || row.webRtcState === "ready" ? "Ready" : "Offline"}</span>
+                                  <span className="text-right text-slate-400">
+                                    {row.isWebrtcRegistered ||
+                                    row.webRtcState === "ready"
+                                      ? "Ready"
+                                      : "Offline"}
+                                  </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Active calls</span>
@@ -3039,15 +4314,21 @@ export default function VoiceConsoleClient({
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Fallback line</span>
-                                  <span className="whitespace-nowrap text-slate-400">{row.phone || "—"}</span>
+                                  <span className="whitespace-nowrap text-slate-400">
+                                    {row.phone || "—"}
+                                  </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Last seen</span>
-                                  <span className="text-right text-slate-400">{formatDateTime(row.lastSeenAt)}</span>
+                                  <span className="text-right text-slate-400">
+                                    {formatDateTime(row.lastSeenAt)}
+                                  </span>
                                 </div>
                               </div>
                               <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Today</div>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                  Today
+                                </div>
                                 <div className="mt-3 grid grid-cols-2 gap-3">
                                   {[
                                     ["Received", row.receivedCallsToday],
@@ -3055,9 +4336,16 @@ export default function VoiceConsoleClient({
                                     ["Missed", row.missedCallsToday],
                                     ["Attempted", row.attemptedCallsToday],
                                   ].map(([label, value]) => (
-                                    <div key={String(label)} className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
-                                      <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</div>
-                                      <div className="mt-1 text-base font-semibold text-white">{value}</div>
+                                    <div
+                                      key={String(label)}
+                                      className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5"
+                                    >
+                                      <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                                        {label}
+                                      </div>
+                                      <div className="mt-1 text-base font-semibold text-white">
+                                        {value}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -3065,8 +4353,12 @@ export default function VoiceConsoleClient({
                               <div className="mt-4 space-y-3 border-t border-slate-800 pt-4">
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
-                                    <div className="text-sm font-semibold text-white">Receive calls</div>
-                                    <div className="text-xs text-slate-500">Switch routing on or off for this agent.</div>
+                                    <div className="text-sm font-semibold text-white">
+                                      Receive calls
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                      Switch routing on or off for this agent.
+                                    </div>
                                   </div>
                                   <button
                                     type="button"
@@ -3082,20 +4374,30 @@ export default function VoiceConsoleClient({
                                         : "border-rose-500/30 bg-rose-500/10 text-rose-100 hover:border-rose-400"
                                     } disabled:cursor-not-allowed disabled:opacity-50`}
                                   >
-                                    {routingPending ? "Saving..." : row.routingEnabled ? "On" : "Off"}
+                                    {routingPending
+                                      ? "Saving..."
+                                      : row.routingEnabled
+                                        ? "On"
+                                        : "Off"}
                                   </button>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
-                                    <div className="text-sm font-semibold text-white">After hours</div>
-                                    <div className="text-xs text-slate-500">Allow this fallback line to receive calls outside working hours.</div>
+                                    <div className="text-sm font-semibold text-white">
+                                      After hours
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                      Allow this fallback line to receive calls
+                                      outside working hours.
+                                    </div>
                                   </div>
                                   <button
                                     type="button"
                                     disabled={routingPending}
                                     onClick={() =>
                                       void handleUpdateAgentRouting(row.id, {
-                                        allowAfterHoursCalls: !row.allowAfterHoursCalls,
+                                        allowAfterHoursCalls:
+                                          !row.allowAfterHoursCalls,
                                       })
                                     }
                                     className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
@@ -3104,7 +4406,11 @@ export default function VoiceConsoleClient({
                                         : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
                                     } disabled:cursor-not-allowed disabled:opacity-50`}
                                   >
-                                    {routingPending ? "Saving..." : row.allowAfterHoursCalls ? "Allowed" : "Blocked"}
+                                    {routingPending
+                                      ? "Saving..."
+                                      : row.allowAfterHoursCalls
+                                        ? "Allowed"
+                                        : "Blocked"}
                                   </button>
                                 </div>
                               </div>
@@ -3121,13 +4427,21 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "feedback" ? (
-                  <section className={cardShell("h-full min-h-0 overflow-y-auto overflow-x-hidden p-5")}>
+                  <section
+                    className={cardShell(
+                      "h-full min-h-0 overflow-y-auto overflow-x-hidden p-5",
+                    )}
+                  >
                     <VoiceFeedbackPanel mode={mode} />
                   </section>
                 ) : null}
 
                 {activeTab === "settings" ? (
-                  <section className={cardShell("h-full min-h-0 overflow-y-auto overflow-x-hidden p-5")}>
+                  <section
+                    className={cardShell(
+                      "h-full min-h-0 overflow-y-auto overflow-x-hidden p-5",
+                    )}
+                  >
                     <VoiceSettingsClient />
                   </section>
                 ) : null}
@@ -3149,419 +4463,616 @@ export default function VoiceConsoleClient({
                 className="pointer-events-auto mt-4 flex max-h-full w-full flex-col overflow-hidden rounded-[28px] border border-slate-800 bg-slate-950 shadow-[0_32px_100px_rgba(0,0,0,0.55)]"
                 onClick={(event) => event.stopPropagation()}
               >
-              <div className="flex flex-col gap-4 border-b border-slate-800 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Customer Detail</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{selectedCallLabel}</div>
-                  <div className="mt-1 text-sm text-slate-400">
-                    {selectedCall?.callerNumber || selectedPhone || "No phone selected"} · {selectedCallSubLabel}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
-                    {formatRefreshStamp(lastRefreshAt)}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setDetailModalOpen(false)}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/80 text-slate-100 transition hover:border-slate-700"
-                    aria-label="Close customer detail"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="border-b border-slate-800 px-5 py-4">
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    ["customer", "Customer Information"],
-                    ["timeline", "Timeline"],
-                    ["agent", "Agent"],
-                    ["recording", "Recording"],
-                  ].map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setContextTab(key as typeof contextTab)}
-                      className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                        contextTab === key
-                          ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
-                          : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:text-slate-200"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-                {contextTab === "customer" ? (
-                  <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      {contextQuickCards.map((item) => (
-                        <div key={item.label} className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
-                          <div className="mt-2 text-sm font-semibold text-white">{item.value}</div>
-                        </div>
-                      ))}
+                <div className="flex flex-col gap-4 border-b border-slate-800 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      Customer Detail
                     </div>
+                    <div className="mt-2 text-2xl font-semibold text-white">
+                      {selectedCallLabel}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-400">
+                      {selectedCall?.callerNumber ||
+                        selectedPhone ||
+                        "No phone selected"}{" "}
+                      · {selectedCallSubLabel}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                      {formatRefreshStamp(lastRefreshAt)}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDetailModalOpen(false)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/80 text-slate-100 transition hover:border-slate-700"
+                      aria-label="Close customer detail"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
 
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="border-b border-slate-800 px-5 py-4">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      ["customer", "Customer Information"],
+                      ["timeline", "Timeline"],
+                      ["agent", "Agent"],
+                      ["recording", "Recording"],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setContextTab(key as typeof contextTab)}
+                        className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                          contextTab === key
+                            ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                            : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+                  {contextTab === "customer" ? (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {contextQuickCards.map((item) => (
+                          <div
+                            key={item.label}
+                            className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4"
+                          >
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              {item.label}
+                            </div>
+                            <div className="mt-2 text-sm font-semibold text-white">
+                              {item.value}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-lg font-semibold text-white">
+                            Recent Activity
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {timelineItems.slice(0, 4).length ? (
+                              timelineItems.slice(0, 4).map((item: any) => (
+                                <div
+                                  key={item.id}
+                                  className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3"
+                                >
+                                  <div className="text-sm font-semibold text-white">
+                                    {item.title}
+                                  </div>
+                                  <div className="mt-1 text-xs text-slate-400">
+                                    {item.detail || "No extra detail"} ·{" "}
+                                    {formatDateTime(item.at)}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                                No previous interactions. This may be a new
+                                customer.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <ChatraceActivityCard
+                            data={selectedChatraceActivity}
+                          />
+
+                          <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                            <div className="text-lg font-semibold text-white">
+                              Quick Actions
+                            </div>
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openWorkspaceHref(
+                                    selectedCustomerLinks.customer,
+                                  )
+                                }
+                                className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
+                              >
+                                Open CRM
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openWorkspaceHref(selectedCustomerLinks.quote)
+                                }
+                                className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400"
+                              >
+                                Create Quote
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openWorkspaceHref(
+                                    selectedCustomerLinks.receipt,
+                                  )
+                                }
+                                className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
+                              >
+                                Create Receipt
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDetailModalOpen(false);
+                                  switchTab("followups");
+                                }}
+                                className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
+                              >
+                                Open Follow-ups
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                        <div className="text-lg font-semibold text-white">Recent Activity</div>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-lg font-semibold text-white">
+                            Recent Quotations
+                          </div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                            {selectedRecentQuotations.length} linked
+                          </div>
+                        </div>
                         <div className="mt-4 space-y-3">
-                          {timelineItems.slice(0, 4).length ? (
-                            timelineItems.slice(0, 4).map((item: any) => (
-                              <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
-                                <div className="text-sm font-semibold text-white">{item.title}</div>
-                                <div className="mt-1 text-xs text-slate-400">
-                                  {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+                          {selectedRecentQuotations.length ? (
+                            selectedRecentQuotations.map((quotation) => (
+                              <div
+                                key={quotation.id}
+                                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                              >
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <div className="font-semibold text-white">
+                                        {quotation.quoteRef}
+                                      </div>
+                                      <span
+                                        className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(quotation.status)}`}
+                                      >
+                                        {formatDispositionLabel(
+                                          quotation.status,
+                                        )}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 text-sm text-slate-300">
+                                      {quotation.quoteTitle ||
+                                        "Quotation proposal"}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
+                                      <span>
+                                        {quotation.itemCount || 0} items
+                                      </span>
+                                      <span>
+                                        {formatMoney(quotation.totalAmount)}
+                                      </span>
+                                      <span>
+                                        Updated{" "}
+                                        {formatDateTime(quotation.updatedAt)}
+                                      </span>
+                                      {quotation.customerActionAt ? (
+                                        <span>
+                                          Viewed{" "}
+                                          {formatDateTime(
+                                            quotation.customerActionAt,
+                                          )}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openWorkspaceHref(quotation.href)
+                                      }
+                                      className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                    >
+                                      Open quotation
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openWorkspaceHref(quotation.pdfHref)
+                                      }
+                                      className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                    >
+                                      Download PDF
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ))
                           ) : (
                             <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                              No previous interactions. This may be a new customer.
+                              No quotation records linked to this customer yet.
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        <ChatraceActivityCard data={selectedChatraceActivity} />
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-sm font-semibold text-white">
+                            Disposition Codes
+                          </div>
+                          <div className="mt-2 text-sm text-slate-400">
+                            Save a final outcome after an answered call so
+                            supervisors can track service quality.
+                          </div>
+                          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                            {VOICE_DISPOSITIONS.map((disposition) => (
+                              <button
+                                key={disposition}
+                                type="button"
+                                disabled={
+                                  !selectedCall?.id || dispositionPending
+                                }
+                                onClick={() =>
+                                  handleSetDisposition(disposition)
+                                }
+                                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                                  (data.selectedCallDetail as any)
+                                    ?.disposition === disposition
+                                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                                    : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-white/20"
+                                } disabled:cursor-not-allowed disabled:opacity-50`}
+                              >
+                                {formatDispositionLabel(disposition)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
 
                         <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                          <div className="text-lg font-semibold text-white">Quick Actions</div>
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            <button
-                              type="button"
-                              onClick={() => openWorkspaceHref(selectedCustomerLinks.customer)}
-                              className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
-                            >
-                              Open CRM
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openWorkspaceHref(selectedCustomerLinks.quote)}
-                              className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400"
-                            >
-                              Create Quote
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openWorkspaceHref(selectedCustomerLinks.receipt)}
-                              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
-                            >
-                              Create Receipt
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDetailModalOpen(false);
-                                switchTab("followups");
-                              }}
-                              className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
-                            >
-                              Open Follow-ups
-                            </button>
+                          <div className="text-sm font-semibold text-white">
+                            SLA and Routing Audit
                           </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-lg font-semibold text-white">Recent Quotations</div>
-                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                          {selectedRecentQuotations.length} linked
-                        </div>
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {selectedRecentQuotations.length ? (
-                          selectedRecentQuotations.map((quotation) => (
-                            <div key={quotation.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="font-semibold text-white">{quotation.quoteRef}</div>
-                                    <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(quotation.status)}`}>
-                                      {formatDispositionLabel(quotation.status)}
-                                    </span>
-                                  </div>
-                                  <div className="mt-2 text-sm text-slate-300">
-                                    {quotation.quoteTitle || "Quotation proposal"}
-                                  </div>
-                                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
-                                    <span>{quotation.itemCount || 0} items</span>
-                                    <span>{formatMoney(quotation.totalAmount)}</span>
-                                    <span>Updated {formatDateTime(quotation.updatedAt)}</span>
-                                    {quotation.customerActionAt ? <span>Viewed {formatDateTime(quotation.customerActionAt)}</span> : null}
-                                  </div>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                            {[
+                              [
+                                "First response",
+                                formatDuration(
+                                  (data.selectedCallDetail as any)?.sla
+                                    ?.firstResponseSeconds,
+                                ),
+                              ],
+                              [
+                                "Ring time",
+                                formatDuration(
+                                  (data.selectedCallDetail as any)?.sla
+                                    ?.ringSeconds,
+                                ),
+                              ],
+                              [
+                                "Talk time",
+                                formatDuration(
+                                  (data.selectedCallDetail as any)?.sla
+                                    ?.talkSeconds,
+                                ),
+                              ],
+                            ].map(([label, value]) => (
+                              <div
+                                key={label}
+                                className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3"
+                              >
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                                  {label}
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => openWorkspaceHref(quotation.href)}
-                                    className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                                  >
-                                    Open quotation
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => openWorkspaceHref(quotation.pdfHref)}
-                                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                                  >
-                                    Download PDF
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                            No quotation records linked to this customer yet.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                        <div className="text-sm font-semibold text-white">Disposition Codes</div>
-                        <div className="mt-2 text-sm text-slate-400">
-                          Save a final outcome after an answered call so supervisors can track service quality.
-                        </div>
-                        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                          {VOICE_DISPOSITIONS.map((disposition) => (
-                            <button
-                              key={disposition}
-                              type="button"
-                              disabled={!selectedCall?.id || dispositionPending}
-                              onClick={() => handleSetDisposition(disposition)}
-                              className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                                (data.selectedCallDetail as any)?.disposition === disposition
-                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                                  : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-white/20"
-                              } disabled:cursor-not-allowed disabled:opacity-50`}
-                            >
-                              {formatDispositionLabel(disposition)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                        <div className="text-sm font-semibold text-white">SLA and Routing Audit</div>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                          {[
-                            ["First response", formatDuration((data.selectedCallDetail as any)?.sla?.firstResponseSeconds)],
-                            ["Ring time", formatDuration((data.selectedCallDetail as any)?.sla?.ringSeconds)],
-                            ["Talk time", formatDuration((data.selectedCallDetail as any)?.sla?.talkSeconds)],
-                          ].map(([label, value]) => (
-                            <div key={label} className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
-                              <div className="mt-1 text-sm font-semibold text-white">{value}</div>
-                            </div>
-                          ))}
-                        </div>
-                        {(data.selectedCallDetail as any)?.hopAudit?.length ? (
-                          <div className="mt-4 space-y-2">
-                            {(data.selectedCallDetail as any).hopAudit.map((hop: any) => (
-                              <div key={hop.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
-                                <div className="min-w-0">
-                                  <div className="truncate text-sm font-semibold text-white">{hop.title}</div>
-                                  <div className="truncate text-xs text-slate-500">{hop.detail || "Dial attempt"}</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-xs font-semibold text-slate-200">{hop.status}</div>
-                                  <div className="text-[11px] text-slate-500">{formatDateTime(hop.at)}</div>
+                                <div className="mt-1 text-sm font-semibold text-white">
+                                  {value}
                                 </div>
                               </div>
                             ))}
                           </div>
-                        ) : (
-                          <div className="mt-4 rounded-xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
-                            Per-hop audit will appear here for routed calls.
+                          {(data.selectedCallDetail as any)?.hopAudit
+                            ?.length ? (
+                            <div className="mt-4 space-y-2">
+                              {(data.selectedCallDetail as any).hopAudit.map(
+                                (hop: any) => (
+                                  <div
+                                    key={hop.id}
+                                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="truncate text-sm font-semibold text-white">
+                                        {hop.title}
+                                      </div>
+                                      <div className="truncate text-xs text-slate-500">
+                                        {hop.detail || "Dial attempt"}
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-xs font-semibold text-slate-200">
+                                        {hop.status}
+                                      </div>
+                                      <div className="text-[11px] text-slate-500">
+                                        {formatDateTime(hop.at)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          ) : (
+                            <div className="mt-4 rounded-xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
+                              Per-hop audit will appear here for routed calls.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-sm font-semibold text-white">
+                            Quick Note
                           </div>
-                        )}
+                          <textarea
+                            value={noteDraft}
+                            onChange={(event) =>
+                              setNoteDraft(event.target.value)
+                            }
+                            rows={4}
+                            placeholder="Add a note about this call..."
+                            className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                          />
+                          <button
+                            type="button"
+                            disabled={
+                              !selectedCall?.id ||
+                              submittingNote ||
+                              !noteDraft.trim()
+                            }
+                            onClick={handleAddNote}
+                            className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {submittingNote ? "Saving..." : "Save Note"}
+                          </button>
+                        </div>
+
+                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-sm font-semibold text-white">
+                            Follow-up
+                          </div>
+                          <input
+                            value={followUpTitle}
+                            onChange={(event) =>
+                              setFollowUpTitle(event.target.value)
+                            }
+                            placeholder="Callback customer about quotation"
+                            className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                          />
+                          <input
+                            value={followUpDueAt}
+                            onChange={(event) =>
+                              setFollowUpDueAt(event.target.value)
+                            }
+                            type="datetime-local"
+                            className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-500/40"
+                          />
+                          <textarea
+                            value={followUpNotes}
+                            onChange={(event) =>
+                              setFollowUpNotes(event.target.value)
+                            }
+                            rows={5}
+                            placeholder="Follow-up notes or supervisor instruction"
+                            className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                          />
+                          <button
+                            type="button"
+                            disabled={
+                              submittingFollowUp || !followUpTitle.trim()
+                            }
+                            onClick={handleCreateFollowUp}
+                            className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {submittingFollowUp
+                              ? "Saving..."
+                              : "Create Follow-up"}
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  ) : null}
 
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                        <div className="text-sm font-semibold text-white">Quick Note</div>
-                        <textarea
-                          value={noteDraft}
-                          onChange={(event) => setNoteDraft(event.target.value)}
-                          rows={4}
-                          placeholder="Add a note about this call..."
-                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
-                        />
-                        <button
-                          type="button"
-                          disabled={!selectedCall?.id || submittingNote || !noteDraft.trim()}
-                          onClick={handleAddNote}
-                          className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {submittingNote ? "Saving..." : "Save Note"}
-                        </button>
-                      </div>
-
-                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                        <div className="text-sm font-semibold text-white">Follow-up</div>
-                        <input
-                          value={followUpTitle}
-                          onChange={(event) => setFollowUpTitle(event.target.value)}
-                          placeholder="Callback customer about quotation"
-                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
-                        />
-                        <input
-                          value={followUpDueAt}
-                          onChange={(event) => setFollowUpDueAt(event.target.value)}
-                          type="datetime-local"
-                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-500/40"
-                        />
-                        <textarea
-                          value={followUpNotes}
-                          onChange={(event) => setFollowUpNotes(event.target.value)}
-                          rows={5}
-                          placeholder="Follow-up notes or supervisor instruction"
-                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
-                        />
-                        <button
-                          type="button"
-                          disabled={submittingFollowUp || !followUpTitle.trim()}
-                          onClick={handleCreateFollowUp}
-                          className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {submittingFollowUp ? "Saving..." : "Create Follow-up"}
-                        </button>
-                      </div>
+                  {contextTab === "timeline" ? (
+                    <div className="space-y-3">
+                      {timelineItems.length ? (
+                        timelineItems.map((item: any) => (
+                          <div
+                            key={item.id}
+                            className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4"
+                          >
+                            <div className="text-sm font-semibold text-white">
+                              {item.title}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-400">
+                              {item.detail || "No extra detail"} ·{" "}
+                              {formatDateTime(item.at)}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                          No timeline entries yet.
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
 
-                {contextTab === "timeline" ? (
-                  <div className="space-y-3">
-                    {timelineItems.length ? (
-                      timelineItems.map((item: any) => (
-                        <div key={item.id} className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                          <div className="text-sm font-semibold text-white">{item.title}</div>
-                          <div className="mt-1 text-xs text-slate-400">
-                            {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+                  {contextTab === "agent" ? (
+                    selectedAgent ? (
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                        <div className="space-y-4">
+                          <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                            <div className="text-lg font-semibold text-white">
+                              {(selectedAgent as any).displayName ||
+                                selectedAgent.name}
+                            </div>
+                            <div className="mt-1 text-sm text-slate-400">
+                              {(selectedAgent as any).displayRoleLabel}
+                            </div>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <span
+                                className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(selectedAgent.status)}`}
+                              >
+                                {selectedAgent.status}
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                                {(selectedAgent as any).isWebrtcRegistered
+                                  ? "Browser Ready"
+                                  : "Browser Offline"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+                            <div>
+                              Active Calls: {selectedAgent.activeCallCount}
+                            </div>
+                            <div className="mt-2">
+                              Waiting Calls: {selectedAgent.waitingCallCount}
+                            </div>
+                            <div className="mt-2">
+                              Fallback:{" "}
+                              {(selectedAgent as any).phone ||
+                                "No mobile fallback"}
+                            </div>
+                            <div className="mt-2">
+                              Last seen:{" "}
+                              {formatDateTime(selectedAgent.lastSeenAt)}
+                            </div>
                           </div>
                         </div>
-                      ))
+
+                        {data.viewer.isAdmin ? (
+                          <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                            <div className="text-sm font-semibold text-white">
+                              Reassign
+                            </div>
+                            <div className="mt-2 text-sm text-slate-300">
+                              Move this interaction to another agent for
+                              ownership and follow-up.
+                            </div>
+                            {(() => {
+                              const callId = selectedCall?.id ?? "";
+                              const draftValue = callId
+                                ? (callAssignmentDrafts[callId] ??
+                                  selectedCall?.assignedToId ??
+                                  "")
+                                : "";
+                              const isDirty =
+                                Boolean(callId) &&
+                                draftValue !==
+                                  (selectedCall?.assignedToId ?? "");
+                              const pendingKey = callId
+                                ? `call:${callId}`
+                                : "call";
+                              return (
+                                <>
+                                  <select
+                                    value={draftValue}
+                                    onChange={(event) => {
+                                      if (!callId) return;
+                                      const assignedToId = event.target.value;
+                                      setCallAssignmentDrafts((current) => ({
+                                        ...current,
+                                        [callId]: assignedToId,
+                                      }));
+                                    }}
+                                    className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
+                                  >
+                                    <option value="">Select agent</option>
+                                    {visibleAgents.map((agent) => (
+                                      <option key={agent.id} value={agent.id}>
+                                        {(agent as any).displayName ||
+                                          agent.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <div className="mt-3 flex items-center justify-between gap-3">
+                                    <div className="text-xs text-slate-500">
+                                      {isDirty
+                                        ? "Click save to persist this reassignment on the server."
+                                        : "Saved owner will be used for future routing."}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        !callId ||
+                                        !draftValue ||
+                                        !isDirty ||
+                                        assignmentPendingKey === pendingKey
+                                      }
+                                      onClick={() => {
+                                        if (!callId) return;
+                                        void handleReassign({
+                                          callId,
+                                          assignedToId: draftValue,
+                                        });
+                                      }}
+                                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {assignmentPendingKey === pendingKey
+                                        ? "Saving..."
+                                        : "Save Assignment"}
+                                    </button>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        ) : null}
+                      </div>
                     ) : (
                       <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                        No timeline entries yet.
+                        No agent context available.
                       </div>
-                    )}
-                  </div>
-                ) : null}
+                    )
+                  ) : null}
 
-                {contextTab === "agent" ? (
-                  selectedAgent ? (
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                      <div className="space-y-4">
-                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                          <div className="text-lg font-semibold text-white">{(selectedAgent as any).displayName || selectedAgent.name}</div>
-                          <div className="mt-1 text-sm text-slate-400">{(selectedAgent as any).displayRoleLabel}</div>
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(selectedAgent.status)}`}>
-                              {selectedAgent.status}
-                            </span>
-                            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                              {(selectedAgent as any).isWebrtcRegistered ? "Browser Ready" : "Browser Offline"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
-                          <div>Active Calls: {selectedAgent.activeCallCount}</div>
-                          <div className="mt-2">Waiting Calls: {selectedAgent.waitingCallCount}</div>
-                          <div className="mt-2">Fallback: {(selectedAgent as any).phone || "No mobile fallback"}</div>
-                          <div className="mt-2">Last seen: {formatDateTime(selectedAgent.lastSeenAt)}</div>
-                        </div>
+                  {contextTab === "recording" ? (
+                    selectedCall?.recordingUrl ? (
+                      <div className="space-y-3">
+                        <audio
+                          controls
+                          preload="none"
+                          className="w-full"
+                          src={selectedCall.recordingUrl}
+                        />
+                        <a
+                          href={selectedCall.recordingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
+                        >
+                          Download Recording
+                        </a>
                       </div>
-
-                      {data.viewer.isAdmin ? (
-                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                          <div className="text-sm font-semibold text-white">Reassign</div>
-                          <div className="mt-2 text-sm text-slate-300">Move this interaction to another agent for ownership and follow-up.</div>
-                          {(() => {
-                            const callId = selectedCall?.id ?? "";
-                            const draftValue = callId ? (callAssignmentDrafts[callId] ?? selectedCall?.assignedToId ?? "") : "";
-                            const isDirty = Boolean(callId) && draftValue !== (selectedCall?.assignedToId ?? "");
-                            const pendingKey = callId ? `call:${callId}` : "call";
-                            return (
-                              <>
-                          <select
-                            value={draftValue}
-                            onChange={(event) => {
-                              if (!callId) return;
-                              const assignedToId = event.target.value;
-                              setCallAssignmentDrafts((current) => ({ ...current, [callId]: assignedToId }));
-                            }}
-                            className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
-                          >
-                            <option value="">Select agent</option>
-                            {visibleAgents.map((agent) => (
-                              <option key={agent.id} value={agent.id}>
-                                {(agent as any).displayName || agent.name}
-                              </option>
-                            ))}
-                          </select>
-                          <div className="mt-3 flex items-center justify-between gap-3">
-                            <div className="text-xs text-slate-500">
-                              {isDirty ? "Click save to persist this reassignment on the server." : "Saved owner will be used for future routing."}
-                            </div>
-                            <button
-                              type="button"
-                              disabled={!callId || !draftValue || !isDirty || assignmentPendingKey === pendingKey}
-                              onClick={() => {
-                                if (!callId) return;
-                                void handleReassign({ callId, assignedToId: draftValue });
-                              }}
-                              className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {assignmentPendingKey === pendingKey ? "Saving..." : "Save Assignment"}
-                            </button>
-                          </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                      No agent context available.
-                    </div>
-                  )
-                ) : null}
-
-                {contextTab === "recording" ? (
-                  selectedCall?.recordingUrl ? (
-                    <div className="space-y-3">
-                      <audio controls preload="none" className="w-full" src={selectedCall.recordingUrl} />
-                      <a
-                        href={selectedCall.recordingUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
-                      >
-                        Download Recording
-                      </a>
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                      Recording not available for this interaction.
-                    </div>
-                  )
-                ) : null}
-              </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                        Recording not available for this interaction.
+                      </div>
+                    )
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>

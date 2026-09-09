@@ -23,6 +23,7 @@ export async function GET(request: Request) {
       viewer,
       selectedCallId: url.searchParams.get("selectedCallId"),
       selectedPhone: url.searchParams.get("selectedPhone"),
+      historyRange: url.searchParams.get("range"),
     });
 
     return NextResponse.json(snapshot, { status: 200 });
@@ -60,11 +61,17 @@ export async function POST(request: Request) {
     };
 
     if (!body.assignedToId) {
-      return NextResponse.json({ error: "assigned_to_id_required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "assigned_to_id_required" },
+        { status: 400 },
+      );
     }
 
     if (!viewer.isAdmin) {
-      return NextResponse.json({ error: "admin_reassign_required" }, { status: 403 });
+      return NextResponse.json(
+        { error: "admin_reassign_required" },
+        { status: 403 },
+      );
     }
 
     const result = await reassignVoiceWork({
@@ -87,7 +94,9 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "voice_reassign_failed" },
+      {
+        error: error instanceof Error ? error.message : "voice_reassign_failed",
+      },
       { status: 400 },
     );
   }
