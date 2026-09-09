@@ -1,7 +1,15 @@
 "use client";
 
 import React from "react";
-import { Edit3, Trash2, Download, Send, Printer, Check, DollarSign } from "lucide-react";
+import {
+  Edit3,
+  Trash2,
+  Download,
+  Send,
+  Printer,
+  Check,
+  DollarSign,
+} from "lucide-react";
 
 export default function RowActions({
   onEdit,
@@ -71,8 +79,8 @@ export default function RowActions({
       </button>
 
       <button
-        aria-label="Delete receipt"
-        title="Delete"
+        aria-label="Cancel receipt and reverse calculations"
+        title="Cancel receipt"
         onClick={(e) => {
           e.stopPropagation();
           onDelete();
@@ -81,7 +89,7 @@ export default function RowActions({
         className={`${btnBase} bg-rose-700 hover:bg-rose-600 text-white`}
       >
         <Trash2 size={16} />
-        <span className="hidden md:inline">Delete</span>
+        <span className="hidden md:inline">Cancel</span>
       </button>
 
       <button
@@ -124,7 +132,9 @@ export default function RowActions({
           className={`${btnBase} bg-yellow-500/60 hover:bg-yellow-500 text-black`}
         >
           <Check size={16} />
-          <span className="hidden md:inline">{podActionProcessing ? "Processing..." : podActionLabel}</span>
+          <span className="hidden md:inline">
+            {podActionProcessing ? "Processing..." : podActionLabel}
+          </span>
         </button>
       )}
 
@@ -172,7 +182,9 @@ export default function RowActions({
           className={`${btnBase} bg-cyan-500/70 hover:bg-cyan-500 text-black`}
         >
           <Check size={16} />
-          <span className="hidden md:inline">{projectActionProcessing ? "Processing..." : projectActionLabel}</span>
+          <span className="hidden md:inline">
+            {projectActionProcessing ? "Processing..." : projectActionLabel}
+          </span>
         </button>
       )}
 

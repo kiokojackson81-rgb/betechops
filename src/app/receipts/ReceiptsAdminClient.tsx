@@ -1,13 +1,21 @@
-
 "use client";
 
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import ReceiptsSummary from "./list/ReceiptsSummary";
 import RowActions from "./list/RowActions";
-import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
+import MarkdownRendererClient, {
+  RichFormattingToggle,
+} from "@/components/MarkdownRendererClient";
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
@@ -73,7 +81,8 @@ type PaymentTotals = {
 
 type StaffOption = { id: string; name: string };
 
-type AdminQuickRangeKey = "today" | "yesterday" | "this-week" | "custom" | "trading-period";
+type AdminQuickRangeKey =
+  "today" | "yesterday" | "this-week" | "custom" | "trading-period";
 type PodPanelStatus = "all" | "pending" | "delivered" | "delivery_failed";
 type SummaryViewMode = "all" | "profit";
 
@@ -117,6 +126,14 @@ type CostSummary = {
   hasAuthoritativeBuyingTotal: boolean;
 };
 
+type PodOutcomeDraft = {
+  receiptId: string;
+  status: "delivered" | "delivery_failed";
+  reason: string;
+  evidenceFile: File | null;
+  overrideEvidence: boolean;
+};
+
 type EditItem = {
   id: string;
   title: string;
@@ -153,7 +170,15 @@ type Props = {
 };
 
 const DOC_TYPES = ["RECEIPT", "INVOICE", "QUOTATION", "LAYAWAY"];
-const WARRANTY_OPTIONS = ["", "3 Months", "6 Months", "1 Year", "2 Years", "3 Years", "5 Years"];
+const WARRANTY_OPTIONS = [
+  "",
+  "3 Months",
+  "6 Months",
+  "1 Year",
+  "2 Years",
+  "3 Years",
+  "5 Years",
+];
 const PAGE_SIZE = 50;
 
 const randomId = () => Math.random().toString(36).slice(2, 9);
@@ -164,7 +189,11 @@ const computeSummary = (rows: ReceiptRow[]): ReceiptSummary => {
   const averageValue = totalCount ? totalValue / totalCount : 0;
   const head = rows[0];
   const lastReceipt = head
-    ? { id: head.id, createdAt: head.createdAt, customerName: head.customerName }
+    ? {
+        id: head.id,
+        createdAt: head.createdAt,
+        customerName: head.customerName,
+      }
     : undefined;
   return { totalCount, totalValue, averageValue, lastReceipt };
 };
@@ -312,17 +341,26 @@ const formatBadgeLabel = (value?: string | null) =>
 
 const getDocBadgeClass = (docType?: string | null) => {
   if (!docType) return "border border-white/10 bg-white/5 text-white";
-  return DOC_BADGE_VARIANTS[docType.toUpperCase()] ?? "border border-white/10 bg-white/5 text-white";
+  return (
+    DOC_BADGE_VARIANTS[docType.toUpperCase()] ??
+    "border border-white/10 bg-white/5 text-white"
+  );
 };
 
 const getStatusBadgeClass = (status?: string | null) => {
   if (!status) return "border border-white/10 bg-white/5 text-white";
-  return STATUS_BADGE_VARIANTS[status.toUpperCase().trim()] ?? "border border-white/10 bg-white/5 text-white";
+  return (
+    STATUS_BADGE_VARIANTS[status.toUpperCase().trim()] ??
+    "border border-white/10 bg-white/5 text-white"
+  );
 };
 
 const getPaymentBadgeClass = (method?: string | null) => {
   if (!method) return "border border-white/10 bg-white/5 text-white";
-  return PAYMENT_BADGE_VARIANTS[method.toUpperCase()] ?? "border border-white/10 bg-white/5 text-white";
+  return (
+    PAYMENT_BADGE_VARIANTS[method.toUpperCase()] ??
+    "border border-white/10 bg-white/5 text-white"
+  );
 };
 
 const isSalesReceiptSource = (source?: string) => {
@@ -331,20 +369,29 @@ const isSalesReceiptSource = (source?: string) => {
 };
 
 const isPodDeliveredReceipt = (row?: ReceiptRow | null) =>
-  Boolean(row?.isPodDelivery && `${row.podDeliveryStatus ?? ""}`.toLowerCase() === "delivered");
+  Boolean(
+    row?.isPodDelivery &&
+    `${row.podDeliveryStatus ?? ""}`.toLowerCase() === "delivered",
+  );
 
 const canTreatAsSalesReceipt = (row?: ReceiptRow | null) =>
-  Boolean(row && (isSalesReceiptSource(row.source) || isPodDeliveredReceipt(row)));
+  Boolean(
+    row && (isSalesReceiptSource(row.source) || isPodDeliveredReceipt(row)),
+  );
 
 const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
   const receipt = detail.receipt;
   const order = receipt?.order ?? {};
-  const dataItems = Array.isArray(receipt?.data?.items) ? receipt.data.items : [];
+  const dataItems = Array.isArray(receipt?.data?.items)
+    ? receipt.data.items
+    : [];
   const orderItems = Array.isArray(order?.items) ? order.items : [];
   const sourceItems = dataItems.length ? dataItems : orderItems;
   const supportCostMap = new Map<string, number>();
   (detail.supportItems ?? []).forEach((item) => {
-    const key = String(item.productName ?? "").trim().toLowerCase();
+    const key = String(item.productName ?? "")
+      .trim()
+      .toLowerCase();
     if (key) {
       supportCostMap.set(key, Number(item.buyingPrice ?? 0));
     }
@@ -361,7 +408,9 @@ const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
           buyingPrice: (() => {
             const explicit = Number(it.buyingPrice ?? 0);
             if (Number.isFinite(explicit) && explicit > 0) return explicit;
-            const key = (it.title || it.productName || it.name || "").trim().toLowerCase();
+            const key = (it.title || it.productName || it.name || "")
+              .trim()
+              .toLowerCase();
             const support = supportCostMap.get(key) ?? 0;
             if (Number.isFinite(support) && support > 0) return support;
             // orderItems can include persisted OrderCost overrides (admin edits)
@@ -372,16 +421,16 @@ const buildDraftFromDetail = (detail: ReceiptDetailPayload): EditDraft => {
           })(),
         }))
       : [
-        {
-          id: randomId(),
-          title: "",
-          quantity: 1,
-          unitPrice: 0,
-          serial: null,
-          warranty: null,
-          buyingPrice: 0,
-        },
-      ];
+          {
+            id: randomId(),
+            title: "",
+            quantity: 1,
+            unitPrice: 0,
+            serial: null,
+            warranty: null,
+            buyingPrice: 0,
+          },
+        ];
 
   return {
     docType: String(receipt?.docType || "RECEIPT").toUpperCase(),
@@ -431,32 +480,51 @@ export default function ReceiptsAdminClient({
   const [profitReceipts, setProfitReceipts] = useState<ReceiptRow[]>([]);
   const filtersBeforeProfitRef = useRef<FilterState | null>(null);
   const [quickRange, setQuickRange] = useState<AdminQuickRangeKey>("today");
-  const [filters, setFilters] = useState<FilterState>(() => makeDefaultFilters());
-  const [appliedFilters, setAppliedFilters] = useState<FilterState>(() => makeDefaultFilters());
+  const [filters, setFilters] = useState<FilterState>(() =>
+    makeDefaultFilters(),
+  );
+  const [appliedFilters, setAppliedFilters] = useState<FilterState>(() =>
+    makeDefaultFilters(),
+  );
   const [staffList, setStaffList] = useState<StaffOption[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState<ReceiptRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [inlineDetailHost, setInlineDetailHost] = useState<HTMLDivElement | null>(null);
+  const [inlineDetailHost, setInlineDetailHost] =
+    useState<HTMLDivElement | null>(null);
   const detailCacheRef = useRef(new Map<string, ReceiptDetailPayload>());
   const detailRequestIdRef = useRef<string | null>(null);
   const [triggerSummaryLoading, setTriggerSummaryLoading] = useState(false);
-  const [triggerSummaryResult, setTriggerSummaryResult] = useState<string | null>(null);
+  const [triggerSummaryResult, setTriggerSummaryResult] = useState<
+    string | null
+  >(null);
   const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [recalculatingReceiptId, setRecalculatingReceiptId] = useState<string | null>(null);
+  const [recalculatingReceiptId, setRecalculatingReceiptId] = useState<
+    string | null
+  >(null);
   const [buyingPriceEditorOpen, setBuyingPriceEditorOpen] = useState(false);
-  const [buyingPriceDraft, setBuyingPriceDraft] = useState<Record<string, string>>({});
-  const [buyingPriceMode, setBuyingPriceMode] = useState<"ITEMS" | "TOTAL">("ITEMS");
+  const [buyingPriceDraft, setBuyingPriceDraft] = useState<
+    Record<string, string>
+  >({});
+  const [buyingPriceMode, setBuyingPriceMode] = useState<"ITEMS" | "TOTAL">(
+    "ITEMS",
+  );
   const [buyingTotalDraft, setBuyingTotalDraft] = useState("");
   const [buyingPriceSaving, setBuyingPriceSaving] = useState(false);
   const [commissionEditorOpen, setCommissionEditorOpen] = useState(false);
   const [commissionInput, setCommissionInput] = useState("");
   const [commissionSaving, setCommissionSaving] = useState(false);
-  const [sendingChannel, setSendingChannel] = useState<"email" | "whatsapp" | null>(null);
+  const [sendingChannel, setSendingChannel] = useState<
+    "email" | "whatsapp" | null
+  >(null);
   const [pendingEditId, setPendingEditId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<{ open: boolean; draft: EditDraft | null; saving: boolean }>({
+  const [editState, setEditState] = useState<{
+    open: boolean;
+    draft: EditDraft | null;
+    saving: boolean;
+  }>({
     open: false,
     draft: null,
     saving: false,
@@ -464,6 +532,7 @@ export default function ReceiptsAdminClient({
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [podActionId, setPodActionId] = useState<string | null>(null);
+  const [podOutcome, setPodOutcome] = useState<PodOutcomeDraft | null>(null);
   const [projectActionId, setProjectActionId] = useState<string | null>(null);
   const [projectEditor, setProjectEditor] = useState<{
     stage: ReceiptProjectStage;
@@ -480,7 +549,8 @@ export default function ReceiptsAdminClient({
     internalNotes: string;
     paymentNotes: string;
   } | null>(null);
-  const [podPanelStatus, setPodPanelStatus] = useState<PodPanelStatus>("delivered");
+  const [podPanelStatus, setPodPanelStatus] =
+    useState<PodPanelStatus>("delivered");
   const firstLoadRef = useRef(true);
   const STORAGE_KEYS = {
     attendantId: "receipts.attendantId.v1",
@@ -494,11 +564,17 @@ export default function ReceiptsAdminClient({
   // load persisted filters (attendant + quick range) on mount
   useEffect(() => {
     try {
-      const savedAttendant = window.localStorage.getItem(STORAGE_KEYS.attendantId);
-      const savedQuick = window.localStorage.getItem(STORAGE_KEYS.quickRange) as AdminQuickRangeKey | null;
+      const savedAttendant = window.localStorage.getItem(
+        STORAGE_KEYS.attendantId,
+      );
+      const savedQuick = window.localStorage.getItem(
+        STORAGE_KEYS.quickRange,
+      ) as AdminQuickRangeKey | null;
       const savedStart = window.localStorage.getItem(STORAGE_KEYS.rangeStart);
       const savedEnd = window.localStorage.getItem(STORAGE_KEYS.rangeEnd);
-      const savedPaymentMethod = window.localStorage.getItem(STORAGE_KEYS.paymentMethod) as "MPESA" | "CASH" | "" | null;
+      const savedPaymentMethod = window.localStorage.getItem(
+        STORAGE_KEYS.paymentMethod,
+      ) as "MPESA" | "CASH" | "" | null;
       setFilters((prev) => {
         let next = { ...prev };
         if (savedAttendant) next.attendantId = savedAttendant;
@@ -547,7 +623,13 @@ export default function ReceiptsAdminClient({
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || "Failed to load staff");
         if (cancelled) return;
-        const options: StaffOption[] = (Array.isArray(data?.users) ? data.users : Array.isArray(data) ? data : [])
+        const options: StaffOption[] = (
+          Array.isArray(data?.users)
+            ? data.users
+            : Array.isArray(data)
+              ? data
+              : []
+        )
           .filter((u: any) => u?.id)
           .map((u: any) => ({ id: u.id, name: u.name || u.email || u.id }));
         setStaffList(options);
@@ -577,17 +659,22 @@ export default function ReceiptsAdminClient({
         const activeFilters = opts?.filtersOverride ?? appliedFilters;
         const activeSummaryView = opts?.summaryViewOverride ?? summaryView;
         const activeOnlyPos = opts?.forceOnlyPos ?? onlyPos;
-        const activeLedgerEnabled = opts?.includeLedgerOverride ?? ledgerEnabled;
+        const activeLedgerEnabled =
+          opts?.includeLedgerOverride ?? ledgerEnabled;
         const params = new URLSearchParams();
         params.set("page", String(targetPage));
         params.set("size", String(PAGE_SIZE));
         params.set("includeItems", "false");
         if (activeFilters.q.trim()) params.set("q", activeFilters.q.trim());
         if (activeFilters.docType) params.set("docType", activeFilters.docType);
-        if (activeFilters.attendantId) params.set("attendantId", activeFilters.attendantId);
-        if (activeFilters.paymentMethod) params.set("paymentMethod", activeFilters.paymentMethod);
-        if (activeFilters.customerType) params.set("customerType", activeFilters.customerType);
-        if (activeFilters.podStatus) params.set("status", activeFilters.podStatus);
+        if (activeFilters.attendantId)
+          params.set("attendantId", activeFilters.attendantId);
+        if (activeFilters.paymentMethod)
+          params.set("paymentMethod", activeFilters.paymentMethod);
+        if (activeFilters.customerType)
+          params.set("customerType", activeFilters.customerType);
+        if (activeFilters.podStatus)
+          params.set("status", activeFilters.podStatus);
         const startParam = buildDateParam(activeFilters.start, false);
         const endParam = buildDateParam(activeFilters.end, true);
         if (startParam) params.set("start", startParam);
@@ -600,7 +687,9 @@ export default function ReceiptsAdminClient({
         }
         if (!activeLedgerEnabled) params.set("includeLedger", "false");
 
-        const res = await fetch(`/api/receipts?${params.toString()}`, { cache: "no-store" });
+        const res = await fetch(`/api/receipts?${params.toString()}`, {
+          cache: "no-store",
+        });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
         const nextRows = Array.isArray(data?.receipts) ? data.receipts : [];
@@ -611,7 +700,8 @@ export default function ReceiptsAdminClient({
         setHasMore(nextRows.length === PAGE_SIZE);
         setPage(targetPage);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load receipts";
+        const message =
+          err instanceof Error ? err.message : "Failed to load receipts";
         setError(message);
         showToast(message, "error");
       } finally {
@@ -634,72 +724,83 @@ export default function ReceiptsAdminClient({
   }, [refreshSignal, loadRows]);
 
   // Fetch summary (extracted so it can be polled)
-  const fetchSummary = useCallback(async (opts?: { signal?: AbortSignal }) => {
-    setSummaryLoading(true);
-    try {
-      const params = new URLSearchParams();
-      const startParam = buildDateParam(appliedFilters.start, false);
-      const endParam = buildDateParam(appliedFilters.end, true);
-      if (startParam) params.set("start", startParam);
-      if (endParam) params.set("end", endParam);
-      if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
-      if (appliedFilters.attendantId) {
-        params.set("attendantId", appliedFilters.attendantId);
-      }
-      if (appliedFilters.docType) {
-        params.set("docType", appliedFilters.docType);
-      }
-      if (appliedFilters.q.trim()) {
-        params.set("q", appliedFilters.q.trim());
-      }
-      if (appliedFilters.customerType) {
-        params.set("customerType", appliedFilters.customerType);
-      }
-      if (appliedFilters.podStatus) {
-        params.set("status", appliedFilters.podStatus);
-      }
-      params.set("scope", scopeMode);
-      if (onlyPos) params.set("onlyPos", "1");
-      if (!ledgerEnabled) params.set("includeLedger", "false");
-      const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
-        cache: "no-store",
-        signal: opts?.signal,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to load summary");
-      setSummaryTotals({
-        totalSales: Number(data.totalSales ?? 0),
-        // Prefer the inclusive per-receipt sum if provided, fall back to legacy
-        totalProfit: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
-        totalCost: Number(data.totalCost ?? 0),
-        // expose both variants on data for potential UI use
-        totalProfitPriced: Number(data.totalProfitPriced ?? 0),
-        totalProfitInclusive: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
-        receiptsCount: Number(data.receiptsCount ?? 0),
-        itemsCount: Number(data.itemsCount ?? 0),
-        hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
-        awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
-        paymentTotals:
-          data?.paymentTotals ??
+  const fetchSummary = useCallback(
+    async (opts?: { signal?: AbortSignal }) => {
+      setSummaryLoading(true);
+      try {
+        const params = new URLSearchParams();
+        const startParam = buildDateParam(appliedFilters.start, false);
+        const endParam = buildDateParam(appliedFilters.end, true);
+        if (startParam) params.set("start", startParam);
+        if (endParam) params.set("end", endParam);
+        if (appliedFilters.paymentMethod)
+          params.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.attendantId) {
+          params.set("attendantId", appliedFilters.attendantId);
+        }
+        if (appliedFilters.docType) {
+          params.set("docType", appliedFilters.docType);
+        }
+        if (appliedFilters.q.trim()) {
+          params.set("q", appliedFilters.q.trim());
+        }
+        if (appliedFilters.customerType) {
+          params.set("customerType", appliedFilters.customerType);
+        }
+        if (appliedFilters.podStatus) {
+          params.set("status", appliedFilters.podStatus);
+        }
+        params.set("scope", scopeMode);
+        if (onlyPos) params.set("onlyPos", "1");
+        if (!ledgerEnabled) params.set("includeLedger", "false");
+        const res = await fetch(
+          `/api/admin/receipts/summary?${params.toString()}`,
           {
+            cache: "no-store",
+            signal: opts?.signal,
+          },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Failed to load summary");
+        setSummaryTotals({
+          totalSales: Number(data.totalSales ?? 0),
+          // Prefer the inclusive per-receipt sum if provided, fall back to legacy
+          totalProfit: Number(
+            data.totalProfitInclusive ?? data.totalProfit ?? 0,
+          ),
+          totalCost: Number(data.totalCost ?? 0),
+          // expose both variants on data for potential UI use
+          totalProfitPriced: Number(data.totalProfitPriced ?? 0),
+          totalProfitInclusive: Number(
+            data.totalProfitInclusive ?? data.totalProfit ?? 0,
+          ),
+          receiptsCount: Number(data.receiptsCount ?? 0),
+          itemsCount: Number(data.itemsCount ?? 0),
+          hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
+          awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
+          paymentTotals: data?.paymentTotals ?? {
             mpesa: { totalSales: 0, count: 0 },
             cash: { totalSales: 0, count: 0 },
           },
-      });
-    } catch (err) {
-      console.warn("[receipts] summary error", err);
-      setSummaryTotals(null);
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, [appliedFilters, scopeMode, onlyPos, ledgerEnabled]);
+        });
+      } catch (err) {
+        console.warn("[receipts] summary error", err);
+        setSummaryTotals(null);
+      } finally {
+        setSummaryLoading(false);
+      }
+    },
+    [appliedFilters, scopeMode, onlyPos, ledgerEnabled],
+  );
 
   const handleTriggerSummary = useCallback(async () => {
     if (triggerSummaryLoading) return;
     setTriggerSummaryLoading(true);
     setTriggerSummaryResult(null);
     try {
-      const res = await fetch("/api/admin/daily-summary/trigger", { cache: "no-store" });
+      const res = await fetch("/api/admin/daily-summary/trigger", {
+        cache: "no-store",
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to trigger summary");
       const previewParts = [
@@ -708,11 +809,16 @@ export default function ReceiptsAdminClient({
         data?.payload?.slot4 ?? data?.slot4,
       ].filter((value): value is string => Boolean(value));
       setTriggerSummaryResult(
-        previewParts.length > 0 ? previewParts.join(" · ") : (data?.chatrace?.ok ? "Summary triggered" : "Trigger sent"),
+        previewParts.length > 0
+          ? previewParts.join(" · ")
+          : data?.chatrace?.ok
+            ? "Summary triggered"
+            : "Trigger sent",
       );
       showToast("Admin summary triggered", "success");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to trigger summary";
+      const message =
+        err instanceof Error ? err.message : "Failed to trigger summary";
       setTriggerSummaryResult(message);
       showToast(message, "error");
     } finally {
@@ -734,10 +840,19 @@ export default function ReceiptsAdminClient({
 
   const persistFilterValues = (nextFilters: FilterState) => {
     try {
-      window.localStorage.setItem(STORAGE_KEYS.attendantId, nextFilters.attendantId || "");
-      window.localStorage.setItem(STORAGE_KEYS.rangeStart, nextFilters.start || "");
+      window.localStorage.setItem(
+        STORAGE_KEYS.attendantId,
+        nextFilters.attendantId || "",
+      );
+      window.localStorage.setItem(
+        STORAGE_KEYS.rangeStart,
+        nextFilters.start || "",
+      );
       window.localStorage.setItem(STORAGE_KEYS.rangeEnd, nextFilters.end || "");
-      window.localStorage.setItem(STORAGE_KEYS.paymentMethod, nextFilters.paymentMethod || "");
+      window.localStorage.setItem(
+        STORAGE_KEYS.paymentMethod,
+        nextFilters.paymentMethod || "",
+      );
       window.localStorage.setItem(STORAGE_KEYS.quickRange, quickRange);
     } catch (err) {
       // ignore storage errors
@@ -791,7 +906,10 @@ export default function ReceiptsAdminClient({
       bounds = { start: formatDateInput(start), end: formatDateInput(end) };
     } else if (key === "trading-period") {
       const period = getTradingPeriodFor(now);
-      bounds = { start: formatDateInput(period.start), end: formatDateInput(period.end) };
+      bounds = {
+        start: formatDateInput(period.start),
+        end: formatDateInput(period.end),
+      };
     } else {
       setQuickRange("custom");
       return;
@@ -801,8 +919,14 @@ export default function ReceiptsAdminClient({
     setAppliedFilters(nextFilters);
     setQuickRange(key);
     try {
-      window.localStorage.setItem(STORAGE_KEYS.attendantId, nextFilters.attendantId || "");
-      window.localStorage.setItem(STORAGE_KEYS.rangeStart, nextFilters.start || "");
+      window.localStorage.setItem(
+        STORAGE_KEYS.attendantId,
+        nextFilters.attendantId || "",
+      );
+      window.localStorage.setItem(
+        STORAGE_KEYS.rangeStart,
+        nextFilters.start || "",
+      );
       window.localStorage.setItem(STORAGE_KEYS.rangeEnd, nextFilters.end || "");
       window.localStorage.setItem(STORAGE_KEYS.quickRange, key);
     } catch (err) {
@@ -826,7 +950,10 @@ export default function ReceiptsAdminClient({
       setProfitReceipts([]);
       setFilters(restoredFilters);
       setAppliedFilters(restoredFilters);
-      void loadRows(1, { summaryViewOverride: "all", filtersOverride: restoredFilters });
+      void loadRows(1, {
+        summaryViewOverride: "all",
+        filtersOverride: restoredFilters,
+      });
       return;
     }
 
@@ -849,96 +976,162 @@ export default function ReceiptsAdminClient({
       captureProfitReceipts: true,
     });
   };
-  const applyReceiptDetailPayload = useCallback((payload: ReceiptDetailPayload) => {
-    setDetail(payload);
-    const nextProjectFlow = readReceiptProjectFlow(payload?.receipt?.data?.projectFlow);
-    setProjectEditor(
-      nextProjectFlow
-        ? {
-            stage: nextProjectFlow.stage,
-            paymentTerm: nextProjectFlow.paymentTerm,
-            depositType: nextProjectFlow.depositType || "PERCENT",
-            depositValue: String(
-              nextProjectFlow.depositType === "AMOUNT"
-                ? nextProjectFlow.depositRequiredAmount || 0
-                : nextProjectFlow.depositValue || nextProjectFlow.depositPercent || 30,
-            ),
-            depositPaidAmount: String(nextProjectFlow.depositPaidAmount || 0),
-            depositPaymentMethod: nextProjectFlow.depositPaymentMethod || "UNSPECIFIED",
-            depositReference: nextProjectFlow.depositReference || "",
-            balancePaidAmount: String(nextProjectFlow.balancePaidAmount || 0),
-            balancePaymentMethod: nextProjectFlow.balancePaymentMethod || "UNSPECIFIED",
-            balanceReference: nextProjectFlow.balanceReference || "",
-            scheduledDate: nextProjectFlow.scheduledDate ? nextProjectFlow.scheduledDate.slice(0, 10) : "",
-            internalNotes: nextProjectFlow.internalNotes || "",
-            paymentNotes: nextProjectFlow.paymentNotes || "",
-          }
-        : null,
-    );
-  }, []);
+  const applyReceiptDetailPayload = useCallback(
+    (payload: ReceiptDetailPayload) => {
+      setDetail(payload);
+      const nextProjectFlow = readReceiptProjectFlow(
+        payload?.receipt?.data?.projectFlow,
+      );
+      setProjectEditor(
+        nextProjectFlow
+          ? {
+              stage: nextProjectFlow.stage,
+              paymentTerm: nextProjectFlow.paymentTerm,
+              depositType: nextProjectFlow.depositType || "PERCENT",
+              depositValue: String(
+                nextProjectFlow.depositType === "AMOUNT"
+                  ? nextProjectFlow.depositRequiredAmount || 0
+                  : nextProjectFlow.depositValue ||
+                      nextProjectFlow.depositPercent ||
+                      30,
+              ),
+              depositPaidAmount: String(nextProjectFlow.depositPaidAmount || 0),
+              depositPaymentMethod:
+                nextProjectFlow.depositPaymentMethod || "UNSPECIFIED",
+              depositReference: nextProjectFlow.depositReference || "",
+              balancePaidAmount: String(nextProjectFlow.balancePaidAmount || 0),
+              balancePaymentMethod:
+                nextProjectFlow.balancePaymentMethod || "UNSPECIFIED",
+              balanceReference: nextProjectFlow.balanceReference || "",
+              scheduledDate: nextProjectFlow.scheduledDate
+                ? nextProjectFlow.scheduledDate.slice(0, 10)
+                : "",
+              internalNotes: nextProjectFlow.internalNotes || "",
+              paymentNotes: nextProjectFlow.paymentNotes || "",
+            }
+          : null,
+      );
+    },
+    [],
+  );
 
-  const fetchReceiptDetail = useCallback(async (id: string) => {
-    detailRequestIdRef.current = id;
-    setDetailLoading(true);
-    try {
-      const res = await fetch(`/api/receipts/${id}`, { cache: "no-store" });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Failed to load receipt");
-      detailCacheRef.current.set(id, payload as ReceiptDetailPayload);
-      if (detailRequestIdRef.current !== id) return;
-      applyReceiptDetailPayload(payload as ReceiptDetailPayload);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load receipt";
-      showToast(message, "error");
-    } finally {
-      if (detailRequestIdRef.current === id) setDetailLoading(false);
-    }
-  }, [applyReceiptDetailPayload, showToast]);
-  const handleMarkPodDelivered = useCallback(
-    async (receiptId: string) => {
+  const fetchReceiptDetail = useCallback(
+    async (id: string) => {
+      detailRequestIdRef.current = id;
+      setDetailLoading(true);
+      try {
+        const res = await fetch(`/api/receipts/${id}`, { cache: "no-store" });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok)
+          throw new Error(payload?.error || "Failed to load receipt");
+        detailCacheRef.current.set(id, payload as ReceiptDetailPayload);
+        if (detailRequestIdRef.current !== id) return;
+        applyReceiptDetailPayload(payload as ReceiptDetailPayload);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to load receipt";
+        showToast(message, "error");
+      } finally {
+        if (detailRequestIdRef.current === id) setDetailLoading(false);
+      }
+    },
+    [applyReceiptDetailPayload, showToast],
+  );
+  const finalizePodOutcome = useCallback(
+    async (outcome: PodOutcomeDraft) => {
+      const { receiptId } = outcome;
       setPodActionId(receiptId);
       try {
-        console.info('[receipts][client] marking POD delivered', { receiptId });
+        let evidenceUrl: string | undefined;
+        let evidenceFileName: string | undefined;
+        if (outcome.evidenceFile) {
+          const form = new FormData();
+          form.set("file", outcome.evidenceFile);
+          const upload = await fetch("/api/receipts/pod-evidence-upload", {
+            method: "POST",
+            credentials: "same-origin",
+            body: form,
+          });
+          const uploaded = await upload.json().catch(() => ({}));
+          if (!upload.ok)
+            throw new Error(
+              uploaded.error || "Failed to upload delivery evidence",
+            );
+          evidenceUrl = uploaded.url;
+          evidenceFileName = uploaded.fileName;
+        }
         const res = await fetch(`/api/receipts/${receiptId}/pod-delivered`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({}),
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            status: outcome.status,
+            reason: outcome.reason.trim() || undefined,
+            evidenceUrl,
+            evidenceFileName,
+            force: outcome.overrideEvidence,
+          }),
         });
         let payload: any = {};
         try {
           payload = await res.json();
         } catch (e) {
-          console.warn('[receipts][client] pod-delivered: failed to parse JSON', e);
+          console.warn(
+            "[receipts][client] pod-delivered: failed to parse JSON",
+            e,
+          );
         }
-        console.info('[receipts][client] pod-delivered response', { status: res.status, body: payload });
+        console.info("[receipts][client] pod-delivered response", {
+          status: res.status,
+          body: payload,
+        });
         if (!res.ok) {
-          const errMsg = payload?.error || payload?.message || `Failed to mark POD delivered (status ${res.status})`;
+          const errMsg =
+            payload?.error ||
+            payload?.message ||
+            `Failed to mark POD delivered (status ${res.status})`;
           throw new Error(errMsg);
         }
-        showToast('POD delivery recorded and notification queued', 'success');
+        showToast(
+          outcome.status === "delivered"
+            ? "POD delivery recorded"
+            : "Delivery failure recorded and customer SMS sent",
+          "success",
+        );
+        setPodOutcome(null);
         await loadRows(page, { silent: true });
         await fetchSummary();
         if (selected?.id === receiptId) {
           await fetchReceiptDetail(receiptId);
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to mark POD delivery';
-        console.error('[receipts][client] pod-delivered error', message);
-        showToast(message, 'error');
+        const message =
+          err instanceof Error ? err.message : "Failed to record POD outcome";
+        console.error("[receipts][client] pod-delivered error", message);
+        showToast(message, "error");
       } finally {
         setPodActionId(null);
       }
     },
     [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
   );
+  const openPodOutcome = (receiptId: string) =>
+    setPodOutcome({
+      receiptId,
+      status: "delivered",
+      reason: "",
+      evidenceFile: null,
+      overrideEvidence: false,
+    });
 
   const handleMarkPodPaid = useCallback(
     async (receiptId: string) => {
       setPodActionId(receiptId);
       // Confirm action with the user to avoid accidental marks
       try {
-        const proceed = window.confirm('Mark this POD as paid? This will record an admin-paid flag.');
+        const proceed = window.confirm(
+          "Mark this POD as paid? This will record an admin-paid flag.",
+        );
         if (!proceed) {
           setPodActionId(null);
           return;
@@ -947,34 +1140,41 @@ export default function ReceiptsAdminClient({
         // If window.confirm is unavailable for any reason, continue.
       }
       try {
-        console.info('[receipts][client] marking POD paid', { receiptId });
+        console.info("[receipts][client] marking POD paid", { receiptId });
         const res = await fetch(`/api/receipts/${receiptId}/pod-paid`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify({}),
         });
         let payload: any = {};
         try {
           payload = await res.json();
         } catch (e) {
-          console.warn('[receipts][client] pod-paid: failed to parse JSON', e);
+          console.warn("[receipts][client] pod-paid: failed to parse JSON", e);
         }
-        console.info('[receipts][client] pod-paid response', { status: res.status, body: payload });
+        console.info("[receipts][client] pod-paid response", {
+          status: res.status,
+          body: payload,
+        });
         if (!res.ok) {
-          const errMsg = payload?.error || payload?.message || `Failed to mark POD paid (status ${res.status})`;
+          const errMsg =
+            payload?.error ||
+            payload?.message ||
+            `Failed to mark POD paid (status ${res.status})`;
           throw new Error(errMsg);
         }
-        showToast('POD marked paid', 'success');
+        showToast("POD marked paid", "success");
         await loadRows(page, { silent: true });
         await fetchSummary();
         if (selected?.id === receiptId) {
           await fetchReceiptDetail(receiptId);
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to mark POD paid';
-        console.error('[receipts][client] pod-paid error', message);
-        showToast(message, 'error');
+        const message =
+          err instanceof Error ? err.message : "Failed to mark POD paid";
+        console.error("[receipts][client] pod-paid error", message);
+        showToast(message, "error");
       } finally {
         setPodActionId(null);
       }
@@ -984,7 +1184,10 @@ export default function ReceiptsAdminClient({
 
   const handleRowClick = (row: ReceiptRow, forceOpen = false) => {
     if (!canTreatAsSalesReceipt(row)) {
-      showToast("Receipt detail view is only available for sales or delivered POD receipts", "info");
+      showToast(
+        "Receipt detail view is only available for sales or delivered POD receipts",
+        "info",
+      );
       return;
     }
     if (!forceOpen && drawerOpen && selected?.id === row.id) {
@@ -1018,22 +1221,27 @@ export default function ReceiptsAdminClient({
   };
 
   const saveProjectFlow = useCallback(
-    async (receiptId: string, body: {
-      stage?: ReceiptProjectStage;
-      paymentTerm?: ReceiptProjectPaymentTerm;
-      depositType?: ReceiptProjectDepositType;
-      depositValue?: number;
-      depositPercent?: number;
-      depositPaidAmount?: number;
-      depositPaymentMethod?: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
-      depositReference?: string | null;
-      balancePaidAmount?: number;
-      balancePaymentMethod?: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
-      balanceReference?: string | null;
-      scheduledDate?: string | null;
-      internalNotes?: string | null;
-      paymentNotes?: string | null;
-    }) => {
+    async (
+      receiptId: string,
+      body: {
+        stage?: ReceiptProjectStage;
+        paymentTerm?: ReceiptProjectPaymentTerm;
+        depositType?: ReceiptProjectDepositType;
+        depositValue?: number;
+        depositPercent?: number;
+        depositPaidAmount?: number;
+        depositPaymentMethod?:
+          "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
+        depositReference?: string | null;
+        balancePaidAmount?: number;
+        balancePaymentMethod?:
+          "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
+        balanceReference?: string | null;
+        scheduledDate?: string | null;
+        internalNotes?: string | null;
+        paymentNotes?: string | null;
+      },
+    ) => {
       setProjectActionId(receiptId);
       try {
         const res = await fetch(`/api/receipts/${receiptId}/project`, {
@@ -1053,7 +1261,10 @@ export default function ReceiptsAdminClient({
           await fetchReceiptDetail(receiptId);
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to update project receipt";
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to update project receipt";
         showToast(message, "error");
       } finally {
         setProjectActionId(null);
@@ -1070,11 +1281,11 @@ export default function ReceiptsAdminClient({
           ? "PROJECT_SCHEDULED"
           : currentStage === "PROJECT_SCHEDULED"
             ? "PROJECT_IN_PROGRESS"
-          : currentStage === "PROJECT_IN_PROGRESS"
-            ? "PROJECT_INSTALLED"
-            : currentStage === "PROJECT_INSTALLED"
-              ? "COMPLETED_POSTED"
-            : null;
+            : currentStage === "PROJECT_IN_PROGRESS"
+              ? "PROJECT_INSTALLED"
+              : currentStage === "PROJECT_INSTALLED"
+                ? "COMPLETED_POSTED"
+                : null;
       if (!nextStage) return;
       await saveProjectFlow(row.id, { stage: nextStage });
     },
@@ -1085,14 +1296,19 @@ export default function ReceiptsAdminClient({
     async (receiptId: string) => {
       setRecalculatingReceiptId(receiptId);
       try {
-        const res = await fetch(`/api/receipts/${receiptId}/recalculate-costs`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-        });
+        const res = await fetch(
+          `/api/receipts/${receiptId}/recalculate-costs`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+          },
+        );
         const payload = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(payload?.error || "Failed to recalculate receipt costs");
+          throw new Error(
+            payload?.error || "Failed to recalculate receipt costs",
+          );
         }
         const updatedItems = Number(payload?.updatedItems ?? 0);
         const buyingTotal = formatCurrency(payload?.buyingTotal ?? 0);
@@ -1108,7 +1324,10 @@ export default function ReceiptsAdminClient({
           await fetchReceiptDetail(receiptId);
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to recalculate receipt costs";
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to recalculate receipt costs";
         showToast(message, "error");
       } finally {
         setRecalculatingReceiptId(null);
@@ -1145,27 +1364,40 @@ export default function ReceiptsAdminClient({
       await fetchSummary();
       await fetchReceiptDetail(selected.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save commission";
+      const message =
+        err instanceof Error ? err.message : "Failed to save commission";
       showToast(message, "error");
     } finally {
       setCommissionSaving(false);
     }
-  }, [commissionInput, fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast]);
+  }, [
+    commissionInput,
+    fetchReceiptDetail,
+    fetchSummary,
+    loadRows,
+    page,
+    selected,
+    showToast,
+  ]);
 
   const deleteManualCommission = useCallback(async () => {
     if (!selected?.id) return;
     setCommissionSaving(true);
     try {
-      const res = await fetch(`/api/receipts/${selected.id}/commission`, { method: "DELETE" });
+      const res = await fetch(`/api/receipts/${selected.id}/commission`, {
+        method: "DELETE",
+      });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to delete commission");
+      if (!res.ok)
+        throw new Error(data?.error || "Failed to delete commission");
       showToast("POS commission removed", "success");
       setCommissionEditorOpen(false);
       await loadRows(page, { silent: true });
       await fetchSummary();
       await fetchReceiptDetail(selected.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to delete commission";
+      const message =
+        err instanceof Error ? err.message : "Failed to delete commission";
       showToast(message, "error");
     } finally {
       setCommissionSaving(false);
@@ -1175,12 +1407,15 @@ export default function ReceiptsAdminClient({
   const handleSend = async (channel: "email" | "whatsapp") => {
     if (!selected) return;
     if (!canTreatAsSalesReceipt(selected)) {
-      showToast("Sending is only supported for sales or delivered POD receipts", "info");
+      showToast(
+        "Sending is only supported for sales or delivered POD receipts",
+        "info",
+      );
       return;
     }
     setSendingChannel(channel);
     try {
-      console.log('[receipts][client] sending', { id: selected.id, channel });
+      console.log("[receipts][client] sending", { id: selected.id, channel });
       const res = await fetch(`/api/receipts/${selected.id}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1190,20 +1425,30 @@ export default function ReceiptsAdminClient({
       try {
         data = await res.json();
       } catch (e) {
-        console.error('[receipts][client] failed to parse response JSON', e);
+        console.error("[receipts][client] failed to parse response JSON", e);
       }
-      console.log('[receipts][client] send response', { status: res.status, body: data });
+      console.log("[receipts][client] send response", {
+        status: res.status,
+        body: data,
+      });
       if (!res.ok) throw new Error(data?.error || "Failed to queue send");
-      showToast(`Queued ${channel === "email" ? "email" : "WhatsApp"} send`, "success");
+      showToast(
+        `Queued ${channel === "email" ? "email" : "WhatsApp"} send`,
+        "success",
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to queue send";
+      const message =
+        err instanceof Error ? err.message : "Failed to queue send";
       showToast(message, "error");
     } finally {
       setSendingChannel(null);
     }
   };
 
-  const sendReceiptById = async (receiptId: string, channel: "email" | "whatsapp") => {
+  const sendReceiptById = async (
+    receiptId: string,
+    channel: "email" | "whatsapp",
+  ) => {
     if (receiptId.startsWith("marketing-")) {
       showToast("Sending is only supported for sales receipts", "info");
       return;
@@ -1217,56 +1462,71 @@ export default function ReceiptsAdminClient({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to queue send");
-      showToast(`Queued ${channel === "email" ? "email" : "WhatsApp"} send`, "success");
+      showToast(
+        `Queued ${channel === "email" ? "email" : "WhatsApp"} send`,
+        "success",
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to queue send";
+      const message =
+        err instanceof Error ? err.message : "Failed to queue send";
       showToast(message, "error");
     } finally {
       setSendingChannel(null);
     }
   };
 
-  const downloadReceiptById = useCallback(
-    async (row: ReceiptRow) => {
-      if (!row?.id) return;
-      try {
-        const res = await fetch(`/api/receipts/${encodeURIComponent(row.id)}/pdf?download=1&fresh=1`, { cache: "no-store" });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data?.error || "Failed to download receipt PDF");
-        }
-
-        const blob = await res.blob();
-        if (!blob || blob.size === 0) {
-          throw new Error("Downloaded file is empty");
-        }
-
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        const safeRef = String(row.orderRef || row.id || "receipt").replace(/[^a-zA-Z0-9_-]+/g, "-");
-        a.href = objectUrl;
-        a.download = `${safeRef}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(objectUrl);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to download receipt PDF";
-        showToast(message, "error");
+  const downloadReceiptById = useCallback(async (row: ReceiptRow) => {
+    if (!row?.id) return;
+    try {
+      const res = await fetch(
+        `/api/receipts/${encodeURIComponent(row.id)}/pdf?download=1&fresh=1`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to download receipt PDF");
       }
-    },
-    [],
-  );
+
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error("Downloaded file is empty");
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeRef = String(row.orderRef || row.id || "receipt").replace(
+        /[^a-zA-Z0-9_-]+/g,
+        "-",
+      );
+      a.href = objectUrl;
+      a.download = `${safeRef}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to download receipt PDF";
+      showToast(message, "error");
+    }
+  }, []);
 
   const handleDeleteReceipt = async () => {
     if (!selected || !allowEdit) return;
-    if (!window.confirm("Delete this receipt and all related records from the system?")) return;
+    const reason = window.prompt(
+      "Cancel this receipt and reverse its sales, profit and commission calculations. Optional reason:",
+    );
+    if (reason === null) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/receipts/${selected.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/receipts/${selected.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const errMsg = data?.error || "Failed to delete receipt";
+        const errMsg = data?.error || "Failed to cancel receipt";
         const lower = String(errMsg).toLowerCase();
         if (res.status === 404 || lower.includes("not found")) {
           showToast("Receipt not found; refreshing list", "info");
@@ -1277,11 +1537,12 @@ export default function ReceiptsAdminClient({
         }
         throw new Error(errMsg);
       }
-      showToast("Receipt deleted", "success");
+      showToast("Receipt cancelled and calculations reversed", "success");
       closeDrawer();
       await loadRows(page);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to delete receipt";
+      const message =
+        err instanceof Error ? err.message : "Failed to cancel receipt";
       showToast(message, "error");
     } finally {
       setDeleting(false);
@@ -1294,13 +1555,20 @@ export default function ReceiptsAdminClient({
       showToast("Deletion is only supported for sales receipts", "info");
       return;
     }
-    if (!window.confirm("Delete this receipt and all related records from the system?")) return;
+    const reason = window.prompt(
+      "Cancel this receipt and reverse its sales, profit and commission calculations. Optional reason:",
+    );
+    if (reason === null) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/receipts/${receiptId}`, { method: "DELETE" });
+      const res = await fetch(`/api/receipts/${receiptId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const errMsg = data?.error || "Failed to delete receipt";
+        const errMsg = data?.error || "Failed to cancel receipt";
         const lower = String(errMsg).toLowerCase();
         if (res.status === 404 || lower.includes("not found")) {
           showToast("Receipt not found; refreshing list", "info");
@@ -1311,12 +1579,13 @@ export default function ReceiptsAdminClient({
         }
         throw new Error(errMsg);
       }
-      showToast("Receipt deleted", "success");
+      showToast("Receipt cancelled and calculations reversed", "success");
       // if we deleted the currently selected, close drawer
       if (selected?.id === receiptId) closeDrawer();
       await loadRows(page);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to delete receipt";
+      const message =
+        err instanceof Error ? err.message : "Failed to cancel receipt";
       showToast(message, "error");
     } finally {
       setDeleting(false);
@@ -1372,19 +1641,23 @@ export default function ReceiptsAdminClient({
       if (!res.ok) throw new Error(data?.error || "Failed to update receipt");
       showToast("Receipt updated", "success");
       setEditState({ open: false, draft: null, saving: false });
-      setDetail((prev) => (prev ? { ...prev, receipt: data.receipt ?? prev.receipt } : prev));
+      setDetail((prev) =>
+        prev ? { ...prev, receipt: data.receipt ?? prev.receipt } : prev,
+      );
       setSelected((prev) =>
         prev && prev.id === detail.receipt.id
           ? {
               ...prev,
               total: data?.receipt?.totals?.total ?? prev.total,
-              customerName: data?.receipt?.order?.customerName ?? prev.customerName,
+              customerName:
+                data?.receipt?.order?.customerName ?? prev.customerName,
             }
           : prev,
       );
       await loadRows(page, { silent: true });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update receipt";
+      const message =
+        err instanceof Error ? err.message : "Failed to update receipt";
       showToast(message, "error");
       setEditState((prev) => ({ ...prev, saving: false }));
     }
@@ -1392,7 +1665,7 @@ export default function ReceiptsAdminClient({
 
   const costSummary = useMemo<CostSummary>(() => {
     const orderItems = detail?.receipt?.order?.items ?? [];
-  if (!orderItems.length) {
+    if (!orderItems.length) {
       return {
         itemsWithCost: [],
         supportBuyingTotal: 0,
@@ -1405,14 +1678,22 @@ export default function ReceiptsAdminClient({
     // If the server provided a supportReceiptSummary with a stored buyingTotal,
     // prefer that authoritative DB value for the admin UI to match the DB.
     const receiptBuyingTotalRaw = Number(
-      (detail?.receipt as any)?.totals?.buyingTotal ?? (detail?.receipt as any)?.data?.totals?.buyingTotal ?? 0,
+      (detail?.receipt as any)?.totals?.buyingTotal ??
+        (detail?.receipt as any)?.data?.totals?.buyingTotal ??
+        0,
     );
-    const receiptBuyingTotal = Number.isFinite(receiptBuyingTotalRaw) && receiptBuyingTotalRaw > 0 ? receiptBuyingTotalRaw : null;
+    const receiptBuyingTotal =
+      Number.isFinite(receiptBuyingTotalRaw) && receiptBuyingTotalRaw > 0
+        ? receiptBuyingTotalRaw
+        : null;
     const supportReceiptBuyingTotal =
-      detail?.supportReceiptSummary && Number(detail.supportReceiptSummary.buyingTotal ?? 0) > 0
+      detail?.supportReceiptSummary &&
+      Number(detail.supportReceiptSummary.buyingTotal ?? 0) > 0
         ? Number(detail.supportReceiptSummary.buyingTotal ?? 0)
         : null;
-    const supportQueue = (detail?.supportItems ?? []).map((item) => ({ ...item }));
+    const supportQueue = (detail?.supportItems ?? []).map((item) => ({
+      ...item,
+    }));
     let allItemCostsKnown = true;
     const itemsWithCost: ItemWithCost[] = orderItems.map((item: any) => {
       const normalizedName = (item.product?.name ?? "").trim();
@@ -1421,20 +1702,26 @@ export default function ReceiptsAdminClient({
           ? supportQueue.findIndex(
               (support) =>
                 support.productName &&
-                support.productName.trim().toLowerCase() === normalizedName.toLowerCase(),
+                support.productName.trim().toLowerCase() ===
+                  normalizedName.toLowerCase(),
             )
           : -1;
-      const matched = matchIndex >= 0 ? supportQueue.splice(matchIndex, 1)[0] : null;
+      const matched =
+        matchIndex >= 0 ? supportQueue.splice(matchIndex, 1)[0] : null;
       const displayName = item.product?.name ?? matched?.productName ?? "Item";
       const matchedPriceRaw = matched?.buyingPrice ?? null;
       const matchedCost =
-        matchedPriceRaw !== null && Number(matchedPriceRaw ?? 0) > 0 ? Number(matchedPriceRaw) : 0;
+        matchedPriceRaw !== null && Number(matchedPriceRaw ?? 0) > 0
+          ? Number(matchedPriceRaw)
+          : 0;
       // fallback to persisted OrderCost override (admin-edited POS costs)
       const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
       const latest = costs[0];
       const overrideUnit = Number(latest?.unitCost ?? 0);
-      const overrideCost = Number.isFinite(overrideUnit) && overrideUnit > 0 ? overrideUnit : 0;
-      const resolvedCost = matchedCost > 0 ? matchedCost : overrideCost > 0 ? overrideCost : null;
+      const overrideCost =
+        Number.isFinite(overrideUnit) && overrideUnit > 0 ? overrideUnit : 0;
+      const resolvedCost =
+        matchedCost > 0 ? matchedCost : overrideCost > 0 ? overrideCost : null;
       const hasCost = resolvedCost !== null && Number(resolvedCost ?? 0) > 0;
       if (!hasCost) allItemCostsKnown = false;
       return {
@@ -1449,7 +1736,8 @@ export default function ReceiptsAdminClient({
     // and the admin summary/receipt UI uses a per-support-item aggregation.
     const matchedCost = itemsWithCost.reduce((sum, item) => {
       // treat missing or non-positive buyingPrice as unknown (do not count)
-      if (item.buyingPrice === null || Number(item.buyingPrice ?? 0) <= 0) return sum;
+      if (item.buyingPrice === null || Number(item.buyingPrice ?? 0) <= 0)
+        return sum;
       const qty = Math.max(1, Math.trunc(Number((item as any)?.quantity ?? 1)));
       return sum + Number(item.buyingPrice ?? 0) * qty;
     }, 0);
@@ -1465,16 +1753,22 @@ export default function ReceiptsAdminClient({
     const hasCompleteCosts = allItemCostsKnown && !supportHasUnknown;
     const hasAuthoritativeBuyingTotal =
       receiptBuyingTotal !== null || supportReceiptBuyingTotal !== null;
-    const authoritativeBuyingTotal = receiptBuyingTotal ?? supportReceiptBuyingTotal;
+    const authoritativeBuyingTotal =
+      receiptBuyingTotal ?? supportReceiptBuyingTotal;
     const aggregateSellingTotal = Number(
-      detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0,
+      detail?.receipt?.totals?.total ??
+        detail?.receipt?.order?.totalAmount ??
+        0,
     );
     const commissionTotal = Number(detail?.posCommissionTotal ?? 0);
     const recognized =
       authoritativeBuyingTotal !== null
         ? {
             recognizedSellingTotal: aggregateSellingTotal,
-            recognizedProfit: aggregateSellingTotal - authoritativeBuyingTotal - commissionTotal,
+            recognizedProfit:
+              aggregateSellingTotal -
+              authoritativeBuyingTotal -
+              commissionTotal,
           }
         : computeRecognizedReceiptProfit({
             items: itemsWithCost.map((item) => ({
@@ -1509,7 +1803,16 @@ export default function ReceiptsAdminClient({
     }
     setExporting(true);
     try {
-      const header = ["Receipt ID", "Order Ref", "Doc Type", "Customer", "Staff", "Total", "Status", "Created At"];
+      const header = [
+        "Receipt ID",
+        "Order Ref",
+        "Doc Type",
+        "Customer",
+        "Staff",
+        "Total",
+        "Status",
+        "Created At",
+      ];
       const csv = [header.join(",")];
       for (const row of rows) {
         csv.push(
@@ -1525,7 +1828,9 @@ export default function ReceiptsAdminClient({
           ].join(","),
         );
       }
-      const blob = new Blob([csv.join("\n")], { type: "text/csv;charset=utf-8" });
+      const blob = new Blob([csv.join("\n")], {
+        type: "text/csv;charset=utf-8",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -1536,7 +1841,8 @@ export default function ReceiptsAdminClient({
       URL.revokeObjectURL(url);
       showToast("Export ready", "success");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to export CSV";
+      const message =
+        err instanceof Error ? err.message : "Failed to export CSV";
       showToast(message, "error");
     } finally {
       setExporting(false);
@@ -1584,8 +1890,10 @@ export default function ReceiptsAdminClient({
         const base = new URLSearchParams();
         if (startParam) base.set("start", startParam);
         if (endParam) base.set("end", endParam);
-        if (appliedFilters.paymentMethod) base.set("paymentMethod", appliedFilters.paymentMethod);
-        if (appliedFilters.attendantId) base.set("attendantId", appliedFilters.attendantId);
+        if (appliedFilters.paymentMethod)
+          base.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.attendantId)
+          base.set("attendantId", appliedFilters.attendantId);
         if (appliedFilters.docType) base.set("docType", appliedFilters.docType);
         if (appliedFilters.q.trim()) base.set("q", appliedFilters.q.trim());
         base.set("scope", scopeMode);
@@ -1596,12 +1904,16 @@ export default function ReceiptsAdminClient({
         const fetchOne = async (status?: string) => {
           const params = new URLSearchParams(base);
           if (status) params.set("status", status);
-          const res = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
-            cache: "no-store",
-            signal: controller.signal,
-          });
+          const res = await fetch(
+            `/api/admin/receipts/summary?${params.toString()}`,
+            {
+              cache: "no-store",
+              signal: controller.signal,
+            },
+          );
           const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data?.error || "Failed to load POD summary");
+          if (!res.ok)
+            throw new Error(data?.error || "Failed to load POD summary");
           return {
             count: Number(data.receiptsCount ?? 0),
             value: Number(data.totalSales ?? 0),
@@ -1672,29 +1984,54 @@ export default function ReceiptsAdminClient({
     hasCompleteCosts,
     hasAuthoritativeBuyingTotal,
   } = costSummary;
-  const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
-  const posCommissionTotal = Number(detail?.posCommissionTotal ?? 0);
-  const manualPosCommissionAmount = Number(detail?.manualPosCommissionAmount ?? 0);
-  const earnedPosCommissionTotal = Number(
-    detail?.earnedPosCommissionTotal ?? Math.max(0, posCommissionTotal - manualPosCommissionAmount),
+  const receiptGrandTotal = Number(
+    detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0,
   );
-  const canShowReceiptProfit = hasCompleteCosts || hasAuthoritativeBuyingTotal || recognizedSellingTotal > 0;
+  const posCommissionTotal = Number(detail?.posCommissionTotal ?? 0);
+  const manualPosCommissionAmount = Number(
+    detail?.manualPosCommissionAmount ?? 0,
+  );
+  const earnedPosCommissionTotal = Number(
+    detail?.earnedPosCommissionTotal ??
+      Math.max(0, posCommissionTotal - manualPosCommissionAmount),
+  );
+  const canShowReceiptProfit =
+    hasCompleteCosts ||
+    hasAuthoritativeBuyingTotal ||
+    recognizedSellingTotal > 0;
   const profitAmount = canShowReceiptProfit ? recognizedProfit : 0;
   const profitColor =
-    canShowReceiptProfit && profitAmount >= 0 ? "text-emerald-300" : canShowReceiptProfit ? "text-rose-400" : "text-slate-400";
+    canShowReceiptProfit && profitAmount >= 0
+      ? "text-emerald-300"
+      : canShowReceiptProfit
+        ? "text-rose-400"
+        : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
   const buyingPricePreview =
     buyingPriceMode === "TOTAL"
       ? Math.max(0, Number(buyingTotalDraft) || 0)
       : itemsWithCost.reduce((sum, item) => {
           const draftValue = buyingPriceDraft[item.id];
-          const unitCost = draftValue === undefined ? Number(item.buyingPrice ?? 0) : Number(draftValue);
-          return sum + (Number.isFinite(unitCost) ? Math.max(0, unitCost) : 0) * Math.max(1, Number(item.quantity ?? 1));
+          const unitCost =
+            draftValue === undefined
+              ? Number(item.buyingPrice ?? 0)
+              : Number(draftValue);
+          return (
+            sum +
+            (Number.isFinite(unitCost) ? Math.max(0, unitCost) : 0) *
+              Math.max(1, Number(item.quantity ?? 1))
+          );
         }, 0);
-  const profitPreview = receiptGrandTotal - buyingPricePreview - posCommissionTotal;
+  const profitPreview =
+    receiptGrandTotal - buyingPricePreview - posCommissionTotal;
   const openBuyingPriceEditor = () => {
     setBuyingPriceDraft(
-      Object.fromEntries(itemsWithCost.map((item) => [item.id, item.buyingPrice === null ? "" : String(item.buyingPrice)])),
+      Object.fromEntries(
+        itemsWithCost.map((item) => [
+          item.id,
+          item.buyingPrice === null ? "" : String(item.buyingPrice),
+        ]),
+      ),
     );
     const savedMode = String(
       (detail?.receipt as any)?.totals?.buyingPriceMode ??
@@ -1702,7 +2039,9 @@ export default function ReceiptsAdminClient({
         "ITEMS",
     ).toUpperCase();
     setBuyingPriceMode(savedMode === "TOTAL" ? "TOTAL" : "ITEMS");
-    setBuyingTotalDraft(supportBuyingTotal > 0 ? String(supportBuyingTotal) : "");
+    setBuyingTotalDraft(
+      supportBuyingTotal > 0 ? String(supportBuyingTotal) : "",
+    );
     setBuyingPriceEditorOpen(true);
   };
   const saveBuyingPrices = async () => {
@@ -1710,7 +2049,9 @@ export default function ReceiptsAdminClient({
     const aggregateBuyingTotal = Number(buyingTotalDraft);
     if (
       buyingPriceMode === "TOTAL" &&
-      (buyingTotalDraft.trim() === "" || !Number.isFinite(aggregateBuyingTotal) || aggregateBuyingTotal <= 0)
+      (buyingTotalDraft.trim() === "" ||
+        !Number.isFinite(aggregateBuyingTotal) ||
+        aggregateBuyingTotal <= 0)
     ) {
       showToast("Enter a valid total buying price greater than zero", "warn");
       return;
@@ -1720,7 +2061,10 @@ export default function ReceiptsAdminClient({
       buyingPrice: Number(buyingPriceDraft[item.id]),
     }));
     const hasInvalidPrice = items.some(
-      (item) => buyingPriceDraft[item.orderItemId]?.trim() === "" || !Number.isFinite(item.buyingPrice) || item.buyingPrice < 0,
+      (item) =>
+        buyingPriceDraft[item.orderItemId]?.trim() === "" ||
+        !Number.isFinite(item.buyingPrice) ||
+        item.buyingPrice < 0,
     );
     if (buyingPriceMode === "ITEMS" && hasInvalidPrice) {
       showToast("Enter a valid buying price for every item", "warn");
@@ -1729,18 +2073,22 @@ export default function ReceiptsAdminClient({
 
     setBuyingPriceSaving(true);
     try {
-      const response = await fetch(`/api/receipts/${selected.id}/buying-prices`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify(
-          buyingPriceMode === "TOTAL"
-            ? { mode: "TOTAL", buyingTotal: aggregateBuyingTotal }
-            : { mode: "ITEMS", items },
-        ),
-      });
+      const response = await fetch(
+        `/api/receipts/${selected.id}/buying-prices`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(
+            buyingPriceMode === "TOTAL"
+              ? { mode: "TOTAL", buyingTotal: aggregateBuyingTotal }
+              : { mode: "ITEMS", items },
+          ),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload?.error || "Failed to update buying prices");
+      if (!response.ok)
+        throw new Error(payload?.error || "Failed to update buying prices");
 
       showToast(
         `Buying prices saved. Profit recalculated to ${formatCurrency(payload?.profit ?? profitPreview)}.`,
@@ -1753,7 +2101,8 @@ export default function ReceiptsAdminClient({
       await fetchSummary();
       await fetchReceiptDetail(selected.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update buying prices";
+      const message =
+        err instanceof Error ? err.message : "Failed to update buying prices";
       showToast(message, "error");
     } finally {
       setBuyingPriceSaving(false);
@@ -1764,12 +2113,12 @@ export default function ReceiptsAdminClient({
     quickRange === "today"
       ? "Today"
       : quickRange === "yesterday"
-      ? "Yesterday"
-      : quickRange === "this-week"
-      ? "This week"
-      : quickRange === "trading-period"
-      ? tradingPeriod.label
-      : "Custom range";
+        ? "Yesterday"
+        : quickRange === "this-week"
+          ? "This week"
+          : quickRange === "trading-period"
+            ? tradingPeriod.label
+            : "Custom range";
   const partialTotals = useMemo(() => {
     const totals: Record<"MPESA" | "CASH", number> = { MPESA: 0, CASH: 0 };
     rows.forEach((row) => {
@@ -1782,7 +2131,9 @@ export default function ReceiptsAdminClient({
     return totals;
   }, [rows]);
   const derivedSummary = useMemo(() => {
-    const filtered = rows.filter((row) => (row.podDeliveryStatus ?? "").toLowerCase() !== "pending");
+    const filtered = rows.filter(
+      (row) => (row.podDeliveryStatus ?? "").toLowerCase() !== "pending",
+    );
     const paymentTotals = filtered.reduce(
       (acc, row) => {
         const method = row.paymentMethod ?? "";
@@ -1803,11 +2154,15 @@ export default function ReceiptsAdminClient({
     );
 
     const itemsCount = filtered.reduce((sum, row) => {
-      const itemList = Array.isArray(row.items) && row.items.length > 0 ? row.items.length : 1;
+      const itemList =
+        Array.isArray(row.items) && row.items.length > 0 ? row.items.length : 1;
       return sum + itemList;
     }, 0);
 
-    const totalSales = filtered.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+    const totalSales = filtered.reduce(
+      (sum, row) => sum + Number(row.total ?? 0),
+      0,
+    );
     return {
       totalSales,
       totalCost: 0,
@@ -1822,14 +2177,18 @@ export default function ReceiptsAdminClient({
     };
   }, [rows]);
   const shouldUseDerivedSummary = rows.length > 0 && !summaryTotals;
-  const summaryForDisplay = shouldUseDerivedSummary ? derivedSummary : summaryTotals ?? derivedSummary;
+  const summaryForDisplay = shouldUseDerivedSummary
+    ? derivedSummary
+    : (summaryTotals ?? derivedSummary);
   const profitViewActive = summaryView === "profit";
   const displayRows = profitViewActive ? profitReceipts : rows;
   const profitReceiptTotal = profitReceipts.reduce((sum, row) => {
-    const explicit = typeof (row as any).profit === "number" ? (row as any).profit : undefined;
+    const explicit =
+      typeof (row as any).profit === "number" ? (row as any).profit : undefined;
     const buying = Number((row as any).buyingTotal ?? 0);
     const selling = Number(row.total ?? 0);
-    const computed = explicit !== undefined ? explicit : buying > 0 ? selling - buying : 0;
+    const computed =
+      explicit !== undefined ? explicit : buying > 0 ? selling - buying : 0;
     return sum + computed;
   }, 0);
   const summarySalesLabel = summaryLoading
@@ -1839,7 +2198,9 @@ export default function ReceiptsAdminClient({
     ? "Loading..."
     : formatCurrency(summaryForDisplay?.totalProfit ?? 0);
   const profitColorClass =
-    (summaryForDisplay?.totalProfit ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300";
+    (summaryForDisplay?.totalProfit ?? 0) >= 0
+      ? "text-emerald-300"
+      : "text-rose-300";
   const formattedRangeStart = formatRangeLabel(appliedFilters.start);
   const formattedRangeEnd = formatRangeLabel(appliedFilters.end);
   const rangeDisplay =
@@ -1857,11 +2218,16 @@ export default function ReceiptsAdminClient({
       <section className="rounded-[32px] border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/70 p-6 shadow-[0_30px_70px_rgba(2,6,23,0.85)]">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl space-y-1">
-            <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">Receipts overview</p>
-            <h2 className="text-2xl font-semibold text-white">Receipt operations at a glance</h2>
+            <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">
+              Receipts overview
+            </p>
+            <h2 className="text-2xl font-semibold text-white">
+              Receipt operations at a glance
+            </h2>
             <p className="text-sm text-slate-300">
-              The summaries in this panel stay arranged in balanced blocks so the page feels structured and fills the
-              width without extra side margins.
+              The summaries in this panel stay arranged in balanced blocks so
+              the page feels structured and fills the width without extra side
+              margins.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 text-right">
@@ -1875,7 +2241,9 @@ export default function ReceiptsAdminClient({
                   : "border-emerald-500 text-emerald-200 hover:border-emerald-300 hover:bg-emerald-500/10"
               }`}
             >
-              {triggerSummaryLoading ? "Sending summary…" : "Send 8PM summary now"}
+              {triggerSummaryLoading
+                ? "Sending summary…"
+                : "Send 8PM summary now"}
             </button>
             {triggerSummaryResult && (
               <p className="text-xs text-emerald-200">{triggerSummaryResult}</p>
@@ -1904,67 +2272,93 @@ export default function ReceiptsAdminClient({
           <div className="rounded-[28px] border border-white/10 bg-slate-950/75 p-5 shadow-inner shadow-black/40">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">POD receipts only</p>
-                <p className="text-sm text-slate-300">Paid PODs only (marked via “Mark POD paid”).</p>
+                <p className="text-xs uppercase tracking-wide text-slate-400">
+                  POD receipts only
+                </p>
+                <p className="text-sm text-slate-300">
+                  Paid PODs only (marked via “Mark POD paid”).
+                </p>
               </div>
               <span className="text-xs text-emerald-300">
-                {podPanelLoading ? "Loading..." : podPanelStatus === "all" ? "All" : "Filtered"}
+                {podPanelLoading
+                  ? "Loading..."
+                  : podPanelStatus === "all"
+                    ? "All"
+                    : "Filtered"}
               </span>
             </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => applyPodFilters("all")}
-              aria-pressed={podPanelStatus === "all"}
-              className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
-                podPanelStatus === "all"
-                  ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]"
-                  : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-emerald-500 hover:bg-slate-900/70"
-              }`}
-            >
-              <p className="text-xs uppercase tracking-wide text-slate-500">Total PODs</p>
-              <p className="text-2xl font-semibold text-white">{podStats.total}</p>
-            </button>
-            <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Paid value</p>
-              <p className="text-2xl font-semibold text-white">{formatCurrency(podStats.totalValue)}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => applyPodFilters("all")}
+                aria-pressed={podPanelStatus === "all"}
+                className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
+                  podPanelStatus === "all"
+                    ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                    : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-emerald-500 hover:bg-slate-900/70"
+                }`}
+              >
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Total PODs
+                </p>
+                <p className="text-2xl font-semibold text-white">
+                  {podStats.total}
+                </p>
+              </button>
+              <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Paid value
+                </p>
+                <p className="text-2xl font-semibold text-white">
+                  {formatCurrency(podStats.totalValue)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => applyPodFilters("delivered")}
+                aria-pressed={podPanelStatus === "delivered"}
+                className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
+                  podPanelStatus === "delivered"
+                    ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                    : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-emerald-500 hover:bg-slate-900/70"
+                }`}
+              >
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Delivered
+                </p>
+                <p className="text-lg font-semibold text-emerald-300">
+                  {podStats.delivered}
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPodFilters("pending")}
+                aria-pressed={podPanelStatus === "pending"}
+                className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
+                  podPanelStatus === "pending"
+                    ? "border-rose-500 text-white bg-rose-500/10 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
+                    : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-rose-500 hover:bg-slate-900/70"
+                }`}
+              >
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Pending / Failed
+                </p>
+                <p className="text-lg font-semibold text-rose-300">
+                  {podStats.pending} / {podStats.failed}
+                </p>
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => applyPodFilters("delivered")}
-              aria-pressed={podPanelStatus === "delivered"}
-              className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
-                podPanelStatus === "delivered"
-                  ? "border-emerald-500 bg-emerald-500/10 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]"
-                  : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-emerald-500 hover:bg-slate-900/70"
-              }`}
-            >
-              <p className="text-xs uppercase tracking-wide text-slate-500">Delivered</p>
-              <p className="text-lg font-semibold text-emerald-300">{podStats.delivered}</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPodFilters("pending")}
-              aria-pressed={podPanelStatus === "pending"}
-              className={`rounded-xl border px-3 py-4 text-left text-sm transition ${
-                podPanelStatus === "pending"
-                  ? "border-rose-500 text-white bg-rose-500/10 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
-                  : "border-white/10 bg-slate-950/60 text-slate-100 hover:border-rose-500 hover:bg-slate-900/70"
-              }`}
-            >
-              <p className="text-xs uppercase tracking-wide text-slate-500">Pending / Failed</p>
-              <p className="text-lg font-semibold text-rose-300">
-                {podStats.pending} / {podStats.failed}
-              </p>
-            </button>
-          </div>
             <div className="mt-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Status filter</p>
-            <select
-              value={podPanelStatus}
-              onChange={(e) => setPodPanelStatus(e.target.value as PodPanelStatus)}
-              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-            >
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Status filter
+              </p>
+              <select
+                value={podPanelStatus}
+                onChange={(e) =>
+                  setPodPanelStatus(e.target.value as PodPanelStatus)
+                }
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+              >
                 <option value="all">All PODs</option>
                 <option value="delivered">Delivered</option>
                 <option value="pending">Pending</option>
@@ -2010,7 +2404,9 @@ export default function ReceiptsAdminClient({
             Search customer / order / staff
             <input
               value={filters.q}
-              onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, q: e.target.value }))
+              }
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
               placeholder="eg. Jane, OR-123..."
             />
@@ -2019,7 +2415,9 @@ export default function ReceiptsAdminClient({
             Document type
             <select
               value={filters.docType}
-              onChange={(e) => setFilters((prev) => ({ ...prev, docType: e.target.value }))}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, docType: e.target.value }))
+              }
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
             >
               <option value="">All</option>
@@ -2039,7 +2437,8 @@ export default function ReceiptsAdminClient({
                 setQuickRange("custom");
                 setFilters((prev) => {
                   const next = { ...prev, start: e.target.value };
-                  if (next.end && next.start && next.start > next.end) next.end = next.start;
+                  if (next.end && next.start && next.start > next.end)
+                    next.end = next.start;
                   return next;
                 });
               }}
@@ -2055,7 +2454,8 @@ export default function ReceiptsAdminClient({
                 setQuickRange("custom");
                 setFilters((prev) => {
                   const next = { ...prev, end: e.target.value };
-                  if (next.start && next.end && next.end < next.start) next.start = next.end;
+                  if (next.start && next.end && next.end < next.start)
+                    next.start = next.end;
                   return next;
                 });
               }}
@@ -2068,7 +2468,9 @@ export default function ReceiptsAdminClient({
             Staff
             <select
               value={filters.attendantId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, attendantId: e.target.value }))}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, attendantId: e.target.value }))
+              }
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
             >
               <option value="">All staff</option>
@@ -2118,7 +2520,11 @@ export default function ReceiptsAdminClient({
             onClick={handleDownloadPosPdf}
             className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5 disabled:opacity-50"
             disabled={!appliedFilters.attendantId}
-            title={!appliedFilters.attendantId ? "Select a staff member first" : "Download POS direct sales report (PDF)"}
+            title={
+              !appliedFilters.attendantId
+                ? "Select a staff member first"
+                : "Download POS direct sales report (PDF)"
+            }
           >
             Download POS PDF
           </button>
@@ -2126,7 +2532,9 @@ export default function ReceiptsAdminClient({
       </section>
       <section className="rounded-[32px] border border-white/10 bg-slate-950/70 p-4 shadow-[0_25px_55px_rgba(0,0,0,0.65)]">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Receipt list</p>
+          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">
+            Receipt list
+          </p>
           <div className="flex items-center gap-3">
             {profitViewActive ? (
               <button
@@ -2151,12 +2559,16 @@ export default function ReceiptsAdminClient({
                   Contributing receipts ({profitReceipts.length})
                 </h3>
                 <p className="text-xs text-emerald-100/80">
-                  These are priced receipts included in the profit total. Pending variable-cost receipts appear here after admin pricing.
+                  These are priced receipts included in the profit total.
+                  Pending variable-cost receipts appear here after admin
+                  pricing.
                 </p>
               </div>
               <div className="text-right text-xs text-emerald-100/80">
                 <div>Listed profit</div>
-                <div className="text-sm font-semibold text-white">{formatCurrency(profitReceiptTotal)}</div>
+                <div className="text-sm font-semibold text-white">
+                  {formatCurrency(profitReceiptTotal)}
+                </div>
               </div>
             </div>
           </div>
@@ -2165,22 +2577,38 @@ export default function ReceiptsAdminClient({
           <table className="w-full min-w-[900px] text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">
               <tr>
-                <th className="w-14 px-3 py-2 text-center whitespace-nowrap" aria-label="Expand receipt" />
+                <th
+                  className="w-14 px-3 py-2 text-center whitespace-nowrap"
+                  aria-label="Expand receipt"
+                />
                 <th className="px-3 py-2 text-left whitespace-nowrap">Order</th>
                 <th className="px-3 py-2 text-left whitespace-nowrap">Doc</th>
-                <th className="px-3 py-2 text-left whitespace-nowrap">Customer</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">
+                  Customer
+                </th>
                 <th className="px-3 py-2 text-left whitespace-nowrap">Staff</th>
                 <th className="px-3 py-2 text-left whitespace-nowrap">Total</th>
-                <th className="px-3 py-2 text-left whitespace-nowrap">Payment</th>
-                <th className="px-3 py-2 text-left whitespace-nowrap">Status</th>
-                <th className="px-3 py-2 text-left whitespace-nowrap">Created</th>
-                <th className="px-3 py-2 text-right whitespace-nowrap">Actions</th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">
+                  Payment
+                </th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">
+                  Status
+                </th>
+                <th className="px-3 py-2 text-left whitespace-nowrap">
+                  Created
+                </th>
+                <th className="px-3 py-2 text-right whitespace-nowrap">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 whitespace-nowrap">
               {displayRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-6 text-center text-slate-400">
+                  <td
+                    colSpan={10}
+                    className="px-3 py-6 text-center text-slate-400"
+                  >
                     {loading
                       ? "Loading receipts..."
                       : profitViewActive
@@ -2190,7 +2618,10 @@ export default function ReceiptsAdminClient({
                 </tr>
               )}
               {displayRows.map((row) => {
-                const isPodPending = row.isPodDelivery && String(row.podDeliveryStatus ?? "").toLowerCase() === "pending";
+                const isPodPending =
+                  row.isPodDelivery &&
+                  String(row.podDeliveryStatus ?? "").toLowerCase() ===
+                    "pending";
                 const isSelected = row.id === selected?.id && drawerOpen;
                 const customerProfileHref = buildAdminCustomerProfileHref({
                   phone: row.customerPhone,
@@ -2198,119 +2629,164 @@ export default function ReceiptsAdminClient({
                 });
                 return (
                   <Fragment key={row.id}>
-                  <tr
-                    className={`cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`}
-                    onClick={() => handleRowClick(row)}
-                    aria-expanded={isSelected}
-                  >
-                  <td className="px-3 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleRowClick(row);
-                      }}
-                      className="inline-flex rounded-xl border border-white/10 p-2 text-slate-200 transition hover:border-cyan-400/30 hover:bg-cyan-400/10 hover:text-cyan-100"
-                      aria-label={isSelected ? "Collapse receipt details" : "Expand receipt details"}
+                    <tr
+                      className={`cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`}
+                      onClick={() => handleRowClick(row)}
+                      aria-expanded={isSelected}
                     >
-                      {isSelected ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </button>
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                  <div className="font-semibold text-white">{row.orderRef || "-"}</div>
-                  <div className="text-xs text-slate-400">#{row.id.slice(0, 6)}</div>
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`${badgeBaseClass} ${getDocBadgeClass(row.docType)}`}>
-                      {formatBadgeLabel(row.docType)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <Link
-                      href={customerProfileHref}
-                      onClick={(event) => event.stopPropagation()}
-                      className="text-white transition hover:text-cyan-200"
-                    >
-                      {row.customerName || "Walk-in"}
-                    </Link>
-                  </td>
-                    <td className="px-3 py-3 text-slate-300">{row.attendantName || "-"}</td>
-                    <td className="px-3 py-3 font-semibold text-emerald-300">{formatCurrency(row.total)}</td>
-                    <td className="px-3 py-3">
-                      <span className={`${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`}>
-                        {formatBadgeLabel(row.paymentMethod)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className={`${badgeBaseClass} ${getStatusBadgeClass(row.status)}`}>
-                        {formatBadgeLabel(row.status)}
-                      </span>
-                      {row.isPodDelivery && (
-                        <div className="mt-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-yellow-200">
-                          POD {formatBadgeLabel(row.podDeliveryStatus)}
+                      <td className="px-3 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleRowClick(row);
+                          }}
+                          className="inline-flex rounded-xl border border-white/10 p-2 text-slate-200 transition hover:border-cyan-400/30 hover:bg-cyan-400/10 hover:text-cyan-100"
+                          aria-label={
+                            isSelected
+                              ? "Collapse receipt details"
+                              : "Expand receipt details"
+                          }
+                        >
+                          {isSelected ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <div className="font-semibold text-white">
+                          {row.orderRef || "-"}
                         </div>
-                      )}
-                      {row.isProjectReceipt && (
-                        <div className="mt-1 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-cyan-100">
-                          Project {formatProjectStageLabel(row.projectStage)}
-                        </div>
-                      )}
-                      {row.podDeliveryNote && (
-                        <p className="mt-1 text-xs text-yellow-200">{row.podDeliveryNote}</p>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-slate-300">{formatDateTime(row.createdAt)}</td>
-                    <td className="px-3 py-3 text-right">
-                      <RowActions
-                        onEdit={() => {
-                          setPendingEditId(row.id);
-                          handleRowClick(row, true);
-                        }}
-                        onEditItems={() => {
-                          setPendingEditId(row.id);
-                          handleRowClick(row, true);
-                        }}
-                        onDelete={() => void deleteReceiptById(row.id)}
-                        onDownload={() => void downloadReceiptById(row)}
-                        onSendWhatsapp={() => void sendReceiptById(row.id, "whatsapp")}
-                        onResendPod={row.isPodDelivery ? () => void sendReceiptById(row.id, "whatsapp") : undefined}
-                        onPrint={() => window.open(`/receipts/${row.id}`, "_blank")}
-                        onPodAction={
-                          isPodPending ? () => void handleMarkPodDelivered(row.id) : undefined
-                        }
-                        onMarkPaid={row.isPodDelivery && row.podDeliveryStatus === "delivered" ? () => void handleMarkPodPaid(row.id) : undefined}
-                        onProjectAction={
-                          row.isProjectReceipt && row.projectStage !== "COMPLETED_POSTED"
-                            ? () => void advanceProjectStage(row)
-                            : undefined
-                        }
-                        projectActionLabel={
-                          row.projectStage === "RECEIPT_CREATED"
-                            ? "Confirm & schedule"
-                            : row.projectStage === "PROJECT_SCHEDULED"
-                              ? "Start progress"
-                              : row.projectStage === "PROJECT_IN_PROGRESS"
-                                ? "Mark installed"
-                                : row.projectStage === "PROJECT_INSTALLED"
-                                  ? "Complete project"
-                                  : "Project saved"
-                        }
-                        projectActionProcessing={projectActionId === row.id}
-                        podActionLabel="Mark POD delivered"
-                        podActionProcessing={podActionId === row.id}
-                        disabled={loading}
-                      />
-                    </td>
-                  </tr>
-                  {isSelected ? (
-                    <tr className="bg-slate-950/80">
-                      <td colSpan={10} className="border-t border-cyan-400/15 p-0 whitespace-normal">
-                        <div className="sticky left-0 w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] p-3 sm:p-4 lg:static lg:w-auto lg:max-w-none lg:p-5">
-                          <div ref={setInlineDetailHost} />
+                        <div className="text-xs text-slate-400">
+                          #{row.id.slice(0, 6)}
                         </div>
                       </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`${badgeBaseClass} ${getDocBadgeClass(row.docType)}`}
+                        >
+                          {formatBadgeLabel(row.docType)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <Link
+                          href={customerProfileHref}
+                          onClick={(event) => event.stopPropagation()}
+                          className="text-white transition hover:text-cyan-200"
+                        >
+                          {row.customerName || "Walk-in"}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-slate-300">
+                        {row.attendantName || "-"}
+                      </td>
+                      <td className="px-3 py-3 font-semibold text-emerald-300">
+                        {formatCurrency(row.total)}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`}
+                        >
+                          {formatBadgeLabel(row.paymentMethod)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`${badgeBaseClass} ${getStatusBadgeClass(row.status)}`}
+                        >
+                          {formatBadgeLabel(row.status)}
+                        </span>
+                        {row.isPodDelivery && (
+                          <div className="mt-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-yellow-200">
+                            POD {formatBadgeLabel(row.podDeliveryStatus)}
+                          </div>
+                        )}
+                        {row.isProjectReceipt && (
+                          <div className="mt-1 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-cyan-100">
+                            Project {formatProjectStageLabel(row.projectStage)}
+                          </div>
+                        )}
+                        {row.podDeliveryNote && (
+                          <p className="mt-1 text-xs text-yellow-200">
+                            {row.podDeliveryNote}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-slate-300">
+                        {formatDateTime(row.createdAt)}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <RowActions
+                          onEdit={() => {
+                            setPendingEditId(row.id);
+                            handleRowClick(row, true);
+                          }}
+                          onEditItems={() => {
+                            setPendingEditId(row.id);
+                            handleRowClick(row, true);
+                          }}
+                          onDelete={() => void deleteReceiptById(row.id)}
+                          onDownload={() => void downloadReceiptById(row)}
+                          onSendWhatsapp={() =>
+                            void sendReceiptById(row.id, "whatsapp")
+                          }
+                          onResendPod={
+                            row.isPodDelivery
+                              ? () => void sendReceiptById(row.id, "whatsapp")
+                              : undefined
+                          }
+                          onPrint={() =>
+                            window.open(`/receipts/${row.id}`, "_blank")
+                          }
+                          onPodAction={
+                            isPodPending
+                              ? () => openPodOutcome(row.id)
+                              : undefined
+                          }
+                          onMarkPaid={
+                            row.isPodDelivery &&
+                            row.podDeliveryStatus === "delivered"
+                              ? () => void handleMarkPodPaid(row.id)
+                              : undefined
+                          }
+                          onProjectAction={
+                            row.isProjectReceipt &&
+                            row.projectStage !== "COMPLETED_POSTED"
+                              ? () => void advanceProjectStage(row)
+                              : undefined
+                          }
+                          projectActionLabel={
+                            row.projectStage === "RECEIPT_CREATED"
+                              ? "Confirm & schedule"
+                              : row.projectStage === "PROJECT_SCHEDULED"
+                                ? "Start progress"
+                                : row.projectStage === "PROJECT_IN_PROGRESS"
+                                  ? "Mark installed"
+                                  : row.projectStage === "PROJECT_INSTALLED"
+                                    ? "Complete project"
+                                    : "Project saved"
+                          }
+                          projectActionProcessing={projectActionId === row.id}
+                          podActionLabel="Record POD outcome"
+                          podActionProcessing={podActionId === row.id}
+                          disabled={loading}
+                        />
+                      </td>
                     </tr>
-                  ) : null}
+                    {isSelected ? (
+                      <tr className="bg-slate-950/80">
+                        <td
+                          colSpan={10}
+                          className="border-t border-cyan-400/15 p-0 whitespace-normal"
+                        >
+                          <div className="sticky left-0 w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] p-3 sm:p-4 lg:static lg:w-auto lg:max-w-none lg:p-5">
+                            <div ref={setInlineDetailHost} />
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
                   </Fragment>
                 );
               })}
@@ -2346,682 +2822,1089 @@ export default function ReceiptsAdminClient({
       </section>
       {drawerOpen && inlineDetailHost
         ? createPortal(
-          <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] p-4 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.35)] sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Receipt detail</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl font-semibold text-white">{selected?.orderRef || selected?.id}</h2>
-                  {allowEdit && selected?.id ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={openBuyingPriceEditor}
-                        disabled={detailLoading || itemsWithCost.length === 0}
-                        className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-50"
-                      >
-                        Edit buying prices
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleRecalculateReceiptCosts(selected.id)}
-                        disabled={recalculatingReceiptId === selected.id}
-                        className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
-                      >
-                        {recalculatingReceiptId === selected.id ? "Recalculating..." : "Use catalogue cost"}
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeDrawer}
-                className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10"
-              >
-                Close
-              </button>
-            </div>
-            {detailLoading && <p className="mt-6 text-sm text-slate-400">Loading details...</p>}
-            {!detailLoading && detail?.receipt && (
-              <div className="mt-6 space-y-4">
-                <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm">
-                  {(() => {
-                    const customerProfileHref = buildAdminCustomerProfileHref({
-                      phone: detail.receipt.order?.customerPhone || detail.receipt.data?.customerPhone || null,
-                      displayName: detail.receipt.order?.customerName || detail.receipt.data?.customerName || null,
-                    });
-                    return (
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] p-4 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.35)] sm:p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Receipt detail
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-semibold text-white">
+                      {selected?.orderRef || selected?.id}
+                    </h2>
+                    {allowEdit && selected?.id ? (
                       <>
-                  <div className="flex flex-wrap gap-4 text-slate-300">
-                    <div>
-                      <p className="text-xs text-slate-500">Customer</p>
-                      <p className="text-base text-white">
-                        <Link href={customerProfileHref} className="transition hover:text-cyan-200">
-                          {detail.receipt.order?.customerName || detail.receipt.data?.customerName || "Walk-in"}
-                        </Link>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Served by</p>
-                      <p>{detail.receipt.order?.attendant?.name || selected?.attendantName || "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Created</p>
-                      <p>{formatDateTime(detail.receipt.generatedAt)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Doc type</p>
-                      <p>{detail.receipt.docType}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <Link href={customerProfileHref} className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15">
-                      Open customer profile
-                    </Link>
-                  </div>
-                      </>
-                    );
-                  })()}
-                  <div className="mt-4 rounded-xl border border-white/5 bg-slate-950/40 p-3 text-sm">
-                    <div className="flex flex-wrap gap-4">
-                      <div>
-                        <p className="text-xs text-slate-500">Subtotal</p>
-                        <p className="font-semibold text-white">{formatCurrency(detail.receipt.totals?.subtotal)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Tax</p>
-                        <p className="font-semibold text-white">{formatCurrency(detail.receipt.totals?.tax)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Discount</p>
-                        <p className="font-semibold text-white">{formatCurrency(detail.receipt.discount)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Total</p>
-                        <p className="text-lg font-semibold text-emerald-300">
-                          {formatCurrency(detail.receipt.totals?.total)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-300">
-                      <div>
-                        <p className="text-xs text-slate-500">Buying total</p>
-                        <p className="font-semibold text-white">{formatCurrency(supportBuyingTotal)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">POS commission</p>
-                        <p className="font-semibold text-white">{formatCurrency(posCommissionTotal)}</p>
-                        <p className="text-[11px] text-slate-500">
-                          Earned {formatCurrency(earnedPosCommissionTotal)} {manualPosCommissionAmount > 0 ? `+ Manual ${formatCurrency(manualPosCommissionAmount)}` : ""}
-                        </p>
-                        {allowEdit && (
-                          <div className="mt-1 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={openCommissionEditor}
-                              className="rounded-lg border border-white/15 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-100 hover:bg-white/10"
-                            >
-                              {manualPosCommissionAmount > 0 ? "Edit" : "Add"}
-                            </button>
-                            {manualPosCommissionAmount > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => void deleteManualCommission()}
-                                disabled={commissionSaving}
-                                className="rounded-lg border border-rose-500/40 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {allowEdit && commissionEditorOpen && (
-                          <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
-                            <p className="text-[10px] uppercase tracking-wide text-emerald-200">Manual POS commission</p>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={commissionInput}
-                                onChange={(e) => setCommissionInput(e.target.value)}
-                                className="w-32 rounded-lg border border-white/15 bg-slate-950/60 px-2 py-1 text-xs text-white"
-                                placeholder="Amount"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void saveManualCommission()}
-                                disabled={commissionSaving}
-                                className="rounded-lg bg-emerald-500 px-2 py-1 text-xs font-semibold text-black disabled:opacity-50"
-                              >
-                                {commissionSaving ? "Saving..." : "Save"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setCommissionEditorOpen(false);
-                                  setCommissionInput("");
-                                }}
-                                disabled={commissionSaving}
-                                className="rounded-lg border border-white/15 px-2 py-1 text-xs text-slate-100 disabled:opacity-50"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Profit</p>
-                        <p className={`text-lg font-semibold ${profitColor}`}>
-                          {canShowReceiptProfit ? formatCurrency(profitAmount) : "Awaiting cost data"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  {detail.receipt.docType === "LAYAWAY" && (
-                    <p className="mt-2 text-xs text-amber-300">
-                      Balance: {formatCurrency(detail.receipt.totals?.balance ?? detail.receipt.order?.layawayPlan?.balance)}
-                    </p>
-                  )}
-                </div>
-
-                {allowEdit && buyingPriceEditorOpen && (
-                  <section className="rounded-2xl border border-cyan-400/30 bg-cyan-400/5 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Edit buying prices</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-400">Choose one total cost for the complete receipt or enter unit costs per item. Selling prices will not change.</p>
-                      </div>
-                      <button type="button" onClick={() => setBuyingPriceEditorOpen(false)} disabled={buyingPriceSaving} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-300 disabled:opacity-50">Cancel</button>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-slate-950/40 p-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setBuyingPriceMode("TOTAL")}
-                        className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${buyingPriceMode === "TOTAL" ? "bg-cyan-300 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
-                      >
-                        Price all at once
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBuyingPriceMode("ITEMS")}
-                        className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${buyingPriceMode === "ITEMS" ? "bg-cyan-300 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
-                      >
-                        Price item by item
-                      </button>
-                    </div>
-                    {buyingPriceMode === "TOTAL" ? (
-                      <label className="mt-4 block rounded-xl border border-cyan-400/20 bg-slate-950/50 p-4">
-                        <span className="block text-sm font-semibold text-white">Total buying price for the complete receipt</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-400">Enter one combined cost covering every product, service, transport, and installation line.</span>
-                        <span className="relative mt-3 block">
-                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">KES</span>
-                          <input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            inputMode="decimal"
-                            value={buyingTotalDraft}
-                            onChange={(event) => setBuyingTotalDraft(event.target.value)}
-                            className="w-full rounded-lg border border-white/15 bg-slate-950 py-3 pl-11 pr-3 text-right text-base font-semibold text-white outline-none focus:border-cyan-400"
-                            aria-label="Total buying price for the complete receipt"
-                            autoFocus
-                          />
-                        </span>
-                      </label>
-                    ) : (
-                      <div className="mt-4 space-y-3">
-                        {itemsWithCost.map((item) => (
-                        <label key={item.id} className="grid gap-2 rounded-xl border border-white/10 bg-slate-950/50 p-3 sm:grid-cols-[1fr_150px] sm:items-center">
-                          <span>
-                            <span className="block text-sm font-semibold text-white">{item.displayName || "Item"}</span>
-                            <span className="text-xs text-slate-500">Qty {Math.max(1, Number(item.quantity ?? 1))} · Selling {formatCurrency(item.sellingPrice)}</span>
-                          </span>
-                          <span className="relative block">
-                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">KES</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              inputMode="decimal"
-                              value={buyingPriceDraft[item.id] ?? ""}
-                              onChange={(event) => setBuyingPriceDraft((current) => ({ ...current, [item.id]: event.target.value }))}
-                              className="w-full rounded-lg border border-white/15 bg-slate-950 py-2 pl-11 pr-3 text-right text-sm font-semibold text-white outline-none focus:border-cyan-400"
-                              aria-label={`Buying price for ${item.displayName || "item"}`}
-                            />
-                          </span>
-                        </label>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm">
-                      <div><p className="text-xs text-slate-500">New buying total</p><p className="font-semibold text-white">{formatCurrency(buyingPricePreview)}</p></div>
-                      <div><p className="text-xs text-slate-500">Estimated profit</p><p className={`font-semibold ${profitPreview >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatCurrency(profitPreview)}</p></div>
-                    </div>
-                    <button type="button" onClick={() => void saveBuyingPrices()} disabled={buyingPriceSaving} className="mt-4 w-full rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:opacity-50">
-                      {buyingPriceSaving
-                        ? "Saving and recalculating..."
-                        : buyingPriceMode === "TOTAL"
-                          ? "Save total cost and recalculate profit"
-                          : "Save item prices and recalculate profit"}
-                    </button>
-                  </section>
-                )}
-
-                {detail.receipt.data?.podDelivery && (
-                  <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-yellow-100">
-                    <p className="text-xs uppercase tracking-[0.3em] text-yellow-300">
-                      POD {formatBadgeLabel(detail.receipt.data.podDelivery.status)}
-                    </p>
-                    {detail.receipt.data.podDelivery.note && (
-                      <p className="mt-2 text-sm text-white">{detail.receipt.data.podDelivery.note}</p>
-                    )}
-                    {detail.receipt.data.podDelivery.createdAt && (
-                      <p className="mt-2 text-[11px] text-yellow-200">
-                        Created {formatDateTime(detail.receipt.data.podDelivery.createdAt)}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {(() => {
-                  const projectFlow = readReceiptProjectFlow(detail.receipt.data?.projectFlow);
-                  if (!projectFlow || !projectEditor) return null;
-                  return (
-                    <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-100">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-cyan-200">Project receipt</p>
-                          <p className="mt-1 text-sm text-white">
-                            {formatProjectStageLabel(projectFlow.stage)} · {formatProjectPaymentTermLabel(projectFlow.paymentTerm)}
-                          </p>
-                        </div>
-                        <div className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
-                          {projectFlow.paymentStatus.replace(/_/g, " ")}
-                        </div>
-                      </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
-                          Stage
-                          <select
-                            value={projectEditor.stage}
-                            onChange={(e) =>
-                              setProjectEditor((current) =>
-                                current
-                                  ? { ...current, stage: e.target.value as ReceiptProjectStage }
-                                  : current,
-                              )
-                            }
-                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
-                          >
-                            {(["RECEIPT_CREATED", "PROJECT_SCHEDULED", "PROJECT_IN_PROGRESS", "PROJECT_INSTALLED", "COMPLETED_POSTED"] as const).map((option) => (
-                              <option key={option} value={option}>
-                                {formatProjectStageLabel(option)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
-                          Payment position
-                          <select
-                            value={projectEditor.paymentTerm}
-                            onChange={(e) =>
-                              setProjectEditor((current) =>
-                                current
-                                  ? { ...current, paymentTerm: e.target.value as ReceiptProjectPaymentTerm }
-                                  : current,
-                              )
-                            }
-                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
-                          >
-                            {(["FULL_BEFORE_INSTALLATION", "DEPOSIT_AND_BALANCE", "FULL_AFTER_INSTALLATION"] as const).map((option) => (
-                              <option key={option} value={option}>
-                                {formatProjectPaymentTermLabel(option)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
-                          Installation date
-                          <input
-                            type="date"
-                            value={projectEditor.scheduledDate}
-                            onChange={(e) =>
-                              setProjectEditor((current) =>
-                                current ? { ...current, scheduledDate: e.target.value } : current,
-                              )
-                            }
-                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
-                          />
-                        </label>
-                        {projectEditor.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
-                          <>
-                            <label className="text-xs uppercase tracking-wide text-cyan-200/80">
-                              Deposit type
-                              <select
-                                value={projectEditor.depositType}
-                                onChange={(e) =>
-                                  setProjectEditor((current) =>
-                                    current
-                                      ? {
-                                          ...current,
-                                          depositType: e.target.value as ReceiptProjectDepositType,
-                                          depositValue:
-                                            e.target.value === "AMOUNT"
-                                              ? current.depositType === "AMOUNT"
-                                                ? current.depositValue
-                                                : "5000"
-                                              : current.depositType === "PERCENT"
-                                                ? current.depositValue
-                                                : "30",
-                                        }
-                                      : current,
-                                  )
-                                }
-                                className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
-                              >
-                                <option value="PERCENT">Percentage</option>
-                                <option value="AMOUNT">Fixed amount</option>
-                              </select>
-                            </label>
-                            <label className="text-xs uppercase tracking-wide text-cyan-200/80">
-                              {projectEditor.depositType === "AMOUNT" ? "Deposit amount (Ksh)" : "Deposit percentage"}
-                              <input
-                                type="number"
-                                min={0}
-                                max={projectEditor.depositType === "AMOUNT" ? undefined : 100}
-                                value={projectEditor.depositValue}
-                                onChange={(e) =>
-                                  setProjectEditor((current) =>
-                                    current ? { ...current, depositValue: e.target.value } : current,
-                                  )
-                                }
-                                className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
-                              />
-                            </label>
-                          </>
-                        ) : null}
-                      </div>
-                      <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-xs text-slate-200 sm:grid-cols-2">
-                        <div>Project value: {formatCurrency(projectFlow.projectValue)}</div>
-                        <div>Total paid: {formatCurrency(projectFlow.totalPaidAmount)}</div>
-                        <div>Required deposit: {formatCurrency(projectFlow.depositRequiredAmount)}</div>
-                        <div>Deposit pending: {formatCurrency(projectFlow.depositPendingAmount)}</div>
-                        <div>Balance expected: {formatCurrency(projectFlow.balanceExpectedAmount)}</div>
-                        <div>Balance pending: {formatCurrency(projectFlow.balancePendingAmount)}</div>
-                        <div>Remaining unpaid: {formatCurrency(projectFlow.remainingAmount)}</div>
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={openBuyingPriceEditor}
+                          disabled={detailLoading || itemsWithCost.length === 0}
+                          className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-50"
+                        >
+                          Edit buying prices
+                        </button>
                         <button
                           type="button"
                           onClick={() =>
-                            saveProjectFlow(detail.receipt.id, {
-                              stage: projectEditor.stage,
-                              paymentTerm: projectEditor.paymentTerm,
-                              depositType: projectEditor.depositType,
-                              depositValue: Number(projectEditor.depositValue || 0),
-                              depositPaidAmount: Number(projectEditor.depositPaidAmount || 0),
-                              depositPaymentMethod: projectEditor.depositPaymentMethod,
-                              depositReference: projectEditor.depositReference || null,
-                              balancePaidAmount: Number(projectEditor.balancePaidAmount || 0),
-                              balancePaymentMethod: projectEditor.balancePaymentMethod,
-                              balanceReference: projectEditor.balanceReference || null,
-                              scheduledDate: projectEditor.scheduledDate || null,
-                              internalNotes: projectEditor.internalNotes || null,
-                              paymentNotes: projectEditor.paymentNotes || null,
-                            })
+                            void handleRecalculateReceiptCosts(selected.id)
                           }
-                          disabled={projectActionId === detail.receipt.id}
-                          className="rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-50"
+                          disabled={recalculatingReceiptId === selected.id}
+                          className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
                         >
-                          {projectActionId === detail.receipt.id ? "Saving..." : "Save project details"}
+                          {recalculatingReceiptId === selected.id
+                            ? "Recalculating..."
+                            : "Use catalogue cost"}
                         </button>
-                        {projectFlow.stage !== "COMPLETED_POSTED" && (
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDrawer}
+                  className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10"
+                >
+                  Close
+                </button>
+              </div>
+              {detailLoading && (
+                <p className="mt-6 text-sm text-slate-400">
+                  Loading details...
+                </p>
+              )}
+              {!detailLoading && detail?.receipt && (
+                <div className="mt-6 space-y-4">
+                  <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm">
+                    {(() => {
+                      const customerProfileHref = buildAdminCustomerProfileHref(
+                        {
+                          phone:
+                            detail.receipt.order?.customerPhone ||
+                            detail.receipt.data?.customerPhone ||
+                            null,
+                          displayName:
+                            detail.receipt.order?.customerName ||
+                            detail.receipt.data?.customerName ||
+                            null,
+                        },
+                      );
+                      return (
+                        <>
+                          <div className="flex flex-wrap gap-4 text-slate-300">
+                            <div>
+                              <p className="text-xs text-slate-500">Customer</p>
+                              <p className="text-base text-white">
+                                <Link
+                                  href={customerProfileHref}
+                                  className="transition hover:text-cyan-200"
+                                >
+                                  {detail.receipt.order?.customerName ||
+                                    detail.receipt.data?.customerName ||
+                                    "Walk-in"}
+                                </Link>
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">
+                                Served by
+                              </p>
+                              <p>
+                                {detail.receipt.order?.attendant?.name ||
+                                  selected?.attendantName ||
+                                  "-"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">Created</p>
+                              <p>
+                                {formatDateTime(detail.receipt.generatedAt)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">Doc type</p>
+                              <p>{detail.receipt.docType}</p>
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <Link
+                              href={customerProfileHref}
+                              className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
+                            >
+                              Open customer profile
+                            </Link>
+                          </div>
+                        </>
+                      );
+                    })()}
+                    <div className="mt-4 rounded-xl border border-white/5 bg-slate-950/40 p-3 text-sm">
+                      <div className="flex flex-wrap gap-4">
+                        <div>
+                          <p className="text-xs text-slate-500">Subtotal</p>
+                          <p className="font-semibold text-white">
+                            {formatCurrency(detail.receipt.totals?.subtotal)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Tax</p>
+                          <p className="font-semibold text-white">
+                            {formatCurrency(detail.receipt.totals?.tax)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Discount</p>
+                          <p className="font-semibold text-white">
+                            {formatCurrency(detail.receipt.discount)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Total</p>
+                          <p className="text-lg font-semibold text-emerald-300">
+                            {formatCurrency(detail.receipt.totals?.total)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-300">
+                        <div>
+                          <p className="text-xs text-slate-500">Buying total</p>
+                          <p className="font-semibold text-white">
+                            {formatCurrency(supportBuyingTotal)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">
+                            POS commission
+                          </p>
+                          <p className="font-semibold text-white">
+                            {formatCurrency(posCommissionTotal)}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            Earned {formatCurrency(earnedPosCommissionTotal)}{" "}
+                            {manualPosCommissionAmount > 0
+                              ? `+ Manual ${formatCurrency(manualPosCommissionAmount)}`
+                              : ""}
+                          </p>
+                          {allowEdit && (
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={openCommissionEditor}
+                                className="rounded-lg border border-white/15 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-100 hover:bg-white/10"
+                              >
+                                {manualPosCommissionAmount > 0 ? "Edit" : "Add"}
+                              </button>
+                              {manualPosCommissionAmount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteManualCommission()}
+                                  disabled={commissionSaving}
+                                  className="rounded-lg border border-rose-500/40 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {allowEdit && commissionEditorOpen && (
+                            <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
+                              <p className="text-[10px] uppercase tracking-wide text-emerald-200">
+                                Manual POS commission
+                              </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={commissionInput}
+                                  onChange={(e) =>
+                                    setCommissionInput(e.target.value)
+                                  }
+                                  className="w-32 rounded-lg border border-white/15 bg-slate-950/60 px-2 py-1 text-xs text-white"
+                                  placeholder="Amount"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void saveManualCommission()}
+                                  disabled={commissionSaving}
+                                  className="rounded-lg bg-emerald-500 px-2 py-1 text-xs font-semibold text-black disabled:opacity-50"
+                                >
+                                  {commissionSaving ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCommissionEditorOpen(false);
+                                    setCommissionInput("");
+                                  }}
+                                  disabled={commissionSaving}
+                                  className="rounded-lg border border-white/15 px-2 py-1 text-xs text-slate-100 disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Profit</p>
+                          <p className={`text-lg font-semibold ${profitColor}`}>
+                            {canShowReceiptProfit
+                              ? formatCurrency(profitAmount)
+                              : "Awaiting cost data"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    {detail.receipt.docType === "LAYAWAY" && (
+                      <p className="mt-2 text-xs text-amber-300">
+                        Balance:{" "}
+                        {formatCurrency(
+                          detail.receipt.totals?.balance ??
+                            detail.receipt.order?.layawayPlan?.balance,
+                        )}
+                      </p>
+                    )}
+                  </div>
+
+                  {allowEdit && buyingPriceEditorOpen && (
+                    <section className="rounded-2xl border border-cyan-400/30 bg-cyan-400/5 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                            Edit buying prices
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-slate-400">
+                            Choose one total cost for the complete receipt or
+                            enter unit costs per item. Selling prices will not
+                            change.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setBuyingPriceEditorOpen(false)}
+                          disabled={buyingPriceSaving}
+                          className="rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-300 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-slate-950/40 p-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setBuyingPriceMode("TOTAL")}
+                          className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${buyingPriceMode === "TOTAL" ? "bg-cyan-300 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
+                        >
+                          Price all at once
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBuyingPriceMode("ITEMS")}
+                          className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${buyingPriceMode === "ITEMS" ? "bg-cyan-300 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
+                        >
+                          Price item by item
+                        </button>
+                      </div>
+                      {buyingPriceMode === "TOTAL" ? (
+                        <label className="mt-4 block rounded-xl border border-cyan-400/20 bg-slate-950/50 p-4">
+                          <span className="block text-sm font-semibold text-white">
+                            Total buying price for the complete receipt
+                          </span>
+                          <span className="mt-1 block text-xs leading-5 text-slate-400">
+                            Enter one combined cost covering every product,
+                            service, transport, and installation line.
+                          </span>
+                          <span className="relative mt-3 block">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                              KES
+                            </span>
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              inputMode="decimal"
+                              value={buyingTotalDraft}
+                              onChange={(event) =>
+                                setBuyingTotalDraft(event.target.value)
+                              }
+                              className="w-full rounded-lg border border-white/15 bg-slate-950 py-3 pl-11 pr-3 text-right text-base font-semibold text-white outline-none focus:border-cyan-400"
+                              aria-label="Total buying price for the complete receipt"
+                              autoFocus
+                            />
+                          </span>
+                        </label>
+                      ) : (
+                        <div className="mt-4 space-y-3">
+                          {itemsWithCost.map((item) => (
+                            <label
+                              key={item.id}
+                              className="grid gap-2 rounded-xl border border-white/10 bg-slate-950/50 p-3 sm:grid-cols-[1fr_150px] sm:items-center"
+                            >
+                              <span>
+                                <span className="block text-sm font-semibold text-white">
+                                  {item.displayName || "Item"}
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                  Qty {Math.max(1, Number(item.quantity ?? 1))}{" "}
+                                  · Selling {formatCurrency(item.sellingPrice)}
+                                </span>
+                              </span>
+                              <span className="relative block">
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                                  KES
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  inputMode="decimal"
+                                  value={buyingPriceDraft[item.id] ?? ""}
+                                  onChange={(event) =>
+                                    setBuyingPriceDraft((current) => ({
+                                      ...current,
+                                      [item.id]: event.target.value,
+                                    }))
+                                  }
+                                  className="w-full rounded-lg border border-white/15 bg-slate-950 py-2 pl-11 pr-3 text-right text-sm font-semibold text-white outline-none focus:border-cyan-400"
+                                  aria-label={`Buying price for ${item.displayName || "item"}`}
+                                />
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm">
+                        <div>
+                          <p className="text-xs text-slate-500">
+                            New buying total
+                          </p>
+                          <p className="font-semibold text-white">
+                            {formatCurrency(buyingPricePreview)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">
+                            Estimated profit
+                          </p>
+                          <p
+                            className={`font-semibold ${profitPreview >= 0 ? "text-emerald-300" : "text-rose-300"}`}
+                          >
+                            {formatCurrency(profitPreview)}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void saveBuyingPrices()}
+                        disabled={buyingPriceSaving}
+                        className="mt-4 w-full rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:opacity-50"
+                      >
+                        {buyingPriceSaving
+                          ? "Saving and recalculating..."
+                          : buyingPriceMode === "TOTAL"
+                            ? "Save total cost and recalculate profit"
+                            : "Save item prices and recalculate profit"}
+                      </button>
+                    </section>
+                  )}
+
+                  {detail.receipt.data?.podDelivery && (
+                    <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-yellow-100">
+                      <p className="text-xs uppercase tracking-[0.3em] text-yellow-300">
+                        POD{" "}
+                        {formatBadgeLabel(
+                          detail.receipt.data.podDelivery.status,
+                        )}
+                      </p>
+                      {detail.receipt.data.podDelivery.note && (
+                        <p className="mt-2 text-sm text-white">
+                          {detail.receipt.data.podDelivery.note}
+                        </p>
+                      )}
+                      {detail.receipt.data.podDelivery.createdAt && (
+                        <p className="mt-2 text-[11px] text-yellow-200">
+                          Created{" "}
+                          {formatDateTime(
+                            detail.receipt.data.podDelivery.createdAt,
+                          )}
+                        </p>
+                      )}
+                      {detail.receipt.data.podDelivery.evidenceUrl && (
+                        <a
+                          href={detail.receipt.data.podDelivery.evidenceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-block font-semibold text-cyan-200 underline"
+                        >
+                          View delivery / return evidence
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {(() => {
+                    const projectFlow = readReceiptProjectFlow(
+                      detail.receipt.data?.projectFlow,
+                    );
+                    if (!projectFlow || !projectEditor) return null;
+                    return (
+                      <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-100">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.3em] text-cyan-200">
+                              Project receipt
+                            </p>
+                            <p className="mt-1 text-sm text-white">
+                              {formatProjectStageLabel(projectFlow.stage)} ·{" "}
+                              {formatProjectPaymentTermLabel(
+                                projectFlow.paymentTerm,
+                              )}
+                            </p>
+                          </div>
+                          <div className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
+                            {projectFlow.paymentStatus.replace(/_/g, " ")}
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                            Stage
+                            <select
+                              value={projectEditor.stage}
+                              onChange={(e) =>
+                                setProjectEditor((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        stage: e.target
+                                          .value as ReceiptProjectStage,
+                                      }
+                                    : current,
+                                )
+                              }
+                              className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                            >
+                              {(
+                                [
+                                  "RECEIPT_CREATED",
+                                  "PROJECT_SCHEDULED",
+                                  "PROJECT_IN_PROGRESS",
+                                  "PROJECT_INSTALLED",
+                                  "COMPLETED_POSTED",
+                                ] as const
+                              ).map((option) => (
+                                <option key={option} value={option}>
+                                  {formatProjectStageLabel(option)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                            Payment position
+                            <select
+                              value={projectEditor.paymentTerm}
+                              onChange={(e) =>
+                                setProjectEditor((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        paymentTerm: e.target
+                                          .value as ReceiptProjectPaymentTerm,
+                                      }
+                                    : current,
+                                )
+                              }
+                              className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                            >
+                              {(
+                                [
+                                  "FULL_BEFORE_INSTALLATION",
+                                  "DEPOSIT_AND_BALANCE",
+                                  "FULL_AFTER_INSTALLATION",
+                                ] as const
+                              ).map((option) => (
+                                <option key={option} value={option}>
+                                  {formatProjectPaymentTermLabel(option)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                            Installation date
+                            <input
+                              type="date"
+                              value={projectEditor.scheduledDate}
+                              onChange={(e) =>
+                                setProjectEditor((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        scheduledDate: e.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                              className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                            />
+                          </label>
+                          {projectEditor.paymentTerm ===
+                          "DEPOSIT_AND_BALANCE" ? (
+                            <>
+                              <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                                Deposit type
+                                <select
+                                  value={projectEditor.depositType}
+                                  onChange={(e) =>
+                                    setProjectEditor((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            depositType: e.target
+                                              .value as ReceiptProjectDepositType,
+                                            depositValue:
+                                              e.target.value === "AMOUNT"
+                                                ? current.depositType ===
+                                                  "AMOUNT"
+                                                  ? current.depositValue
+                                                  : "5000"
+                                                : current.depositType ===
+                                                    "PERCENT"
+                                                  ? current.depositValue
+                                                  : "30",
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                                >
+                                  <option value="PERCENT">Percentage</option>
+                                  <option value="AMOUNT">Fixed amount</option>
+                                </select>
+                              </label>
+                              <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                                {projectEditor.depositType === "AMOUNT"
+                                  ? "Deposit amount (Ksh)"
+                                  : "Deposit percentage"}
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={
+                                    projectEditor.depositType === "AMOUNT"
+                                      ? undefined
+                                      : 100
+                                  }
+                                  value={projectEditor.depositValue}
+                                  onChange={(e) =>
+                                    setProjectEditor((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            depositValue: e.target.value,
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                                />
+                              </label>
+                            </>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-xs text-slate-200 sm:grid-cols-2">
+                          <div>
+                            Project value:{" "}
+                            {formatCurrency(projectFlow.projectValue)}
+                          </div>
+                          <div>
+                            Total paid:{" "}
+                            {formatCurrency(projectFlow.totalPaidAmount)}
+                          </div>
+                          <div>
+                            Required deposit:{" "}
+                            {formatCurrency(projectFlow.depositRequiredAmount)}
+                          </div>
+                          <div>
+                            Deposit pending:{" "}
+                            {formatCurrency(projectFlow.depositPendingAmount)}
+                          </div>
+                          <div>
+                            Balance expected:{" "}
+                            {formatCurrency(projectFlow.balanceExpectedAmount)}
+                          </div>
+                          <div>
+                            Balance pending:{" "}
+                            {formatCurrency(projectFlow.balancePendingAmount)}
+                          </div>
+                          <div>
+                            Remaining unpaid:{" "}
+                            {formatCurrency(projectFlow.remainingAmount)}
+                          </div>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() =>
                               saveProjectFlow(detail.receipt.id, {
-                                stage:
-                                  projectFlow.stage === "RECEIPT_CREATED"
-                                    ? "PROJECT_SCHEDULED"
-                                    : projectFlow.stage === "PROJECT_SCHEDULED"
-                                      ? "PROJECT_IN_PROGRESS"
-                                      : projectFlow.stage === "PROJECT_IN_PROGRESS"
-                                        ? "PROJECT_INSTALLED"
-                                        : "COMPLETED_POSTED",
+                                stage: projectEditor.stage,
+                                paymentTerm: projectEditor.paymentTerm,
+                                depositType: projectEditor.depositType,
+                                depositValue: Number(
+                                  projectEditor.depositValue || 0,
+                                ),
+                                depositPaidAmount: Number(
+                                  projectEditor.depositPaidAmount || 0,
+                                ),
+                                depositPaymentMethod:
+                                  projectEditor.depositPaymentMethod,
+                                depositReference:
+                                  projectEditor.depositReference || null,
+                                balancePaidAmount: Number(
+                                  projectEditor.balancePaidAmount || 0,
+                                ),
+                                balancePaymentMethod:
+                                  projectEditor.balancePaymentMethod,
+                                balanceReference:
+                                  projectEditor.balanceReference || null,
+                                scheduledDate:
+                                  projectEditor.scheduledDate || null,
+                                internalNotes:
+                                  projectEditor.internalNotes || null,
+                                paymentNotes:
+                                  projectEditor.paymentNotes || null,
                               })
                             }
                             disabled={projectActionId === detail.receipt.id}
-                            className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
+                            className="rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-50"
                           >
                             {projectActionId === detail.receipt.id
                               ? "Saving..."
-                              : projectFlow.stage === "RECEIPT_CREATED"
-                                ? "Confirm and schedule"
-                                : projectFlow.stage === "PROJECT_SCHEDULED"
-                                  ? "Start project progress"
-                                  : projectFlow.stage === "PROJECT_IN_PROGRESS"
-                                    ? "Mark project installed"
-                                    : "Mark project completed"}
+                              : "Save project details"}
                           </button>
-                        )}
+                          {projectFlow.stage !== "COMPLETED_POSTED" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                saveProjectFlow(detail.receipt.id, {
+                                  stage:
+                                    projectFlow.stage === "RECEIPT_CREATED"
+                                      ? "PROJECT_SCHEDULED"
+                                      : projectFlow.stage ===
+                                          "PROJECT_SCHEDULED"
+                                        ? "PROJECT_IN_PROGRESS"
+                                        : projectFlow.stage ===
+                                            "PROJECT_IN_PROGRESS"
+                                          ? "PROJECT_INSTALLED"
+                                          : "COMPLETED_POSTED",
+                                })
+                              }
+                              disabled={projectActionId === detail.receipt.id}
+                              className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
+                            >
+                              {projectActionId === detail.receipt.id
+                                ? "Saving..."
+                                : projectFlow.stage === "RECEIPT_CREATED"
+                                  ? "Confirm and schedule"
+                                  : projectFlow.stage === "PROJECT_SCHEDULED"
+                                    ? "Start project progress"
+                                    : projectFlow.stage ===
+                                        "PROJECT_IN_PROGRESS"
+                                      ? "Mark project installed"
+                                      : "Mark project completed"}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
 
-                <div className="rounded-2xl border border-white/5 bg-slate-900/40 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Items</p>
-                  <div className="mt-3 space-y-2">
-                    {itemsWithCost.map((item) => {
-                      const quantity = Math.max(1, Number(item.quantity ?? 1));
-                      const sellingPrice = Number(item.sellingPrice ?? 0);
-                      const lineTotal = sellingPrice * quantity;
-                      const unitCost = item.buyingPrice;
-                      const totalCost = unitCost !== null ? unitCost * quantity : null;
-                      const lineProfit = totalCost !== null ? lineTotal - totalCost : null;
-                      const profitLabelClass =
-                        lineProfit === null
-                          ? "text-slate-400"
-                          : lineProfit >= 0
-                            ? "text-emerald-300"
-                            : "text-rose-300";
+                  <div className="rounded-2xl border border-white/5 bg-slate-900/40 p-4">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">
+                      Items
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {itemsWithCost.map((item) => {
+                        const quantity = Math.max(
+                          1,
+                          Number(item.quantity ?? 1),
+                        );
+                        const sellingPrice = Number(item.sellingPrice ?? 0);
+                        const lineTotal = sellingPrice * quantity;
+                        const unitCost = item.buyingPrice;
+                        const totalCost =
+                          unitCost !== null ? unitCost * quantity : null;
+                        const lineProfit =
+                          totalCost !== null ? lineTotal - totalCost : null;
+                        const profitLabelClass =
+                          lineProfit === null
+                            ? "text-slate-400"
+                            : lineProfit >= 0
+                              ? "text-emerald-300"
+                              : "text-rose-300";
 
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-sm"
-                        >
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {item.product?.shopHref ? (
-                                <Link
-                                  href={item.product.shopHref}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="font-semibold text-white underline-offset-4 hover:text-emerald-200 hover:underline"
-                                >
-                                  {item.displayName || "Item"}
-                                </Link>
-                              ) : (
-                                <p className="font-semibold text-white">{item.displayName || "Item"}</p>
-                              )}
-                              {item.product?.adminEditHref && (
-                                <Link
-                                  href={item.product.adminEditHref}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="rounded-lg border border-cyan-400/30 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-200 hover:bg-cyan-400/10"
-                                >
-                                  Edit
-                                </Link>
-                              )}
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-sm"
+                          >
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {item.product?.shopHref ? (
+                                  <Link
+                                    href={item.product.shopHref}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-semibold text-white underline-offset-4 hover:text-emerald-200 hover:underline"
+                                  >
+                                    {item.displayName || "Item"}
+                                  </Link>
+                                ) : (
+                                  <p className="font-semibold text-white">
+                                    {item.displayName || "Item"}
+                                  </p>
+                                )}
+                                {item.product?.adminEditHref && (
+                                  <Link
+                                    href={item.product.adminEditHref}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-lg border border-cyan-400/30 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-200 hover:bg-cyan-400/10"
+                                  >
+                                    Edit
+                                  </Link>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-400 flex flex-wrap gap-2">
+                                <span>Qty {quantity.toLocaleString()}</span>
+                                <span>
+                                  Selling {formatCurrency(sellingPrice)}
+                                </span>
+                                <span>
+                                  Cost{" "}
+                                  {unitCost !== null
+                                    ? formatCurrency(unitCost)
+                                    : "N/A"}
+                                </span>
+                                {lineProfit !== null ? (
+                                  <span className={profitLabelClass}>
+                                    Profit {formatCurrency(lineProfit)}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">
+                                    Profit N/A
+                                  </span>
+                                )}
+                                {item.serial && <span>SN {item.serial}</span>}
+                              </p>
                             </div>
-                            <p className="text-xs text-slate-400 flex flex-wrap gap-2">
-                              <span>Qty {quantity.toLocaleString()}</span>
-                              <span>Selling {formatCurrency(sellingPrice)}</span>
-                              <span>Cost {unitCost !== null ? formatCurrency(unitCost) : "N/A"}</span>
-                              {lineProfit !== null ? (
-                                <span className={profitLabelClass}>Profit {formatCurrency(lineProfit)}</span>
-                              ) : (
-                                <span className="text-slate-400">Profit N/A</span>
-                              )}
-                              {item.serial && <span>SN {item.serial}</span>}
+                            <p className="font-semibold text-emerald-300">
+                              {formatCurrency(lineTotal)}
                             </p>
                           </div>
-                          <p className="font-semibold text-emerald-300">{formatCurrency(lineTotal)}</p>
-                        </div>
-                      );
-                    })}
-                    {itemsWithCost.length === 0 && (
-                      <p className="text-sm text-slate-400">No items recorded.</p>
-                    )}
-                  </div>
-                </div>
-
-                {hasSupportItems && (
-                  <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Support buying costs</p>
-                    <div className="mt-3 space-y-2">
-                      {detail.supportItems?.map((support) => (
-                        <div
-                          key={support.id}
-                          className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2"
-                        >
-                          <div>
-                            <p className="font-semibold text-white">{support.productName || "Support entry"}</p>
-                            <p className="text-xs text-slate-500">Captured via support ledger</p>
-                          </div>
-                          <p className="text-sm font-semibold text-emerald-300">
-                            {support.buyingPrice !== null ? formatCurrency(support.buyingPrice) : "-"}
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
+                      {itemsWithCost.length === 0 && (
+                        <p className="text-sm text-slate-400">
+                          No items recorded.
+                        </p>
+                      )}
                     </div>
                   </div>
-                )}
 
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    href={`/receipts/${detail.receipt.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10"
-                  >
-                    Open printable
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleSend("email")}
-                    disabled={sendingChannel === "email"}
-                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
-                  >
-                    {sendingChannel === "email" ? "Sending..." : "Send email"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSend("whatsapp")}
-                    disabled={sendingChannel === "whatsapp"}
-                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
-                  >
-                    {sendingChannel === "whatsapp" ? "Sending..." : "Send WhatsApp"}
-                  </button>
-                  {detail.receipt.data?.podDelivery && (
+                  {hasSupportItems && (
+                    <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm">
+                      <p className="text-xs uppercase tracking-wide text-slate-400">
+                        Support buying costs
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {detail.supportItems?.map((support) => (
+                          <div
+                            key={support.id}
+                            className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2"
+                          >
+                            <div>
+                              <p className="font-semibold text-white">
+                                {support.productName || "Support entry"}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Captured via support ledger
+                              </p>
+                            </div>
+                            <p className="text-sm font-semibold text-emerald-300">
+                              {support.buyingPrice !== null
+                                ? formatCurrency(support.buyingPrice)
+                                : "-"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={`/receipts/${detail.receipt.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10"
+                    >
+                      Open printable
+                    </Link>
                     <button
                       type="button"
-                      onClick={() => sendReceiptById(detail.receipt.id, "whatsapp")}
+                      onClick={() => handleSend("email")}
+                      disabled={sendingChannel === "email"}
+                      className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
+                    >
+                      {sendingChannel === "email" ? "Sending..." : "Send email"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSend("whatsapp")}
                       disabled={sendingChannel === "whatsapp"}
                       className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
                     >
-                      Resend POD
+                      {sendingChannel === "whatsapp"
+                        ? "Sending..."
+                        : "Send WhatsApp"}
                     </button>
-                  )}
-                  {detail.receipt.data?.podDelivery?.status === "pending" && (
-                    <button
-                      type="button"
-                      onClick={() => handleMarkPodDelivered(detail.receipt.id)}
-                      disabled={podActionId === detail.receipt.id}
-                      className="rounded-xl border border-yellow-500/70 bg-yellow-500/20 px-4 py-2 text-sm font-semibold text-yellow-100 hover:bg-yellow-500/40 disabled:opacity-50"
-                    >
-                      {podActionId === detail.receipt.id ? "Processing..." : "Mark POD delivered"}
-                    </button>
-                  )}
-                  {detail.receipt.data?.podDelivery?.status === "delivered" && !detail.receipt.data?.podDelivery?.paidAt && (
-                    <button
-                      type="button"
-                      onClick={() => handleMarkPodPaid(detail.receipt.id)}
-                      disabled={podActionId === detail.receipt.id}
-                      className="rounded-xl border border-emerald-500/70 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/40 disabled:opacity-50"
-                    >
-                      {podActionId === detail.receipt.id ? "Processing..." : "Mark Paid"}
-                    </button>
-                  )}
-                  {allowEdit && (
-                    <button
-                      type="button"
-                      onClick={() => selected?.id && void handleRecalculateReceiptCosts(selected.id)}
-                      disabled={!selected?.id || recalculatingReceiptId === selected?.id}
-                      className="rounded-xl border border-emerald-500/70 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
-                    >
-                      {recalculatingReceiptId === selected?.id ? "Recalculating..." : "Recalculate buying price"}
-                    </button>
-                  )}
-                  {allowEdit && (
-                    <button
-                      type="button"
-                      onClick={openEditModal}
-                      className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
-                    >
-                      Edit receipt
-                    </button>
-                  )}
-                  {allowEdit && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteReceipt}
-                      disabled={deleting}
-                      className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60"
-                    >
-                      {deleting ? "Deleting..." : "Delete receipt"}
-                    </button>
+                    {detail.receipt.data?.podDelivery && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          sendReceiptById(detail.receipt.id, "whatsapp")
+                        }
+                        disabled={sendingChannel === "whatsapp"}
+                        className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
+                      >
+                        Resend POD
+                      </button>
+                    )}
+                    {detail.receipt.data?.podDelivery?.status === "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => openPodOutcome(detail.receipt.id)}
+                        disabled={podActionId === detail.receipt.id}
+                        className="rounded-xl border border-yellow-500/70 bg-yellow-500/20 px-4 py-2 text-sm font-semibold text-yellow-100 hover:bg-yellow-500/40 disabled:opacity-50"
+                      >
+                        {podActionId === detail.receipt.id
+                          ? "Processing..."
+                          : "Record POD outcome"}
+                      </button>
+                    )}
+                    {detail.receipt.data?.podDelivery?.status === "delivered" &&
+                      !detail.receipt.data?.podDelivery?.paidAt && (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkPodPaid(detail.receipt.id)}
+                          disabled={podActionId === detail.receipt.id}
+                          className="rounded-xl border border-emerald-500/70 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/40 disabled:opacity-50"
+                        >
+                          {podActionId === detail.receipt.id
+                            ? "Processing..."
+                            : "Mark Paid"}
+                        </button>
+                      )}
+                    {allowEdit && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          selected?.id &&
+                          void handleRecalculateReceiptCosts(selected.id)
+                        }
+                        disabled={
+                          !selected?.id ||
+                          recalculatingReceiptId === selected?.id
+                        }
+                        className="rounded-xl border border-emerald-500/70 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
+                      >
+                        {recalculatingReceiptId === selected?.id
+                          ? "Recalculating..."
+                          : "Recalculate buying price"}
+                      </button>
+                    )}
+                    {allowEdit && (
+                      <button
+                        type="button"
+                        onClick={openEditModal}
+                        className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
+                      >
+                        Edit receipt
+                      </button>
+                    )}
+                    {allowEdit && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteReceipt}
+                        disabled={deleting}
+                        className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60"
+                      >
+                        {deleting
+                          ? "Cancelling..."
+                          : "Cancel & reverse calculations"}
+                      </button>
+                    )}
+                  </div>
+
+                  {detail.receipt.notes && (
+                    <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          Notes
+                        </p>
+                        {/* Toggle lives here to let admins preview formatting */}
+                        <div className="no-print">
+                          {/* dynamic import not necessary; component is client side */}
+                          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                          {/* @ts-ignore-next-line */}
+                          <RichFormattingToggle />
+                        </div>
+                      </div>
+                      {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+                      {/* @ts-ignore-next-line */}
+                      <MarkdownRendererClient mdText={detail.receipt.notes} />
+                    </div>
                   )}
                 </div>
-
-                {detail.receipt.notes && (
-                  <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">Notes</p>
-                      {/* Toggle lives here to let admins preview formatting */}
-                      <div className="no-print">
-                        {/* dynamic import not necessary; component is client side */}
-                        {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-                        {/* @ts-ignore-next-line */}
-                        <RichFormattingToggle />
-                      </div>
-                    </div>
-                    {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-                    {/* @ts-ignore-next-line */}
-                    <MarkdownRendererClient mdText={detail.receipt.notes} />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>,
-          inlineDetailHost,
-        )
+              )}
+            </div>,
+            inlineDetailHost,
+          )
         : null}
+      <PodOutcomeModal
+        draft={podOutcome}
+        processing={podActionId === podOutcome?.receiptId}
+        onChange={(patch) =>
+          setPodOutcome((current) =>
+            current ? { ...current, ...patch } : current,
+          )
+        }
+        onClose={() => setPodOutcome(null)}
+        onSubmit={() => {
+          if (podOutcome) void finalizePodOutcome(podOutcome);
+        }}
+      />
       <EditModal
         open={editState.open}
         draft={editState.draft}
         staffList={staffList}
         saving={editState.saving}
-        onClose={() => setEditState({ open: false, draft: null, saving: false })}
+        onClose={() =>
+          setEditState({ open: false, draft: null, saving: false })
+        }
         onDraftChange={updateDraft}
         onSave={handleSaveEdit}
       />
     </main>
+  );
+}
+
+function PodOutcomeModal({
+  draft,
+  processing,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  draft: PodOutcomeDraft | null;
+  processing: boolean;
+  onChange: (patch: Partial<PodOutcomeDraft>) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  if (!draft) return null;
+  const needsEvidence = !draft.evidenceFile && !draft.overrideEvidence;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
+      <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b1424] p-6 shadow-2xl">
+        <p className="text-xs font-black uppercase tracking-[.25em] text-cyan-300">
+          POD outcome
+        </p>
+        <h2 className="mt-2 text-2xl font-bold text-white">
+          Record delivery or returned item
+        </h2>
+        <p className="mt-2 text-sm text-slate-400">
+          Photo evidence is required. An administrator may proceed without it
+          only when necessary.
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => onChange({ status: "delivered" })}
+            className={`rounded-2xl border px-4 py-3 text-sm font-bold ${draft.status === "delivered" ? "border-emerald-400 bg-emerald-400 text-slate-950" : "border-white/10 text-slate-200"}`}
+          >
+            DELIVERED
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ status: "delivery_failed" })}
+            className={`rounded-2xl border px-4 py-3 text-sm font-bold ${draft.status === "delivery_failed" ? "border-rose-400 bg-rose-400 text-slate-950" : "border-white/10 text-slate-200"}`}
+          >
+            DELIVERY FAILED
+          </button>
+        </div>
+        <label className="mt-5 block text-sm text-slate-200">
+          {draft.status === "delivery_failed"
+            ? "Reason for return (optional)"
+            : "Delivery note (optional)"}
+          <textarea
+            value={draft.reason}
+            onChange={(event) => onChange({ reason: event.target.value })}
+            rows={3}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-white"
+            placeholder={
+              draft.status === "delivery_failed"
+                ? "Example: customer unavailable; item returned."
+                : "Optional delivery note"
+            }
+          />
+        </label>
+        <label className="mt-4 block cursor-pointer rounded-2xl border border-cyan-400/35 bg-cyan-400/10 px-4 py-5 text-center text-sm font-bold text-cyan-100">
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(event) =>
+              onChange({ evidenceFile: event.target.files?.[0] || null })
+            }
+          />
+          {draft.evidenceFile
+            ? `✓ ${draft.evidenceFile.name}`
+            : draft.status === "delivery_failed"
+              ? "TAKE / CHOOSE RETURNED-ITEM PHOTO"
+              : "TAKE / CHOOSE DELIVERY PHOTO"}
+        </label>
+        <label className="mt-4 flex items-start gap-3 text-sm text-amber-200">
+          <input
+            type="checkbox"
+            checked={draft.overrideEvidence}
+            onChange={(event) =>
+              onChange({ overrideEvidence: event.target.checked })
+            }
+            className="mt-1"
+          />
+          <span>Administrator override: record without evidence.</span>
+        </label>
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={processing}
+            className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={processing || needsEvidence}
+            className="rounded-xl bg-cyan-400 px-4 py-3 text-sm font-black text-slate-950 disabled:opacity-40"
+          >
+            {processing
+              ? "SAVING..."
+              : draft.status === "delivery_failed"
+                ? "MARK FAILED & SEND SMS"
+                : "MARK DELIVERED"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -3048,9 +3931,13 @@ function PaymentMethodFilterCard({
     <section className="isolate rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-inner shadow-black/30">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Payments</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+            Payments
+          </p>
           <h2 className="text-lg font-semibold text-white">Filter by method</h2>
-          <p className="text-sm text-slate-400">Tap a method to lock the list to MPESA or cash receipts.</p>
+          <p className="text-sm text-slate-400">
+            Tap a method to lock the list to MPESA or cash receipts.
+          </p>
         </div>
         <button
           type="button"
@@ -3064,7 +3951,9 @@ function PaymentMethodFilterCard({
         {methods.map((method) => {
           const isActive = activeMethod === method.key;
           const pool = method.key === "MPESA" ? totals?.mpesa : totals?.cash;
-          const amountLabel = loading ? "Loading..." : formatCurrency(pool?.totalSales ?? 0);
+          const amountLabel = loading
+            ? "Loading..."
+            : formatCurrency(pool?.totalSales ?? 0);
           const countLabel = loading ? "" : `${pool?.count ?? 0} receipts`;
           const partialLabel = formatCurrency(partialTotals[method.key]);
           return (
@@ -3080,12 +3969,17 @@ function PaymentMethodFilterCard({
               aria-pressed={isActive}
             >
               <div className="flex items-center justify-between w-full">
-                <span className="text-xs uppercase tracking-[0.3em] text-slate-400">{method.label}</span>
+                <span className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  {method.label}
+                </span>
                 <span className="text-[11px] text-slate-400">{countLabel}</span>
               </div>
               <p className="text-2xl font-semibold">{amountLabel}</p>
               <p className="text-xs text-slate-400">
-                Partial sum: <span className="font-semibold text-slate-100">{partialLabel}</span>
+                Partial sum:{" "}
+                <span className="font-semibold text-slate-100">
+                  {partialLabel}
+                </span>
               </p>
             </button>
           );
@@ -3104,10 +3998,21 @@ type EditModalProps = {
   onSave: () => void;
 };
 
-function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onSave }: EditModalProps) {
+function EditModal({
+  open,
+  draft,
+  staffList,
+  saving,
+  onClose,
+  onDraftChange,
+  onSave,
+}: EditModalProps) {
   const totals = useMemo(() => {
     if (!draft) return { subtotal: 0, tax: 0, total: 0 };
-    const subtotal = draft.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const subtotal = draft.items.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0,
+    );
     const tax = draft.showTax ? subtotal * (draft.taxRate / 100) : 0;
     const total = subtotal + tax - draft.discount;
     return { subtotal, tax, total };
@@ -3116,7 +4021,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
   if (!open || !draft) return null;
 
   const updateItem = (id: string, patch: Partial<EditItem>) => {
-    const nextItems = draft.items.map((item) => (item.id === id ? { ...item, ...patch } : item));
+    const nextItems = draft.items.map((item) =>
+      item.id === id ? { ...item, ...patch } : item,
+    );
     onDraftChange({ ...draft, items: nextItems });
   };
 
@@ -3125,7 +4032,15 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
       ...draft,
       items: [
         ...draft.items,
-        { id: randomId(), title: "", quantity: 1, unitPrice: 0, serial: null, warranty: null, buyingPrice: 0 },
+        {
+          id: randomId(),
+          title: "",
+          quantity: 1,
+          unitPrice: 0,
+          serial: null,
+          warranty: null,
+          buyingPrice: 0,
+        },
       ],
     });
   };
@@ -3169,7 +4084,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
             Staff
             <select
               value={draft.attendantId ?? ""}
-              onChange={(e) => onDraftChange({ ...draft, attendantId: e.target.value || null })}
+              onChange={(e) =>
+                onDraftChange({ ...draft, attendantId: e.target.value || null })
+              }
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
             >
               <option value="">Keep existing</option>
@@ -3184,7 +4101,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
             Document type
             <select
               value={draft.docType}
-              onChange={(e) => onDraftChange({ ...draft, docType: e.target.value })}
+              onChange={(e) =>
+                onDraftChange({ ...draft, docType: e.target.value })
+              }
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
             >
               {DOC_TYPES.map((type) => (
@@ -3198,7 +4117,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
             Customer name
             <input
               value={draft.customerName}
-              onChange={(e) => onDraftChange({ ...draft, customerName: e.target.value })}
+              onChange={(e) =>
+                onDraftChange({ ...draft, customerName: e.target.value })
+              }
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
             />
           </label>
@@ -3206,7 +4127,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
             Customer phone
             <input
               value={draft.customerPhone || ""}
-              onChange={(e) => onDraftChange({ ...draft, customerPhone: e.target.value })}
+              onChange={(e) =>
+                onDraftChange({ ...draft, customerPhone: e.target.value })
+              }
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
             />
           </label>
@@ -3218,7 +4141,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
               <input
                 type="checkbox"
                 checked={draft.showTax}
-                onChange={(e) => onDraftChange({ ...draft, showTax: e.target.checked })}
+                onChange={(e) =>
+                  onDraftChange({ ...draft, showTax: e.target.checked })
+                }
                 className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
               />
               Show tax (rate {draft.taxRate}%)
@@ -3228,7 +4153,12 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
                 type="number"
                 min={0}
                 value={draft.taxRate}
-                onChange={(e) => onDraftChange({ ...draft, taxRate: Number(e.target.value || 0) })}
+                onChange={(e) =>
+                  onDraftChange({
+                    ...draft,
+                    taxRate: Number(e.target.value || 0),
+                  })
+                }
                 className="w-24 rounded-xl border border-slate-800 bg-slate-950/70 px-2 py-1 text-sm text-white"
               />
             )}
@@ -3236,7 +4166,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
               <input
                 type="checkbox"
                 checked={draft.showDiscount}
-                onChange={(e) => onDraftChange({ ...draft, showDiscount: e.target.checked })}
+                onChange={(e) =>
+                  onDraftChange({ ...draft, showDiscount: e.target.checked })
+                }
                 className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
               />
               Show discount
@@ -3245,7 +4177,12 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
               type="number"
               min={0}
               value={draft.discount}
-              onChange={(e) => onDraftChange({ ...draft, discount: Number(e.target.value || 0) })}
+              onChange={(e) =>
+                onDraftChange({
+                  ...draft,
+                  discount: Number(e.target.value || 0),
+                })
+              }
               className="w-32 rounded-xl border border-slate-800 bg-slate-950/70 px-2 py-1 text-sm text-white"
               placeholder="Discount"
             />
@@ -3253,7 +4190,12 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
               <input
                 type="checkbox"
                 checked={draft.paymentDetailsShown}
-                onChange={(e) => onDraftChange({ ...draft, paymentDetailsShown: e.target.checked })}
+                onChange={(e) =>
+                  onDraftChange({
+                    ...draft,
+                    paymentDetailsShown: e.target.checked,
+                  })
+                }
                 className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
               />
               Show payment instructions
@@ -3274,10 +4216,15 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
           </div>
           <div className="space-y-3">
             {draft.items.map((item) => (
-              <div key={item.id} className="grid gap-2 rounded-2xl border border-white/5 bg-slate-950/60 p-3 md:grid-cols-12">
+              <div
+                key={item.id}
+                className="grid gap-2 rounded-2xl border border-white/5 bg-slate-950/60 p-3 md:grid-cols-12"
+              >
                 <input
                   value={item.title}
-                  onChange={(e) => updateItem(item.id, { title: e.target.value })}
+                  onChange={(e) =>
+                    updateItem(item.id, { title: e.target.value })
+                  }
                   placeholder="Item description"
                   className="md:col-span-4 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
                 />
@@ -3285,14 +4232,22 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
                   type="number"
                   min={1}
                   value={item.quantity}
-                  onChange={(e) => updateItem(item.id, { quantity: Math.max(1, Number(e.target.value || 1)) })}
+                  onChange={(e) =>
+                    updateItem(item.id, {
+                      quantity: Math.max(1, Number(e.target.value || 1)),
+                    })
+                  }
                   className="md:col-span-1 rounded-xl border border-slate-800 bg-slate-900/70 px-2 py-2 text-sm text-white"
                 />
                 <input
                   type="number"
                   min={0}
                   value={item.unitPrice}
-                  onChange={(e) => updateItem(item.id, { unitPrice: Math.max(0, Number(e.target.value || 0)) })}
+                  onChange={(e) =>
+                    updateItem(item.id, {
+                      unitPrice: Math.max(0, Number(e.target.value || 0)),
+                    })
+                  }
                   className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
                   placeholder="Unit price"
                 />
@@ -3301,20 +4256,26 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
                   min={0}
                   value={item.buyingPrice}
                   onChange={(e) =>
-                    updateItem(item.id, { buyingPrice: Math.max(0, Number(e.target.value || 0)) })
+                    updateItem(item.id, {
+                      buyingPrice: Math.max(0, Number(e.target.value || 0)),
+                    })
                   }
                   className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
                   placeholder="Cost price"
                 />
                 <input
                   value={item.serial || ""}
-                  onChange={(e) => updateItem(item.id, { serial: e.target.value })}
+                  onChange={(e) =>
+                    updateItem(item.id, { serial: e.target.value })
+                  }
                   placeholder="Serial"
                   className="md:col-span-1 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
                 />
                 <select
                   value={item.warranty || ""}
-                  onChange={(e) => updateItem(item.id, { warranty: e.target.value || null })}
+                  onChange={(e) =>
+                    updateItem(item.id, { warranty: e.target.value || null })
+                  }
                   className="md:col-span-1 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-white"
                 >
                   {WARRANTY_OPTIONS.map((option) => (
@@ -3346,7 +4307,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
             Notes
             <textarea
               value={draft.notes || ""}
-              onChange={(e) => onDraftChange({ ...draft, notes: e.target.value })}
+              onChange={(e) =>
+                onDraftChange({ ...draft, notes: e.target.value })
+              }
               className="mt-1 min-h-[60px] w-full rounded-xl border border-slate-800 bg-slate-900/70 p-2 text-sm text-white"
             />
           </label>
@@ -3354,7 +4317,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
             Warranty text
             <textarea
               value={draft.warrantyText || ""}
-              onChange={(e) => onDraftChange({ ...draft, warrantyText: e.target.value })}
+              onChange={(e) =>
+                onDraftChange({ ...draft, warrantyText: e.target.value })
+              }
               className="mt-1 min-h-[60px] w-full rounded-xl border border-slate-800 bg-slate-900/70 p-2 text-sm text-white"
             />
           </label>
@@ -3365,7 +4330,9 @@ function EditModal({ open, draft, staffList, saving, onClose, onDraftChange, onS
             <p>Subtotal: {formatCurrency(totals.subtotal)}</p>
             <p>Tax: {formatCurrency(totals.tax)}</p>
             <p>Discount: {formatCurrency(draft.discount)}</p>
-            <p className="text-lg font-semibold text-white">Total: {formatCurrency(totals.total)}</p>
+            <p className="text-lg font-semibold text-white">
+              Total: {formatCurrency(totals.total)}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
