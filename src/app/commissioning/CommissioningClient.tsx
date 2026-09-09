@@ -285,6 +285,37 @@ export default function CommissioningClient({ token }: { token: string }) {
         [key]: [...(current.evidence?.[key] || []), item],
       },
     }));
+  const removeEvidence = (key: string, index: number) =>
+    setDraft((current) => ({
+      ...current,
+      evidence: {
+        ...(current.evidence || {}),
+        [key]: (current.evidence?.[key] || []).filter(
+          (_, itemIndex) => itemIndex !== index,
+        ),
+      },
+    }));
+  const clearEquipment = (kind: EquipmentKind) =>
+    setDraft((current) => {
+      const equipment = { ...(current.equipment || {}) };
+      const confirmations = { ...(current.confirmations || {}) };
+      for (const key of [
+        "Brand",
+        "Model",
+        "Serial",
+        "RatedPower",
+        "Voltage",
+        "Capacity",
+      ]) {
+        delete equipment[`${kind}${key}`];
+      }
+      delete confirmations[kind];
+      if (kind === "panel") {
+        delete equipment.panelQuantity;
+        delete confirmations.panelQuantity;
+      }
+      return { ...current, equipment, confirmations };
+    });
   const go = (index: number) => {
     setActiveStep(index);
     setLastStep(steps[index].id);
@@ -440,8 +471,10 @@ export default function CommissioningClient({ token }: { token: string }) {
                 setDifferent={setDifferentQuantity}
                 token={token}
                 onPhoto={(item) => addEvidence("panelLabel", item)}
+                onRemovePhoto={(index) => removeEvidence("panelLabel", index)}
                 onEquipment={(values) => setEquipment("panel", values)}
                 onConfirm={() => patch("confirmations", "panel", true)}
+                onClearEquipment={() => clearEquipment("panel")}
                 onQuantity={(value) => {
                   patch("equipment", "panelQuantity", value);
                   patch("confirmations", "panelQuantity", Number(value) > 0);
@@ -457,6 +490,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 items={evidence.panelArray || []}
                 token={token}
                 onUploaded={(item) => addEvidence("panelArray", item)}
+                onRemove={(index) => removeEvidence("panelArray", index)}
               />
             )}
             {current.id === "inverter" && (
@@ -469,11 +503,18 @@ export default function CommissioningClient({ token }: { token: string }) {
                 confirmed={Boolean(confirmations.inverter)}
                 token={token}
                 onLabel={(item) => addEvidence("inverterLabel", item)}
+                onRemoveLabel={(index) =>
+                  removeEvidence("inverterLabel", index)
+                }
                 onInstallation={(item) =>
                   addEvidence("inverterInstallation", item)
                 }
+                onRemoveInstallation={(index) =>
+                  removeEvidence("inverterInstallation", index)
+                }
                 onEquipment={(values) => setEquipment("inverter", values)}
                 onConfirm={() => patch("confirmations", "inverter", true)}
+                onClearEquipment={() => clearEquipment("inverter")}
                 manual={manual === "inverter"}
                 onManual={() =>
                   setManual(manual === "inverter" ? null : "inverter")
@@ -494,11 +535,16 @@ export default function CommissioningClient({ token }: { token: string }) {
                 confirmed={Boolean(confirmations.battery)}
                 token={token}
                 onLabel={(item) => addEvidence("batteryLabel", item)}
+                onRemoveLabel={(index) => removeEvidence("batteryLabel", index)}
                 onInstallation={(item) =>
                   addEvidence("batteryInstallation", item)
                 }
+                onRemoveInstallation={(index) =>
+                  removeEvidence("batteryInstallation", index)
+                }
                 onEquipment={(values) => setEquipment("battery", values)}
                 onConfirm={() => patch("confirmations", "battery", true)}
+                onClearEquipment={() => clearEquipment("battery")}
                 manual={manual === "battery"}
                 onManual={() =>
                   setManual(manual === "battery" ? null : "battery")
@@ -513,6 +559,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                   items={evidence.protection || []}
                   token={token}
                   onUploaded={(item) => addEvidence("protection", item)}
+                  onRemove={(index) => removeEvidence("protection", index)}
                 />
                 <PhotoStep
                   title="Completed installation"
@@ -520,6 +567,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                   items={evidence.overall || []}
                   token={token}
                   onUploaded={(item) => addEvidence("overall", item)}
+                  onRemove={(index) => removeEvidence("overall", index)}
                 />
               </>
             )}
@@ -530,6 +578,12 @@ export default function CommissioningClient({ token }: { token: string }) {
                 onChecklist={(key, value) => patch("checklist", key, value)}
                 onMeasurement={(key, value) =>
                   patch("measurements", key, value)
+                }
+                onClearChecklist={() =>
+                  setDraft((current) => ({ ...current, checklist: {} }))
+                }
+                onClearMeasurements={() =>
+                  setDraft((current) => ({ ...current, measurements: {} }))
                 }
               />
             )}
@@ -595,18 +649,25 @@ function PhotoStep({
   items,
   token,
   onUploaded,
+  onRemove,
 }: {
   title: string;
   note: string;
   items: Evidence[];
   token: string;
   onUploaded: (item: Evidence) => void;
+  onRemove: (index: number) => void;
 }) {
   return (
     <section className="mt-4 rounded-3xl bg-slate-900 p-5">
       <h3 className="text-xl font-black">{title}</h3>
       <p className="mt-2 text-slate-400">{note}</p>
-      <PhotoCapture items={items} token={token} onUploaded={onUploaded} />
+      <PhotoCapture
+        items={items}
+        token={token}
+        onUploaded={onUploaded}
+        onRemove={onRemove}
+      />
     </section>
   );
 }
@@ -620,8 +681,10 @@ function Panels({
   setDifferent,
   token,
   onPhoto,
+  onRemovePhoto,
   onEquipment,
   onConfirm,
+  onClearEquipment,
   onQuantity,
   manual,
   onManual,
@@ -635,8 +698,10 @@ function Panels({
   setDifferent: (value: boolean) => void;
   token: string;
   onPhoto: (item: Evidence) => void;
+  onRemovePhoto: (index: number) => void;
   onEquipment: (values: Record<string, string>) => void;
   onConfirm: () => void;
+  onClearEquipment: () => void;
   onQuantity: (value: string) => void;
   manual: boolean;
   onManual: () => void;
@@ -651,6 +716,7 @@ function Panels({
         items={items}
         token={token}
         onUploaded={onPhoto}
+        onRemove={onRemovePhoto}
         onEquipment={onEquipment}
       />
       {items.length ? (
@@ -660,6 +726,7 @@ function Panels({
           equipment={equipment}
           confirmed={confirmed}
           onConfirm={onConfirm}
+          onClear={onClearEquipment}
           manual={manual}
           onManual={onManual}
           onEquipment={onEquipment}
@@ -728,9 +795,12 @@ function EquipmentStep({
   confirmed,
   token,
   onLabel,
+  onRemoveLabel,
   onInstallation,
+  onRemoveInstallation,
   onEquipment,
   onConfirm,
+  onClearEquipment,
   manual,
   onManual,
 }: {
@@ -742,9 +812,12 @@ function EquipmentStep({
   confirmed: boolean;
   token: string;
   onLabel: (item: Evidence) => void;
+  onRemoveLabel: (index: number) => void;
   onInstallation: (item: Evidence) => void;
+  onRemoveInstallation: (index: number) => void;
   onEquipment: (values: Record<string, string>) => void;
   onConfirm: () => void;
+  onClearEquipment: () => void;
   manual: boolean;
   onManual: () => void;
 }) {
@@ -761,6 +834,7 @@ function EquipmentStep({
           items={labelItems}
           token={token}
           onUploaded={onLabel}
+          onRemove={onRemoveLabel}
           onEquipment={onEquipment}
         />
       </section>
@@ -771,6 +845,7 @@ function EquipmentStep({
           equipment={equipment}
           confirmed={confirmed}
           onConfirm={onConfirm}
+          onClear={onClearEquipment}
           manual={manual}
           onManual={onManual}
           onEquipment={onEquipment}
@@ -783,6 +858,7 @@ function EquipmentStep({
           items={installationItems}
           token={token}
           onUploaded={onInstallation}
+          onRemove={onRemoveInstallation}
         />
       ) : null}
     </>
@@ -793,12 +869,14 @@ function LabelCapture({
   items,
   token,
   onUploaded,
+  onRemove,
   onEquipment,
 }: {
   kind: EquipmentKind;
   items: Evidence[];
   token: string;
   onUploaded: (item: Evidence) => void;
+  onRemove: (index: number) => void;
   onEquipment: (values: Record<string, string>) => void;
 }) {
   const [reading, setReading] = useState(false);
@@ -837,6 +915,7 @@ function LabelCapture({
         items={items}
         token={token}
         onUploaded={uploaded}
+        onRemove={onRemove}
         label="TAKE LABEL PHOTO"
       />
       {items.length ? (
@@ -855,6 +934,7 @@ function EquipmentConfirm({
   equipment,
   confirmed,
   onConfirm,
+  onClear,
   manual,
   onManual,
   onEquipment,
@@ -864,6 +944,7 @@ function EquipmentConfirm({
   equipment: Record<string, string>;
   confirmed: boolean;
   onConfirm: () => void;
+  onClear: () => void;
   manual: boolean;
   onManual: () => void;
   onEquipment: (values: Record<string, string>) => void;
@@ -912,6 +993,15 @@ function EquipmentConfirm({
       >
         {manual ? "HIDE MANUAL DETAILS" : "ENTER DETAILS MANUALLY"}
       </button>
+      {(identified || confirmed) && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="ml-4 mt-3 text-sm font-bold text-rose-300"
+        >
+          CLEAR ENTERED DETAILS
+        </button>
+      )}
       {manual ? (
         <div className="mt-3 grid gap-3">
           <label className="text-sm">
@@ -947,11 +1037,13 @@ function PhotoCapture({
   items,
   token,
   onUploaded,
+  onRemove,
   label = "TAKE / CHOOSE PHOTO",
 }: {
   items: Evidence[];
   token: string;
   onUploaded: (item: Evidence) => void;
+  onRemove: (index: number) => void;
   label?: string;
 }) {
   const [uploading, setUploading] = useState(false);
@@ -988,24 +1080,33 @@ function PhotoCapture({
           </p>
           <div className="mt-3 flex flex-wrap gap-3">
             {items.map((item, index) => (
-              <a
+              <div
                 key={item.url}
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
-                className="block overflow-hidden rounded-lg border border-emerald-300/30"
+                className="overflow-hidden rounded-lg border border-emerald-300/30"
               >
-                <Image
-                  src={item.url}
-                  alt={`Evidence photo ${index + 1}`}
-                  width={112}
-                  height={84}
-                  className="h-20 w-28 object-cover"
-                />
-                <span className="block px-2 py-1 text-center text-[11px] font-black">
-                  VIEW PHOTO
-                </span>
-              </a>
+                <a href={item.url} target="_blank" rel="noreferrer">
+                  <Image
+                    src={item.url}
+                    alt={`Evidence photo ${index + 1}`}
+                    width={112}
+                    height={84}
+                    className="h-20 w-28 object-cover"
+                  />
+                  <span className="block px-2 py-1 text-center text-[11px] font-black">
+                    VIEW PHOTO
+                  </span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Remove this photo from the draft?"))
+                      onRemove(index);
+                  }}
+                  className="w-full border-t border-emerald-300/20 px-2 py-1.5 text-[11px] font-black text-rose-200 hover:bg-rose-500/10"
+                >
+                  REMOVE
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -1038,11 +1139,15 @@ function Commissioning({
   measurements,
   onChecklist,
   onMeasurement,
+  onClearChecklist,
+  onClearMeasurements,
 }: {
   checklist: Record<string, string>;
   measurements: Record<string, string>;
   onChecklist: (key: string, value: string) => void;
   onMeasurement: (key: string, value: string) => void;
+  onClearChecklist: () => void;
+  onClearMeasurements: () => void;
 }) {
   return (
     <section className="rounded-3xl bg-slate-900 p-5">
@@ -1052,6 +1157,16 @@ function Commissioning({
         className="w-full rounded-2xl bg-emerald-400 px-4 py-4 font-black text-slate-950"
       >
         ✓ PASS ALL STANDARD TESTS
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (window.confirm("Clear all commissioning test results?"))
+            onClearChecklist();
+        }}
+        className="mt-3 w-full rounded-xl border border-rose-400/30 px-4 py-3 text-sm font-black text-rose-200"
+      >
+        CLEAR TEST RESULTS
       </button>
       <div className="mt-5 space-y-3">
         {checks.map((check) => (
@@ -1109,6 +1224,16 @@ function Commissioning({
           </label>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          if (window.confirm("Clear all recorded measurements?"))
+            onClearMeasurements();
+        }}
+        className="mt-4 text-sm font-bold text-rose-300"
+      >
+        CLEAR MEASUREMENTS
+      </button>
     </section>
   );
 }

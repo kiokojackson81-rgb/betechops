@@ -40,19 +40,25 @@ type ProjectRow = {
   total?: number | string | null;
   createdAt: string;
   projectStage?: string | null;
-  projectPaymentTerm?: "FULL_BEFORE_INSTALLATION" | "DEPOSIT_AND_BALANCE" | "FULL_AFTER_INSTALLATION" | null;
+  projectPaymentTerm?:
+    | "FULL_BEFORE_INSTALLATION"
+    | "DEPOSIT_AND_BALANCE"
+    | "FULL_AFTER_INSTALLATION"
+    | null;
   projectPaymentStatus?: string | null;
   projectDepositType?: "PERCENT" | "AMOUNT" | null;
   projectDepositValue?: number | null;
   projectDepositRequiredAmount?: number | null;
   projectDepositPaidAmount?: number | null;
   projectDepositPendingAmount?: number | null;
-  projectDepositPaymentMethod?: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED" | null;
+  projectDepositPaymentMethod?:
+    "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED" | null;
   projectDepositReference?: string | null;
   projectBalanceExpectedAmount?: number | null;
   projectBalancePaidAmount?: number | null;
   projectBalancePendingAmount?: number | null;
-  projectBalancePaymentMethod?: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED" | null;
+  projectBalancePaymentMethod?:
+    "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED" | null;
   projectBalanceReference?: string | null;
   projectTotalPaidAmount?: number | null;
   projectRemainingAmount?: number | null;
@@ -70,7 +76,10 @@ type ProjectRow = {
 };
 
 type ProjectEditor = {
-  paymentTerm: "FULL_BEFORE_INSTALLATION" | "DEPOSIT_AND_BALANCE" | "FULL_AFTER_INSTALLATION";
+  paymentTerm:
+    | "FULL_BEFORE_INSTALLATION"
+    | "DEPOSIT_AND_BALANCE"
+    | "FULL_AFTER_INSTALLATION";
   depositType: "PERCENT" | "AMOUNT";
   depositValue: string;
   depositPaidAmount: string;
@@ -113,9 +122,7 @@ type SummaryCardFilter = {
 };
 
 type AssignmentModalState =
-  | { type: "staff"; rowId: string }
-  | { type: "external"; rowId: string }
-  | null;
+  { type: "staff"; rowId: string } | { type: "external"; rowId: string } | null;
 
 const PROJECT_COMPLETION_COMMISSION = 2000;
 
@@ -252,7 +259,11 @@ const getDisplayStatus = (row: ProjectRow) => {
     };
   }
 
-  if (Number(row.projectRemainingAmount ?? 0) > 0 && Number(row.projectTotalPaidAmount ?? 0) > 0 && !row.projectScheduledDate) {
+  if (
+    Number(row.projectRemainingAmount ?? 0) > 0 &&
+    Number(row.projectTotalPaidAmount ?? 0) > 0 &&
+    !row.projectScheduledDate
+  ) {
     return {
       label: "Awaiting Payment",
       tone: "border-orange-500/30 bg-orange-500/12 text-orange-200",
@@ -272,12 +283,16 @@ const getDisplayStatus = (row: ProjectRow) => {
   };
 };
 
-const getLocationValue = (row: ProjectRow) => String(row.customerLocation || "Unspecified").trim();
+const getLocationValue = (row: ProjectRow) =>
+  String(row.customerLocation || "Unspecified").trim();
 
-const getAssignedHandlers = (row: ProjectRow) => row.projectAssignedHandlers ?? [];
+const getAssignedHandlers = (row: ProjectRow) =>
+  row.projectAssignedHandlers ?? [];
 
 const getAssignedStaffIds = (row: ProjectRow) => {
-  const direct = Array.isArray(row.projectHandlerStaffIds) ? row.projectHandlerStaffIds.filter(Boolean) : [];
+  const direct = Array.isArray(row.projectHandlerStaffIds)
+    ? row.projectHandlerStaffIds.filter(Boolean)
+    : [];
   const legacy = row.projectHandlerStaffId ? [row.projectHandlerStaffId] : [];
   const derived = getAssignedHandlers(row)
     .filter((entry) => entry.kind === "STAFF" && entry.staffId)
@@ -286,7 +301,9 @@ const getAssignedStaffIds = (row: ProjectRow) => {
 };
 
 const getAssignedExternalIds = (row: ProjectRow) => {
-  const direct = Array.isArray(row.projectExternalAgentIds) ? row.projectExternalAgentIds.filter(Boolean) : [];
+  const direct = Array.isArray(row.projectExternalAgentIds)
+    ? row.projectExternalAgentIds.filter(Boolean)
+    : [];
   const legacy = row.projectExternalAgentId ? [row.projectExternalAgentId] : [];
   const derived = getAssignedHandlers(row)
     .filter((entry) => entry.kind === "EXTERNAL" && entry.externalAgentId)
@@ -305,8 +322,8 @@ function makeEditor(row: ProjectRow): ProjectEditor {
     depositType: row.projectDepositType === "AMOUNT" ? "AMOUNT" : "PERCENT",
     depositValue: String(
       row.projectDepositType === "AMOUNT"
-        ? row.projectDepositRequiredAmount ?? row.projectDepositValue ?? 0
-        : row.projectDepositValue ?? 30,
+        ? (row.projectDepositRequiredAmount ?? row.projectDepositValue ?? 0)
+        : (row.projectDepositValue ?? 30),
     ),
     depositPaidAmount: String(row.projectDepositPaidAmount ?? 0),
     depositPaymentMethod: row.projectDepositPaymentMethod ?? "UNSPECIFIED",
@@ -314,7 +331,9 @@ function makeEditor(row: ProjectRow): ProjectEditor {
     balancePaidAmount: String(row.projectBalancePaidAmount ?? 0),
     balancePaymentMethod: row.projectBalancePaymentMethod ?? "UNSPECIFIED",
     balanceReference: row.projectBalanceReference ?? "",
-    scheduledDate: row.projectScheduledDate ? row.projectScheduledDate.slice(0, 10) : "",
+    scheduledDate: row.projectScheduledDate
+      ? row.projectScheduledDate.slice(0, 10)
+      : "",
     paymentNotes: row.projectPaymentNotes ?? "",
     handlerStaffIds: getAssignedStaffIds(row),
     externalAgentIds: getAssignedExternalIds(row),
@@ -322,7 +341,9 @@ function makeEditor(row: ProjectRow): ProjectEditor {
 }
 
 function toggleValue(values: string[], value: string) {
-  return values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
+  return values.includes(value)
+    ? values.filter((entry) => entry !== value)
+    : [...values, value];
 }
 
 function ModalShell({
@@ -343,7 +364,9 @@ function ModalShell({
       <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#07111f] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
         <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.32em] text-cyan-300">Project Assignment</div>
+            <div className="text-[11px] uppercase tracking-[0.32em] text-cyan-300">
+              Project Assignment
+            </div>
             <h3 className="mt-2 text-xl font-semibold text-white">{title}</h3>
             <p className="mt-1 text-sm text-slate-400">{description}</p>
           </div>
@@ -355,8 +378,14 @@ function ModalShell({
             Close
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer ? <div className="border-t border-white/10 bg-[#091321] px-5 py-4">{footer}</div> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {children}
+        </div>
+        {footer ? (
+          <div className="border-t border-white/10 bg-[#091321] px-5 py-4">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -369,7 +398,9 @@ export default function ProjectsOperationsClient({
   const isTechnicalScope = scope === "technical";
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
-  const [externalAgents, setExternalAgents] = useState<ExternalAgentOption[]>([]);
+  const [externalAgents, setExternalAgents] = useState<ExternalAgentOption[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -382,45 +413,65 @@ export default function ProjectsOperationsClient({
   const [newAgentPhone, setNewAgentPhone] = useState("");
   const [agentSaving, setAgentSaving] = useState(false);
   const [sendingReceiptId, setSendingReceiptId] = useState<string | null>(null);
-  const [commissioningLinks, setCommissioningLinks] = useState<Record<string, CommissioningLinkState>>({});
+  const [commissioningLinks, setCommissioningLinks] = useState<
+    Record<string, CommissioningLinkState>
+  >({});
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
-  const [assignmentModal, setAssignmentModal] = useState<AssignmentModalState>(null);
+  const [assignmentModal, setAssignmentModal] =
+    useState<AssignmentModalState>(null);
   const [assignmentSearch, setAssignmentSearch] = useState("");
 
   const load = async () => {
     setLoading(true);
     try {
-      const [firstReceiptsRes, staffRes, externalAgentsRes] = await Promise.all([
-        fetch("/api/receipts?customerType=project&scope=global&page=1&size=200", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/receipts/staff", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/project-external-agents", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ]);
+      const [firstReceiptsRes, staffRes, externalAgentsRes] = await Promise.all(
+        [
+          fetch(
+            "/api/receipts?customerType=project&scope=global&page=1&size=200",
+            {
+              cache: "no-store",
+              credentials: "same-origin",
+            },
+          ),
+          fetch("/api/receipts/staff", {
+            cache: "no-store",
+            credentials: "same-origin",
+          }),
+          fetch("/api/project-external-agents", {
+            cache: "no-store",
+            credentials: "same-origin",
+          }),
+        ],
+      );
       const receiptsPayload = await firstReceiptsRes.json().catch(() => ({}));
       const staffPayload = await staffRes.json().catch(() => []);
-      const externalAgentsPayload = await externalAgentsRes.json().catch(() => []);
+      const externalAgentsPayload = await externalAgentsRes
+        .json()
+        .catch(() => []);
       if (!firstReceiptsRes.ok) {
-        throw new Error(receiptsPayload?.error || "Failed to load project receipts");
+        throw new Error(
+          receiptsPayload?.error || "Failed to load project receipts",
+        );
       }
 
-      let nextRows = Array.isArray(receiptsPayload?.receipts) ? receiptsPayload.receipts : [];
-      const totalPages = Math.max(1, Number(receiptsPayload?.paging?.totalPages || 1));
+      let nextRows = Array.isArray(receiptsPayload?.receipts)
+        ? receiptsPayload.receipts
+        : [];
+      const totalPages = Math.max(
+        1,
+        Number(receiptsPayload?.paging?.totalPages || 1),
+      );
       if (totalPages > 1) {
         const remainingPayloads = await Promise.all(
           Array.from({ length: totalPages - 1 }, (_, index) =>
-            fetch(`/api/receipts?customerType=project&scope=global&page=${index + 2}&size=200`, {
-              cache: "no-store",
-              credentials: "same-origin",
-            }).then((response) => response.json().catch(() => ({}))),
+            fetch(
+              `/api/receipts?customerType=project&scope=global&page=${index + 2}&size=200`,
+              {
+                cache: "no-store",
+                credentials: "same-origin",
+              },
+            ).then((response) => response.json().catch(() => ({}))),
           ),
         );
 
@@ -432,11 +483,20 @@ export default function ProjectsOperationsClient({
       }
 
       setRows(nextRows);
-      setEditors(Object.fromEntries(nextRows.map((row: ProjectRow) => [row.id, makeEditor(row)])));
+      setEditors(
+        Object.fromEntries(
+          nextRows.map((row: ProjectRow) => [row.id, makeEditor(row)]),
+        ),
+      );
       setStaff(Array.isArray(staffPayload) ? staffPayload : []);
-      setExternalAgents(Array.isArray(externalAgentsPayload) ? externalAgentsPayload : []);
+      setExternalAgents(
+        Array.isArray(externalAgentsPayload) ? externalAgentsPayload : [],
+      );
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to load projects", "error");
+      showToast(
+        error instanceof Error ? error.message : "Failed to load projects",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -453,10 +513,10 @@ export default function ProjectsOperationsClient({
     setQuery(nextQuery);
     setStageFilter(
       nextStage === "RECEIPT_CREATED" ||
-      nextStage === "PROJECT_SCHEDULED" ||
-      nextStage === "PROJECT_IN_PROGRESS" ||
-      nextStage === "PROJECT_INSTALLED" ||
-      nextStage === "COMPLETED_POSTED"
+        nextStage === "PROJECT_SCHEDULED" ||
+        nextStage === "PROJECT_IN_PROGRESS" ||
+        nextStage === "PROJECT_INSTALLED" ||
+        nextStage === "COMPLETED_POSTED"
         ? nextStage
         : "ALL",
     );
@@ -480,22 +540,31 @@ export default function ProjectsOperationsClient({
     else params.delete("location");
     if (technicianFilter !== "ALL") params.set("technician", technicianFilter);
     else params.delete("technician");
-    if (installationDateFilter) params.set("installationDate", installationDateFilter);
+    if (installationDateFilter)
+      params.set("installationDate", installationDateFilter);
     else params.delete("installationDate");
     const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
     window.history.replaceState(null, "", next);
-  }, [installationDateFilter, locationFilter, query, stageFilter, technicianFilter]);
+  }, [
+    installationDateFilter,
+    locationFilter,
+    query,
+    stageFilter,
+    technicianFilter,
+  ]);
 
   const scopedRows = useMemo(() => {
     if (!isTechnicalScope) return rows;
-    return rows.filter((row) => getAssignedStaffIds(row).includes(String(viewerId || "").trim()));
+    return rows.filter((row) =>
+      getAssignedStaffIds(row).includes(String(viewerId || "").trim()),
+    );
   }, [isTechnicalScope, rows, viewerId]);
 
   const locationOptions = useMemo(
     () =>
-      Array.from(new Set(scopedRows.map((row) => getLocationValue(row)).filter(Boolean))).sort((left, right) =>
-        left.localeCompare(right),
-      ),
+      Array.from(
+        new Set(scopedRows.map((row) => getLocationValue(row)).filter(Boolean)),
+      ).sort((left, right) => left.localeCompare(right)),
     [scopedRows],
   );
 
@@ -503,11 +572,22 @@ export default function ProjectsOperationsClient({
     const term = query.trim().toLowerCase();
     return scopedRows
       .filter((row) => {
-        if (stageFilter !== "ALL" && row.projectStage !== stageFilter) return false;
-        if (locationFilter !== "ALL" && getLocationValue(row) !== locationFilter) return false;
-        if (technicianFilter !== "ALL" && !getAssignedStaffIds(row).includes(technicianFilter)) return false;
+        if (stageFilter !== "ALL" && row.projectStage !== stageFilter)
+          return false;
+        if (
+          locationFilter !== "ALL" &&
+          getLocationValue(row) !== locationFilter
+        )
+          return false;
+        if (
+          technicianFilter !== "ALL" &&
+          !getAssignedStaffIds(row).includes(technicianFilter)
+        )
+          return false;
         if (installationDateFilter) {
-          const currentDate = row.projectScheduledDate ? row.projectScheduledDate.slice(0, 10) : "";
+          const currentDate = row.projectScheduledDate
+            ? row.projectScheduledDate.slice(0, 10)
+            : "";
           if (currentDate !== installationDateFilter) return false;
         }
         if (!term) return true;
@@ -528,32 +608,84 @@ export default function ProjectsOperationsClient({
         return searchableValues.some((value) => value.includes(term));
       })
       .sort((left, right) => {
-        const stageRankDiff = getProjectStageRank(left.projectStage) - getProjectStageRank(right.projectStage);
+        const stageRankDiff =
+          getProjectStageRank(left.projectStage) -
+          getProjectStageRank(right.projectStage);
         if (stageRankDiff !== 0) return stageRankDiff;
-        return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+        return (
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime()
+        );
       });
-  }, [installationDateFilter, locationFilter, query, scopedRows, stageFilter, technicianFilter]);
+  }, [
+    installationDateFilter,
+    locationFilter,
+    query,
+    scopedRows,
+    stageFilter,
+    technicianFilter,
+  ]);
 
   const summary = useMemo(
     () => ({
       total: scopedRows.length,
-      pending: scopedRows.filter((row) => row.projectStage === "RECEIPT_CREATED" || !row.projectStage).length,
-      scheduled: scopedRows.filter((row) => row.projectStage === "PROJECT_SCHEDULED").length,
-      inProgress: scopedRows.filter((row) => row.projectStage === "PROJECT_IN_PROGRESS").length,
-      installed: scopedRows.filter((row) => row.projectStage === "PROJECT_INSTALLED").length,
-      completed: scopedRows.filter((row) => row.projectStage === "COMPLETED_POSTED").length,
+      pending: scopedRows.filter(
+        (row) => row.projectStage === "RECEIPT_CREATED" || !row.projectStage,
+      ).length,
+      scheduled: scopedRows.filter(
+        (row) => row.projectStage === "PROJECT_SCHEDULED",
+      ).length,
+      inProgress: scopedRows.filter(
+        (row) => row.projectStage === "PROJECT_IN_PROGRESS",
+      ).length,
+      installed: scopedRows.filter(
+        (row) => row.projectStage === "PROJECT_INSTALLED",
+      ).length,
+      completed: scopedRows.filter(
+        (row) => row.projectStage === "COMPLETED_POSTED",
+      ).length,
     }),
     [scopedRows],
   );
 
   const summaryCards = useMemo<SummaryCardFilter[]>(
     () => [
-      { label: "All Projects", value: summary.total, accent: "text-white", filter: "ALL" },
-      { label: "Pending", value: summary.pending, accent: "text-amber-200", filter: "RECEIPT_CREATED" },
-      { label: "Scheduled", value: summary.scheduled, accent: "text-fuchsia-200", filter: "PROJECT_SCHEDULED" },
-      { label: "In Progress", value: summary.inProgress, accent: "text-sky-200", filter: "PROJECT_IN_PROGRESS" },
-      { label: "Installed", value: summary.installed, accent: "text-violet-200", filter: "PROJECT_INSTALLED" },
-      { label: "Completed", value: summary.completed, accent: "text-emerald-200", filter: "COMPLETED_POSTED" },
+      {
+        label: "All Projects",
+        value: summary.total,
+        accent: "text-white",
+        filter: "ALL",
+      },
+      {
+        label: "Pending",
+        value: summary.pending,
+        accent: "text-amber-200",
+        filter: "RECEIPT_CREATED",
+      },
+      {
+        label: "Scheduled",
+        value: summary.scheduled,
+        accent: "text-fuchsia-200",
+        filter: "PROJECT_SCHEDULED",
+      },
+      {
+        label: "In Progress",
+        value: summary.inProgress,
+        accent: "text-sky-200",
+        filter: "PROJECT_IN_PROGRESS",
+      },
+      {
+        label: "Installed",
+        value: summary.installed,
+        accent: "text-violet-200",
+        filter: "PROJECT_INSTALLED",
+      },
+      {
+        label: "Completed",
+        value: summary.completed,
+        accent: "text-emerald-200",
+        filter: "COMPLETED_POSTED",
+      },
     ],
     [summary],
   );
@@ -563,7 +695,12 @@ export default function ProjectsOperationsClient({
       ...current,
       [receiptId]: {
         ...(current[receiptId] ??
-          makeEditor(rows.find((row) => row.id === receiptId) ?? { id: receiptId, createdAt: new Date().toISOString() })),
+          makeEditor(
+            rows.find((row) => row.id === receiptId) ?? {
+              id: receiptId,
+              createdAt: new Date().toISOString(),
+            },
+          )),
         ...patch,
       },
     }));
@@ -578,22 +715,34 @@ export default function ProjectsOperationsClient({
   };
 
   const toggleExpanded = (rowId: string) => {
-    setExpandedRowIds((current) => (current.includes(rowId) ? current.filter((id) => id !== rowId) : [rowId]));
+    setExpandedRowIds((current) =>
+      current.includes(rowId) ? current.filter((id) => id !== rowId) : [rowId],
+    );
   };
 
   const toggleSelected = (rowId: string) => {
-    setSelectedRowIds((current) => (current.includes(rowId) ? current.filter((id) => id !== rowId) : [...current, rowId]));
+    setSelectedRowIds((current) =>
+      current.includes(rowId)
+        ? current.filter((id) => id !== rowId)
+        : [...current, rowId],
+    );
   };
 
   const toggleSelectAllVisible = () => {
     const visibleIds = filteredRows.map((row) => row.id);
-    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedRowIds.includes(id));
-    setSelectedRowIds(allSelected ? selectedRowIds.filter((id) => !visibleIds.includes(id)) : Array.from(new Set([...selectedRowIds, ...visibleIds])));
+    const allSelected =
+      visibleIds.length > 0 &&
+      visibleIds.every((id) => selectedRowIds.includes(id));
+    setSelectedRowIds(
+      allSelected
+        ? selectedRowIds.filter((id) => !visibleIds.includes(id))
+        : Array.from(new Set([...selectedRowIds, ...visibleIds])),
+    );
   };
 
   const saveProject = async (
     receiptId: string,
-    override?: { stage?: ProjectStage },
+    override?: { stage?: ProjectStage; assignments?: boolean },
   ) => {
     const editor = editors[receiptId];
     if (!editor) return;
@@ -616,8 +765,12 @@ export default function ProjectsOperationsClient({
           balanceReference: editor.balanceReference || null,
           scheduledDate: editor.scheduledDate || null,
           paymentNotes: editor.paymentNotes || null,
-          handlerStaffIds: editor.handlerStaffIds,
-          externalAgentIds: editor.externalAgentIds,
+          ...(override?.assignments
+            ? {
+                handlerStaffIds: editor.handlerStaffIds,
+                externalAgentIds: editor.externalAgentIds,
+              }
+            : {}),
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -629,24 +782,32 @@ export default function ProjectsOperationsClient({
           ...current,
           [receiptId]: { link: payload.commissioningLink, status: "DRAFT" },
         }));
-        await navigator.clipboard?.writeText(payload.commissioningLink).catch(() => undefined);
-        showToast("Technician changed: the old commissioning link was invalidated and the replacement link copied.", "success");
+        await navigator.clipboard
+          ?.writeText(payload.commissioningLink)
+          .catch(() => undefined);
+        showToast(
+          "Technician changed: the old commissioning link was invalidated and the replacement link copied.",
+          "success",
+        );
       }
       showToast(
         override?.stage === "COMPLETED_POSTED"
           ? "Project marked complete and left in POS for normal pricing flow"
           : override?.stage === "PROJECT_INSTALLED"
             ? "Project marked installed"
-          : override?.stage === "PROJECT_IN_PROGRESS"
-            ? "Project marked in progress"
-            : override?.stage === "PROJECT_SCHEDULED"
-              ? "Project confirmed and scheduled"
-            : "Project assignment updated",
+            : override?.stage === "PROJECT_IN_PROGRESS"
+              ? "Project marked in progress"
+              : override?.stage === "PROJECT_SCHEDULED"
+                ? "Project confirmed and scheduled"
+                : "Project assignment updated",
         "success",
       );
       await load();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to update project", "error");
+      showToast(
+        error instanceof Error ? error.message : "Failed to update project",
+        "error",
+      );
     } finally {
       setSavingId(null);
     }
@@ -659,7 +820,10 @@ export default function ProjectsOperationsClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ name: newAgentName, whatsappNumber: newAgentPhone }),
+        body: JSON.stringify({
+          name: newAgentName,
+          whatsappNumber: newAgentPhone,
+        }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -670,7 +834,12 @@ export default function ProjectsOperationsClient({
       await load();
       showToast("External agent saved", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to save external agent", "error");
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Failed to save external agent",
+        "error",
+      );
     } finally {
       setAgentSaving(false);
     }
@@ -690,7 +859,12 @@ export default function ProjectsOperationsClient({
       await load();
       showToast("Starter external agents loaded", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to load starter agents", "error");
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Failed to load starter agents",
+        "error",
+      );
     } finally {
       setAgentSaving(false);
     }
@@ -699,10 +873,13 @@ export default function ProjectsOperationsClient({
   const deleteExternalAgent = async (id: string) => {
     setAgentSaving(true);
     try {
-      const res = await fetch(`/api/project-external-agents?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        credentials: "same-origin",
-      });
+      const res = await fetch(
+        `/api/project-external-agents?id=${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          credentials: "same-origin",
+        },
+      );
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(payload?.error || "Failed to delete external agent");
@@ -710,7 +887,12 @@ export default function ProjectsOperationsClient({
       await load();
       showToast("External agent removed", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to delete external agent", "error");
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete external agent",
+        "error",
+      );
     } finally {
       setAgentSaving(false);
     }
@@ -718,30 +900,45 @@ export default function ProjectsOperationsClient({
 
   const saveAssignmentsFromModal = async () => {
     if (!assignmentModal) return;
-    await saveProject(assignmentModal.rowId);
+    await saveProject(assignmentModal.rowId, { assignments: true });
     setAssignmentModal(null);
     setAssignmentSearch("");
   };
 
   const resendProjectReceipt = async (row: ProjectRow) => {
-    const eventType = row.projectStage === "COMPLETED_POSTED" ? "PROJECT_COMPLETED" : "PROJECT_BOOKED";
+    const eventType =
+      row.projectStage === "COMPLETED_POSTED"
+        ? "PROJECT_COMPLETED"
+        : "PROJECT_BOOKED";
     setSendingReceiptId(row.id);
     try {
-      const res = await fetch(`/api/receipts/${row.id}/project/notifications/retry`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ eventType }),
-      });
+      const res = await fetch(
+        `/api/receipts/${row.id}/project/notifications/retry`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ eventType }),
+        },
+      );
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(payload?.error || "Failed to resend project receipt");
       }
 
-      const results = Object.values(payload?.results ?? {}) as Array<{ channel?: string; status?: string }>;
-      const sentCount = results.filter((entry) => String(entry.status || "").toUpperCase() === "SENT").length;
-      const skippedCount = results.filter((entry) => String(entry.status || "").toUpperCase() === "SKIPPED").length;
-      const failedCount = results.filter((entry) => String(entry.status || "").toUpperCase() === "FAILED").length;
+      const results = Object.values(payload?.results ?? {}) as Array<{
+        channel?: string;
+        status?: string;
+      }>;
+      const sentCount = results.filter(
+        (entry) => String(entry.status || "").toUpperCase() === "SENT",
+      ).length;
+      const skippedCount = results.filter(
+        (entry) => String(entry.status || "").toUpperCase() === "SKIPPED",
+      ).length;
+      const failedCount = results.filter(
+        (entry) => String(entry.status || "").toUpperCase() === "FAILED",
+      ).length;
       const statusParts = [
         sentCount ? `${sentCount} sent` : null,
         skippedCount ? `${skippedCount} skipped` : null,
@@ -755,7 +952,12 @@ export default function ProjectsOperationsClient({
         failedCount > 0 ? "error" : "success",
       );
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to resend project receipt", "error");
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Failed to resend project receipt",
+        "error",
+      );
     } finally {
       setSendingReceiptId(null);
     }
@@ -763,7 +965,13 @@ export default function ProjectsOperationsClient({
 
   const manageCommissioningLink = async (
     row: ProjectRow,
-    action: "create" | "resend" | "regenerate" | "revoke" | "reassign" | "deliver-certificate",
+    action:
+      | "create"
+      | "resend"
+      | "regenerate"
+      | "revoke"
+      | "reassign"
+      | "deliver-certificate",
     technicianId?: string,
   ) => {
     setSavingId(row.id);
@@ -775,15 +983,24 @@ export default function ProjectsOperationsClient({
         body: JSON.stringify({ action, technicianId }),
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Unable to update commissioning link");
+      if (!res.ok)
+        throw new Error(
+          payload?.error || "Unable to update commissioning link",
+        );
       if (payload?.link) {
         if (action !== "deliver-certificate") {
           setCommissioningLinks((current) => ({
             ...current,
-            [row.id]: { link: payload.link, status: payload.session?.status, progress: payload.session?.progress },
+            [row.id]: {
+              link: payload.link,
+              status: payload.session?.status,
+              progress: payload.session?.progress,
+            },
           }));
         }
-        await navigator.clipboard?.writeText(payload.link).catch(() => undefined);
+        await navigator.clipboard
+          ?.writeText(payload.link)
+          .catch(() => undefined);
         showToast(
           action === "deliver-certificate"
             ? "Customer certificate delivery was triggered and its secure link was copied."
@@ -801,28 +1018,44 @@ export default function ProjectsOperationsClient({
         showToast(payload?.message || "Commissioning link revoked.", "success");
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Unable to update commissioning link", "error");
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Unable to update commissioning link",
+        "error",
+      );
     } finally {
       setSavingId(null);
     }
   };
 
-  const modalRow = assignmentModal ? rows.find((row) => row.id === assignmentModal.rowId) ?? null : null;
-  const modalEditor = modalRow ? editors[modalRow.id] ?? makeEditor(modalRow) : null;
+  const modalRow = assignmentModal
+    ? (rows.find((row) => row.id === assignmentModal.rowId) ?? null)
+    : null;
+  const modalEditor = modalRow
+    ? (editors[modalRow.id] ?? makeEditor(modalRow))
+    : null;
   const assignmentOptions = useMemo(() => {
     const term = assignmentSearch.trim().toLowerCase();
     if (!assignmentModal) return [];
     if (assignmentModal.type === "staff") {
       return staff.filter((member) => {
         if (!term) return true;
-        return [member.name, member.whatsappNumber, member.technicalPhoneNumber, member.phone]
+        return [
+          member.name,
+          member.whatsappNumber,
+          member.technicalPhoneNumber,
+          member.phone,
+        ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(term));
       });
     }
     return externalAgents.filter((agent) => {
       if (!term) return true;
-      return [agent.name, agent.whatsappNumber].some((value) => String(value).toLowerCase().includes(term));
+      return [agent.name, agent.whatsappNumber].some((value) =>
+        String(value).toLowerCase().includes(term),
+      );
     });
   }, [assignmentModal, assignmentSearch, externalAgents, staff]);
 
@@ -831,18 +1064,27 @@ export default function ProjectsOperationsClient({
       <section className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(6,12,24,0.98),rgba(8,16,31,0.96))] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:px-6">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.38em] text-cyan-300">Admin Projects</div>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Projects</h1>
+            <div className="text-[11px] uppercase tracking-[0.38em] text-cyan-300">
+              Admin Projects
+            </div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+              Projects
+            </h1>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
-              Track project receipts, schedule installations, assign internal technicians and external agents, and move each project through the live POS workflow.
+              Track project receipts, schedule installations, assign internal
+              technicians and external agents, and move each project through the
+              live POS workflow.
             </p>
             <p className="mt-2 max-w-4xl text-xs leading-5 text-slate-500">
-              The same project can be assigned to both internal staff and external agents at the same time.
+              The same project can be assigned to both internal staff and
+              external agents at the same time.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="min-w-[260px] rounded-2xl border border-white/10 bg-[#0b1424] px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Search</div>
+              <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">
+                Search
+              </div>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -862,7 +1104,9 @@ export default function ProjectsOperationsClient({
 
         <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {summaryCards.map((card) => {
-            const isActive = stageFilter === card.filter || (card.filter === "ALL" && stageFilter === "ALL");
+            const isActive =
+              stageFilter === card.filter ||
+              (card.filter === "ALL" && stageFilter === "ALL");
             return (
               <button
                 key={card.label}
@@ -874,8 +1118,12 @@ export default function ProjectsOperationsClient({
                     : "border-white/8 bg-[#0a1322] hover:border-white/15 hover:bg-[#0d1728]"
                 }`}
               >
-                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500">{card.label}</div>
-                <div className={`mt-3 text-2xl font-semibold ${card.accent}`}>{card.value}</div>
+                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
+                  {card.label}
+                </div>
+                <div className={`mt-3 text-2xl font-semibold ${card.accent}`}>
+                  {card.value}
+                </div>
               </button>
             );
           })}
@@ -886,13 +1134,19 @@ export default function ProjectsOperationsClient({
         <section className="mt-6 rounded-[30px] border border-white/10 bg-[#07111f] p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">External Agents</div>
-              <h2 className="mt-2 text-xl font-semibold text-white">Manage project external technicians</h2>
+              <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">
+                External Agents
+              </div>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Manage project external technicians
+              </h2>
               <p className="mt-2 text-sm text-slate-400">
-                Save, reuse, and delete external agents used for installation assignments and notifications.
+                Save, reuse, and delete external agents used for installation
+                assignments and notifications.
               </p>
               <p className="mt-2 text-xs text-slate-500">
-                External agents can be added alongside internal technicians on the same project.
+                External agents can be added alongside internal technicians on
+                the same project.
               </p>
             </div>
             <button
@@ -930,9 +1184,16 @@ export default function ProjectsOperationsClient({
 
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {externalAgents.map((agent) => (
-              <div key={agent.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-sm font-semibold text-white">{agent.name}</div>
-                <div className="mt-1 text-xs text-slate-400">{agent.whatsappNumber}</div>
+              <div
+                key={agent.id}
+                className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
+              >
+                <div className="text-sm font-semibold text-white">
+                  {agent.name}
+                </div>
+                <div className="mt-1 text-xs text-slate-400">
+                  {agent.whatsappNumber}
+                </div>
                 <button
                   type="button"
                   onClick={() => void deleteExternalAgent(agent.id)}
@@ -950,7 +1211,9 @@ export default function ProjectsOperationsClient({
       <section className="mt-6 rounded-[30px] border border-white/10 bg-[#07111f] p-5">
         <div className="grid gap-3 xl:grid-cols-[minmax(280px,1.5fr)_repeat(4,minmax(0,1fr))_auto]">
           <div className="rounded-2xl border border-white/10 bg-[#0b1424] px-4 py-3">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Search</div>
+            <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">
+              Search
+            </div>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -960,7 +1223,9 @@ export default function ProjectsOperationsClient({
           </div>
           <select
             value={stageFilter}
-            onChange={(event) => setStageFilter(event.target.value as ProjectStageFilter)}
+            onChange={(event) =>
+              setStageFilter(event.target.value as ProjectStageFilter)
+            }
             className="rounded-2xl border border-white/10 bg-[#0b1424] px-4 py-3 text-sm text-white outline-none"
           >
             <option value="ALL">All statuses</option>
@@ -1018,32 +1283,61 @@ export default function ProjectsOperationsClient({
                 <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
                   <input
                     type="checkbox"
-                    checked={filteredRows.length > 0 && filteredRows.every((row) => selectedRowIds.includes(row.id))}
+                    checked={
+                      filteredRows.length > 0 &&
+                      filteredRows.every((row) =>
+                        selectedRowIds.includes(row.id),
+                      )
+                    }
                     onChange={toggleSelectAllVisible}
                     className="h-4 w-4 rounded border-white/20 bg-transparent"
                   />
                 </th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">Open</th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">Project</th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">Customer</th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">Amount</th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">County / Location</th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">Assigned Technicians</th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">Installation Date</th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">Status</th>
-                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">Actions</th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  Open
+                </th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  Project
+                </th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  Customer
+                </th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  Amount
+                </th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  County / Location
+                </th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  Assigned Technicians
+                </th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  Installation Date
+                </th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  Status
+                </th>
+                <th className="px-4 py-5 text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-10 text-sm text-slate-400">
+                  <td
+                    colSpan={10}
+                    className="px-6 py-10 text-sm text-slate-400"
+                  >
                     Loading project receipts...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-10 text-sm text-slate-400">
+                  <td
+                    colSpan={10}
+                    className="px-6 py-10 text-sm text-slate-400"
+                  >
                     No project receipts found for the current filters.
                   </td>
                 </tr>
@@ -1056,11 +1350,23 @@ export default function ProjectsOperationsClient({
                   const displayStatus = getDisplayStatus(row);
                   const percentagePaid = Math.max(
                     0,
-                    Math.min(100, Math.round((Number(row.projectTotalPaidAmount ?? 0) / Math.max(Number(row.total ?? 0), 1)) * 100)),
+                    Math.min(
+                      100,
+                      Math.round(
+                        (Number(row.projectTotalPaidAmount ?? 0) /
+                          Math.max(Number(row.total ?? 0), 1)) *
+                          100,
+                      ),
+                    ),
                   );
-                  const assignedStaff = assignedHandlers.filter((entry) => entry.kind === "STAFF");
-                  const assignedExternal = assignedHandlers.filter((entry) => entry.kind === "EXTERNAL");
-                  const quickTechLabels = assignedStaff.length > 0 ? assignedStaff : assignedHandlers;
+                  const assignedStaff = assignedHandlers.filter(
+                    (entry) => entry.kind === "STAFF",
+                  );
+                  const assignedExternal = assignedHandlers.filter(
+                    (entry) => entry.kind === "EXTERNAL",
+                  );
+                  const quickTechLabels =
+                    assignedStaff.length > 0 ? assignedStaff : assignedHandlers;
                   return (
                     <Fragment key={row.id}>
                       <tr
@@ -1084,33 +1390,55 @@ export default function ProjectsOperationsClient({
                           </button>
                         </td>
                         <td className="px-4 py-5">
-                          <div className="text-base font-semibold text-white">{row.orderRef || "Project receipt"}</div>
-                          <div className="mt-1 text-sm text-slate-400">{row.customerName || "Unnamed project"}</div>
+                          <div className="text-base font-semibold text-white">
+                            {row.orderRef || "Project receipt"}
+                          </div>
+                          <div className="mt-1 text-sm text-slate-400">
+                            {row.customerName || "Unnamed project"}
+                          </div>
                         </td>
                         <td className="px-4 py-5">
-                          <div className="text-sm font-medium text-white">{row.customerName || "No customer name"}</div>
-                          <div className="mt-1 text-sm text-slate-400">{row.customerPhone || "No phone"}</div>
+                          <div className="text-sm font-medium text-white">
+                            {row.customerName || "No customer name"}
+                          </div>
+                          <div className="mt-1 text-sm text-slate-400">
+                            {row.customerPhone || "No phone"}
+                          </div>
                         </td>
                         <td className="px-4 py-5">
-                          <div className="text-lg font-semibold text-white">{formatCurrency(row.total)}</div>
-                          <div className="mt-1 text-xs text-slate-500">{formatPaymentStatusLabel(row.projectPaymentStatus)}</div>
+                          <div className="text-lg font-semibold text-white">
+                            {formatCurrency(row.total)}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {formatPaymentStatusLabel(row.projectPaymentStatus)}
+                          </div>
                         </td>
-                        <td className="px-4 py-5 text-sm text-slate-300">{getLocationValue(row)}</td>
+                        <td className="px-4 py-5 text-sm text-slate-300">
+                          {getLocationValue(row)}
+                        </td>
                         <td className="px-4 py-5">
                           <div className="flex flex-wrap items-center gap-2">
                             {quickTechLabels.length === 0 ? (
-                              <span className="text-sm text-slate-500">Unassigned</span>
+                              <span className="text-sm text-slate-500">
+                                Unassigned
+                              </span>
                             ) : (
                               <>
-                                {quickTechLabels.slice(0, 2).map((handler, index) => (
-                                  <div
-                                    key={`${handler.kind}-${handler.staffId || handler.externalAgentId || index}`}
-                                    title={renderAssignedLabel(handler)}
-                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-xs font-semibold text-cyan-100"
-                                  >
-                                    {getInitials(handler.kind === "STAFF" ? handler.staffName : handler.externalAgentName)}
-                                  </div>
-                                ))}
+                                {quickTechLabels
+                                  .slice(0, 2)
+                                  .map((handler, index) => (
+                                    <div
+                                      key={`${handler.kind}-${handler.staffId || handler.externalAgentId || index}`}
+                                      title={renderAssignedLabel(handler)}
+                                      className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-xs font-semibold text-cyan-100"
+                                    >
+                                      {getInitials(
+                                        handler.kind === "STAFF"
+                                          ? handler.staffName
+                                          : handler.externalAgentName,
+                                      )}
+                                    </div>
+                                  ))}
                                 {quickTechLabels.length > 2 ? (
                                   <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300">
                                     +{quickTechLabels.length - 2}
@@ -1121,16 +1449,29 @@ export default function ProjectsOperationsClient({
                           </div>
                           {assignedExternal.length > 0 ? (
                             <div className="mt-2 text-xs text-slate-500">
-                              Agent: {assignedExternal.map((handler) => handler.externalAgentName || "External").join(", ")}
+                              Agent:{" "}
+                              {assignedExternal
+                                .map(
+                                  (handler) =>
+                                    handler.externalAgentName || "External",
+                                )
+                                .join(", ")}
                             </div>
                           ) : null}
                         </td>
                         <td className="px-4 py-5">
-                          <div className="text-sm text-white">{formatProjectDate(row.projectScheduledDate) || "Not scheduled"}</div>
-                          <div className="mt-1 text-xs text-slate-500">Created {formatProjectDate(row.createdAt)}</div>
+                          <div className="text-sm text-white">
+                            {formatProjectDate(row.projectScheduledDate) ||
+                              "Not scheduled"}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            Created {formatProjectDate(row.createdAt)}
+                          </div>
                         </td>
                         <td className="px-4 py-5">
-                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${displayStatus.tone}`}>
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${displayStatus.tone}`}
+                          >
                             {displayStatus.label}
                           </span>
                         </td>
@@ -1156,28 +1497,65 @@ export default function ProjectsOperationsClient({
                       </tr>
                       {isExpanded ? (
                         <tr className="bg-[#050d19]">
-                          <td colSpan={10} className="border-t border-white/5 px-5 py-5">
+                          <td
+                            colSpan={10}
+                            className="border-t border-white/5 px-5 py-5"
+                          >
                             <div className="grid gap-4 xl:grid-cols-[1.2fr_0.95fr_0.95fr]">
                               <div className="space-y-4">
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">Project Summary</div>
+                                  <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">
+                                    Project Summary
+                                  </div>
                                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                                     {[
-                                      ["Project name", row.customerName || "Not available"],
-                                      ["Customer name", row.customerName || "Not available"],
-                                      ["Customer phone", row.customerPhone || "Not available"],
-                                      ["County / location", getLocationValue(row)],
-                                      ["Date created", formatProjectDateTime(row.createdAt)],
-                                      ["Installation date", formatProjectDate(row.projectScheduledDate) || "Not scheduled"],
-                                      ["Created by", row.attendantName || "Not available"],
+                                      [
+                                        "Project name",
+                                        row.customerName || "Not available",
+                                      ],
+                                      [
+                                        "Customer name",
+                                        row.customerName || "Not available",
+                                      ],
+                                      [
+                                        "Customer phone",
+                                        row.customerPhone || "Not available",
+                                      ],
+                                      [
+                                        "County / location",
+                                        getLocationValue(row),
+                                      ],
+                                      [
+                                        "Date created",
+                                        formatProjectDateTime(row.createdAt),
+                                      ],
+                                      [
+                                        "Installation date",
+                                        formatProjectDate(
+                                          row.projectScheduledDate,
+                                        ) || "Not scheduled",
+                                      ],
+                                      [
+                                        "Created by",
+                                        row.attendantName || "Not available",
+                                      ],
                                     ].map(([label, value]) => (
-                                      <div key={label} className="rounded-2xl border border-white/8 bg-[#08111d] px-4 py-3">
-                                        <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">{label}</div>
-                                        <div className="mt-2 text-sm font-medium text-white">{value}</div>
+                                      <div
+                                        key={label}
+                                        className="rounded-2xl border border-white/8 bg-[#08111d] px-4 py-3"
+                                      >
+                                        <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                                          {label}
+                                        </div>
+                                        <div className="mt-2 text-sm font-medium text-white">
+                                          {value}
+                                        </div>
                                       </div>
                                     ))}
                                     <div className="rounded-2xl border border-white/8 bg-[#08111d] px-4 py-3">
-                                      <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Receipt number</div>
+                                      <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                                        Receipt number
+                                      </div>
                                       {row.orderRef ? (
                                         <Link
                                           href={`/receipts/print/${encodeURIComponent(row.id)}`}
@@ -1188,7 +1566,9 @@ export default function ProjectsOperationsClient({
                                           {row.orderRef}
                                         </Link>
                                       ) : (
-                                        <div className="mt-2 text-sm font-medium text-white">Not available</div>
+                                        <div className="mt-2 text-sm font-medium text-white">
+                                          Not available
+                                        </div>
                                       )}
                                     </div>
                                   </div>
@@ -1197,8 +1577,12 @@ export default function ProjectsOperationsClient({
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">
                                   <div className="flex items-center justify-between gap-3">
                                     <div>
-                                      <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">Quick Actions</div>
-                                      <div className="mt-2 text-lg font-semibold text-white">Project workflow</div>
+                                      <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">
+                                        Quick Actions
+                                      </div>
+                                      <div className="mt-2 text-lg font-semibold text-white">
+                                        Project workflow
+                                      </div>
                                     </div>
                                     <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-400">
                                       {isSaving ? "Saving..." : "Ready"}
@@ -1215,22 +1599,36 @@ export default function ProjectsOperationsClient({
                                     </Link>
                                     <button
                                       type="button"
-                                      onClick={() => void resendProjectReceipt(row)}
+                                      onClick={() =>
+                                        void resendProjectReceipt(row)
+                                      }
                                       disabled={sendingReceiptId === row.id}
                                       className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
-                                      {sendingReceiptId === row.id ? "Sending..." : "Send Receipt"}
+                                      {sendingReceiptId === row.id
+                                        ? "Sending..."
+                                        : "Send Receipt"}
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => setAssignmentModal({ type: "staff", rowId: row.id })}
+                                      onClick={() =>
+                                        setAssignmentModal({
+                                          type: "staff",
+                                          rowId: row.id,
+                                        })
+                                      }
                                       className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20"
                                     >
                                       Assign Technician
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => setAssignmentModal({ type: "external", rowId: row.id })}
+                                      onClick={() =>
+                                        setAssignmentModal({
+                                          type: "external",
+                                          rowId: row.id,
+                                        })
+                                      }
                                       className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
                                     >
                                       Assign Agent
@@ -1245,8 +1643,15 @@ export default function ProjectsOperationsClient({
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => void saveProject(row.id, { stage: "PROJECT_SCHEDULED" })}
-                                      disabled={isSaving || row.projectStage !== "RECEIPT_CREATED"}
+                                      onClick={() =>
+                                        void saveProject(row.id, {
+                                          stage: "PROJECT_SCHEDULED",
+                                        })
+                                      }
+                                      disabled={
+                                        isSaving ||
+                                        row.projectStage !== "RECEIPT_CREATED"
+                                      }
                                       className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/10 px-4 py-3 text-sm font-semibold text-fuchsia-100 hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                       title="Requires an assigned technician or agent and an installation date."
                                     >
@@ -1254,24 +1659,46 @@ export default function ProjectsOperationsClient({
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => void saveProject(row.id, { stage: "PROJECT_IN_PROGRESS" })}
-                                      disabled={isSaving || row.projectStage !== "PROJECT_SCHEDULED"}
+                                      onClick={() =>
+                                        void saveProject(row.id, {
+                                          stage: "PROJECT_IN_PROGRESS",
+                                        })
+                                      }
+                                      disabled={
+                                        isSaving ||
+                                        row.projectStage !== "PROJECT_SCHEDULED"
+                                      }
                                       className="rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100 hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                       Start Progress
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => void saveProject(row.id, { stage: "PROJECT_INSTALLED" })}
-                                      disabled={isSaving || row.projectStage !== "PROJECT_IN_PROGRESS"}
+                                      onClick={() =>
+                                        void saveProject(row.id, {
+                                          stage: "PROJECT_INSTALLED",
+                                        })
+                                      }
+                                      disabled={
+                                        isSaving ||
+                                        row.projectStage !==
+                                          "PROJECT_IN_PROGRESS"
+                                      }
                                       className="rounded-2xl border border-violet-500/25 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-100 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                       Mark Installed
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => void saveProject(row.id, { stage: "COMPLETED_POSTED" })}
-                                      disabled={isSaving || row.projectStage !== "PROJECT_INSTALLED"}
+                                      onClick={() =>
+                                        void saveProject(row.id, {
+                                          stage: "COMPLETED_POSTED",
+                                        })
+                                      }
+                                      disabled={
+                                        isSaving ||
+                                        row.projectStage !== "PROJECT_INSTALLED"
+                                      }
                                       className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                       Complete and Post to POS
@@ -1282,20 +1709,42 @@ export default function ProjectsOperationsClient({
 
                               <div className="space-y-4">
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">Payment Overview</div>
+                                  <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">
+                                    Payment Overview
+                                  </div>
                                   <div className="mt-4 grid gap-3">
                                     {[
-                                      ["Total project value", formatCurrency(row.total)],
-                                      ["Paid amount", formatCurrency(row.projectTotalPaidAmount)],
-                                      ["Remaining balance", formatCurrency(row.projectRemainingAmount)],
+                                      [
+                                        "Total project value",
+                                        formatCurrency(row.total),
+                                      ],
+                                      [
+                                        "Paid amount",
+                                        formatCurrency(
+                                          row.projectTotalPaidAmount,
+                                        ),
+                                      ],
+                                      [
+                                        "Remaining balance",
+                                        formatCurrency(
+                                          row.projectRemainingAmount,
+                                        ),
+                                      ],
                                       [
                                         "Deposit amount and status",
                                         `${formatCurrency(row.projectDepositPaidAmount)} / ${formatCurrency(row.projectDepositRequiredAmount)} · ${formatPaymentMethodLabel(row.projectDepositPaymentMethod)}`,
                                       ],
                                     ].map(([label, value]) => (
-                                      <div key={label} className="rounded-2xl border border-white/8 bg-[#08111d] px-4 py-3">
-                                        <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">{label}</div>
-                                        <div className="mt-2 text-sm font-medium text-white">{value}</div>
+                                      <div
+                                        key={label}
+                                        className="rounded-2xl border border-white/8 bg-[#08111d] px-4 py-3"
+                                      >
+                                        <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                                          {label}
+                                        </div>
+                                        <div className="mt-2 text-sm font-medium text-white">
+                                          {value}
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -1310,7 +1759,11 @@ export default function ProjectsOperationsClient({
                                         style={{ width: `${percentagePaid}%` }}
                                       />
                                     </div>
-                                    <div className="mt-3 text-xs text-slate-500">{formatPaymentTermLabel(row.projectPaymentTerm)}</div>
+                                    <div className="mt-3 text-xs text-slate-500">
+                                      {formatPaymentTermLabel(
+                                        row.projectPaymentTerm,
+                                      )}
+                                    </div>
                                   </div>
                                   <div className="mt-5 grid gap-3 sm:grid-cols-2">
                                     <label className="block text-sm text-slate-300">
@@ -1319,17 +1772,25 @@ export default function ProjectsOperationsClient({
                                         value={editor.paymentTerm}
                                         onChange={(event) =>
                                           setEditorValue(row.id, {
-                                            paymentTerm: event.target.value as ProjectEditor["paymentTerm"],
+                                            paymentTerm: event.target
+                                              .value as ProjectEditor["paymentTerm"],
                                           })
                                         }
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                       >
-                                        <option value="FULL_BEFORE_INSTALLATION">Pay fully before installation</option>
-                                        <option value="DEPOSIT_AND_BALANCE">Deposit and balance</option>
-                                        <option value="FULL_AFTER_INSTALLATION">Pay fully after installation</option>
+                                        <option value="FULL_BEFORE_INSTALLATION">
+                                          Pay fully before installation
+                                        </option>
+                                        <option value="DEPOSIT_AND_BALANCE">
+                                          Deposit and balance
+                                        </option>
+                                        <option value="FULL_AFTER_INSTALLATION">
+                                          Pay fully after installation
+                                        </option>
                                       </select>
                                     </label>
-                                    {editor.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
+                                    {editor.paymentTerm ===
+                                    "DEPOSIT_AND_BALANCE" ? (
                                       <>
                                         <label className="block text-sm text-slate-300">
                                           Deposit type
@@ -1337,31 +1798,50 @@ export default function ProjectsOperationsClient({
                                             value={editor.depositType}
                                             onChange={(event) =>
                                               setEditorValue(row.id, {
-                                                depositType: event.target.value as ProjectEditor["depositType"],
+                                                depositType: event.target
+                                                  .value as ProjectEditor["depositType"],
                                                 depositValue:
-                                                  event.target.value === "AMOUNT"
-                                                    ? editor.depositType === "AMOUNT"
+                                                  event.target.value ===
+                                                  "AMOUNT"
+                                                    ? editor.depositType ===
+                                                      "AMOUNT"
                                                       ? editor.depositValue
                                                       : "5000"
-                                                    : editor.depositType === "PERCENT"
+                                                    : editor.depositType ===
+                                                        "PERCENT"
                                                       ? editor.depositValue
                                                       : "30",
                                               })
                                             }
                                             className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                           >
-                                            <option value="PERCENT">Percentage</option>
-                                            <option value="AMOUNT">Fixed amount</option>
+                                            <option value="PERCENT">
+                                              Percentage
+                                            </option>
+                                            <option value="AMOUNT">
+                                              Fixed amount
+                                            </option>
                                           </select>
                                         </label>
                                         <label className="block text-sm text-slate-300">
-                                          {editor.depositType === "AMOUNT" ? "Deposit amount (Ksh)" : "Deposit percentage"}
+                                          {editor.depositType === "AMOUNT"
+                                            ? "Deposit amount (Ksh)"
+                                            : "Deposit percentage"}
                                           <input
                                             type="number"
                                             min={0}
-                                            max={editor.depositType === "AMOUNT" ? undefined : 100}
+                                            max={
+                                              editor.depositType === "AMOUNT"
+                                                ? undefined
+                                                : 100
+                                            }
                                             value={editor.depositValue}
-                                            onChange={(event) => setEditorValue(row.id, { depositValue: event.target.value })}
+                                            onChange={(event) =>
+                                              setEditorValue(row.id, {
+                                                depositValue:
+                                                  event.target.value,
+                                              })
+                                            }
                                             className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                           />
                                         </label>
@@ -1373,7 +1853,12 @@ export default function ProjectsOperationsClient({
                                         type="number"
                                         min={0}
                                         value={editor.depositPaidAmount}
-                                        onChange={(event) => setEditorValue(row.id, { depositPaidAmount: event.target.value })}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            depositPaidAmount:
+                                              event.target.value,
+                                          })
+                                        }
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                       />
                                     </label>
@@ -1383,12 +1868,15 @@ export default function ProjectsOperationsClient({
                                         value={editor.depositPaymentMethod}
                                         onChange={(event) =>
                                           setEditorValue(row.id, {
-                                            depositPaymentMethod: event.target.value as ProjectEditor["depositPaymentMethod"],
+                                            depositPaymentMethod: event.target
+                                              .value as ProjectEditor["depositPaymentMethod"],
                                           })
                                         }
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                       >
-                                        <option value="UNSPECIFIED">Unspecified</option>
+                                        <option value="UNSPECIFIED">
+                                          Unspecified
+                                        </option>
                                         <option value="MPESA">M-Pesa</option>
                                         <option value="CASH">Cash</option>
                                         <option value="BANK">Bank</option>
@@ -1400,7 +1888,12 @@ export default function ProjectsOperationsClient({
                                       <input
                                         type="text"
                                         value={editor.depositReference}
-                                        onChange={(event) => setEditorValue(row.id, { depositReference: event.target.value })}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            depositReference:
+                                              event.target.value,
+                                          })
+                                        }
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                         placeholder="Optional deposit reference"
                                       />
@@ -1411,7 +1904,12 @@ export default function ProjectsOperationsClient({
                                         type="number"
                                         min={0}
                                         value={editor.balancePaidAmount}
-                                        onChange={(event) => setEditorValue(row.id, { balancePaidAmount: event.target.value })}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            balancePaidAmount:
+                                              event.target.value,
+                                          })
+                                        }
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                       />
                                     </label>
@@ -1421,12 +1919,15 @@ export default function ProjectsOperationsClient({
                                         value={editor.balancePaymentMethod}
                                         onChange={(event) =>
                                           setEditorValue(row.id, {
-                                            balancePaymentMethod: event.target.value as ProjectEditor["balancePaymentMethod"],
+                                            balancePaymentMethod: event.target
+                                              .value as ProjectEditor["balancePaymentMethod"],
                                           })
                                         }
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                       >
-                                        <option value="UNSPECIFIED">Unspecified</option>
+                                        <option value="UNSPECIFIED">
+                                          Unspecified
+                                        </option>
                                         <option value="MPESA">M-Pesa</option>
                                         <option value="CASH">Cash</option>
                                         <option value="BANK">Bank</option>
@@ -1438,7 +1939,12 @@ export default function ProjectsOperationsClient({
                                       <input
                                         type="text"
                                         value={editor.balanceReference}
-                                        onChange={(event) => setEditorValue(row.id, { balanceReference: event.target.value })}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            balanceReference:
+                                              event.target.value,
+                                          })
+                                        }
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                         placeholder="Optional balance reference"
                                       />
@@ -1447,18 +1953,28 @@ export default function ProjectsOperationsClient({
                                 </div>
 
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">Project Status</div>
+                                  <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">
+                                    Project Status
+                                  </div>
                                   <div className="mt-4 flex items-center gap-3">
-                                    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${displayStatus.tone}`}>
+                                    <span
+                                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${displayStatus.tone}`}
+                                    >
                                       {displayStatus.label}
                                     </span>
-                                    <span className="text-xs text-slate-500">{formatPaymentStatusLabel(row.projectPaymentStatus)}</span>
+                                    <span className="text-xs text-slate-500">
+                                      {formatPaymentStatusLabel(
+                                        row.projectPaymentStatus,
+                                      )}
+                                    </span>
                                   </div>
                                   <p className="mt-4 text-sm leading-6 text-slate-400">
                                     {editor.handlerStaffIds.length > 0
-                                      ? row.projectStage === "PROJECT_IN_PROGRESS"
+                                      ? row.projectStage ===
+                                        "PROJECT_IN_PROGRESS"
                                         ? `Pending assigned project commission: ${formatCurrency(PROJECT_COMPLETION_COMMISSION)}`
-                                        : row.projectStage === "COMPLETED_POSTED"
+                                        : row.projectStage ===
+                                            "COMPLETED_POSTED"
                                           ? `Project commission earned: ${formatCurrency(PROJECT_COMPLETION_COMMISSION)}`
                                           : "Project commission unlocks after this project moves into progress."
                                       : "Assign technicians or agents to activate the project execution workflow."}
@@ -1470,12 +1986,21 @@ export default function ProjectsOperationsClient({
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">
                                   <div className="flex items-center justify-between gap-3">
                                     <div>
-                                      <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">Internal Technicians</div>
-                                      <div className="mt-2 text-lg font-semibold text-white">Assigned staff</div>
+                                      <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">
+                                        Internal Technicians
+                                      </div>
+                                      <div className="mt-2 text-lg font-semibold text-white">
+                                        Assigned staff
+                                      </div>
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => setAssignmentModal({ type: "staff", rowId: row.id })}
+                                      onClick={() =>
+                                        setAssignmentModal({
+                                          type: "staff",
+                                          rowId: row.id,
+                                        })
+                                      }
                                       className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20"
                                     >
                                       Change Assignment
@@ -1492,30 +2017,59 @@ export default function ProjectsOperationsClient({
                                           key={`${handler.staffId || index}-staff`}
                                           className="rounded-2xl border border-white/8 bg-[#08111d] px-4 py-3"
                                         >
-                                          <div className="text-sm font-semibold text-white">{handler.staffName || "Staff member"}</div>
-                                          <div className="mt-1 text-xs text-slate-400">{handler.phone || "No phone saved"}</div>
+                                          <div className="text-sm font-semibold text-white">
+                                            {handler.staffName ||
+                                              "Staff member"}
+                                          </div>
+                                          <div className="mt-1 text-xs text-slate-400">
+                                            {handler.phone || "No phone saved"}
+                                          </div>
                                         </div>
                                       ))
                                     )}
                                   </div>
                                   <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-                                    <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Commissioning & certificate</div>
+                                    <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300">
+                                      Commissioning & certificate
+                                    </div>
                                     {assignedStaff.length > 0 ? (
                                       <>
-                                        <p className="mt-2 text-sm text-slate-300">One persistent, secure link is reused until the certificate is issued or access is deliberately changed.</p>
+                                        <p className="mt-2 text-sm text-slate-300">
+                                          One persistent, secure link is reused
+                                          until the certificate is issued or
+                                          access is deliberately changed.
+                                        </p>
                                         <div className="mt-3 flex flex-wrap gap-2">
                                           <button
                                             type="button"
                                             disabled={savingId === row.id}
-                                            onClick={() => void manageCommissioningLink(row, commissioningLinks[row.id] ? "resend" : "create", assignedStaff[0]?.staffId || undefined)}
+                                            onClick={() =>
+                                              void manageCommissioningLink(
+                                                row,
+                                                commissioningLinks[row.id]
+                                                  ? "resend"
+                                                  : "create",
+                                                assignedStaff[0]?.staffId ||
+                                                  undefined,
+                                              )
+                                            }
                                             className="rounded-xl bg-cyan-400 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50"
                                           >
-                                            {savingId === row.id ? "Working…" : commissioningLinks[row.id] ? "Copy / Send Link" : "Create & Copy Link"}
+                                            {savingId === row.id
+                                              ? "Working…"
+                                              : commissioningLinks[row.id]
+                                                ? "Copy / Send Link"
+                                                : "Create & Copy Link"}
                                           </button>
                                           <button
                                             type="button"
                                             disabled={savingId === row.id}
-                                            onClick={() => void manageCommissioningLink(row, "regenerate")}
+                                            onClick={() =>
+                                              void manageCommissioningLink(
+                                                row,
+                                                "regenerate",
+                                              )
+                                            }
                                             className="rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-200 disabled:opacity-50"
                                           >
                                             Replace Token
@@ -1523,7 +2077,12 @@ export default function ProjectsOperationsClient({
                                           <button
                                             type="button"
                                             disabled={savingId === row.id}
-                                            onClick={() => void manageCommissioningLink(row, "revoke")}
+                                            onClick={() =>
+                                              void manageCommissioningLink(
+                                                row,
+                                                "revoke",
+                                              )
+                                            }
                                             className="rounded-xl border border-rose-400/30 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-50"
                                           >
                                             Revoke Access
@@ -1531,27 +2090,50 @@ export default function ProjectsOperationsClient({
                                           <button
                                             type="button"
                                             disabled={savingId === row.id}
-                                            onClick={() => void manageCommissioningLink(row, "deliver-certificate")}
+                                            onClick={() =>
+                                              void manageCommissioningLink(
+                                                row,
+                                                "deliver-certificate",
+                                              )
+                                            }
                                             className="rounded-xl border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-200 disabled:opacity-50"
                                           >
                                             Send Certificate to Customer
                                           </button>
                                         </div>
-                                        {commissioningLinks[row.id] ? <div className="mt-3 break-all rounded-xl bg-[#08111d] p-3 text-xs text-cyan-100">{commissioningLinks[row.id].link}</div> : null}
+                                        {commissioningLinks[row.id] ? (
+                                          <div className="mt-3 break-all rounded-xl bg-[#08111d] p-3 text-xs text-cyan-100">
+                                            {commissioningLinks[row.id].link}
+                                          </div>
+                                        ) : null}
                                       </>
-                                    ) : <p className="mt-2 text-sm text-slate-500">Assign an internal technician to create a commissioning link.</p>}
+                                    ) : (
+                                      <p className="mt-2 text-sm text-slate-500">
+                                        Assign an internal technician to create
+                                        a commissioning link.
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
 
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">
                                   <div className="flex items-center justify-between gap-3">
                                     <div>
-                                      <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">External Agent</div>
-                                      <div className="mt-2 text-lg font-semibold text-white">Assigned external support</div>
+                                      <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">
+                                        External Agent
+                                      </div>
+                                      <div className="mt-2 text-lg font-semibold text-white">
+                                        Assigned external support
+                                      </div>
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => setAssignmentModal({ type: "external", rowId: row.id })}
+                                      onClick={() =>
+                                        setAssignmentModal({
+                                          type: "external",
+                                          rowId: row.id,
+                                        })
+                                      }
                                       className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
                                     >
                                       Change Agent
@@ -1568,8 +2150,13 @@ export default function ProjectsOperationsClient({
                                           key={`${handler.externalAgentId || index}-external`}
                                           className="rounded-2xl border border-white/8 bg-[#08111d] px-4 py-3"
                                         >
-                                          <div className="text-sm font-semibold text-white">{handler.externalAgentName || "External agent"}</div>
-                                          <div className="mt-1 text-xs text-slate-400">{handler.phone || "No phone saved"}</div>
+                                          <div className="text-sm font-semibold text-white">
+                                            {handler.externalAgentName ||
+                                              "External agent"}
+                                          </div>
+                                          <div className="mt-1 text-xs text-slate-400">
+                                            {handler.phone || "No phone saved"}
+                                          </div>
                                         </div>
                                       ))
                                     )}
@@ -1577,15 +2164,23 @@ export default function ProjectsOperationsClient({
                                 </div>
 
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">Project Setup</div>
+                                  <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">
+                                    Project Setup
+                                  </div>
                                   <div className="mt-4 space-y-3">
                                     <label className="block text-sm text-slate-300">
                                       Installation date
                                       <input
                                         type="date"
                                         value={editor.scheduledDate}
-                                        onChange={(event) => setEditorValue(row.id, { scheduledDate: event.target.value })}
-                                        onClick={(event) => event.currentTarget.showPicker?.()}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            scheduledDate: event.target.value,
+                                          })
+                                        }
+                                        onClick={(event) =>
+                                          event.currentTarget.showPicker?.()
+                                        }
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                       />
                                     </label>
@@ -1593,7 +2188,11 @@ export default function ProjectsOperationsClient({
                                       Payment notes
                                       <textarea
                                         value={editor.paymentNotes}
-                                        onChange={(event) => setEditorValue(row.id, { paymentNotes: event.target.value })}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            paymentNotes: event.target.value,
+                                          })
+                                        }
                                         rows={4}
                                         className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
                                         placeholder="Internal notes about deposit, balance, or scheduling."
@@ -1617,7 +2216,11 @@ export default function ProjectsOperationsClient({
 
       {assignmentModal && modalRow && modalEditor ? (
         <ModalShell
-          title={assignmentModal.type === "staff" ? "Change technician assignment" : "Change external agent"}
+          title={
+            assignmentModal.type === "staff"
+              ? "Change technician assignment"
+              : "Change external agent"
+          }
           description={`Update assignments for ${modalRow.orderRef || modalRow.customerName || "this project"}. Saving here writes the selected technicians or external agents directly to the project.`}
           onClose={() => {
             setAssignmentModal(null);
@@ -1654,38 +2257,62 @@ export default function ProjectsOperationsClient({
           }
         >
           <div className="rounded-2xl border border-white/10 bg-[#0b1424] px-4 py-2.5">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Search</div>
+            <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">
+              Search
+            </div>
             <input
               value={assignmentSearch}
               onChange={(event) => setAssignmentSearch(event.target.value)}
-              placeholder={assignmentModal.type === "staff" ? "Search technician" : "Search external agent"}
+              placeholder={
+                assignmentModal.type === "staff"
+                  ? "Search technician"
+                  : "Search external agent"
+              }
               className="mt-1.5 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
             />
           </div>
           <div className="mt-3 rounded-[20px] border border-white/10 bg-[#0a1322] px-4 py-3">
-            <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Current Selection</div>
+            <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+              Current Selection
+            </div>
             <div className="mt-2 flex flex-wrap gap-2">
-              {assignmentModal.type === "staff"
-                ? modalEditor.handlerStaffIds.length > 0
-                  ? modalEditor.handlerStaffIds.map((staffId) => {
-                      const member = staff.find((entry) => entry.id === staffId);
-                      return (
-                        <span key={staffId} className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100">
-                          {member?.name || "Technician"}
-                        </span>
-                      );
-                    })
-                  : <span className="text-sm text-slate-500">No technicians selected.</span>
-                : modalEditor.externalAgentIds.length > 0
-                  ? modalEditor.externalAgentIds.map((agentId) => {
-                      const agent = externalAgents.find((entry) => entry.id === agentId);
-                      return (
-                        <span key={agentId} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200">
-                          {agent?.name || "External agent"}
-                        </span>
-                      );
-                    })
-                  : <span className="text-sm text-slate-500">No external agents selected.</span>}
+              {assignmentModal.type === "staff" ? (
+                modalEditor.handlerStaffIds.length > 0 ? (
+                  modalEditor.handlerStaffIds.map((staffId) => {
+                    const member = staff.find((entry) => entry.id === staffId);
+                    return (
+                      <span
+                        key={staffId}
+                        className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100"
+                      >
+                        {member?.name || "Technician"}
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="text-sm text-slate-500">
+                    No technicians selected.
+                  </span>
+                )
+              ) : modalEditor.externalAgentIds.length > 0 ? (
+                modalEditor.externalAgentIds.map((agentId) => {
+                  const agent = externalAgents.find(
+                    (entry) => entry.id === agentId,
+                  );
+                  return (
+                    <span
+                      key={agentId}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200"
+                    >
+                      {agent?.name || "External agent"}
+                    </span>
+                  );
+                })
+              ) : (
+                <span className="text-sm text-slate-500">
+                  No external agents selected.
+                </span>
+              )}
             </div>
           </div>
           <div className="mt-3 grid max-h-[40vh] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
@@ -1693,21 +2320,34 @@ export default function ProjectsOperationsClient({
               ? assignmentOptions.map((option) => {
                   const member = option as StaffOption;
                   return (
-                    <label key={member.id} className="flex items-start gap-3 rounded-[20px] border border-white/10 bg-[#08111d] px-4 py-3 text-sm text-white">
+                    <label
+                      key={member.id}
+                      className="flex items-start gap-3 rounded-[20px] border border-white/10 bg-[#08111d] px-4 py-3 text-sm text-white"
+                    >
                       <input
                         type="checkbox"
-                        checked={modalEditor.handlerStaffIds.includes(member.id)}
+                        checked={modalEditor.handlerStaffIds.includes(
+                          member.id,
+                        )}
                         onChange={() =>
                           setEditorValue(modalRow.id, {
-                            handlerStaffIds: toggleValue(modalEditor.handlerStaffIds, member.id),
+                            handlerStaffIds: toggleValue(
+                              modalEditor.handlerStaffIds,
+                              member.id,
+                            ),
                           })
                         }
                         className="mt-1 h-4 w-4"
                       />
                       <span>
-                        <span className="block font-semibold">{member.name}</span>
+                        <span className="block font-semibold">
+                          {member.name}
+                        </span>
                         <span className="mt-0.5 block text-xs text-slate-400">
-                          {member.whatsappNumber || member.technicalPhoneNumber || member.phone || "No phone saved"}
+                          {member.whatsappNumber ||
+                            member.technicalPhoneNumber ||
+                            member.phone ||
+                            "No phone saved"}
                         </span>
                       </span>
                     </label>
@@ -1716,20 +2356,32 @@ export default function ProjectsOperationsClient({
               : assignmentOptions.map((option) => {
                   const agent = option as ExternalAgentOption;
                   return (
-                    <label key={agent.id} className="flex items-start gap-3 rounded-[20px] border border-white/10 bg-[#08111d] px-4 py-3 text-sm text-white">
+                    <label
+                      key={agent.id}
+                      className="flex items-start gap-3 rounded-[20px] border border-white/10 bg-[#08111d] px-4 py-3 text-sm text-white"
+                    >
                       <input
                         type="checkbox"
-                        checked={modalEditor.externalAgentIds.includes(agent.id)}
+                        checked={modalEditor.externalAgentIds.includes(
+                          agent.id,
+                        )}
                         onChange={() =>
                           setEditorValue(modalRow.id, {
-                            externalAgentIds: toggleValue(modalEditor.externalAgentIds, agent.id),
+                            externalAgentIds: toggleValue(
+                              modalEditor.externalAgentIds,
+                              agent.id,
+                            ),
                           })
                         }
                         className="mt-1 h-4 w-4"
                       />
                       <span>
-                        <span className="block font-semibold">{agent.name}</span>
-                        <span className="mt-0.5 block text-xs text-slate-400">{agent.whatsappNumber}</span>
+                        <span className="block font-semibold">
+                          {agent.name}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-slate-400">
+                          {agent.whatsappNumber}
+                        </span>
                       </span>
                     </label>
                   );

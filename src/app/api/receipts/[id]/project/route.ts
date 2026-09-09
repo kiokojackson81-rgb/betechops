@@ -64,7 +64,8 @@ const updateSchema = z.object({
   externalAgentPhone: z.string().trim().nullable().optional(),
 });
 
-type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
+type ParamsContext =
+  { params: { id: string } } | { params: Promise<{ id: string }> };
 
 type StaffAssignmentUser = {
   id: string;
@@ -82,20 +83,28 @@ type ExternalAgentRecord = {
 };
 
 async function resolveId(context: ParamsContext) {
-  const params = await (context as { params: Promise<{ id: string }> | { id: string } }).params;
+  const params = await (
+    context as { params: Promise<{ id: string }> | { id: string } }
+  ).params;
   return params.id;
 }
 
 function uniqueStrings(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+  return Array.from(
+    new Set(values.map((value) => String(value || "").trim()).filter(Boolean)),
+  );
 }
 
 function buildAssignedHandlerChange(
   previous: ReceiptProjectHandlerAssignment[] | null | undefined,
   next: ReceiptProjectHandlerAssignment[] | null | undefined,
 ) {
-  const previousSignature = JSON.stringify((previous ?? []).map(buildProjectHandlerSignature).sort());
-  const nextSignature = JSON.stringify((next ?? []).map(buildProjectHandlerSignature).sort());
+  const previousSignature = JSON.stringify(
+    (previous ?? []).map(buildProjectHandlerSignature).sort(),
+  );
+  const nextSignature = JSON.stringify(
+    (next ?? []).map(buildProjectHandlerSignature).sort(),
+  );
   return previousSignature !== nextSignature;
 }
 
@@ -103,14 +112,18 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!guard.ok) return guard.res;
   const session = await auth().catch(() => null);
-  const actor = session?.user as { id?: string | null; attendantCategory?: string | null } | undefined;
+  const actor = session?.user as
+    { id?: string | null; attendantCategory?: string | null } | undefined;
   const actorId = String(actor?.id || "").trim() || null;
 
   const id = await resolveId(context);
   const body = await req.json().catch(() => ({}));
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid project update payload" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid project update payload" },
+      { status: 400 },
+    );
   }
 
   const existing = await prisma.receipt.findUnique({
@@ -132,18 +145,28 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   }
 
   const existingData =
-    existing.data && typeof existing.data === "object" && !Array.isArray(existing.data)
+    existing.data &&
+    typeof existing.data === "object" &&
+    !Array.isArray(existing.data)
       ? (existing.data as Record<string, unknown>)
       : {};
   const existingProjectFlow = readReceiptProjectFlow(existingData.projectFlow);
-  if (!existingProjectFlow && String(existingData.customerType || "").toLowerCase() !== "project") {
-    return NextResponse.json({ error: "This receipt is not tagged as a project receipt" }, { status: 400 });
+  if (
+    !existingProjectFlow &&
+    String(existingData.customerType || "").toLowerCase() !== "project"
+  ) {
+    return NextResponse.json(
+      { error: "This receipt is not tagged as a project receipt" },
+      { status: 400 },
+    );
   }
 
   const existingAssignedHandlers = existingProjectFlow?.assignedHandlers ?? [];
   if (guard.role === "ATTENDANT") {
     const assignedToActor = existingAssignedHandlers.some(
-      (entry) => entry.kind === "STAFF" && String(entry.staffId || "").trim() === actorId,
+      (entry) =>
+        entry.kind === "STAFF" &&
+        String(entry.staffId || "").trim() === actorId,
     );
     const createdByActor = String(existing.issuedById || "").trim() === actorId;
     const isTechnicalActor = isTechnicalTeamCategory(actor?.attendantCategory);
@@ -152,21 +175,48 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     }
   }
 
+  // Ordinary project edits (including confirming a schedule) must retain the
+  // current assignees. Assignment IDs are submitted only by the dedicated
+  // change-assignment action, otherwise legacy name-only agent assignments
+  // would be silently replaced with an empty list.
+  const assignmentWasSubmitted =
+    parsed.data.handlerStaffIds !== undefined ||
+    parsed.data.handlerStaffId !== undefined ||
+    parsed.data.externalAgentIds !== undefined ||
+    parsed.data.externalAgentId !== undefined ||
+    parsed.data.handlerType !== undefined ||
+    parsed.data.handlerStaffName !== undefined ||
+    parsed.data.externalAgentName !== undefined ||
+    parsed.data.externalAgentPhone !== undefined;
+  const existingHandlerStaffIds = uniqueStrings([
+    ...(existingProjectFlow?.handlerStaffIds ?? []),
+    existingProjectFlow?.handlerStaffId,
+    ...existingAssignedHandlers
+      .filter((entry) => entry.kind === "STAFF")
+      .map((entry) => entry.staffId),
+  ]);
+  const existingExternalAgentIds = uniqueStrings([
+    ...(existingProjectFlow?.externalAgentIds ?? []),
+    existingProjectFlow?.externalAgentId,
+    ...existingAssignedHandlers
+      .filter((entry) => entry.kind === "EXTERNAL")
+      .map((entry) => entry.externalAgentId),
+  ]);
   const nextHandlerStaffIds =
     parsed.data.handlerStaffIds !== undefined
       ? uniqueStrings(parsed.data.handlerStaffIds)
       : parsed.data.handlerStaffId !== undefined
         ? uniqueStrings([parsed.data.handlerStaffId])
-        : uniqueStrings(existingProjectFlow?.handlerStaffIds ?? existingProjectFlow?.handlerStaffId ? [existingProjectFlow?.handlerStaffId ?? ""] : []);
+        : existingHandlerStaffIds;
   const nextExternalAgentIds =
     parsed.data.externalAgentIds !== undefined
       ? uniqueStrings(parsed.data.externalAgentIds)
       : parsed.data.externalAgentId !== undefined
         ? uniqueStrings([parsed.data.externalAgentId])
-        : uniqueStrings(existingProjectFlow?.externalAgentIds ?? existingProjectFlow?.externalAgentId ? [existingProjectFlow?.externalAgentId ?? ""] : []);
+        : existingExternalAgentIds;
 
   const [staffMembers, externalAgents] = await Promise.all([
-    nextHandlerStaffIds.length
+    assignmentWasSubmitted && nextHandlerStaffIds.length
       ? prisma.user.findMany({
           where: { id: { in: nextHandlerStaffIds } },
           select: {
@@ -179,7 +229,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
           },
         })
       : Promise.resolve([] as StaffAssignmentUser[]),
-    nextExternalAgentIds.length
+    assignmentWasSubmitted && nextExternalAgentIds.length
       ? prisma.projectExternalAgent.findMany({
           where: { id: { in: nextExternalAgentIds }, isActive: true },
           select: { id: true, name: true, whatsappNumber: true },
@@ -187,20 +237,31 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       : Promise.resolve([] as ExternalAgentRecord[]),
   ]);
 
-  const staffById = new Map<string, StaffAssignmentUser>(staffMembers.map((entry) => [entry.id, entry] as const));
-  const externalById = new Map<string, ExternalAgentRecord>(externalAgents.map((entry) => [entry.id, entry] as const));
+  const staffById = new Map<string, StaffAssignmentUser>(
+    staffMembers.map((entry) => [entry.id, entry] as const),
+  );
+  const externalById = new Map<string, ExternalAgentRecord>(
+    externalAgents.map((entry) => [entry.id, entry] as const),
+  );
 
-  if (nextExternalAgentIds.length > externalAgents.length) {
+  if (
+    assignmentWasSubmitted &&
+    nextExternalAgentIds.length > externalAgents.length
+  ) {
     return NextResponse.json(
-      { error: "One or more selected external agents could not be found or are inactive" },
+      {
+        error:
+          "One or more selected external agents could not be found or are inactive",
+      },
       { status: 400 },
     );
   }
 
-  const nextAssignedHandlers: ReceiptProjectHandlerAssignment[] = [
+  const submittedAssignedHandlers: ReceiptProjectHandlerAssignment[] = [
     ...nextHandlerStaffIds.map((staffId) => {
       const user = staffById.get(staffId);
-      const name = user?.name ?? user?.email ?? parsed.data.handlerStaffName ?? null;
+      const name =
+        user?.name ?? user?.email ?? parsed.data.handlerStaffName ?? null;
       return {
         kind: "STAFF",
         staffId,
@@ -223,14 +284,22 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         staffName: null,
         externalAgentId,
         externalAgentName: agent?.name ?? parsed.data.externalAgentName ?? null,
-        phone: normalizeProjectHandlerPhone(agent?.whatsappNumber ?? parsed.data.externalAgentPhone ?? null),
+        phone: normalizeProjectHandlerPhone(
+          agent?.whatsappNumber ?? parsed.data.externalAgentPhone ?? null,
+        ),
       } satisfies ReceiptProjectHandlerAssignment;
     }),
   ];
+  const nextAssignedHandlers = assignmentWasSubmitted
+    ? submittedAssignedHandlers
+    : existingAssignedHandlers;
 
   const nextScheduledDate =
-    parsed.data.scheduledDate !== undefined ? parsed.data.scheduledDate : existingProjectFlow?.scheduledDate;
-  const requestedStage = parsed.data.stage ?? existingProjectFlow?.stage ?? "RECEIPT_CREATED";
+    parsed.data.scheduledDate !== undefined
+      ? parsed.data.scheduledDate
+      : existingProjectFlow?.scheduledDate;
+  const requestedStage =
+    parsed.data.stage ?? existingProjectFlow?.stage ?? "RECEIPT_CREATED";
   const effectiveStage =
     parsed.data.stage === undefined &&
     requestedStage === "RECEIPT_CREATED" &&
@@ -239,9 +308,15 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       ? "PROJECT_SCHEDULED"
       : requestedStage;
 
-  if (effectiveStage === "PROJECT_SCHEDULED" && (!nextScheduledDate || nextAssignedHandlers.length === 0)) {
+  if (
+    effectiveStage === "PROJECT_SCHEDULED" &&
+    (!nextScheduledDate || nextAssignedHandlers.length === 0)
+  ) {
     return NextResponse.json(
-      { error: "Assign a technician or agent and select an installation date before confirming the project." },
+      {
+        error:
+          "Assign a technician or agent and select an installation date before confirming the project.",
+      },
       { status: 400 },
     );
   }
@@ -253,11 +328,19 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     "PROJECT_INSTALLED",
     "COMPLETED_POSTED",
   ] as const;
-  const currentStageIndex = stageOrder.indexOf(existingProjectFlow?.stage ?? "RECEIPT_CREATED");
+  const currentStageIndex = stageOrder.indexOf(
+    existingProjectFlow?.stage ?? "RECEIPT_CREATED",
+  );
   const nextStageIndex = stageOrder.indexOf(effectiveStage);
-  if (parsed.data.stage !== undefined && nextStageIndex > currentStageIndex + 1) {
+  if (
+    parsed.data.stage !== undefined &&
+    nextStageIndex > currentStageIndex + 1
+  ) {
     return NextResponse.json(
-      { error: "Complete the current project stage before moving to the next one." },
+      {
+        error:
+          "Complete the current project stage before moving to the next one.",
+      },
       { status: 409 },
     );
   }
@@ -273,30 +356,63 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     existing: existingProjectFlow as unknown as Record<string, unknown> | null,
     stage: effectiveStage,
     paymentTerm: parsed.data.paymentTerm ?? existingProjectFlow?.paymentTerm,
-    projectValue: Number(existing.order?.totalAmount ?? existingProjectFlow?.projectValue ?? 0),
-    amountPaidTotal: Number(existing.order?.paidAmount ?? existingProjectFlow?.amountPaidTotal ?? 0),
+    projectValue: Number(
+      existing.order?.totalAmount ?? existingProjectFlow?.projectValue ?? 0,
+    ),
+    amountPaidTotal: Number(
+      existing.order?.paidAmount ?? existingProjectFlow?.amountPaidTotal ?? 0,
+    ),
     depositType: parsed.data.depositType ?? existingProjectFlow?.depositType,
     depositValue: parsed.data.depositValue ?? existingProjectFlow?.depositValue,
-    depositPercent: parsed.data.depositPercent ?? existingProjectFlow?.depositPercent,
-    depositPaidAmount: parsed.data.depositPaidAmount ?? existingProjectFlow?.depositPaidAmount,
-    depositPaymentMethod: parsed.data.depositPaymentMethod ?? existingProjectFlow?.depositPaymentMethod,
-    depositReference: parsed.data.depositReference ?? existingProjectFlow?.depositReference,
-    balancePaidAmount: parsed.data.balancePaidAmount ?? existingProjectFlow?.balancePaidAmount,
-    balancePaymentMethod: parsed.data.balancePaymentMethod ?? existingProjectFlow?.balancePaymentMethod,
-    balanceReference: parsed.data.balanceReference ?? existingProjectFlow?.balanceReference,
+    depositPercent:
+      parsed.data.depositPercent ?? existingProjectFlow?.depositPercent,
+    depositPaidAmount:
+      parsed.data.depositPaidAmount ?? existingProjectFlow?.depositPaidAmount,
+    depositPaymentMethod:
+      parsed.data.depositPaymentMethod ??
+      existingProjectFlow?.depositPaymentMethod,
+    depositReference:
+      parsed.data.depositReference ?? existingProjectFlow?.depositReference,
+    balancePaidAmount:
+      parsed.data.balancePaidAmount ?? existingProjectFlow?.balancePaidAmount,
+    balancePaymentMethod:
+      parsed.data.balancePaymentMethod ??
+      existingProjectFlow?.balancePaymentMethod,
+    balanceReference:
+      parsed.data.balanceReference ?? existingProjectFlow?.balanceReference,
     scheduledDate: nextScheduledDate,
-    postedReceiptNumber: existing.order?.orderNumber ?? existingProjectFlow?.postedReceiptNumber ?? null,
-    internalNotes: parsed.data.internalNotes !== undefined ? parsed.data.internalNotes : existingProjectFlow?.internalNotes,
-    paymentNotes: parsed.data.paymentNotes !== undefined ? parsed.data.paymentNotes : existingProjectFlow?.paymentNotes,
+    postedReceiptNumber:
+      existing.order?.orderNumber ??
+      existingProjectFlow?.postedReceiptNumber ??
+      null,
+    internalNotes:
+      parsed.data.internalNotes !== undefined
+        ? parsed.data.internalNotes
+        : existingProjectFlow?.internalNotes,
+    paymentNotes:
+      parsed.data.paymentNotes !== undefined
+        ? parsed.data.paymentNotes
+        : existingProjectFlow?.paymentNotes,
     assignedHandlers: nextAssignedHandlers,
   });
 
   const changedFields = [
-    existingProjectFlow?.scheduledDate !== nextProjectFlow.scheduledDate ? "scheduledDate" : null,
-    existingProjectFlow?.handlerType !== nextProjectFlow.handlerType ? "handlerType" : null,
+    existingProjectFlow?.scheduledDate !== nextProjectFlow.scheduledDate
+      ? "scheduledDate"
+      : null,
+    existingProjectFlow?.handlerType !== nextProjectFlow.handlerType
+      ? "handlerType"
+      : null,
     existingProjectFlow?.stage !== nextProjectFlow.stage ? "stage" : null,
-    buildAssignedHandlerChange(existingAssignedHandlers, nextProjectFlow.assignedHandlers) ? "handlerAssignments" : null,
-  ].filter(Boolean) as Array<"scheduledDate" | "handlerType" | "handlerAssignments" | "stage">;
+    buildAssignedHandlerChange(
+      existingAssignedHandlers,
+      nextProjectFlow.assignedHandlers,
+    )
+      ? "handlerAssignments"
+      : null,
+  ].filter(Boolean) as Array<
+    "scheduledDate" | "handlerType" | "handlerAssignments" | "stage"
+  >;
 
   const wasCompleted = existingProjectFlow?.stage === "COMPLETED_POSTED";
   const isCompleted = nextProjectFlow.stage === "COMPLETED_POSTED";
@@ -322,7 +438,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
                     : nextProjectFlow.paymentStatus === "PARTIALLY_PAID"
                       ? "PARTIAL"
                       : "UNPAID",
-                status: nextProjectFlow.stage === "COMPLETED_POSTED" ? "COMPLETED" : "PENDING",
+                status:
+                  nextProjectFlow.stage === "COMPLETED_POSTED"
+                    ? "COMPLETED"
+                    : "PENDING",
               },
             }
           : undefined,
@@ -339,7 +458,11 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       },
     });
 
-    if (nextProjectFlow.stage === "COMPLETED_POSTED" && tx.supportDailyEntry && tx.supportReceipt) {
+    if (
+      nextProjectFlow.stage === "COMPLETED_POSTED" &&
+      tx.supportDailyEntry &&
+      tx.supportReceipt
+    ) {
       await syncCompletedProjectReceiptToPricing(tx, receipt, nextProjectFlow);
     }
 
@@ -351,20 +474,29 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       currentCommissioning?.technicianId &&
       !nextHandlerStaffIds.includes(currentCommissioning.technicianId),
     );
-    if (currentCommissioning?.status === "DRAFT" && technicianWasUnassigned && nextHandlerStaffIds[0]) {
+    if (
+      currentCommissioning?.status === "DRAFT" &&
+      technicianWasUnassigned &&
+      nextHandlerStaffIds[0]
+    ) {
       replacementCommissioningToken = createCommissioningToken();
       await tx.commissioningSession.update({
         where: { id: currentCommissioning.id },
         data: {
           technicianId: nextHandlerStaffIds[0],
           tokenHash: hashCommissioningToken(replacementCommissioningToken),
-          tokenCiphertext: encryptCommissioningToken(replacementCommissioningToken),
+          tokenCiphertext: encryptCommissioningToken(
+            replacementCommissioningToken,
+          ),
           expiresAt: commissioningExpiry(),
           audit: appendCommissioningAudit(currentCommissioning.audit, {
             at: new Date().toISOString(),
             action: "TECHNICIAN_REASSIGNED_AND_TOKEN_REPLACED",
             actorId,
-            detail: { previousTechnicianId: currentCommissioning.technicianId, technicianId: nextHandlerStaffIds[0] },
+            detail: {
+              previousTechnicianId: currentCommissioning.technicianId,
+              technicianId: nextHandlerStaffIds[0],
+            },
           }),
         },
       });
@@ -419,7 +551,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       console.error("[PROJECT_NOTIFY] service failed", {
         receiptId: updated.id,
         eventType: event,
-        error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error,
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message, stack: error.stack }
+            : error,
       });
     }
   }
@@ -437,6 +572,8 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     receipt: updated,
     projectSaved: true,
     notificationResults,
-    commissioningLink: replacementCommissioningToken ? commissioningUrl(replacementCommissioningToken, new URL(req.url).origin) : null,
+    commissioningLink: replacementCommissioningToken
+      ? commissioningUrl(replacementCommissioningToken, new URL(req.url).origin)
+      : null,
   });
 }
