@@ -1517,7 +1517,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     prisma.voiceLead.count({
       where: {
         ...leadWhere,
-        createdAt: { gte: todayStart },
+        createdAt: { gte: todayWindow.start, lt: todayWindow.endExclusive },
       },
     }),
     viewer.isAdmin ? getVoiceRoutingConfig() : Promise.resolve(null),
@@ -2067,7 +2067,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           ...callWhere,
           assignedToId: { in: agentIds },
           direction: "INBOUND",
-          createdAt: { gte: todayStart },
+          createdAt: { gte: todayWindow.start, lt: todayWindow.endExclusive },
         },
         select: {
           assignedToId: true,
