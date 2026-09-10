@@ -37,7 +37,8 @@ export default async function AdminQuotationCenterPage({
           allowDelete
           templateOwnerOptions={staffOptions}
           assigneeOptions={staffOptions}
-          assigneeLabel="Assign quotation to staff"
+          assigneeLabel="Sales owner (optional)"
+          leaveNewRecordsUnassigned
           showMonitoringSummary
           enableAdminFilters
         />

@@ -65,9 +65,23 @@ export default function ReceiptsPageClient({
   const [createDocumentType, setCreateDocumentType] = useState<"RECEIPT" | "QUOTATION" | "LPP" | "SITE_VISIT">("RECEIPT");
   const [quotationStaffOptions, setQuotationStaffOptions] = useState<PublicStaffOption[]>([]);
   const [quotationStaffLoading, setQuotationStaffLoading] = useState(false);
+  const [canCreateUnassigned, setCanCreateUnassigned] = useState(false);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" })
+      .then((response) => response.json().catch(() => null))
+      .then((session) => {
+        if (cancelled) return;
+        const role = typeof session?.user?.role === "string" ? session.user.role.toUpperCase() : "";
+        setCanCreateUnassigned(role === "ADMIN" || role === "SUPERVISOR");
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     setView(initialView);
@@ -424,18 +438,20 @@ export default function ReceiptsPageClient({
                   initialCreateOpen
                   allowTemplateSelection
                   allowTemplateManager={false}
-                  createApiPath="/api/attendant/quotation-center/create"
+                  createApiPath={canCreateUnassigned ? "/api/admin/quotation-center/create" : "/api/attendant/quotation-center/create"}
                   createActionLabel="Save quotation and notify customer"
                   createSuccessMessage="Quotation saved and customer notification has been triggered."
                   assigneeOptions={quotationStaffOptions}
-                  assigneeLabel="Assign quotation to staff"
-                  requireAssigneeSelection
+                  assigneeLabel={canCreateUnassigned ? "Sales owner (optional)" : "Assign quotation to staff"}
+                  requireAssigneeSelection={!canCreateUnassigned}
+                  leaveNewRecordsUnassigned={canCreateUnassigned}
                 />
               </div>
             ) : createDocumentType === "SITE_VISIT" ? (
               <StaffSiteVisitBookingClient
                 staffOptions={quotationStaffOptions}
                 staffLoading={quotationStaffLoading}
+                allowUnassigned={canCreateUnassigned}
               />
             ) : createDocumentType === "LPP" ? (
               <div>

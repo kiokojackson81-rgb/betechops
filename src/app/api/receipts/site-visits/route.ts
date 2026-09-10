@@ -76,14 +76,15 @@ export async function POST(request: NextRequest) {
   }
 
   const requestedOwnerId = input.assignedStaffId?.trim();
-  if (!requestedOwnerId) {
+  const canCreateUnassigned = guard.role === "ADMIN" || guard.role === "SUPERVISOR";
+  if (!requestedOwnerId && !canCreateUnassigned) {
     return NextResponse.json({ ok: false, error: "Select the staff member requesting this site visit." }, { status: 400 });
   }
-  const requestedOwner = await prisma.user.findFirst({
+  const requestedOwner = requestedOwnerId ? await prisma.user.findFirst({
     where: { id: requestedOwnerId, isActive: true, role: { in: ["ADMIN", "SUPERVISOR", "ATTENDANT"] } },
     select: { id: true, name: true, email: true },
-  });
-  if (!requestedOwner) {
+  }) : null;
+  if (requestedOwnerId && !requestedOwner) {
     return NextResponse.json({ ok: false, error: "Select an active staff owner." }, { status: 400 });
   }
 
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
         ...input,
         customerPhone,
         customerEmail: input.customerEmail || undefined,
-        assignedStaffId: requestedOwner.id,
+        assignedStaffId: requestedOwner?.id,
         assignedTechnicianId: undefined,
         visitFee,
         source: "STAFF",
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
     );
     if (!visit) return NextResponse.json({ ok: false, error: "Unable to create site visit." }, { status: 500 });
 
-    void dispatchSiteVisitCreated(visit, visit.assignedStaffName || requestedOwner.name || requestedOwner.email);
+    void dispatchSiteVisitCreated(visit, visit.assignedStaffName || requestedOwner?.name || requestedOwner?.email || actor.name || actor.email || "Admin");
 
     return NextResponse.json({ ok: true, visit }, { status: 201 });
   } catch (error) {

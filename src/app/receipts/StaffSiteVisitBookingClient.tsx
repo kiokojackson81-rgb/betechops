@@ -20,7 +20,7 @@ type StaffOption = {
   attendantCategory?: string | null;
 };
 
-type Props = { staffOptions: StaffOption[]; staffLoading?: boolean };
+type Props = { staffOptions: StaffOption[]; staffLoading?: boolean; allowUnassigned?: boolean };
 type PaymentStatus = "UNPAID" | "COLLECT_ON_SITE" | "PAID" | "WAIVED";
 
 const projectTypes = [
@@ -93,7 +93,7 @@ function Field({ title, children, wide = false }: { title: string; children: Rea
   return <label className={`text-sm font-medium text-slate-200 ${wide ? "md:col-span-2" : ""}`}>{title}{children}</label>;
 }
 
-export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading = false }: Props) {
+export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading = false, allowUnassigned = false }: Props) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -142,7 +142,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300"><CalendarDays className="h-4 w-4" /> Site visit desk</div>
           <h2 className="mt-2 text-2xl font-semibold text-white">Book a customer site visit</h2>
-          <p className="mt-1 text-sm text-slate-400">Creates one shared visit for sales, admin and technical teams. The customer remains assigned to the staff member who books it.</p>
+          <p className="mt-1 text-sm text-slate-400">Creates one shared visit for sales, admin and technical teams. Admin can leave the customer unassigned and allocate the work later.</p>
         </div>
       </div>
 
@@ -162,7 +162,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
             <Field title="Phone number"><input required inputMode="tel" placeholder="07xx xxx xxx" className={inputClass} value={form.customerPhone} onChange={(event) => setForm({ ...form, customerPhone: event.target.value })} /></Field>
             <Field title="Email (optional)"><input type="email" className={inputClass} value={form.customerEmail} onChange={(event) => setForm({ ...form, customerEmail: event.target.value })} /></Field>
             <Field title="Existing quotation reference (optional)"><input placeholder="QT-..." className={inputClass} value={form.quoteRef} onChange={(event) => setForm({ ...form, quoteRef: event.target.value })} /></Field>
-            <Field title="Staff requesting / customer owner" wide><select required disabled={staffLoading} className={inputClass} value={form.assignedStaffId} onChange={(event) => setForm({ ...form, assignedStaffId: event.target.value })}><option value="">Select staff member</option>{staffOptions.map((member) => <option key={member.id} value={member.id}>{member.name || member.email || "Staff"}</option>)}</select><span className="mt-1 block text-xs font-normal text-slate-400">This staff member keeps customer and quotation ownership. Only admin assigns the technician.</span></Field>
+            <Field title={allowUnassigned ? "Sales owner (optional)" : "Staff requesting / customer owner"} wide><select required={!allowUnassigned} disabled={staffLoading} className={inputClass} value={form.assignedStaffId} onChange={(event) => setForm({ ...form, assignedStaffId: event.target.value })}><option value="">{allowUnassigned ? "Unassigned — allocate later" : "Select staff member"}</option>{staffOptions.map((member) => <option key={member.id} value={member.id}>{member.name || member.email || "Staff"}</option>)}</select><span className="mt-1 block text-xs font-normal text-slate-400">{allowUnassigned ? "No sales person is credited until an admin assigns the work." : "This staff member keeps customer and quotation ownership. Only admin assigns the technician."}</span></Field>
             <Field title="Project type"><select className={inputClass} value={form.projectType} onChange={(event) => setForm({ ...form, projectType: event.target.value })}>{projectTypes.map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></Field>
             <Field title="Visit purpose"><select className={inputClass} value={form.visitReason} onChange={(event) => setForm({ ...form, visitReason: event.target.value })}>{visitReasons.map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></Field>
             <Field title="What should the team assess?" wide><textarea required minLength={10} rows={3} className={inputClass} placeholder="Customer requirements, system concern or work to assess" value={form.customerRequirements} onChange={(event) => setForm({ ...form, customerRequirements: event.target.value })} /></Field>

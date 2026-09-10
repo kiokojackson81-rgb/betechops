@@ -1152,9 +1152,13 @@ export async function POST(req: NextRequest) {
   const serial = normalizeReceiptSerial(payload?.serial);
   const docType = (String(payload?.docType || "RECEIPT")).toUpperCase();
   const resolvedUserId = guard?.user?.id ?? null;
-  // Attendant (who gets credited) should come from the payload (attendantId/servedBy)
-  // and only fall back to the resolved/logged-in user when not provided.
-  const attendantId = payload?.attendantId ?? payload?.servedBy ?? resolvedUserId ?? null;
+  // An administrator may deliberately leave a sale unassigned. Staff-created
+  // receipts still default to the signed-in staff member when no owner is sent.
+  const submittedAttendantId = [payload?.attendantId, payload?.servedBy]
+    .find((value) => typeof value === "string" && value.trim())
+    ?.trim() ?? null;
+  const canCreateUnassigned = guard.role === "ADMIN" || guard.role === "SUPERVISOR";
+  const attendantId = submittedAttendantId ?? (canCreateUnassigned ? null : resolvedUserId ?? null);
   // issuedById MUST be the logged-in user (who clicked Save). Do not trust payload. This prevents
   // admins or impersonation sessions from altering the recorded creator/issuer of a receipt.
   const issuedById = resolvedUserId;

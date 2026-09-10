@@ -132,6 +132,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [staffMembers, setStaffMembers] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
   const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
+  const [canCreateUnassigned, setCanCreateUnassigned] = useState(false);
   const [docType, setDocType] = useState<string>("RECEIPT");
   const [serial, setSerial] = useState<string>(() => generateReceiptSerial());
   const [customerName, setCustomerName] = useState<string>("");
@@ -186,7 +187,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             ? json.user.id.trim()
             : null;
         if (!cancelled) {
-          setDefaultStaffId(sessionUserId);
+          const role = typeof json?.user?.role === "string" ? json.user.role.toUpperCase() : "";
+          const managementUser = role === "ADMIN" || role === "SUPERVISOR";
+          setCanCreateUnassigned(managementUser);
+          setDefaultStaffId(managementUser ? null : sessionUserId);
         }
       } catch {
         if (!cancelled) {
@@ -905,7 +909,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   };
 
   const handlePreview = (autoPrint = false) => {
-    if (!staffId) {
+    if (!staffId && !canCreateUnassigned) {
       showToast("Select staff before previewing", "error");
       return;
     }
@@ -944,7 +948,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const handleSave = async () => {
 
-    if (!staffId) return showToast("Select staff", "error");
+    if (!staffId && !canCreateUnassigned) return showToast("Select staff", "error");
     if (!items.length) return showToast("Add at least one item", "error");
     if (!hasPaymentMethodSelection) return showToast("Select payment method", "error");
     if (!customerName.trim()) return showToast("Customer name is required", "error");
@@ -1109,14 +1113,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label className={labelClass}>Staff*</label>
+          <label className={labelClass}>{canCreateUnassigned ? "Sales owner (optional)" : "Staff*"}</label>
           <select
             value={staffId ?? ""}
             onChange={(e) => setStaffId(e.target.value || null)}
             className={`${fieldClass} appearance-none`}
-            required
+            required={!canCreateUnassigned}
           >
-            <option value="">Select staff</option>
+            <option value="">{canCreateUnassigned ? "Unassigned — no sales owner" : "Select staff"}</option>
             {staffMembers.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}

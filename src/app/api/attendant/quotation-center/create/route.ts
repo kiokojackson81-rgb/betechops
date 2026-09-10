@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const created = await createManualQuotation(parsed.data, {
+    const created = await createManualQuotation({ ...parsed.data, leaveUnassigned: false }, {
       id: guard.userId,
       name: guard.name,
       email: guard.email,

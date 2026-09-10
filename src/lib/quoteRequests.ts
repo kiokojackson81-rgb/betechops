@@ -429,6 +429,7 @@ export type QuoteRequestCreateInput = z.infer<
   status?: QuoteRequestStatus;
   source?: QuoteRequestSource;
   assignedAttendantId?: string | null;
+  leaveUnassigned?: boolean;
   fallbackAssigneeId?: string | null;
   assignedAttendantEmail?: string | null;
   assignedAttendantName?: string | null;
@@ -574,6 +575,7 @@ export const manualQuotationCreateSchema = z.object({
   status: z.enum(QUOTE_REQUEST_STATUSES).optional(),
   source: z.enum(QUOTE_REQUEST_SOURCES).optional(),
   assignedAttendantId: z.string().trim().optional(),
+  leaveUnassigned: z.boolean().optional(),
   templateId: z.string().trim().optional(),
   templateName: z.string().trim().optional(),
   quoteTitle: z.string().trim().max(200).optional(),
@@ -1553,17 +1555,20 @@ export function serializeQuoteRequest(
 export async function createQuoteRequest(input: QuoteRequestCreateInput) {
   await ensureQuoteRequestsSchema();
   const quoteRef = await buildUniqueQuoteRequestRef();
+  const leaveUnassigned = input.leaveUnassigned === true && !input.assignedAttendantId?.trim();
   const requestedAssignee = await getQuoteStaffUserById(
     input.assignedAttendantId ?? null,
   );
-  const previousCustomerAssignee = requestedAssignee
+  const previousCustomerAssignee = leaveUnassigned || requestedAssignee
     ? null
     : await findPreviousCustomerQuoteAssignee(input);
-  const fallbackAssignee = requestedAssignee || previousCustomerAssignee
+  const fallbackAssignee = leaveUnassigned || requestedAssignee || previousCustomerAssignee
     ? null
     : await getQuoteStaffUserById(input.fallbackAssigneeId ?? null);
   const assignee =
-    requestedAssignee ||
+    leaveUnassigned
+      ? null
+      : requestedAssignee ||
     previousCustomerAssignee ||
     fallbackAssignee ||
     (await pickQuoteAssignee(input.source || "WEBSITE_REQUEST"));
@@ -1584,7 +1589,9 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
   const metadata = {
     source: input.source || "WEBSITE_REQUEST",
     assignedAt: new Date().toISOString(),
-    assignmentStrategy: requestedAssignee
+    assignmentStrategy: leaveUnassigned
+      ? "UNASSIGNED_BY_ADMIN"
+      : requestedAssignee
       ? "EXPLICIT"
       : previousCustomerAssignee
         ? "PREVIOUS_CUSTOMER_OWNER"
@@ -2346,7 +2353,7 @@ export async function createManualQuotation(
     source: input.source || "MANUAL",
     requiresApproval: false,
     assignedAttendantId: input.assignedAttendantId,
-    fallbackAssigneeId: actor.id,
+    fallbackAssigneeId: input.leaveUnassigned ? null : actor.id,
     projectType,
     quoteTitle:
       input.quoteTitle ||

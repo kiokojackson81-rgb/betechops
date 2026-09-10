@@ -135,6 +135,7 @@ type Props = {
   assigneeOptions?: TemplateOwnerOption[];
   assigneeLabel?: string;
   requireAssigneeSelection?: boolean;
+  leaveNewRecordsUnassigned?: boolean;
   showMonitoringSummary?: boolean;
   enableAdminFilters?: boolean;
 };
@@ -1561,6 +1562,7 @@ export default function QuotationRequestsDeskClient({
   assigneeOptions = [],
   assigneeLabel = "Quotation owner",
   requireAssigneeSelection = false,
+  leaveNewRecordsUnassigned = false,
   showMonitoringSummary = false,
   enableAdminFilters = false,
 }: Props) {
@@ -2202,6 +2204,7 @@ export default function QuotationRequestsDeskClient({
         propertyType: "",
         source: createMode === "template" ? "TEMPLATE" : "MANUAL",
         assignedAttendantId: createDraft.assignedAttendantId || undefined,
+        leaveUnassigned: leaveNewRecordsUnassigned && !createDraft.assignedAttendantId.trim(),
         templateId: selectedTemplate?.id,
         templateName: selectedTemplate?.templateName,
         quoteTitle:
