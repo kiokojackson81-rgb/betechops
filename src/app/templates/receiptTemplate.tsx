@@ -245,11 +245,6 @@ export default function renderReceiptTemplate(
     toNumberOrNull(snapshot.balance),
     totalValue
   );
-  const projectWarrantyBadge = escapeHtml(
-    items.find((it: any) => it?.warranty && String(it.warranty).trim())?.warranty ||
-      snapshot.warrantyText ||
-      "5 Years"
-  );
   const projectPaymentStatusLabel = formatProjectPaymentStatus(projectFlow?.paymentStatus);
   const projectPaymentSummaryHtml =
     projectFlow?.isProject
@@ -387,11 +382,14 @@ export default function renderReceiptTemplate(
       const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice)) ? Number(it.unitPrice ?? it.sellingPrice) : 0;
       const lineTotal = qty * unit;
       const title = escapeHtml(it.title || it.productName || "Item");
+      const itemWarrantyBadge = escapeHtml(
+        formatWarrantyValue(it?.warranty) || snapshot.warrantyText || "5 Years"
+      );
       return `
         <section class="project-item-block${index ? " project-item-block--spaced" : ""}">
           <div class="project-item-block__label">ITEM NAME</div>
           <div class="project-item-block__title">${title}</div>
-          <div class="project-item-block__warranty">Warranty: ${projectWarrantyBadge}</div>
+          <div class="project-item-block__warranty">Warranty: ${itemWarrantyBadge}</div>
           <table class="project-line-table">
             <colgroup>
               <col style="width:25%" />

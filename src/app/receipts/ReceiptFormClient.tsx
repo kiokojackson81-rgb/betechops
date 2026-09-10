@@ -309,16 +309,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         setSelectedPaymentMethods({ MPESA: true, CASH: false });
       }
       if (Array.isArray(parsed.items) && parsed.items.length) {
-        setItems(
-          parsed.items.map((item: any) => ({
+        const prefilledItems = parsed.items.map((item: any) => ({
             ...newItem(),
             title: String(item.title || item.productName || "Item"),
             quantity: Math.max(1, Number(item.quantity || 1)),
             unitPrice: Number(item.unitPrice || 0),
             productId: item.productId ? String(item.productId) : undefined,
             sku: item.sku ? String(item.sku) : undefined,
-          })),
-        );
+            warranty: typeof item.warranty === "string" ? item.warranty.trim() : "",
+          }));
+        setItems(prefilledItems);
+        if (prefilledItems.some((item) => item.warranty)) setShowWarranty(true);
       }
       const parsedProjectFlow = readReceiptProjectFlow(parsed.projectFlow);
       if (parsedProjectFlow) {
@@ -988,7 +989,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       unitPrice: Number(it.unitPrice || 0),
       isDeliveryFee: Boolean(it.isDeliveryFee),
       serial: showSerials ? it.serial || null : null,
-      warranty: showWarranty ? it.warranty || null : null,
+      warranty: it.warranty?.trim() || null,
       productId: it.productId || null,
       sku: it.sku || null,
       buyingPrice: it.variableCost ? null : Number(it.buyingPrice || 0),

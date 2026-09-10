@@ -13,6 +13,23 @@ import {
   parseStoredQuoteProposal,
 } from "@/lib/quoteProposal";
 
+function getQuotedItemWarranty(item: {
+  warranty?: string;
+  warrantyPeriod?: number;
+  warrantyUnit?: string;
+  defaultWarranty?: string;
+}) {
+  const explicitWarranty = item.warranty?.trim();
+  if (explicitWarranty) return explicitWarranty;
+
+  if (typeof item.warrantyPeriod === "number" && item.warrantyPeriod > 0) {
+    const unit = item.warrantyUnit === "MONTHS" ? "Month" : "Year";
+    return `${item.warrantyPeriod} ${unit}${item.warrantyPeriod === 1 ? "" : "s"}`;
+  }
+
+  return item.defaultWarranty?.trim() || undefined;
+}
+
 export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
@@ -108,6 +125,7 @@ function buildQuoteReceiptPrefill(
       title: item.itemName,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
+      warranty: getQuotedItemWarranty(item),
     })),
   };
 }
