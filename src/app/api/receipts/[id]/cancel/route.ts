@@ -10,6 +10,7 @@ import {
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
+import { buildReceiptProjectFlow, readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,6 +65,23 @@ export async function POST(request: NextRequest, context: ParamsContext) {
     !Array.isArray(baseData.podDelivery)
       ? (baseData.podDelivery as Record<string, unknown>)
       : null;
+  const existingProjectFlow = readReceiptProjectFlow(baseData.projectFlow);
+  const cancelledAt = new Date().toISOString();
+  const cancelledProjectFlow = existingProjectFlow
+    ? {
+        ...buildReceiptProjectFlow({
+          existing: existingProjectFlow as unknown as Record<string, unknown>,
+          stage: "CANCELLED",
+          projectValue: Number(receipt.order.totalAmount || existingProjectFlow.projectValue || 0),
+          depositPaidAmount: 0,
+          balancePaidAmount: 0,
+          amountPaidTotal: 0,
+        }),
+        cancelledAt,
+        cancelledById: actorId,
+        cancellationReason: parsed.data.reason || null,
+      }
+    : null;
 
   await prisma.$transaction(async (tx) => {
     await cleanupMarketingReceipts(tx, receipt.order!.orderNumber, receipt.id);
@@ -88,7 +106,7 @@ export async function POST(request: NextRequest, context: ParamsContext) {
           !Array.isArray(receipt.order!.metadata)
             ? (receipt.order!.metadata as Record<string, unknown>)
             : {}),
-          cancelledAt: new Date().toISOString(),
+          cancelledAt,
           cancelledById: actorId,
           cancellationReason: parsed.data.reason || null,
         } as Prisma.InputJsonValue,
@@ -104,13 +122,16 @@ export async function POST(request: NextRequest, context: ParamsContext) {
                 podDelivery: {
                   ...existingPod,
                   status: "cancelled",
-                  cancelledAt: new Date().toISOString(),
+                  cancelledAt,
                   cancelledById: actorId,
                 },
               }
             : {}),
+          ...(cancelledProjectFlow
+            ? { projectFlow: cancelledProjectFlow }
+            : {}),
           cancellation: {
-            cancelledAt: new Date().toISOString(),
+            cancelledAt,
             cancelledById: actorId,
             reason: parsed.data.reason || null,
           },

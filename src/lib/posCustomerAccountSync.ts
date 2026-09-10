@@ -68,6 +68,8 @@ function readPodDeliveryState(data: Record<string, unknown>) {
 
 function mapProjectStageToWebsiteStatus(stage: ReceiptProjectStage) {
   switch (stage) {
+    case "CANCELLED":
+      return WebsiteOrderStatus.CANCELLED;
     case "PROJECT_SCHEDULED":
       return WebsiteOrderStatus.CONFIRMED;
     case "PROJECT_IN_PROGRESS":

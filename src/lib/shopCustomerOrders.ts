@@ -104,6 +104,8 @@ function buildReceiptDeliveryMethod(metadata: ReceiptMetadataRecord) {
 
 function buildCustomerProjectStatus(metadata: ReceiptMetadataRecord, fallback: string) {
   switch (String(metadata.projectStage || "").trim().toUpperCase()) {
+    case "CANCELLED":
+      return "CANCELLED";
     case "RECEIPT_CREATED":
       return "PENDING";
     case "PROJECT_SCHEDULED":

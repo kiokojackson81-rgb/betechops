@@ -719,6 +719,10 @@ export async function GET(req: NextRequest) {
         : baseProfit;
     const effectivePaymentStatus = (r.order as any)?.paymentStatus ?? null;
     const effectiveProjectPaymentStatus = projectFlowData?.paymentStatus ?? null;
+    const effectiveProjectStage =
+      projectFlowData?.isProject && r.order?.status === "CANCELED"
+        ? "CANCELLED"
+        : projectFlowData?.stage ?? null;
 
     const recognitionDate =
       getReceiptProjectCompletionDate(rawData.projectFlow, undefined, r.generatedAt ?? r.createdAt) ??
@@ -752,7 +756,7 @@ export async function GET(req: NextRequest) {
       podEvidenceUrl: podDeliveryData?.evidenceUrl ?? null,
       podDeliveryFee: podDeliveryFee > 0 ? podDeliveryFee : null,
       isProjectReceipt: Boolean(projectFlowData?.isProject),
-      projectStage: projectFlowData?.stage ?? null,
+      projectStage: effectiveProjectStage,
       projectPaymentTerm: projectFlowData?.paymentTerm ?? null,
       projectPaymentStatus: effectiveProjectPaymentStatus,
       projectDepositType: projectFlowData?.depositType ?? null,
@@ -1088,7 +1092,10 @@ export async function GET(req: NextRequest) {
   const totalProfit = summaryRows.reduce((sum, row) => sum + Number((row as any).profit ?? 0), 0);
   const podReceipts = summaryRows.filter((row) => Boolean((row as any).isPodDelivery)).length;
   const pendingProjectReceipts = summaryRows.filter(
-    (row) => Boolean((row as any).isProjectReceipt) && String((row as any).projectStage ?? "") !== "COMPLETED_POSTED",
+    (row) =>
+      Boolean((row as any).isProjectReceipt) &&
+      String((row as any).status ?? "").toUpperCase() !== "CANCELED" &&
+      !["COMPLETED_POSTED", "CANCELLED"].includes(String((row as any).projectStage ?? "")),
   ).length;
   const completedProjectReceipts = summaryRows.filter(
     (row) => Boolean((row as any).isProjectReceipt) && String((row as any).projectStage ?? "") === "COMPLETED_POSTED",

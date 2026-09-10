@@ -4,6 +4,7 @@ export const RECEIPT_PROJECT_STAGES = [
   "PROJECT_IN_PROGRESS",
   "PROJECT_INSTALLED",
   "COMPLETED_POSTED",
+  "CANCELLED",
 ] as const;
 
 export type ReceiptProjectStage = (typeof RECEIPT_PROJECT_STAGES)[number];

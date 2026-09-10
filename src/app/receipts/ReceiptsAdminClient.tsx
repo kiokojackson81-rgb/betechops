@@ -231,6 +231,8 @@ const formatProjectStageLabel = (value?: string | null) => {
       return "Installed";
     case "COMPLETED_POSTED":
       return "Completed";
+    case "CANCELLED":
+      return "Cancelled";
     default:
       return value ? value.replace(/_/g, " ") : "Project";
   }
@@ -2753,7 +2755,8 @@ export default function ReceiptsAdminClient({
                           }
                           onProjectAction={
                             row.isProjectReceipt &&
-                            row.projectStage !== "COMPLETED_POSTED"
+                            row.projectStage !== "COMPLETED_POSTED" &&
+                            row.projectStage !== "CANCELLED"
                               ? () => void advanceProjectStage(row)
                               : undefined
                           }
@@ -3476,7 +3479,8 @@ export default function ReceiptsAdminClient({
                               ? "Saving..."
                               : "Save project details"}
                           </button>
-                          {projectFlow.stage !== "COMPLETED_POSTED" && (
+                          {projectFlow.stage !== "COMPLETED_POSTED" &&
+                            projectFlow.stage !== "CANCELLED" && (
                             <button
                               type="button"
                               onClick={() =>

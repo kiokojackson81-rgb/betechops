@@ -110,7 +110,8 @@ type ProjectStage =
   | "PROJECT_SCHEDULED"
   | "PROJECT_IN_PROGRESS"
   | "PROJECT_INSTALLED"
-  | "COMPLETED_POSTED";
+  | "COMPLETED_POSTED"
+  | "CANCELLED";
 
 type ProjectStageFilter = "ALL" | ProjectStage;
 
@@ -207,6 +208,8 @@ const getProjectStageRank = (value?: string | null) => {
       return 3;
     case "COMPLETED_POSTED":
       return 4;
+    case "CANCELLED":
+      return 5;
     default:
       return 0;
   }
@@ -231,6 +234,13 @@ const renderAssignedLabel = (handler: AssignedHandler) => {
 };
 
 const getDisplayStatus = (row: ProjectRow) => {
+  if (row.projectStage === "CANCELLED") {
+    return {
+      label: "Cancelled",
+      tone: "border-rose-500/30 bg-rose-500/12 text-rose-200",
+    };
+  }
+
   if (row.projectStage === "COMPLETED_POSTED") {
     return {
       label: "Completed",
@@ -516,7 +526,8 @@ export default function ProjectsOperationsClient({
         nextStage === "PROJECT_SCHEDULED" ||
         nextStage === "PROJECT_IN_PROGRESS" ||
         nextStage === "PROJECT_INSTALLED" ||
-        nextStage === "COMPLETED_POSTED"
+        nextStage === "COMPLETED_POSTED" ||
+        nextStage === "CANCELLED"
         ? nextStage
         : "ALL",
     );
@@ -1268,6 +1279,7 @@ export default function ProjectsOperationsClient({
             <option value="PROJECT_IN_PROGRESS">In Progress</option>
             <option value="PROJECT_INSTALLED">Installed</option>
             <option value="COMPLETED_POSTED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
           </select>
           <select
             value={locationFilter}

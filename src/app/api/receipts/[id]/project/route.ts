@@ -136,6 +136,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
           paidAmount: true,
           orderNumber: true,
           attendantId: true,
+          status: true,
         },
       },
     },
@@ -157,6 +158,18 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   ) {
     return NextResponse.json(
       { error: "This receipt is not tagged as a project receipt" },
+      { status: 400 },
+    );
+  }
+  if (existing.order?.status === "CANCELED") {
+    return NextResponse.json(
+      { error: "This project was cancelled and cannot be updated." },
+      { status: 409 },
+    );
+  }
+  if (parsed.data.stage === "CANCELLED") {
+    return NextResponse.json(
+      { error: "Cancel the receipt to cancel a project and reverse its calculations." },
       { status: 400 },
     );
   }
@@ -327,6 +340,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     "PROJECT_IN_PROGRESS",
     "PROJECT_INSTALLED",
     "COMPLETED_POSTED",
+    "CANCELLED",
   ] as const;
   const currentStageIndex = stageOrder.indexOf(
     existingProjectFlow?.stage ?? "RECEIPT_CREATED",
