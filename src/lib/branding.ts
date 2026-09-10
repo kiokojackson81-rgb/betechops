@@ -11,6 +11,8 @@ export async function getBranding() {
     logoUrl:
       branding?.logoUrl || process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png',
     brandColor: branding?.brandColor || '#7A2020',
+    digitalStampUrl: branding?.digitalStampUrl || null,
+    digitalStampEnabled: Boolean(branding?.digitalStampEnabled),
     siteTitle: process.env.RECEIPT_SITE_TITLE || 'Betech Solar Solutions',
   };
 }

@@ -88,24 +88,40 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const now = new Date();
   const acceptedTerms = hasTermsAcceptance(parsed.data.data);
   const project = projectSummary(session.receipt);
+  const incomingSignatures = asRecord(parsed.data.data.signatures);
+  const savedSessionData = asRecord(session.data);
+  const savedSignatures = asRecord(savedSessionData.signatures);
+  const customerJustSigned = Boolean(incomingSignatures.customer) && !Boolean(savedSignatures.customer);
   const acceptedAt = acceptedTerms
-    ? session.customerTermsAcceptedAt ?? now
+    ? customerJustSigned ? now : session.customerTermsAcceptedAt ?? now
     : null;
   const nextData = {
     ...parsed.data.data,
+    signatures: {
+      ...incomingSignatures,
+      technicianSignedAt: incomingSignatures.technician
+        ? typeof incomingSignatures.technicianSignedAt === "string" && incomingSignatures.technicianSignedAt
+          ? incomingSignatures.technicianSignedAt
+          : now.toISOString()
+        : null,
+    },
     termsAcceptance: {
       ...asRecord(parsed.data.data.termsAcceptance),
       accepted: acceptedTerms,
       acceptedAt: acceptedAt?.toISOString() ?? null,
       termsVersionUrl: TERMS_URL,
+      termsUrl: TERMS_URL,
       acceptedByCustomerName: project.customerName,
+      customerName: project.customerName,
       certificateId: session.certificateNo ?? null,
       projectId: project.reference,
     },
     terms_accepted: acceptedTerms,
     terms_accepted_at: acceptedAt?.toISOString() ?? null,
     terms_version_url: TERMS_URL,
+    terms_url: TERMS_URL,
     accepted_by_customer_name: project.customerName,
+    customer_name: project.customerName,
     certificate_id: session.certificateNo ?? null,
     project_id: project.reference,
   };
@@ -148,14 +164,18 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       accepted: true,
       acceptedAt: acceptedAt.toISOString(),
       termsVersionUrl: TERMS_URL,
+      termsUrl: TERMS_URL,
       acceptedByCustomerName: projectSummary(session.receipt).customerName,
+      customerName: projectSummary(session.receipt).customerName,
       certificateId: certificateNo,
       projectId: reference,
     },
     terms_accepted: true,
     terms_accepted_at: acceptedAt.toISOString(),
     terms_version_url: TERMS_URL,
+    terms_url: TERMS_URL,
     accepted_by_customer_name: projectSummary(session.receipt).customerName,
+    customer_name: projectSummary(session.receipt).customerName,
     certificate_id: certificateNo,
     project_id: reference,
   };

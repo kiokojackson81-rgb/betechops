@@ -137,6 +137,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 : id === "handover"
                   ? Boolean(
                       draft.signatures?.customer &&
+                      draft.signatures?.technician &&
                       draft.termsAcceptance?.accepted &&
                       handoverItems.every((item) => draft.handover?.[item]),
                     )
@@ -203,11 +204,6 @@ export default function CommissioningClient({ token }: { token: string }) {
             ...(next.data?.signatures || {}),
           },
         };
-        if (!merged.signatures?.technician)
-          merged.signatures = {
-            ...merged.signatures,
-            technician: next.technicianName,
-          };
         setSession(next);
         setDraft(merged);
         setLastStep(next.lastStep || "panels");
@@ -600,7 +596,9 @@ export default function CommissioningClient({ token }: { token: string }) {
                 customer={session.project.customerName}
                 handover={draft.handover || {}}
                 termsAccepted={Boolean(draft.termsAcceptance?.accepted)}
-                signature={draft.signatures?.customer || ""}
+                customerSignature={draft.signatures?.customer || ""}
+                technician={session.technicianName}
+                technicianSignature={draft.signatures?.technician || ""}
                 onAll={() =>
                   handoverItems.forEach((item) => patch("handover", item, true))
                 }
@@ -618,7 +616,19 @@ export default function CommissioningClient({ token }: { token: string }) {
                     },
                   }))
                 }
-                onSignature={(value) => patch("signatures", "customer", value)}
+                onCustomerSignature={(value) => patch("signatures", "customer", value)}
+                onTechnicianSignature={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    signatures: {
+                      ...current.signatures,
+                      technician: value,
+                      technicianSignedAt: value
+                        ? current.signatures?.technicianSignedAt || new Date().toISOString()
+                        : "",
+                    },
+                  }))
+                }
               />
             )}
             {current.id === "review" && (
@@ -938,7 +948,6 @@ function LabelCapture({
         token={token}
         onUploaded={uploaded}
         onRemove={onRemove}
-        label="TAKE LABEL PHOTO"
       />
       {items.length ? (
         <p
@@ -1060,13 +1069,11 @@ function PhotoCapture({
   token,
   onUploaded,
   onRemove,
-  label = "TAKE / CHOOSE PHOTO",
 }: {
   items: Evidence[];
   token: string;
   onUploaded: (item: Evidence) => void;
   onRemove: (index: number) => void;
-  label?: string;
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -1133,25 +1140,37 @@ function PhotoCapture({
           </div>
         </div>
       ) : null}
-      <label className="mt-3 block cursor-pointer rounded-2xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-5 text-center font-black text-cyan-100">
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          disabled={uploading}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void upload(file);
-            event.currentTarget.value = "";
-          }}
-        />
-        {uploading
-          ? "UPLOADING PHOTO…"
-          : items.length
-            ? "RETAKE / ADD PHOTO"
-            : label}
-      </label>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block cursor-pointer rounded-2xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-5 text-center font-black text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            disabled={uploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void upload(file);
+              event.currentTarget.value = "";
+            }}
+          />
+          {uploading ? "UPLOADING PHOTO…" : "📷 TAKE PHOTO"}
+        </label>
+        <label className="block cursor-pointer rounded-2xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-5 text-center font-black text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={uploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void upload(file);
+              event.currentTarget.value = "";
+            }}
+          />
+          {uploading ? "UPLOADING PHOTO…" : "🖼 CHOOSE FROM GALLERY"}
+        </label>
+      </div>
       {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
     </div>
   );
@@ -1261,22 +1280,28 @@ function Commissioning({
 }
 function Handover({
   customer,
+  technician,
   handover,
   termsAccepted,
-  signature,
+  customerSignature,
+  technicianSignature,
   onAll,
   onToggle,
   onTermsAccepted,
-  onSignature,
+  onCustomerSignature,
+  onTechnicianSignature,
 }: {
   customer: string;
+  technician: string;
   handover: Record<string, boolean>;
   termsAccepted: boolean;
-  signature: string;
+  customerSignature: string;
+  technicianSignature: string;
   onAll: () => void;
   onToggle: (item: string, value: boolean) => void;
   onTermsAccepted: (value: boolean) => void;
-  onSignature: (value: string) => void;
+  onCustomerSignature: (value: string) => void;
+  onTechnicianSignature: (value: string) => void;
 }) {
   return (
     <section className="rounded-3xl bg-slate-900 p-5">
@@ -1317,7 +1342,12 @@ function Handover({
       <div className="mt-6">
         <p className="text-xs font-black tracking-[.18em] text-cyan-300">CUSTOMER SIGNATURE</p>
         <p className="mt-2 font-bold">{customer}</p>
-        {termsAccepted ? <SignaturePad value={signature} onChange={onSignature} /> : <div className="mt-3 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950 p-5 text-sm text-slate-400">Accept the Terms &amp; Conditions above to enable customer signature.</div>}
+        {termsAccepted ? <SignaturePad value={customerSignature} onChange={onCustomerSignature} label="Customer finger signature" /> : <div className="mt-3 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950 p-5 text-sm text-slate-400">Accept the Terms &amp; Conditions above to enable customer signature.</div>}
+      </div>
+      <div className="mt-6">
+        <p className="text-xs font-black tracking-[.18em] text-cyan-300">TECHNICIAN SIGNATURE</p>
+        <p className="mt-2 font-bold">{technician}</p>
+        <SignaturePad value={technicianSignature} onChange={onTechnicianSignature} label="Technician finger signature" />
       </div>
     </section>
   );
@@ -1325,9 +1355,11 @@ function Handover({
 function SignaturePad({
   value,
   onChange,
+  label,
 }: {
   value: string;
   onChange: (value: string) => void;
+  label: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
@@ -1385,7 +1417,7 @@ function SignaturePad({
         onPointerUp={finish}
         onPointerCancel={finish}
         className="h-40 w-full touch-none rounded-2xl border-2 border-dashed border-cyan-400/50 bg-white"
-        aria-label="Customer finger signature"
+        aria-label={label}
       />
       {value ? (
         <p className="mt-2 text-sm font-bold text-emerald-300">

@@ -3,6 +3,7 @@ import path from "path";
 import * as QRCode from "qrcode";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
 import { decryptCommissioningToken } from "@/lib/commissioning";
+import { getBranding } from "@/lib/branding";
 import { TERMS_DISPLAY_URL } from "@/lib/publicLinks";
 
 type CertificateSource = {
@@ -81,8 +82,12 @@ function formatDate(value: Date | null | undefined) {
   return value ? value.toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi", day: "2-digit", month: "long", year: "numeric" }) : "";
 }
 
-function formatSignatureDate(value: Date | null | undefined) {
-  return value ? value.toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi", day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+function formatStampDate(value: Date | null | undefined) {
+  return value
+    ? value
+        .toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi", day: "2-digit", month: "short", year: "numeric" })
+        .toUpperCase()
+    : "";
 }
 
 async function letterheadBytes() {
@@ -94,10 +99,10 @@ async function letterheadBytes() {
 
 function drawLetterhead(page: PDFPage, image: PDFImage | null) {
   if (!image) return;
-  const scale = Math.min(360 / image.width, 54 / image.height);
+  const scale = Math.min(470 / image.width, 70 / image.height);
   const width = image.width * scale;
   const height = image.height * scale;
-  page.drawImage(image, { x: (A4[0] - width) / 2, y: 775, width, height });
+  page.drawImage(image, { x: (A4[0] - width) / 2, y: 758, width, height });
 }
 
 function drawCheckMark(page: PDFPage, x: number, y: number, color = GREEN) {
@@ -128,6 +133,28 @@ function drawVerifiedBadge(page: PDFPage, bold: PDFFont) {
   page.drawRectangle({ x, y, width, height, color: GREEN_LIGHT, borderColor: GREEN, borderWidth: 0.7 });
   drawCheckMark(page, x + 12, y + 8, rgb(0.04, 0.42, 0.75));
   page.drawText("COMMISSIONED & VERIFIED", { x: x + 25, y: y + 9, size: 8.1, font: bold, color: GREEN });
+}
+
+function drawDigitalStamp(page: PDFPage, stamp: PDFImage | null, stampDate: string, bold: PDFFont) {
+  if (!stamp) return;
+  const size = 104;
+  const x = 450;
+  const y = 38;
+  const scale = Math.min(size / stamp.width, size / stamp.height);
+  const width = stamp.width * scale;
+  const height = stamp.height * scale;
+  page.drawImage(stamp, { x: x + (size - width) / 2, y: y + (size - height) / 2, width, height });
+  if (!stampDate) return;
+  page.drawRectangle({ x: x + 18, y: y + 25, width: 68, height: 16, color: rgb(1, 1, 1), opacity: 0.68 });
+  const dateLabel = `DATE: ${stampDate}`;
+  const fontSize = 6.2;
+  page.drawText(dateLabel, {
+    x: x + (size - bold.widthOfTextAtSize(dateLabel, fontSize)) / 2,
+    y: y + 30,
+    size: fontSize,
+    font: bold,
+    color: rgb(0.08, 0.13, 0.68),
+  });
 }
 
 function drawFooter(page: PDFPage, regular: PDFFont, pageNumber: number, totalPages: number) {
@@ -242,7 +269,16 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const gps = valueFrom(certificateData, ["gps", "gpsCoordinates"]) || valueFrom(receiptData, ["gps", "gpsCoordinates"]);
   const installationDate = valueFrom(receiptData, ["installationDate", "scheduledDate"]) || valueFrom(metadata, ["installationDate"]);
   const issuedDate = formatDate(source.issuedAt);
-  const signatureDate = formatSignatureDate(source.issuedAt);
+  const termsAcceptedAt = text(termsAcceptance.acceptedAt) || source.customerTermsAcceptedAt?.toISOString() || "";
+  const acceptanceDate = termsAcceptedAt ? new Date(termsAcceptedAt) : source.issuedAt;
+  const signatureDate = formatDate(source.issuedAt);
+  const acceptanceDateLabel = formatDate(acceptanceDate);
+  const technicianSignatureDate = formatDate(
+    text(signatures.technicianSignedAt)
+      ? new Date(text(signatures.technicianSignedAt))
+      : source.issuedAt,
+  );
+  const stampDate = formatStampDate(acceptanceDate || source.issuedAt);
   const technician = source.technician?.name || valueFrom(signatures, ["technician"]) || "Assigned technician";
   const page = pdf.addPage(A4);
   const letterhead = await letterheadBytes();
@@ -254,6 +290,10 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
       try { letterheadImage = await pdf.embedPng(letterhead); } catch { /* Certificate content remains available if the configured asset cannot be embedded. */ }
     }
   }
+  const branding = await getBranding();
+  const stampImage = branding.digitalStampEnabled && branding.digitalStampUrl
+    ? await embedImage(pdf, branding.digitalStampUrl)
+    : null;
   drawLetterhead(page, letterheadImage);
   page.drawText("SOLAR PHOTOVOLTAIC SYSTEM", { x: MARGIN, y: 735, size: 16, font: bold, color: INK });
   page.drawText("COMPLETION & COMMISSIONING CERTIFICATE", { x: MARGIN, y: 715, size: 15, font: bold, color: INK });
@@ -328,13 +368,12 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   y -= 46;
 
   const termsAccepted = termsAcceptance.accepted === true;
-  const termsAcceptedAt = text(termsAcceptance.acceptedAt) || source.customerTermsAcceptedAt?.toISOString() || "";
   drawSectionHeading(page, "Customer Acceptance", y, bold);
   drawCheckbox(page, MARGIN + 8, y - 13, handoverLabels.every(([, key]) => handover[key] === true), "Customer handover completed", regular);
   drawCheckbox(page, MARGIN + 8, y - 24, termsAccepted, "Terms & Conditions Accepted", regular);
   drawLines(page, "The Customer confirms that they have read, understood and accepted the Betech Solar Installation, Performance, Warranty & After-Sales Terms & Conditions applicable to this installation.", MARGIN + 8, y - 36, 385, regular, 6.15, INK, 7.3);
   page.drawText(`Terms: ${TERMS_DISPLAY_URL}`, { x: MARGIN + 8, y: y - 58, size: 6.2, font: regular, color: rgb(0.04, 0.42, 0.75) });
-  page.drawText(`Acceptance Date: ${formatSignatureDate(termsAcceptedAt ? new Date(termsAcceptedAt) : null) || "Not recorded"}`, { x: MARGIN + 8, y: y - 67, size: 6.2, font: regular, color: MUTED });
+  page.drawText(`Acceptance Date: ${acceptanceDateLabel}`, { x: MARGIN + 8, y: y - 67, size: 6.2, font: regular, color: MUTED });
   y -= 73;
 
   drawSectionHeading(page, "Signatures", y, bold);
@@ -351,17 +390,18 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const technicianImage = technicianSignature.startsWith("data:image") ? await embedImage(pdf, technicianSignature) : null;
   if (customerImage) { const scale = Math.min(90 / customerImage.width, 20 / customerImage.height); page.drawImage(customerImage, { x: MARGIN + 72, y: signatureTop - 43, width: customerImage.width * scale, height: customerImage.height * scale }); }
   else page.drawText("Signature captured", { x: MARGIN + 72, y: signatureTop - 37, size: 7, font: italic, color: MUTED });
-  if (technicianImage) { const scale = Math.min(90 / technicianImage.width, 20 / technicianImage.height); page.drawImage(technicianImage, { x: 383, y: signatureTop - 43, width: technicianImage.width * scale, height: technicianImage.height * scale }); }
-  else page.drawText(technicianSignature || technician, { x: 383, y: signatureTop - 37, size: 8, font: italic, color: INK });
-  page.drawText(`Date: ${signatureDate}`, { x: MARGIN + 8, y: signatureTop - 49, size: 6.5, font: regular, color: MUTED });
-  page.drawText(`Date: ${signatureDate}     Company stamp: __________________`, { x: 318, y: signatureTop - 49, size: 6.5, font: regular, color: MUTED });
+  if (technicianImage) { const scale = Math.min(78 / technicianImage.width, 20 / technicianImage.height); page.drawImage(technicianImage, { x: 318, y: signatureTop - 43, width: technicianImage.width * scale, height: technicianImage.height * scale }); }
+  else page.drawText(technicianSignature || technician, { x: 318, y: signatureTop - 37, size: 8, font: italic, color: INK });
+  page.drawText(`Acceptance Date: ${acceptanceDateLabel}`, { x: MARGIN + 8, y: signatureTop - 49, size: 6.5, font: regular, color: MUTED });
+  page.drawText(`Date: ${technicianSignatureDate || signatureDate}`, { x: 318, y: signatureTop - 49, size: 6.5, font: regular, color: MUTED });
+  drawDigitalStamp(page, stampImage, stampDate, bold);
 
   const verificationUrl = certificateVerificationUrl(source);
   if (verificationUrl) {
     try {
       const qr = await QRCode.toDataURL(verificationUrl, { margin: 0, width: 140, errorCorrectionLevel: "M" });
       const qrImage = await embedImage(pdf, qr);
-      if (qrImage) { page.drawImage(qrImage, { x: 514, y: 40, width: 28, height: 28 }); page.drawText("SCAN TO VERIFY CERTIFICATE", { x: 476, y: 33, size: 4.5, font: bold, color: MAROON }); }
+      if (qrImage) { page.drawImage(qrImage, { x: 270, y: 40, width: 28, height: 28 }); page.drawText("SCAN TO VERIFY CERTIFICATE", { x: 232, y: 33, size: 4.5, font: bold, color: MAROON }); }
     } catch { /* A certificate remains valid even if QR generation is unavailable. */ }
   }
 

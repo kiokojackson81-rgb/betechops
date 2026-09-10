@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type JumiaForm = {
   apiBase: string;
@@ -217,20 +218,27 @@ export default function AdminSettings() {
       <section className="rounded-xl border border-white/10 bg-[#0b0e13] p-4">
         <h2 className="text-lg font-medium mb-2">Shortcuts</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <a
+          <Link
             href="/admin/settings/jumia/shipping-stations"
             className="block rounded-lg border border-white/10 bg-black/20 p-4 hover:bg-white/5"
           >
             <div className="font-semibold">Jumia Shipping Stations</div>
             <div className="text-sm text-slate-400">Set default shipping station per shop and discover providers.</div>
-          </a>
-          <a
+          </Link>
+          <Link
             href="/admin/settings/shop-images"
             className="block rounded-lg border border-white/10 bg-black/20 p-4 hover:bg-white/5"
           >
             <div className="font-semibold">Shop Images</div>
             <div className="text-sm text-slate-400">Upload and replace category tile images and the home hero banner.</div>
-          </a>
+          </Link>
+          <Link
+            href="/admin/settings/company-documents"
+            className="block rounded-lg border border-white/10 bg-black/20 p-4 hover:bg-white/5"
+          >
+            <div className="font-semibold">Company Documents</div>
+            <div className="text-sm text-slate-400">Upload, preview, replace, or disable the automatic Betech digital stamp.</div>
+          </Link>
         </div>
       </section>
 

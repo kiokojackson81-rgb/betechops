@@ -2204,12 +2204,14 @@ model VoiceCallbackRequest {
 }
 
 model Branding {
-  id            String   @id @default(cuid()) @db.Text
-  name          String   @unique @db.Text
-  letterheadUrl String   @db.Text
-  logoUrl       String?  @db.Text
-  brandColor    String?  @db.Text
-  updatedAt     DateTime @updatedAt
+  id                  String   @id @default(cuid()) @db.Text
+  name                String   @unique @db.Text
+  letterheadUrl       String   @db.Text
+  logoUrl             String?  @db.Text
+  brandColor          String?  @db.Text
+  digitalStampUrl     String?  @db.Text
+  digitalStampEnabled Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
 }
 
 model LipaPolePole {
