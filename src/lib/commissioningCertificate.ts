@@ -92,7 +92,7 @@ async function letterheadBytes() {
 
 function drawHeader(page: PDFPage, bold: PDFFont, regular: PDFFont) {
   page.drawText("BETECH SOLAR SOLUTIONS", { x: MARGIN, y: 801, size: 13, font: bold, color: MAROON });
-  page.drawText("Professional Solar PV • Energy Storage • Installation • Maintenance", { x: MARGIN, y: 787, size: 6.8, font: regular, color: MUTED });
+  page.drawText("Professional Solar PV - Energy Storage - Installation - Maintenance", { x: MARGIN, y: 787, size: 6.8, font: regular, color: MUTED });
   ["0722 151 083 | 0703 241 917", "info@betech.co.ke | www.betech.co.ke", "Pramukh Plaza, 3rd Floor, Shop No. 3, Nairobi CBD"].forEach((line, index) => {
     page.drawText(line, { x: A4[0] - MARGIN - regular.widthOfTextAtSize(line, 7), y: 801 - index * 11, size: 7, font: regular, color: INK });
   });
@@ -130,7 +130,7 @@ function extractEquipment(equipment: Record<string, unknown>, projectItems: stri
   const panelQuantity = valueFrom(equipment, ["panelQuantity", "panelQty", "panelCount"]);
   const panelRating = valueFrom(equipment, ["panelRating", "panelWatts", "panelWattage"]);
   const panelWatts = Number((panelRating || projectItems.join(" ")).match(/(\d{3,4})\s*W/i)?.[1] || 0);
-  const panelCount = Number(panelQuantity.match(/\d+/)?.[0] || projectItems.join(" ").match(/(\d+)\s*[×x]/i)?.[1] || 0);
+  const panelCount = Number(panelQuantity.match(/\d+/)?.[0] || projectItems.join(" ").match(/(\d+)\s*[x]/i)?.[1] || 0);
   const pvCapacity = panelWatts > 0 && panelCount > 0 ? `${((panelWatts * panelCount) / 1000).toFixed(2)} kWp` : "";
   const groups: EquipmentRow[] = [
     { title: "SOLAR ARRAY", rows: [["Brand", valueFrom(equipment, ["panelBrand"])], ["Model", valueFrom(equipment, ["panelModel"])], ["Panel rating", panelRating || (panelWatts ? `${panelWatts}W` : "")], ["Quantity", panelQuantity || (panelCount ? `${panelCount} Panels` : "")], ["Installed PV capacity", pvCapacity], ["Panel serial / reference", valueFrom(equipment, ["panelSerial", "panelReference"])]] },
@@ -181,9 +181,9 @@ function certificateVerificationUrl(source: CertificateSource) {
 
 function evidenceCaption(key: string, equipment: Record<string, unknown>) {
   const captions: Record<string, string> = {
-    panelLabel: [valueFrom(equipment, ["panelBrand"]), valueFrom(equipment, ["panelModel"]), valueFrom(equipment, ["panelRating", "panelWatts"])].filter(Boolean).join(" · "),
-    inverterLabel: [valueFrom(equipment, ["inverterBrand"]), valueFrom(equipment, ["inverterModel"]), valueFrom(equipment, ["inverterSerial", "inverterSerialNumber"])].filter(Boolean).join(" · "),
-    batteryLabel: [valueFrom(equipment, ["batteryBrand"]), valueFrom(equipment, ["batteryModel"]), valueFrom(equipment, ["batterySerial", "batterySerialNumber"])].filter(Boolean).join(" · "),
+    panelLabel: [valueFrom(equipment, ["panelBrand"]), valueFrom(equipment, ["panelModel"]), valueFrom(equipment, ["panelRating", "panelWatts"])].filter(Boolean).join(" - "),
+    inverterLabel: [valueFrom(equipment, ["inverterBrand"]), valueFrom(equipment, ["inverterModel"]), valueFrom(equipment, ["inverterSerial", "inverterSerialNumber"])].filter(Boolean).join(" - "),
+    batteryLabel: [valueFrom(equipment, ["batteryBrand"]), valueFrom(equipment, ["batteryModel"]), valueFrom(equipment, ["batterySerial", "batterySerialNumber"])].filter(Boolean).join(" - "),
   };
   return captions[key] || "Installation evidence recorded during commissioning.";
 }
@@ -226,7 +226,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   page.drawText("SOLAR PHOTOVOLTAIC SYSTEM", { x: MARGIN, y: 735, size: 16, font: bold, color: INK });
   page.drawText("COMPLETION & COMMISSIONING CERTIFICATE", { x: MARGIN, y: 715, size: 15, font: bold, color: INK });
   page.drawRectangle({ x: A4[0] - 142, y: 705, width: 108, height: 25, color: GREEN_LIGHT, borderColor: GREEN, borderWidth: 0.7 });
-  page.drawText("COMMISSIONED ✓", { x: A4[0] - 132, y: 714, size: 8.5, font: bold, color: GREEN });
+  page.drawText("COMMISSIONED - VERIFIED", { x: A4[0] - 132, y: 714, size: 8.5, font: bold, color: GREEN });
   page.drawRectangle({ x: MARGIN, y: 674, width: A4[0] - MARGIN * 2, height: 27, color: GREY });
   [`Certificate No: ${source.certificateNo || "Pending"}`, `Project Ref: ${reference}`, `Completion Date: ${issuedDate || "As recorded"}`].forEach((line, index) => page.drawText(line, { x: MARGIN + 10 + index * 174, y: 684, size: 7.4, font: index === 0 ? bold : regular, color: INK }));
 
@@ -253,8 +253,8 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   y -= 82;
 
   drawSectionHeading(page, "Installation Type", y, bold);
-  page.drawText("Installation Type:  ✓ New Installation     ○ Upgrade     ○ Modification", { x: MARGIN + 9, y: y - 14, size: 7.6, font: regular, color: INK });
-  page.drawText("System Configuration:  ✓ Hybrid     ○ Off-Grid     ○ Grid-Tied", { x: MARGIN + 9, y: y - 27, size: 7.6, font: regular, color: INK });
+  page.drawText("Installation Type:  [X] New Installation     [ ] Upgrade     [ ] Modification", { x: MARGIN + 9, y: y - 14, size: 7.6, font: regular, color: INK });
+  page.drawText("System Configuration:  [X] Hybrid     [ ] Off-Grid     [ ] Grid-Tied", { x: MARGIN + 9, y: y - 27, size: 7.6, font: regular, color: INK });
   y -= 45;
 
   drawSectionHeading(page, "Commissioning Results", y, bold);
@@ -268,7 +268,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   });
   const passed = inspectionRows.every(([, result]) => result !== "FAIL");
   page.drawRectangle({ x: 334, y: y - 101, width: 227, height: 17, color: passed ? GREEN_LIGHT : MAROON_LIGHT, borderColor: passed ? GREEN : MAROON, borderWidth: 0.5 });
-  page.drawText(passed ? "✓ SYSTEM PASSED COMMISSIONING" : "COMMISSIONING REVIEW REQUIRED", { x: 344, y: y - 95, size: 7.5, font: bold, color: passed ? GREEN : MAROON });
+  page.drawText(passed ? "SYSTEM PASSED COMMISSIONING" : "COMMISSIONING REVIEW REQUIRED", { x: 344, y: y - 95, size: 7.5, font: bold, color: passed ? GREEN : MAROON });
   y -= 111;
 
   const readings = measurementRows(measurements);
@@ -287,7 +287,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
 
   drawSectionHeading(page, "Customer Handover Completed", y, bold);
   const handoverLabels: Array<[string, string]> = [["System operation explained", "System operation"], ["Shutdown / startup procedure explained", "Shutdown/startup"], ["Monitoring explained", "Monitoring"], ["Warranty explained", "Warranty"], ["Load limitations explained", "Load limitations"], ["Maintenance / panel cleaning explained", "Maintenance"], ["Fault reporting procedure explained", "Fault reporting"]];
-  handoverLabels.forEach(([label, key], index) => page.drawText(`${handover[key] ? "✓" : "○"} ${label}`, { x: MARGIN + 8 + (index % 2) * 270, y: y - 13 - Math.floor(index / 2) * 8, size: 6.6, font: regular, color: handover[key] ? GREEN : MUTED }));
+  handoverLabels.forEach(([label, key], index) => page.drawText(`${handover[key] ? "[X]" : "[ ]"} ${label}`, { x: MARGIN + 8 + (index % 2) * 270, y: y - 13 - Math.floor(index / 2) * 8, size: 6.6, font: regular, color: handover[key] ? GREEN : MUTED }));
   y -= 51;
 
   drawSectionHeading(page, "Signatures", y, bold);
