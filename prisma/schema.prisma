@@ -1135,6 +1135,7 @@ model Order {
   receipt           Receipt?
   returnCases       ReturnCase[]
   settlementRows    SettlementRow[]
+  mpesaPayments     MpesaPayment[]
   complaints        Complaint[]
 }
 
@@ -1722,6 +1723,7 @@ model WebsiteOrder {
   customerUser        User?              @relation("customerWebsiteOrders", fields: [customerUserId], references: [id], onDelete: SetNull)
   receipt             Receipt?           @relation(fields: [receiptId], references: [id], onDelete: SetNull)
   items               WebsiteOrderItem[]
+  mpesaPayments       MpesaPayment[]
   complaints          Complaint[]
 
   @@index([status, createdAt])
@@ -1833,6 +1835,37 @@ model WebsiteOrderItem {
 
   @@index([websiteOrderId])
   @@index([productId])
+}
+
+/// Server-side audit ledger for Daraja STK and Paybill callbacks. A successful
+/// initiation is deliberately not a successful payment: only a Daraja result
+/// callback may transition an entry to SUCCESS.
+model MpesaPayment {
+  id                String             @id @default(cuid())
+  channel           MpesaPaymentChannel
+  status            MpesaPaymentStatus @default(PENDING)
+  orderId           String?
+  websiteOrderId    String?
+  accountReference  String?
+  requestedAmount   Decimal?           @db.Decimal(14, 2)
+  amount            Decimal?           @db.Decimal(14, 2)
+  phoneNumber       String?
+  merchantRequestId String?            @unique
+  checkoutRequestId String?            @unique
+  receiptNumber     String?            @unique
+  transactionId     String?            @unique
+  resultCode        Int?
+  resultDescription String?
+  transactionAt     DateTime?
+  callbackPayload   Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  order             Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  websiteOrder      WebsiteOrder?      @relation(fields: [websiteOrderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, status, createdAt])
+  @@index([websiteOrderId, status, createdAt])
+  @@index([accountReference, status, createdAt])
 }
 
 model ReceiptFile {
@@ -2973,6 +3006,19 @@ enum PriceSource {
 enum PaymentMethod {
   CASH
   MPESA
+}
+
+enum MpesaPaymentChannel {
+  STK
+  C2B
+}
+
+enum MpesaPaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  UNMATCHED
 }
 
 enum LipaPolePoleStatus {

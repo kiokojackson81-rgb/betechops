@@ -10,6 +10,17 @@ Set these in Vercel project settings (Environment Variables) and locally (e.g., 
 - DATABASE_URL: postgresql://<user>:<pass>@<pooled-host>/<db>?sslmode=require&pgbouncer=true&connection_limit=1&pool_timeout=30
 - DIRECT_URL: postgresql://<user>:<pass>@<direct-host>/<db>?sslmode=require
 
+## M-Pesa (production Daraja)
+- MPESA_CONSUMER_KEY: production Daraja consumer key
+- MPESA_CONSUMER_SECRET: production Daraja consumer secret
+- MPESA_PASSKEY: production STK passkey
+- MPESA_SHORTCODE: production shortcode used for STK Push
+- MPESA_CALLBACK_BASE_URL: optional HTTPS callback origin; defaults to `https://betech.co.ke`
+
+These variables are server-only. Do not prefix them with `NEXT_PUBLIC_` and do
+not expose them to browser code. The C2B Paybill is `1231008`; URL registration
+is a separate operational step and is intentionally not performed by the app.
+
 ## Jumia OIDC + API
 - base_url: https://vendor-api.jumia.com (preferred canonical env name for vendor API base)
 - JUMIA_API_BASE: https://vendor-api.jumia.com (legacy; supported but prefer `base_url`)
