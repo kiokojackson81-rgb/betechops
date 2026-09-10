@@ -391,7 +391,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         Loading commissioning…
       </main>
     );
-  if (session.readOnly) return <IssuedView session={session} draft={draft} />;
+  if (session.readOnly) return <IssuedView session={session} token={token} />;
   const current = steps[activeStep];
   const canContinue = current.id === "review" || complete(current.id);
   return (
@@ -1423,25 +1423,20 @@ function Review({
     </section>
   );
 }
-function IssuedView({ session, draft }: { session: Session; draft: Draft }) {
-  const links = Object.values(draft.evidence || {})
-    .flat()
-    .filter((item) => Boolean(item?.url));
+function IssuedView({ session, token }: { session: Session; token: string }) {
+  const certificateHref = `/api/commissioning/${encodeURIComponent(token)}/certificate`;
   return (
-    <main className="min-h-screen bg-slate-950 p-4 text-slate-100">
-      <article className="mx-auto max-w-xl space-y-5 rounded-3xl bg-slate-900 p-6">
-        <p className="text-xs font-black tracking-[.2em] text-cyan-300">
+    <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900">
+      <article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm">
+        <p className="text-xs font-black tracking-[.2em] text-[#7a0000]">
           BETECH SOLAR SOLUTIONS
         </p>
-        <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4">
-          <h1 className="text-2xl font-black text-emerald-200">
-            Certificate Issued — View Only
-          </h1>
-          <p className="mt-2 text-sm text-slate-300">
-            Certificate: {session.certificateNo}
-          </p>
+        <div className="rounded-2xl border border-emerald-700/20 bg-emerald-50 p-4">
+          <p className="text-xs font-black tracking-[.16em] text-emerald-800">COMMISSIONED ✓</p>
+          <h1 className="mt-2 text-2xl font-black">Completion & commissioning certificate</h1>
+          <p className="mt-2 text-sm text-slate-600">Certificate No: {session.certificateNo}</p>
         </div>
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-slate-700">
           Project: {session.project.reference}
           <br />
           Customer: {session.project.customerName}
@@ -1449,26 +1444,10 @@ function IssuedView({ session, draft }: { session: Session; draft: Draft }) {
           Issued:{" "}
           {session.issuedAt ? new Date(session.issuedAt).toLocaleString() : "—"}
         </p>
-        <div className="flex flex-wrap gap-2">
-          {links.map((item, index) => (
-            <a
-              key={item.url}
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-cyan-400/30 px-3 py-2 text-sm text-cyan-200"
-            >
-              Evidence {index + 1}
-            </a>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="w-full rounded-xl bg-cyan-400 px-4 py-3 font-black text-slate-950"
-        >
-          PRINT / SAVE CERTIFICATE AS PDF
-        </button>
+        <a href={certificateHref} className="block w-full rounded-xl bg-[#7a0000] px-4 py-3 text-center font-black text-white">
+          DOWNLOAD FORMAL CERTIFICATE & EVIDENCE REPORT (PDF)
+        </a>
+        <p className="text-xs leading-5 text-slate-500">The issued record is view-only. The downloadable PDF contains the professional certificate and installation evidence report only.</p>
       </article>
     </main>
   );

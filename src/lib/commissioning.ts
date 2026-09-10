@@ -100,7 +100,15 @@ export async function findAccessibleCommissioningSession(token: string) {
         select: {
           receiptNumber: true,
           data: true,
-          order: { select: { orderNumber: true, customerName: true, metadata: true } },
+          order: {
+            select: {
+              orderNumber: true,
+              customerName: true,
+              customerPhone: true,
+              customerEmail: true,
+              metadata: true,
+            },
+          },
         },
       },
     },
