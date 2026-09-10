@@ -824,6 +824,38 @@ export default function ProjectsOperationsClient({
     }
   };
 
+  const cancelProject = async (row: ProjectRow) => {
+    const reference = row.orderRef || row.customerName || "this project";
+    const reason = window.prompt(
+      `Cancel ${reference}? Enter an optional cancellation reason, then press OK.`,
+      "",
+    );
+    if (reason === null) return;
+
+    setSavingId(row.id);
+    try {
+      const res = await fetch(`/api/receipts/${encodeURIComponent(row.id)}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ reason: reason.trim() || undefined }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || "Failed to cancel project");
+      }
+      showToast("Project cancelled and linked calculations reversed", "success");
+      await load();
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Failed to cancel project",
+        "error",
+      );
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const createExternalAgent = async () => {
     setAgentSaving(true);
     try {
@@ -1718,6 +1750,17 @@ export default function ProjectsOperationsClient({
                                     >
                                       Start Progress
                                     </button>
+                                    {!isTechnicalScope &&
+                                    row.projectStage === "PROJECT_SCHEDULED" ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void cancelProject(row)}
+                                        disabled={isSaving}
+                                        className="rounded-2xl border border-rose-500/35 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-100 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                      >
+                                        {isSaving ? "Cancelling..." : "Cancel Project"}
+                                      </button>
+                                    ) : null}
                                     <button
                                       type="button"
                                       onClick={() =>
