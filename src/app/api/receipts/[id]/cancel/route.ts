@@ -66,13 +66,16 @@ export async function POST(request: NextRequest, context: ParamsContext) {
       ? (baseData.podDelivery as Record<string, unknown>)
       : null;
   const existingProjectFlow = readReceiptProjectFlow(baseData.projectFlow);
+  const isProjectReceipt =
+    Boolean(existingProjectFlow) ||
+    String(baseData.customerType || "").trim().toLowerCase() === "project";
   const cancelledAt = new Date().toISOString();
-  const cancelledProjectFlow = existingProjectFlow
+  const cancelledProjectFlow = isProjectReceipt
     ? {
         ...buildReceiptProjectFlow({
-          existing: existingProjectFlow as unknown as Record<string, unknown>,
+          existing: existingProjectFlow as unknown as Record<string, unknown> | null,
           stage: "CANCELLED",
-          projectValue: Number(receipt.order.totalAmount || existingProjectFlow.projectValue || 0),
+          projectValue: Number(receipt.order.totalAmount || existingProjectFlow?.projectValue || 0),
           depositPaidAmount: 0,
           balancePaidAmount: 0,
           amountPaidTotal: 0,

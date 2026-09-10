@@ -164,6 +164,29 @@ export function normalizeReceiptProjectHandlerType(value: unknown): ReceiptProje
   return null;
 }
 
+function inferReceiptProjectHandlerType(source: {
+  handlerType?: unknown;
+  handlerStaffId?: unknown;
+  handlerStaffName?: unknown;
+  externalAgentId?: unknown;
+  externalAgentName?: unknown;
+  externalAgentPhone?: unknown;
+}): ReceiptProjectHandlerType | null {
+  const explicit = normalizeReceiptProjectHandlerType(source.handlerType);
+  if (explicit) return explicit;
+  if (toTrimmedString(source.handlerStaffId) || toTrimmedString(source.handlerStaffName)) {
+    return "STAFF";
+  }
+  if (
+    toTrimmedString(source.externalAgentId) ||
+    toTrimmedString(source.externalAgentName) ||
+    toTrimmedString(source.externalAgentPhone)
+  ) {
+    return "EXTERNAL";
+  }
+  return null;
+}
+
 export function normalizeReceiptProjectPaymentMethod(value: unknown): ReceiptProjectPaymentMethod {
   const candidate = String(value || "").trim().toUpperCase();
   if (RECEIPT_PROJECT_PAYMENT_METHODS.includes(candidate as ReceiptProjectPaymentMethod)) {
@@ -401,9 +424,14 @@ export function buildReceiptProjectFlow(input: {
   const balancePaymentMethod = normalizeReceiptProjectPaymentMethod(
     input.balancePaymentMethod ?? existing?.balancePaymentMethod,
   );
-  const requestedHandlerType = normalizeReceiptProjectHandlerType(
-    input.handlerType ?? existing?.handlerType,
-  );
+  const requestedHandlerType = inferReceiptProjectHandlerType({
+    handlerType: input.handlerType ?? existing?.handlerType,
+    handlerStaffId: input.handlerStaffId ?? existing?.handlerStaffId,
+    handlerStaffName: input.handlerStaffName ?? existing?.handlerStaffName,
+    externalAgentId: input.externalAgentId ?? existing?.externalAgentId,
+    externalAgentName: input.externalAgentName ?? existing?.externalAgentName,
+    externalAgentPhone: input.externalAgentPhone ?? existing?.externalAgentPhone,
+  });
 
   const requestedAssignments = normalizeAssignedHandlers(
     input.assignedHandlers ?? existing?.assignedHandlers,
@@ -514,7 +542,7 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
   let balanceAmount = roundCurrency(Math.max(0, Number(source.balanceAmount || remainingAmount || 0)));
   const postedReceiptNumber = toTrimmedString(source.postedReceiptNumber) || null;
   const scheduledDate = normalizeOptionalDate(source.scheduledDate);
-  const handlerType = normalizeReceiptProjectHandlerType(source.handlerType);
+  const handlerType = inferReceiptProjectHandlerType(source);
   const handlerStaffId = toTrimmedString(source.handlerStaffId) || null;
   const handlerStaffName = toTrimmedString(source.handlerStaffName) || null;
   const handlerStaffIds = toStringArray(source.handlerStaffIds);

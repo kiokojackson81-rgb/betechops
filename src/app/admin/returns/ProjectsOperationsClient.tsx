@@ -32,6 +32,7 @@ type AssignedHandler = {
 
 type ProjectRow = {
   id: string;
+  status?: string | null;
   orderRef?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
@@ -492,6 +493,12 @@ export default function ProjectsOperationsClient({
         }
       }
 
+      nextRows = nextRows.map((row: ProjectRow) =>
+        String(row.status || "").toUpperCase() === "CANCELED"
+          ? { ...row, projectStage: "CANCELLED" }
+          : row,
+      );
+
       setRows(nextRows);
       setEditors(
         Object.fromEntries(
@@ -655,6 +662,9 @@ export default function ProjectsOperationsClient({
       completed: scopedRows.filter(
         (row) => row.projectStage === "COMPLETED_POSTED",
       ).length,
+      cancelled: scopedRows.filter(
+        (row) => row.projectStage === "CANCELLED",
+      ).length,
     }),
     [scopedRows],
   );
@@ -696,6 +706,12 @@ export default function ProjectsOperationsClient({
         value: summary.completed,
         accent: "text-emerald-200",
         filter: "COMPLETED_POSTED",
+      },
+      {
+        label: "Cancelled",
+        value: summary.cancelled,
+        accent: "text-rose-200",
+        filter: "CANCELLED",
       },
     ],
     [summary],
