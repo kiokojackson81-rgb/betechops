@@ -1029,6 +1029,40 @@ export default function ProjectsOperationsClient({
     }
   };
 
+  const downloadCommissioningCertificate = async (row: ProjectRow) => {
+    setSavingId(row.id);
+    try {
+      const response = await fetch(
+        `/api/receipts/${encodeURIComponent(row.id)}/commissioning/certificate`,
+        { credentials: "same-origin" },
+      );
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || "Unable to download the certificate");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const disposition = response.headers.get("content-disposition") || "";
+      const filename = disposition.match(/filename="?([^";]+)"?/)?.[1] || "betech-completion-certificate.pdf";
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast("Certificate download started.", "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Unable to download the certificate",
+        "error",
+      );
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const modalRow = assignmentModal
     ? (rows.find((row) => row.id === assignmentModal.rowId) ?? null)
     : null;
@@ -2099,6 +2133,18 @@ export default function ProjectsOperationsClient({
                                             className="rounded-xl border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-200 disabled:opacity-50"
                                           >
                                             Send Certificate to Customer
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={savingId === row.id}
+                                            onClick={() =>
+                                              void downloadCommissioningCertificate(
+                                                row,
+                                              )
+                                            }
+                                            className="rounded-xl border border-cyan-300/40 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-50"
+                                          >
+                                            Download Certificate PDF
                                           </button>
                                         </div>
                                         {commissioningLinks[row.id] ? (
