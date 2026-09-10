@@ -2,6 +2,7 @@ name = "betech-mpesa-public-proxy"
 main = "src/index.mjs"
 compatibility_date = "2026-09-10"
 
+# Cloudflare Git deployment root: infrastructure/cloudflare/mpesa-public-proxy
 # This is deliberately the only route the Worker owns. All other
 # betech.co.ke traffic keeps its existing Vercel redirect/site behaviour.
 routes = [
