@@ -26,6 +26,24 @@ that can edit the `betech.co.ke` Cloudflare zone, then run:
 npx wrangler deploy
 ```
 
+### Required Cloudflare zone settings
+
+Worker routes run only on proxied Cloudflare traffic. Before testing, the apex
+`betech.co.ke` DNS record must remain pointed at its existing Vercel origin but
+have **Proxy status: Proxied** (orange cloud), and Cloudflare SSL/TLS mode must
+be **Full (strict)**. Do not change the `www` record or the existing Vercel
+redirect configuration.
+
+Verify that the deployed Worker has this exact route in the Cloudflare
+dashboard (Workers & Pages → the Worker → Settings → Domains & Routes):
+
+```
+betech.co.ke/api/mpesa/*
+```
+
+If the apex record is DNS-only, requests bypass Cloudflare entirely and Vercel
+will continue returning its apex-to-`www` 308 before the Worker can run.
+
 Do not register any Daraja C2B URLs until the following direct POST probes all
 return their backend responses with no `Location` header:
 
