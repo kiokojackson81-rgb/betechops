@@ -1,12 +1,14 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import * as QRCode from "qrcode";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
 import { decryptCommissioningToken } from "@/lib/commissioning";
+import { TERMS_DISPLAY_URL } from "@/lib/publicLinks";
 
 type CertificateSource = {
   certificateNo: string | null;
   issuedAt: Date | null;
+  customerTermsAcceptedAt?: Date | null;
   customerTokenCiphertext?: string | null;
   technician: { name: string | null } | null;
   data: unknown;
@@ -90,18 +92,46 @@ async function letterheadBytes() {
   return null;
 }
 
-function drawHeader(page: PDFPage, bold: PDFFont, regular: PDFFont) {
-  page.drawText("BETECH SOLAR SOLUTIONS", { x: MARGIN, y: 801, size: 13, font: bold, color: MAROON });
-  page.drawText("Professional Solar PV - Energy Storage - Installation - Maintenance", { x: MARGIN, y: 787, size: 6.8, font: regular, color: MUTED });
-  ["0722 151 083 | 0703 241 917", "info@betech.co.ke | www.betech.co.ke", "Pramukh Plaza, 3rd Floor, Shop No. 3, Nairobi CBD"].forEach((line, index) => {
-    page.drawText(line, { x: A4[0] - MARGIN - regular.widthOfTextAtSize(line, 7), y: 801 - index * 11, size: 7, font: regular, color: INK });
+function drawLetterhead(page: PDFPage, image: PDFImage | null) {
+  if (!image) return;
+  const scale = Math.min(360 / image.width, 54 / image.height);
+  const width = image.width * scale;
+  const height = image.height * scale;
+  page.drawImage(image, { x: (A4[0] - width) / 2, y: 775, width, height });
+}
+
+function drawCheckMark(page: PDFPage, x: number, y: number, color = GREEN) {
+  page.drawLine({ start: { x, y: y + 2 }, end: { x: x + 3, y: y - 1 }, thickness: 1.3, color });
+  page.drawLine({ start: { x: x + 3, y: y - 1 }, end: { x: x + 8, y: y + 5 }, thickness: 1.3, color });
+}
+
+function drawCheckbox(page: PDFPage, x: number, y: number, checked: boolean, label: string, regular: PDFFont) {
+  const size = 7;
+  page.drawRectangle({
+    x,
+    y: y - 1,
+    width: size,
+    height: size,
+    color: checked ? rgb(0.91, 0.97, 1) : rgb(0.98, 0.98, 0.98),
+    borderColor: checked ? rgb(0.04, 0.42, 0.75) : rgb(0.72, 0.74, 0.77),
+    borderWidth: 0.8,
   });
-  page.drawRectangle({ x: MARGIN, y: 770, width: A4[0] - MARGIN * 2, height: 1.5, color: MAROON });
+  if (checked) drawCheckMark(page, x - 0.3, y - 0.2, rgb(0.04, 0.42, 0.75));
+  page.drawText(label, { x: x + 11, y, size: 6.6, font: regular, color: checked ? INK : MUTED });
+}
+
+function drawVerifiedBadge(page: PDFPage, bold: PDFFont) {
+  const width = 164;
+  const height = 25;
+  const x = A4[0] - MARGIN - width;
+  const y = 704;
+  page.drawRectangle({ x, y, width, height, color: GREEN_LIGHT, borderColor: GREEN, borderWidth: 0.7 });
+  drawCheckMark(page, x + 12, y + 8, rgb(0.04, 0.42, 0.75));
+  page.drawText("COMMISSIONED & VERIFIED", { x: x + 25, y: y + 9, size: 8.1, font: bold, color: GREEN });
 }
 
 function drawFooter(page: PDFPage, regular: PDFFont, pageNumber: number, totalPages: number) {
   page.drawLine({ start: { x: MARGIN, y: 28 }, end: { x: A4[0] - MARGIN, y: 28 }, thickness: 0.5, color: rgb(0.78, 0.78, 0.78) });
-  page.drawText("BETECH SOLAR SOLUTIONS  |  www.betech.co.ke  |  info@betech.co.ke  |  0722 151 083", { x: MARGIN, y: 17, size: 6.5, font: regular, color: MUTED });
   const pageText = `Page ${pageNumber} of ${totalPages}`;
   page.drawText(pageText, { x: A4[0] - MARGIN - regular.widthOfTextAtSize(pageText, 6.5), y: 17, size: 6.5, font: regular, color: MUTED });
 }
@@ -200,6 +230,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const measurements = asRecord(certificateData.measurements);
   const checklist = asRecord(certificateData.checklist);
   const handover = asRecord(certificateData.handover);
+  const termsAcceptance = asRecord(certificateData.termsAcceptance);
   const signatures = asRecord(certificateData.signatures);
   const evidence = getEvidence(certificateData);
   const receiptData = asRecord(source.receipt.data);
@@ -215,18 +246,18 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const technician = source.technician?.name || valueFrom(signatures, ["technician"]) || "Assigned technician";
   const page = pdf.addPage(A4);
   const letterhead = await letterheadBytes();
+  let letterheadImage: PDFImage | null = null;
   if (letterhead) {
     try {
-      const image = await pdf.embedJpg(letterhead);
-      const scale = Math.min(110 / image.width, 32 / image.height);
-      page.drawImage(image, { x: MARGIN, y: 779, width: image.width * scale, height: image.height * scale });
-    } catch { /* Text branding remains the reliable official header. */ }
+      letterheadImage = await pdf.embedJpg(letterhead);
+    } catch {
+      try { letterheadImage = await pdf.embedPng(letterhead); } catch { /* Certificate content remains available if the configured asset cannot be embedded. */ }
+    }
   }
-  drawHeader(page, bold, regular);
+  drawLetterhead(page, letterheadImage);
   page.drawText("SOLAR PHOTOVOLTAIC SYSTEM", { x: MARGIN, y: 735, size: 16, font: bold, color: INK });
   page.drawText("COMPLETION & COMMISSIONING CERTIFICATE", { x: MARGIN, y: 715, size: 15, font: bold, color: INK });
-  page.drawRectangle({ x: A4[0] - 142, y: 705, width: 108, height: 25, color: GREEN_LIGHT, borderColor: GREEN, borderWidth: 0.7 });
-  page.drawText("COMMISSIONED - VERIFIED", { x: A4[0] - 132, y: 714, size: 8.5, font: bold, color: GREEN });
+  drawVerifiedBadge(page, bold);
   page.drawRectangle({ x: MARGIN, y: 674, width: A4[0] - MARGIN * 2, height: 27, color: GREY });
   [`Certificate No: ${source.certificateNo || "Pending"}`, `Project Ref: ${reference}`, `Completion Date: ${issuedDate || "As recorded"}`].forEach((line, index) => page.drawText(line, { x: MARGIN + 10 + index * 174, y: 684, size: 7.4, font: index === 0 ? bold : regular, color: INK }));
 
@@ -253,8 +284,14 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   y -= 82;
 
   drawSectionHeading(page, "Installation Type", y, bold);
-  page.drawText("Installation Type:  [X] New Installation     [ ] Upgrade     [ ] Modification", { x: MARGIN + 9, y: y - 14, size: 7.6, font: regular, color: INK });
-  page.drawText("System Configuration:  [X] Hybrid     [ ] Off-Grid     [ ] Grid-Tied", { x: MARGIN + 9, y: y - 27, size: 7.6, font: regular, color: INK });
+  page.drawText("Installation Type:", { x: MARGIN + 9, y: y - 14, size: 7.4, font: bold, color: INK });
+  drawCheckbox(page, MARGIN + 86, y - 14, true, "New Installation", regular);
+  drawCheckbox(page, MARGIN + 204, y - 14, false, "Upgrade", regular);
+  drawCheckbox(page, MARGIN + 286, y - 14, false, "Modification", regular);
+  page.drawText("System Configuration:", { x: MARGIN + 9, y: y - 28, size: 7.4, font: bold, color: INK });
+  drawCheckbox(page, MARGIN + 105, y - 28, true, "Hybrid", regular);
+  drawCheckbox(page, MARGIN + 184, y - 28, false, "Off-Grid", regular);
+  drawCheckbox(page, MARGIN + 275, y - 28, false, "Grid-Tied", regular);
   y -= 45;
 
   drawSectionHeading(page, "Commissioning Results", y, bold);
@@ -269,7 +306,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const passed = inspectionRows.every(([, result]) => result !== "FAIL");
   page.drawRectangle({ x: 334, y: y - 101, width: 227, height: 17, color: passed ? GREEN_LIGHT : MAROON_LIGHT, borderColor: passed ? GREEN : MAROON, borderWidth: 0.5 });
   page.drawText(passed ? "SYSTEM PASSED COMMISSIONING" : "COMMISSIONING REVIEW REQUIRED", { x: 344, y: y - 95, size: 7.5, font: bold, color: passed ? GREEN : MAROON });
-  y -= 111;
+  y -= 101;
 
   const readings = measurementRows(measurements);
   if (readings.length) {
@@ -283,12 +320,22 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   y -= 14;
   drawLines(page, "We certify that the above Solar Photovoltaic System has been installed, inspected, tested and commissioned by Betech Solar Solutions. At the time of commissioning, the system was confirmed operational within the agreed installation scope. The customer was provided with basic system operating guidance, safety instructions, warranty information, load guidance and the applicable fault-reporting procedure.", MARGIN + 8, y, A4[0] - MARGIN * 2 - 16, regular, 6.65, INK, 8.2);
   drawLines(page, "System performance and battery backup duration depend on actual connected load, usage pattern, weather conditions, solar irradiation and battery state of charge.", MARGIN + 8, y - 34, A4[0] - MARGIN * 2 - 16, italic, 6.5, MUTED, 8);
-  y -= 56;
+  y -= 48;
 
   drawSectionHeading(page, "Customer Handover Completed", y, bold);
   const handoverLabels: Array<[string, string]> = [["System operation explained", "System operation"], ["Shutdown / startup procedure explained", "Shutdown/startup"], ["Monitoring explained", "Monitoring"], ["Warranty explained", "Warranty"], ["Load limitations explained", "Load limitations"], ["Maintenance / panel cleaning explained", "Maintenance"], ["Fault reporting procedure explained", "Fault reporting"]];
-  handoverLabels.forEach(([label, key], index) => page.drawText(`${handover[key] ? "[X]" : "[ ]"} ${label}`, { x: MARGIN + 8 + (index % 2) * 270, y: y - 13 - Math.floor(index / 2) * 8, size: 6.6, font: regular, color: handover[key] ? GREEN : MUTED }));
-  y -= 51;
+  handoverLabels.forEach(([label, key], index) => drawCheckbox(page, MARGIN + 8 + (index % 2) * 270, y - 13 - Math.floor(index / 2) * 8, handover[key] === true, label, regular));
+  y -= 46;
+
+  const termsAccepted = termsAcceptance.accepted === true;
+  const termsAcceptedAt = text(termsAcceptance.acceptedAt) || source.customerTermsAcceptedAt?.toISOString() || "";
+  drawSectionHeading(page, "Customer Acceptance", y, bold);
+  drawCheckbox(page, MARGIN + 8, y - 13, handoverLabels.every(([, key]) => handover[key] === true), "Customer handover completed", regular);
+  drawCheckbox(page, MARGIN + 8, y - 24, termsAccepted, "Terms & Conditions Accepted", regular);
+  drawLines(page, "The Customer confirms that they have read, understood and accepted the Betech Solar Installation, Performance, Warranty & After-Sales Terms & Conditions applicable to this installation.", MARGIN + 8, y - 36, 385, regular, 6.15, INK, 7.3);
+  page.drawText(`Terms: ${TERMS_DISPLAY_URL}`, { x: MARGIN + 8, y: y - 58, size: 6.2, font: regular, color: rgb(0.04, 0.42, 0.75) });
+  page.drawText(`Acceptance Date: ${formatSignatureDate(termsAcceptedAt ? new Date(termsAcceptedAt) : null) || "Not recorded"}`, { x: MARGIN + 8, y: y - 67, size: 6.2, font: regular, color: MUTED });
+  y -= 73;
 
   drawSectionHeading(page, "Signatures", y, bold);
   const signatureTop = y - 14;
@@ -314,7 +361,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
     try {
       const qr = await QRCode.toDataURL(verificationUrl, { margin: 0, width: 140, errorCorrectionLevel: "M" });
       const qrImage = await embedImage(pdf, qr);
-      if (qrImage) { page.drawImage(qrImage, { x: 500, y: 66, width: 46, height: 46 }); page.drawText("SCAN TO VERIFY", { x: 480, y: 57, size: 5.4, font: bold, color: MAROON }); page.drawText("CERTIFICATE", { x: 484, y: 50, size: 5.4, font: bold, color: MAROON }); }
+      if (qrImage) { page.drawImage(qrImage, { x: 514, y: 40, width: 28, height: 28 }); page.drawText("SCAN TO VERIFY CERTIFICATE", { x: 476, y: 33, size: 4.5, font: bold, color: MAROON }); }
     } catch { /* A certificate remains valid even if QR generation is unavailable. */ }
   }
 
@@ -326,7 +373,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   for (const evidenceItem of evidenceItems) {
     if (!evidencePage || evidenceIndex % 4 === 0) {
       evidencePage = pdf.addPage(A4);
-      drawHeader(evidencePage, bold, regular);
+      drawLetterhead(evidencePage, letterheadImage);
       evidencePage.drawText("INSTALLATION & COMMISSIONING EVIDENCE REPORT", { x: MARGIN, y: 735, size: 14, font: bold, color: INK });
       evidencePage.drawText(`Project: ${reference}     |     Certificate: ${source.certificateNo || "Pending"}     |     Customer: ${customer}`, { x: MARGIN, y: 719, size: 7, font: regular, color: MUTED });
       evidenceY = 690;
@@ -350,7 +397,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   }
   if (!evidenceItems.length) {
     const evidenceFallback = pdf.addPage(A4);
-    drawHeader(evidenceFallback, bold, regular);
+    drawLetterhead(evidenceFallback, letterheadImage);
     evidenceFallback.drawText("INSTALLATION & COMMISSIONING EVIDENCE REPORT", { x: MARGIN, y: 735, size: 14, font: bold, color: INK });
     evidenceFallback.drawText("No evidence photos were available to include in this certificate copy.", { x: MARGIN, y: 705, size: 9, font: regular, color: MUTED });
   }

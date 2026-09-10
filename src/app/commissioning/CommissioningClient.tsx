@@ -11,6 +11,12 @@ type Draft = {
   checklist?: Record<string, string>;
   measurements?: Record<string, string>;
   handover?: Record<string, boolean>;
+  termsAcceptance?: {
+    accepted?: boolean;
+    acceptedAt?: string | null;
+    termsVersionUrl?: string;
+    acceptedByCustomerName?: string;
+  };
   signatures?: Record<string, string>;
   confirmations?: Record<string, boolean>;
   [key: string]: unknown;
@@ -47,6 +53,7 @@ const checks = [
 const handoverItems = [
   "System operation",
   "Shutdown/startup",
+  "Monitoring",
   "Warranty",
   "Load limitations",
   "Maintenance",
@@ -130,6 +137,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 : id === "handover"
                   ? Boolean(
                       draft.signatures?.customer &&
+                      draft.termsAcceptance?.accepted &&
                       handoverItems.every((item) => draft.handover?.[item]),
                     )
                   : false;
@@ -591,11 +599,25 @@ export default function CommissioningClient({ token }: { token: string }) {
               <Handover
                 customer={session.project.customerName}
                 handover={draft.handover || {}}
+                termsAccepted={Boolean(draft.termsAcceptance?.accepted)}
                 signature={draft.signatures?.customer || ""}
                 onAll={() =>
                   handoverItems.forEach((item) => patch("handover", item, true))
                 }
                 onToggle={(item, value) => patch("handover", item, value)}
+                onTermsAccepted={(accepted) =>
+                  setDraft((current) => ({
+                    ...current,
+                    termsAcceptance: {
+                      accepted,
+                      acceptedAt: accepted
+                        ? current.termsAcceptance?.acceptedAt || new Date().toISOString()
+                        : null,
+                      termsVersionUrl: "https://www.betech.co.ke/p/terms",
+                      acceptedByCustomerName: session.project.customerName,
+                    },
+                  }))
+                }
                 onSignature={(value) => patch("signatures", "customer", value)}
               />
             )}
@@ -1240,16 +1262,20 @@ function Commissioning({
 function Handover({
   customer,
   handover,
+  termsAccepted,
   signature,
   onAll,
   onToggle,
+  onTermsAccepted,
   onSignature,
 }: {
   customer: string;
   handover: Record<string, boolean>;
+  termsAccepted: boolean;
   signature: string;
   onAll: () => void;
   onToggle: (item: string, value: boolean) => void;
+  onTermsAccepted: (value: boolean) => void;
   onSignature: (value: string) => void;
 }) {
   return (
@@ -1259,7 +1285,7 @@ function Handover({
         onClick={onAll}
         className="w-full rounded-2xl bg-cyan-400 px-4 py-4 font-black text-slate-950"
       >
-        ✓ CONFIRM ALL EXPLAINED
+        CONFIRM ALL EXPLAINED
       </button>
       <div className="mt-4 space-y-2">
         {handoverItems.map((item) => (
@@ -1272,17 +1298,26 @@ function Handover({
               checked={Boolean(handover[item])}
               onChange={(event) => onToggle(item, event.target.checked)}
             />
-            {handover[item] ? "✓" : "○"} {item}
+            {item === "Monitoring" ? "Monitoring explained / N/A" : `${item} explained`}
           </label>
         ))}
       </div>
       <div className="mt-6">
         <p className="text-xs font-black tracking-[.18em] text-cyan-300">
-          CUSTOMER ACCEPTANCE
+          TERMS &amp; CONDITIONS
         </p>
+        <p className="mt-2 text-sm leading-6 text-slate-300">Please allow the customer to review Betech Solar Installation Terms &amp; Conditions before signing.</p>
+        <a href="https://www.betech.co.ke/p/terms" target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl border border-cyan-400/40 px-4 py-3 text-sm font-black text-cyan-200">OPEN TERMS &amp; CONDITIONS</a>
+        <label className="mt-4 flex items-start gap-3 rounded-xl border border-cyan-400/20 bg-slate-950 p-3 text-sm leading-6 text-slate-100">
+          <input type="checkbox" checked={termsAccepted} onChange={(event) => onTermsAccepted(event.target.checked)} className="mt-1" />
+          <span>I have read, understood and agree to the Betech Solar Installation, Performance, Warranty &amp; After-Sales Terms &amp; Conditions.</span>
+        </label>
+        {termsAccepted ? <p className="mt-3 flex items-center gap-2 text-sm font-bold text-emerald-300"><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400 text-xs text-slate-950">✓</span>Terms &amp; Conditions accepted</p> : <p className="mt-3 text-sm text-amber-200">Terms acceptance is required before the customer can sign.</p>}
+      </div>
+      <div className="mt-6">
+        <p className="text-xs font-black tracking-[.18em] text-cyan-300">CUSTOMER SIGNATURE</p>
         <p className="mt-2 font-bold">{customer}</p>
-        <p className="mt-1 text-sm text-slate-400">Sign below</p>
-        <SignaturePad value={signature} onChange={onSignature} />
+        {termsAccepted ? <SignaturePad value={signature} onChange={onSignature} /> : <div className="mt-3 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950 p-5 text-sm text-slate-400">Accept the Terms &amp; Conditions above to enable customer signature.</div>}
       </div>
     </section>
   );
