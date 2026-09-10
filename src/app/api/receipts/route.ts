@@ -1157,7 +1157,11 @@ export async function POST(req: NextRequest) {
   // use shared parse helpers from src/lib/parseNumber
 
   const serial = normalizeReceiptSerial(payload?.serial);
-  const docType = (String(payload?.docType || "RECEIPT")).toUpperCase();
+  // Projects always persist as a receipt-backed project flow. A quotation is
+  // only a proposal and must not be allowed to masquerade as a saved project.
+  const docType = isProjectReceipt
+    ? "RECEIPT"
+    : (String(payload?.docType || "RECEIPT")).toUpperCase();
   const resolvedUserId = guard?.user?.id ?? null;
   // An administrator may deliberately leave a sale unassigned. Staff-created
   // receipts still default to the signed-in staff member when no owner is sent.
@@ -2161,7 +2165,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    waitForReceiptById<{
+    const verifiedReceipt = await waitForReceiptById<{
       id: string;
       orderId: string;
       receiptNumber: string | null;
@@ -2170,38 +2174,33 @@ export async function POST(req: NextRequest) {
       orderRef: result.orderRef,
       loggerPrefix: "[receipts] post-save verification",
       select: { id: true, orderId: true, receiptNumber: true },
-    })
-      .then((verifiedReceipt) => {
-        if (!verifiedReceipt) {
-          console.warn("[receipts] post-save verification miss", {
-            requestId,
-            receiptId: result.receiptId,
-            orderRef: result.orderRef,
-            serial: serial ?? null,
-          });
-          return;
-        }
-        console.info("[receipts] post-save verification passed", {
-          requestId,
-          receiptId: verifiedReceipt.id,
-          orderId: verifiedReceipt.orderId,
-          receiptNumber: verifiedReceipt.receiptNumber ?? null,
-          orderRef: result.orderRef,
-        });
-      })
-      .catch((verifyErr) => {
-        console.warn("[receipts] post-save verification failed", {
-          requestId,
-          receiptId: result.receiptId,
-          error: verifyErr instanceof Error ? verifyErr.message : String(verifyErr),
-        });
+    });
+    if (!verifiedReceipt) {
+      console.error("[receipts] post-save verification miss", {
+        requestId,
+        receiptId: result.receiptId,
+        orderRef: result.orderRef,
+        serial: serial ?? null,
       });
+      return NextResponse.json(
+        {
+          ok: true,
+          persistenceConfirmed: false,
+          receiptId: result.receiptId,
+          orderRef: result.orderRef,
+          projectFlow: result.projectFlow,
+          message: "The receipt was accepted but could not yet be confirmed. Do not print or recreate it; search the receipt reference shortly.",
+        },
+        { status: 202 },
+      );
+    }
 
-    await waitForReceiptById({
-      receiptId: result.receiptId,
+    console.info("[receipts] post-save verification passed", {
+      requestId,
+      receiptId: verifiedReceipt.id,
+      orderId: verifiedReceipt.orderId,
+      receiptNumber: verifiedReceipt.receiptNumber ?? null,
       orderRef: result.orderRef,
-      loggerPrefix: "[receipts] pre-send readiness",
-      select: { id: true },
     });
 
     try {

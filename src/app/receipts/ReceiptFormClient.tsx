@@ -727,22 +727,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
-  const openSavedReceiptWindow = (
-    receiptId: string,
-    draft: ReturnType<typeof buildDraft> | null,
-    autoPrint = false
-  ) => {
+  const openSavedReceiptWindow = (receiptId: string, autoPrint = false) => {
     try {
       const url = `/receipts/print/${encodeURIComponent(receiptId)}`;
       setLastPrintableUrl(url);
       const params = new URLSearchParams();
       if (autoPrint) params.set("autoPrint", "1");
-      if (draft) {
-        const fallbackUrl = buildPreviewUrl(draft);
-        const draftParams = new URLSearchParams(fallbackUrl.split("?")[1] || "");
-        const fallbackDraft = draftParams.get("draft");
-        if (fallbackDraft) params.set("draft", fallbackDraft);
-      }
       const query = params.toString();
       const target = query ? `${url}?${query}` : url;
       const receiptWindow = window.open(target, "_blank");
@@ -866,6 +856,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery" | "pod" | "project") => {
     setCustomerType(type);
+    if (type === "project") {
+      setDocType("RECEIPT");
+    }
     if (type === "delivery") {
       // ensure address input is visible for delivery customers
       setShowAddressInput(true);
@@ -1062,8 +1055,13 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         return showToast(data?.error || "Failed to save receipt", "error");
       }
 
+      if (data?.persistenceConfirmed === false) {
+        showToast(data?.message || "Receipt is awaiting confirmation. Do not print or recreate it yet.", "error");
+        onCreated?.(data, { staffId, serial, receiptId: typeof data?.receiptId === "string" ? data.receiptId : null });
+        return;
+      }
+
       let receiptId = typeof data?.receiptId === "string" ? data.receiptId : "";
-      const draft = buildDraft(primaryPaymentMethod);
       if (!receiptId) {
         receiptId = await lookupSavedReceiptId(serial);
       }
@@ -1082,7 +1080,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       }
 
       // Open the persisted receipt route so printing/sending follows the normal POS receipt flow.
-      const receiptOpened = openSavedReceiptWindow(receiptId, draft, true);
+      const receiptOpened = openSavedReceiptWindow(receiptId, true);
       if (receiptOpened) {
         showToast("Saved receipt", "success");
         onCreated?.({ ...data, receiptId }, { staffId, serial, receiptId });
@@ -1132,13 +1130,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           <select
             value={docType}
             onChange={(e) => setDocType(e.target.value)}
-            className={`${fieldClass} appearance-none`}
+            disabled={customerType === "project"}
+            className={`${fieldClass} appearance-none ${customerType === "project" ? "cursor-not-allowed opacity-70" : ""}`}
           >
             <option>RECEIPT</option>
             <option>INVOICE</option>
             <option>QUOTATION</option>
             <option>LAYAWAY</option>
           </select>
+          {customerType === "project" ? (
+            <p className="mt-1 text-xs text-cyan-200">Projects are saved as receipt-backed project records so they appear in the Projects workspace.</p>
+          ) : null}
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { getBranding } from "@/lib/branding";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import ReceiptToolbar from "./ReceiptToolbar";
 import PrintOnLoad from "./PrintOnLoad";
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 
 export const dynamic = "force-dynamic";
@@ -40,8 +40,6 @@ export default async function Page({
     searchParams && typeof (searchParams as Promise<{ [key: string]: string | string[] | undefined }>).then === "function"
       ? await (searchParams as Promise<{ [key: string]: string | string[] | undefined }>)
       : (searchParams as { [key: string]: string | string[] | undefined } | undefined);
-  const fallbackDraftRaw = resolvedSearchParams?.draft;
-  const fallbackDraft = Array.isArray(fallbackDraftRaw) ? fallbackDraftRaw[0] : fallbackDraftRaw;
   const autoPrintRaw = resolvedSearchParams?.autoPrint;
   const autoPrint = Array.isArray(autoPrintRaw) ? autoPrintRaw[0] : autoPrintRaw;
 
@@ -61,13 +59,18 @@ export default async function Page({
   });
 
   if (!receipt) {
-    if (fallbackDraft) {
-      const params = new URLSearchParams({ draft: fallbackDraft });
-      if (autoPrint === "1") params.set("autoPrint", "1");
-      redirect(`/receipts/preview?${params.toString()}`);
-    }
     console.error("[receipts print page] receipt not found after retries", { id });
-    return <div>Receipt not found</div>;
+    return (
+      <main className="mx-auto max-w-xl px-6 py-20 text-center">
+        <h1 className="text-2xl font-semibold text-slate-900">Receipt not confirmed</h1>
+        <p className="mt-3 text-slate-600">
+          This receipt cannot be printed because no saved record was found. Return to the receipts desk and search its reference before creating another one.
+        </p>
+        <Link className="mt-6 inline-flex rounded-lg bg-slate-900 px-4 py-2 font-medium text-white" href="/receipts">
+          Return to receipts
+        </Link>
+      </main>
+    );
   }
 
   const snapshot = buildReceiptSnapshot(receipt);
