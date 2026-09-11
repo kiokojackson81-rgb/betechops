@@ -76,6 +76,32 @@ type InstallationPricing = {
 };
 
 const inputBaseClass = "min-h-[3rem] rounded-[16px] border bg-white px-4 outline-none transition";
+const PENDING_MPESA_CHECKOUT_STORAGE_KEY = "betech.pending-mpesa-checkout.v1";
+
+type PendingPaymentOrder = {
+  orderRef: string;
+  amountDueNow: number;
+  successUrl: string;
+  paymentAccessToken: string | null;
+  /** Only a newly-created reservation may automatically request an STK prompt. */
+  autoStart: boolean;
+};
+
+function readPendingPaymentOrder(): PendingPaymentOrder | null {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(PENDING_MPESA_CHECKOUT_STORAGE_KEY) || "null") as Partial<PendingPaymentOrder> | null;
+    if (!value || typeof value.orderRef !== "string" || !Number.isFinite(value.amountDueNow) || typeof value.successUrl !== "string") return null;
+    return {
+      orderRef: value.orderRef,
+      amountDueNow: Math.max(0, Number(value.amountDueNow)),
+      successUrl: value.successUrl,
+      paymentAccessToken: typeof value.paymentAccessToken === "string" ? value.paymentAccessToken : null,
+      autoStart: false,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function getCheckoutAvailabilityCopy(product: ShopProduct) {
   if (product.availabilityType === "WAREHOUSE") {
@@ -97,12 +123,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     ? "Warehouse items are available for pickup or dispatch within 1 business day."
     : null;
   const [submitting, setSubmitting] = useState(false);
-  const [pendingPaymentOrder, setPendingPaymentOrder] = useState<{
-    orderRef: string;
-    amountDueNow: number;
-    successUrl: string;
-    paymentAccessToken: string | null;
-  } | null>(null);
+  const [pendingPaymentOrder, setPendingPaymentOrder] = useState<PendingPaymentOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [payerPhone, setPayerPhone] = useState("");
   const [editingPayerPhone, setEditingPayerPhone] = useState(false);
@@ -198,6 +219,13 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
       };
     });
   }, [initialProfile]);
+
+  // A refresh must resume the same server-issued AWAITING_PAYMENT reservation,
+  // not create a second WebsiteOrder or unexpectedly send a fresh STK prompt.
+  useEffect(() => {
+    const pending = readPendingPaymentOrder();
+    if (pending) setPendingPaymentOrder(pending);
+  }, []);
 
   useEffect(() => {
     if (!deliveryZone || !priceableItems.length) {
@@ -384,12 +412,15 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
             // callback confirms it. Keep the cart intact for cancellation or
             // retry and render the shared STK panel in this checkout.
             if (orderResponse.requiresImmediatePayment) {
-              setPendingPaymentOrder({
+              const pending: PendingPaymentOrder = {
                 orderRef: orderResponse.orderRef,
                 amountDueNow: orderResponse.amountDueNow,
                 successUrl: orderResponse.successUrl || getShopOrderSuccessHref(orderResponse.orderRef),
                 paymentAccessToken: orderResponse.paymentAccessToken,
-              });
+                autoStart: true,
+              };
+              window.sessionStorage.setItem(PENDING_MPESA_CHECKOUT_STORAGE_KEY, JSON.stringify(pending));
+              setPendingPaymentOrder(pending);
               return;
             }
 
@@ -626,7 +657,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
 
         {fieldErrors.cart ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{fieldErrors.cart}</div> : null}
         {error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-        {pendingPaymentOrder ? <div className="mt-5"><MpesaStkPaymentPanel resourceType="ORDER" reference={pendingPaymentOrder.orderRef} amountDue={pendingPaymentOrder.amountDueNow} initialPhone={payerPhone || form.phoneNumber} paymentAccessToken={pendingPaymentOrder.paymentAccessToken} autoStart compact onSuccess={() => { clearCartAfterOrder(); router.push(pendingPaymentOrder.successUrl); }} /></div> : null}
+        {pendingPaymentOrder ? <div className="mt-5"><MpesaStkPaymentPanel resourceType="ORDER" reference={pendingPaymentOrder.orderRef} amountDue={pendingPaymentOrder.amountDueNow} initialPhone={payerPhone || form.phoneNumber} paymentAccessToken={pendingPaymentOrder.paymentAccessToken} autoStart={pendingPaymentOrder.autoStart} compact onSuccess={() => { window.sessionStorage.removeItem(PENDING_MPESA_CHECKOUT_STORAGE_KEY); clearCartAfterOrder(); router.push(pendingPaymentOrder.successUrl); }} /></div> : null}
 
         <div className="mt-5 hidden flex-col gap-2.5 xl:flex xl:flex-row">
           <button type="submit" disabled={submitting || Boolean(pendingPaymentOrder)} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">

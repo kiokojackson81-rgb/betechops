@@ -1,6 +1,7 @@
 import { MpesaPaymentChannel, MpesaPaymentStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isSettledMpesaPayment, summarizeMpesaSettlements } from "@/lib/mpesaSettlements";
 import { requireWebsiteOrdersAdmin } from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,7 @@ function serialize(payment: {
     transactionAt: date(payment.transactionAt),
     createdAt: payment.createdAt.toISOString(),
     updatedAt: payment.updatedAt.toISOString(),
+    settlementRole: isSettledMpesaPayment(payment) ? "SETTLEMENT" : payment.status === "SUCCESS" ? "CONFIRMATION_EVENT" : "ATTEMPT",
     order: payment.order ? {
       kind: "ORDER" as const,
       id: payment.order.id,
@@ -122,7 +124,10 @@ export async function GET(request: NextRequest) {
   } satisfies Prisma.MpesaPaymentInclude;
   const [payments, successful, unmatched] = await Promise.all([
     prisma.mpesaPayment.findMany({ where, include, orderBy: [{ transactionAt: "desc" }, { createdAt: "desc" }], take: 250 }),
-    prisma.mpesaPayment.aggregate({ where: { status: "SUCCESS" }, _sum: { amount: true }, _count: true }),
+    prisma.mpesaPayment.findMany({
+      where: { status: "SUCCESS" },
+      select: { status: true, receiptNumber: true, transactionId: true, amount: true },
+    }),
     prisma.mpesaPayment.aggregate({ where: { status: "UNMATCHED" }, _sum: { amount: true }, _count: true }),
   ]);
 
@@ -130,8 +135,7 @@ export async function GET(request: NextRequest) {
     ok: true,
     payments: payments.map(serialize),
     summary: {
-      totalReceived: number(successful._sum.amount),
-      successfulCount: successful._count,
+      ...summarizeMpesaSettlements(successful),
       unmatchedAmount: number(unmatched._sum.amount),
       unmatchedCount: unmatched._count,
     },

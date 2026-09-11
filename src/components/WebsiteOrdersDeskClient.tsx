@@ -143,7 +143,13 @@ function getWebsiteOrderPaymentSummary(order: SerializedWebsiteOrder) {
     receipt: details.lastMpesaReceiptNumber || order.paymentConfirmationReference || null,
     paymentDate: details.lastMpesaPaymentAt || order.paymentConfirmedAt || null,
     method: details.lastMpesaReceiptNumber ? "M-PESA" : order.paymentConfirmationMethod || order.paymentMethod,
+    payerPhone: details.lastMpesaPayerPhone,
   };
+}
+
+function maskPayerPhone(phone: string | null) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  return digits.length > 4 ? `${digits.slice(0, 6)}***${digits.slice(-3)}` : "-";
 }
 
 export default function WebsiteOrdersDeskClient({
@@ -474,6 +480,7 @@ export default function WebsiteOrdersDeskClient({
                               <div><div className="text-xs text-slate-400">Paid</div><div className="mt-1 font-semibold text-emerald-200">{formatCurrency(payment.paid)}</div></div>
                               <div><div className="text-xs text-slate-400">Balance</div><div className="mt-1 font-semibold text-white">{formatCurrency(payment.balance)}</div></div>
                               <div><div className="text-xs text-slate-400">M-PESA receipt</div><div className="mt-1 font-semibold text-white">{payment.receipt || "-"}</div></div>
+                              <div><div className="text-xs text-slate-400">Payer number</div><div className="mt-1 font-semibold text-white">{maskPayerPhone(payment.payerPhone)}</div></div>
                             </div>
                             {payment.paymentDate ? <div className="mt-3 text-xs text-slate-300">Last payment: {payment.method} · {formatDateTime(payment.paymentDate)}</div> : null}
                           </section>

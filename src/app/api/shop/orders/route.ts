@@ -375,20 +375,25 @@ export async function POST(request: NextRequest) {
     });
   });
 
-  await notifyAdminCriticalSms({
-    eventType: "WEB_ORDER_CREATED",
-    entityId: created.id,
-    title: `New web order ${createdRow.orderRef}`,
-    details: [
-      `Customer: ${createdRow.customerName}`,
-      `Total: KSh ${Number(createdRow.total).toLocaleString("en-KE")}`,
-      `Payment: ${createdRow.paymentMethod}`,
-      `Delivery: ${createdRow.deliveryMethod}`,
-      `Location: ${createdRow.customerLocation}`,
-    ],
-    actionPath: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(created.id)}`,
-    payload: { orderRef: createdRow.orderRef, status: createdRow.status },
-  });
+  // Mandatory-prepayment checkout records are reservations, not operational
+  // orders.  Their single idempotent notification is sent only after an
+  // authoritative M-Pesa settlement confirms the reservation.
+  if (!requiresImmediatePayment) {
+    await notifyAdminCriticalSms({
+      eventType: "WEB_ORDER_CREATED",
+      entityId: created.id,
+      title: `New web order ${createdRow.orderRef}`,
+      details: [
+        `Customer: ${createdRow.customerName}`,
+        `Total: KSh ${Number(createdRow.total).toLocaleString("en-KE")}`,
+        `Payment: ${createdRow.paymentMethod}`,
+        `Delivery: ${createdRow.deliveryMethod}`,
+        `Location: ${createdRow.customerLocation}`,
+      ],
+      actionPath: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(created.id)}`,
+      payload: { orderRef: createdRow.orderRef, status: createdRow.status },
+    });
+  }
 
   return NextResponse.json({
     ok: true,

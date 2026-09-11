@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { ensureSiteVisitsSchema } from "@/lib/siteVisits";
 import { getLppAccountSummary, recordLppPayment } from "@/lib/lipaPolePoleService";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 
 const DARAJA_PRODUCTION_BASE_URL = "https://api.safaricom.co.ke";
 const DEFAULT_CALLBACK_BASE_URL = "https://betech.co.ke";
@@ -502,6 +503,60 @@ type PaymentApplicationResult = {
   total: number;
 };
 
+function maskedPhone(value: string | null | undefined) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length > 4 ? `${digits.slice(0, 6)}***${digits.slice(-3)}` : null;
+}
+
+/**
+ * The order state is committed before delivery is attempted. The SMS service
+ * records an event-specific idempotency key, so duplicate callbacks/retries
+ * can neither duplicate the payment nor the operations notification.
+ */
+async function notifyConfirmedWebsiteOrder(input: {
+  websiteOrderId: string;
+  receiptNumber?: string | null;
+  paymentAmount: number;
+  payerPhone?: string | null;
+}) {
+  const order = await prisma.websiteOrder.findUnique({
+    where: { id: input.websiteOrderId },
+    select: {
+      id: true,
+      orderRef: true,
+      customerName: true,
+      customerPhone: true,
+      total: true,
+      paymentMethod: true,
+      deliveryMethod: true,
+      metadata: true,
+    },
+  });
+  if (!order) return;
+  const metadata = paymentMetadata(order.metadata);
+  const paid = Math.max(0, toNumber(metadata.amountPaid));
+  if (!paid) return;
+  const total = toNumber(order.total);
+  const receipt = input.receiptNumber || (typeof metadata.lastMpesaReceiptNumber === "string" ? metadata.lastMpesaReceiptNumber : null);
+  await notifyAdminCriticalSms({
+    eventType: "WEB_ORDER_PAID",
+    entityId: order.id,
+    title: `Paid web order ${order.orderRef}`,
+    details: [
+      `Customer: ${order.customerName}`,
+      `Total: KSh ${total.toLocaleString("en-KE")}`,
+      `Paid: KSh ${paid.toLocaleString("en-KE")}`,
+      `Balance: KSh ${Math.max(0, total - paid).toLocaleString("en-KE")}`,
+      `Payment: ${order.paymentMethod}`,
+      receipt ? `M-Pesa: ${receipt}` : "M-Pesa receipt pending",
+      input.payerPhone || order.customerPhone ? `Payer: ${maskedPhone(input.payerPhone || order.customerPhone) || "—"}` : "",
+      `Delivery: ${order.deliveryMethod}`,
+    ],
+    actionPath: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(order.id)}`,
+    payload: { orderRef: order.orderRef, receiptNumber: receipt, paid, total },
+  });
+}
+
 /**
  * The one accounting path for both confirmed callbacks and staff reconciliation.
  * It must be called inside the transaction that owns the payment-status change.
@@ -568,6 +623,7 @@ async function applyConfirmedPaymentInTransaction(
           checkoutPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(),
           lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null,
           lastMpesaPaymentAt: (input.transactionAt || payment.transactionAt || new Date()).toISOString(),
+          lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null,
         },
       },
     });
@@ -610,14 +666,15 @@ async function applyConfirmedPaymentInTransaction(
 }
 
 async function applyConfirmedPayment(paymentId: string, input: ConfirmedPaymentInput) {
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     // This conditional claim makes duplicate/retried Daraja callbacks harmless:
     // only the transaction that changes PENDING can apply the accounting entry.
     const claimed = await tx.mpesaPayment.updateMany({ where: { id: paymentId, status: "PENDING" }, data: { status: "SUCCESS" } });
-    if (!claimed.count) return;
+    if (!claimed.count) return null;
     const payment = await tx.mpesaPayment.findUnique({ where: { id: paymentId } });
-    if (!payment) return;
-    await applyConfirmedPaymentInTransaction(tx, payment, input);
+    if (!payment) return null;
+    const application = await applyConfirmedPaymentInTransaction(tx, payment, input);
+    return { payment, application };
   });
 }
 
@@ -671,7 +728,7 @@ export async function reconcileUnmatchedMpesaPayment(input: {
   target: MpesaReconciliationTarget;
   actorId: string;
 }) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const payment = await tx.mpesaPayment.findUnique({ where: { id: input.paymentId } });
     if (!payment) throw new Error("M-Pesa payment was not found");
     if (payment.channel !== "C2B" || payment.status !== "UNMATCHED") {
@@ -747,8 +804,21 @@ export async function reconcileUnmatchedMpesaPayment(input: {
       paidBefore: application.paidBefore,
       paidAfter: application.paidAfter,
       balance: Math.max(0, application.total - application.paidAfter),
+      websiteOrderId: target.kind === "WEBSITE_ORDER" ? target.id : null,
+      receiptNumber: payment.receiptNumber,
+      payerPhone: payment.phoneNumber,
     };
   });
+  if (result.websiteOrderId) {
+    await notifyConfirmedWebsiteOrder({
+      websiteOrderId: result.websiteOrderId,
+      receiptNumber: result.receiptNumber,
+      paymentAmount: result.amount,
+      payerPhone: result.payerPhone,
+    });
+  }
+  const { websiteOrderId: _websiteOrderId, receiptNumber: _receiptNumber, payerPhone: _payerPhone, ...publicResult } = result;
+  return publicResult;
 }
 
 export async function handleStkCallback(payload: unknown) {
@@ -792,7 +862,15 @@ export async function handleStkCallback(payload: unknown) {
       });
       return;
     }
-    await applyConfirmedPayment(payment.id, { ...metadata, phoneNumber: normalizeDarajaPhone(metadata.phoneNumber || "") || payment.phoneNumber, resultCode, resultDescription, payload });
+    const confirmation = await applyConfirmedPayment(payment.id, { ...metadata, phoneNumber: normalizeDarajaPhone(metadata.phoneNumber || "") || payment.phoneNumber, resultCode, resultDescription, payload });
+    if (confirmation?.application.applied && confirmation.payment.websiteOrderId) {
+      await notifyConfirmedWebsiteOrder({
+        websiteOrderId: confirmation.payment.websiteOrderId,
+        receiptNumber: metadata.receiptNumber,
+        paymentAmount: metadata.amount,
+        payerPhone: normalizeDarajaPhone(metadata.phoneNumber || "") || confirmation.payment.phoneNumber,
+      });
+    }
     return;
   }
   await prisma.mpesaPayment.update({
@@ -833,7 +911,15 @@ export async function handleC2bConfirmation(payload: unknown) {
     throw error;
   });
   if (!payment || !target) return;
-  await applyConfirmedPayment(payment.id, { amount, receiptNumber, transactionId, phoneNumber, transactionAt, resultCode: 0, resultDescription: "C2B payment received", payload });
+  const confirmation = await applyConfirmedPayment(payment.id, { amount, receiptNumber, transactionId, phoneNumber, transactionAt, resultCode: 0, resultDescription: "C2B payment received", payload });
+  if (confirmation?.application.applied && confirmation.payment.websiteOrderId) {
+    await notifyConfirmedWebsiteOrder({
+      websiteOrderId: confirmation.payment.websiteOrderId,
+      receiptNumber,
+      paymentAmount: amount,
+      payerPhone: phoneNumber,
+    });
+  }
   // C2B is a real confirmation for PayBill STK too.  A matching pending STK
   // request becomes successful here, but only the C2B row above applies its
   // amount to the order.  Receipt numbers stay unique to the C2B ledger row.

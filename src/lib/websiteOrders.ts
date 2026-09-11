@@ -354,6 +354,7 @@ export type SerializedWebsiteOrder = {
     mpesaPaymentStatus: string | null;
     lastMpesaReceiptNumber: string | null;
     lastMpesaPaymentAt: string | null;
+    lastMpesaPayerPhone: string | null;
   };
   paymentMethod: string;
   orderType: WebsiteOrderType;
@@ -511,6 +512,7 @@ function readWebsiteOrderMetadata(metadata: unknown) {
       mpesaPaymentStatus: readString("mpesaPaymentStatus"),
       lastMpesaReceiptNumber: readString("lastMpesaReceiptNumber"),
       lastMpesaPaymentAt: readString("lastMpesaPaymentAt"),
+      lastMpesaPayerPhone: readString("lastMpesaPayerPhone"),
     },
   } as const;
 }
