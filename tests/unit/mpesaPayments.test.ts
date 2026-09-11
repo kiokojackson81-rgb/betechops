@@ -4,13 +4,13 @@ jest.mock("@/lib/prisma", () => ({
   prisma: {
     websiteOrder: { findFirst: jest.fn() },
     order: { findFirst: jest.fn() },
-    mpesaPayment: { findUnique: jest.fn(), create: jest.fn() },
+    mpesaPayment: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
     $transaction: jest.fn(),
   },
 }));
 
 import { prisma } from "@/lib/prisma";
-import { handleC2bConfirmation, handleStkCallback, initiateStkPush, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
+import { getStkPaymentStatus, handleC2bConfirmation, handleStkCallback, initiateStkPush, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
 
 const transactionId = "TESTMPESA001";
 const basePayment = {
@@ -90,6 +90,18 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
     await handleC2bConfirmation(callbackPayload("TEST001"));
 
     expect(prisma.mpesaPayment.create).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("does not apply C2B again when an STK-success receipt already owns the physical transaction", async () => {
+    (prisma.mpesaPayment.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.websiteOrder.findFirst as jest.Mock).mockResolvedValue(null);
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue({ id: "order-1", orderNumber: "ORD-001", totalAmount: 100, paidAmount: 10, customerPhone: "254700000000" });
+    const duplicateReceipt = Object.assign(new Error("Unique receipt"), { code: "P2002" });
+    (prisma.mpesaPayment.create as jest.Mock).mockRejectedValue(duplicateReceipt);
+
+    await handleC2bConfirmation(callbackPayload("ORD-001", "STKRECEIPT1"));
+
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -207,5 +219,142 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
     await handleStkCallback({ Body: { stkCallback: { CheckoutRequestID: "ws_CO_cancel", ResultCode: 1032, ResultDesc: "Request cancelled by user" } } });
     expect((prisma.mpesaPayment as unknown as { update: jest.Mock }).update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "CANCELLED" }) }));
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("returns SUCCESS to status polling when a matching C2B receipt was already applied", async () => {
+    const pendingStk = {
+      ...basePayment,
+      channel: "STK",
+      status: "PENDING",
+      requestedAmount: 21,
+      amount: null,
+      receiptNumber: null,
+      transactionId: null,
+      orderId: null,
+      websiteOrderId: "web-1",
+      accountReference: "BT-WEB-1",
+      checkoutRequestId: "ws_CO_c2b_first",
+      callbackPayload: { ResponseCode: "0" },
+    };
+    const c2b = {
+      ...basePayment,
+      id: "c2b-1",
+      channel: "C2B",
+      status: "SUCCESS",
+      amount: 21,
+      websiteOrderId: "web-1",
+      orderId: null,
+      accountReference: "BT-WEB-1",
+      receiptNumber: "C2BRECEIPT1",
+      transactionId: "C2BRECEIPT1",
+      // Safaricom may omit MSISDN from a C2B confirmation. The other strict
+      // correlation keys still permit recovery of the STK checkout.
+      phoneNumber: null,
+      createdAt: new Date("2026-09-11T07:00:10.000Z"),
+    };
+    const successStk = {
+      ...pendingStk,
+      status: "SUCCESS",
+      amount: 21,
+      resultDescription: "Confirmed by matching C2B receipt C2BRECEIPT1",
+      callbackPayload: { correlation: { receiptNumber: "C2BRECEIPT1" } },
+    };
+    const tx = {
+      mpesaPayment: {
+        findUnique: jest.fn().mockResolvedValue(pendingStk),
+        findFirst: jest.fn().mockResolvedValue(c2b),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    (prisma.mpesaPayment.findUnique as jest.Mock)
+      .mockResolvedValueOnce(pendingStk)
+      .mockResolvedValueOnce(successStk);
+    (prisma.$transaction as jest.Mock).mockImplementation(async (work) => work(tx));
+
+    await expect(getStkPaymentStatus("ws_CO_c2b_first")).resolves.toEqual(expect.objectContaining({
+      status: "SUCCESS", amount: 21, receiptNumber: "C2BRECEIPT1",
+    }));
+    expect(tx.mpesaPayment.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: pendingStk.id, status: "PENDING" },
+      data: expect.objectContaining({ status: "SUCCESS", amount: 21 }),
+    }));
+  });
+
+  it("correlates a later STK callback to the already-applied C2B receipt without applying KSh twice", async () => {
+    const pendingStk = {
+      ...basePayment,
+      channel: "STK",
+      status: "PENDING",
+      requestedAmount: 21,
+      amount: null,
+      receiptNumber: null,
+      transactionId: null,
+      orderId: null,
+      websiteOrderId: "web-1",
+      accountReference: "BT-WEB-1",
+      checkoutRequestId: "ws_CO_callback_after_c2b",
+      callbackPayload: { ResponseCode: "0" },
+    };
+    const c2b = {
+      ...basePayment,
+      id: "c2b-2",
+      channel: "C2B",
+      status: "SUCCESS",
+      amount: 21,
+      websiteOrderId: "web-1",
+      orderId: null,
+      accountReference: "BT-WEB-1",
+      receiptNumber: "SAMEPHYSICAL1",
+      transactionId: "SAMEPHYSICAL1",
+      createdAt: new Date("2026-09-11T07:00:10.000Z"),
+    };
+    const tx = {
+      mpesaPayment: {
+        findUnique: jest.fn().mockResolvedValue(pendingStk),
+        findFirst: jest.fn().mockResolvedValue(c2b),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      order: { update: jest.fn() },
+      websiteOrder: { update: jest.fn() },
+    };
+    (prisma.mpesaPayment.findUnique as jest.Mock).mockResolvedValue(pendingStk);
+    (prisma.$transaction as jest.Mock).mockImplementation(async (work) => work(tx));
+    const callback = { Body: { stkCallback: { CheckoutRequestID: "ws_CO_callback_after_c2b", ResultCode: 0, ResultDesc: "Success", CallbackMetadata: { Item: [
+      { Name: "Amount", Value: 21 }, { Name: "MpesaReceiptNumber", Value: "SAMEPHYSICAL1" }, { Name: "PhoneNumber", Value: "254700000000" }, { Name: "TransactionDate", Value: "20260911100010" },
+    ] } } } };
+
+    await handleStkCallback(callback);
+
+    expect(tx.mpesaPayment.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "SUCCESS", amount: 21 }) }));
+    expect(tx.order.update).not.toHaveBeenCalled();
+    expect(tx.websiteOrder.update).not.toHaveBeenCalled();
+  });
+
+  it("does not correlate a same-reference C2B payment with a different amount", async () => {
+    const pendingStk = {
+      ...basePayment,
+      channel: "STK",
+      status: "PENDING",
+      requestedAmount: 21,
+      amount: null,
+      receiptNumber: null,
+      transactionId: null,
+      orderId: null,
+      websiteOrderId: "web-1",
+      accountReference: "BT-WEB-1",
+      checkoutRequestId: "ws_CO_different_amount",
+    };
+    const tx = {
+      mpesaPayment: {
+        findUnique: jest.fn().mockResolvedValue(pendingStk),
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn(),
+      },
+    };
+    (prisma.mpesaPayment.findUnique as jest.Mock).mockResolvedValue(pendingStk);
+    (prisma.$transaction as jest.Mock).mockImplementation(async (work) => work(tx));
+
+    await expect(getStkPaymentStatus("ws_CO_different_amount")).resolves.toEqual(expect.objectContaining({ status: "PENDING", amount: 21 }));
+    expect(tx.mpesaPayment.updateMany).not.toHaveBeenCalled();
   });
 });

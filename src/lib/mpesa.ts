@@ -316,18 +316,152 @@ export async function initiateStkPush(input: { orderReference: string; phoneNumb
 }
 
 export async function getStkPaymentStatus(checkoutRequestId: string) {
-  const payment = await prisma.mpesaPayment.findUnique({
+  let payment = await prisma.mpesaPayment.findUnique({
     where: { checkoutRequestId },
-    select: { status: true, requestedAmount: true, amount: true, receiptNumber: true, resultDescription: true, accountReference: true, channel: true },
+    select: {
+      id: true,
+      status: true,
+      requestedAmount: true,
+      amount: true,
+      receiptNumber: true,
+      resultDescription: true,
+      accountReference: true,
+      channel: true,
+      orderId: true,
+      websiteOrderId: true,
+      phoneNumber: true,
+      createdAt: true,
+      callbackPayload: true,
+    },
   });
+  if (!payment || payment.channel !== "STK") return null;
+
+  // Daraja sends a C2B confirmation for a successful PayBill STK payment as
+  // well as the STK callback.  If the C2B confirmation was delivered but the
+  // STK callback was delayed or lost, safely recover the waiting checkout
+  // from the already-applied C2B receipt.  This changes ledger state only
+  // after the same strict correlation checks used by callback processing.
+  if (payment.status === "PENDING") {
+    await correlatePendingStkWithConfirmedC2b(payment.id);
+    payment = await prisma.mpesaPayment.findUnique({
+      where: { checkoutRequestId },
+      select: {
+        id: true,
+        status: true,
+        requestedAmount: true,
+        amount: true,
+        receiptNumber: true,
+        resultDescription: true,
+        accountReference: true,
+        channel: true,
+        orderId: true,
+        websiteOrderId: true,
+        phoneNumber: true,
+        createdAt: true,
+        callbackPayload: true,
+      },
+    });
+  }
   if (!payment || payment.channel !== "STK") return null;
   return {
     status: payment.status,
     amount: payment.amount == null ? toNumber(payment.requestedAmount) : toNumber(payment.amount),
-    receiptNumber: payment.receiptNumber,
+    // A C2B and STK notification for one physical transaction share the
+    // Safaricom receipt.  The ledger intentionally keeps receipt numbers
+    // globally unique, so a correlated STK row references (rather than
+    // duplicates) the receipt stored on the authoritative C2B row.
+    receiptNumber: payment.receiptNumber || correlatedReceiptNumber(payment.callbackPayload),
     resultDescription: payment.resultDescription,
     accountReference: payment.accountReference,
   };
+}
+
+const STK_C2B_CORRELATION_WINDOW_MS = 30 * 60 * 1000;
+
+function correlatedReceiptNumber(payload: unknown) {
+  const correlation = readObject(readObject(payload).correlation);
+  const receipt = String(correlation.receiptNumber || "").trim();
+  return receipt || null;
+}
+
+function canCorrelateStkAndC2b(stk: Pick<MpesaPayment, "orderId" | "websiteOrderId" | "accountReference" | "requestedAmount" | "phoneNumber" | "createdAt">) {
+  const amount = toNumber(stk.requestedAmount);
+  return Boolean(
+    amount > 0
+    && stk.accountReference
+    && (stk.orderId || stk.websiteOrderId),
+  );
+}
+
+async function findConfirmedC2bForStk(
+  tx: Prisma.TransactionClient,
+  stk: Pick<MpesaPayment, "orderId" | "websiteOrderId" | "accountReference" | "requestedAmount" | "phoneNumber" | "createdAt">,
+  expectedReceiptNumber?: string | null,
+) {
+  if (!canCorrelateStkAndC2b(stk)) return null;
+  const createdAfter = new Date(stk.createdAt.getTime() - 2 * 60 * 1000);
+  const createdBefore = new Date(stk.createdAt.getTime() + STK_C2B_CORRELATION_WINDOW_MS);
+  const c2b = await tx.mpesaPayment.findFirst({
+    where: {
+      channel: "C2B",
+      status: "SUCCESS",
+      accountReference: { equals: stk.accountReference!, mode: "insensitive" },
+      amount: toNumber(stk.requestedAmount),
+      // C2B payloads can omit MSISDN.  When Safaricom supplies it, it must
+      // match the STK payer; when it is absent, the order link, exact amount,
+      // reference and short delivery window remain mandatory.
+      ...(stk.phoneNumber ? { OR: [{ phoneNumber: stk.phoneNumber }, { phoneNumber: null }] } : {}),
+      createdAt: { gte: createdAfter, lte: createdBefore },
+      ...(stk.orderId ? { orderId: stk.orderId } : { websiteOrderId: stk.websiteOrderId! }),
+    },
+  });
+  if (!c2b) return null;
+  if (expectedReceiptNumber && c2b.receiptNumber !== expectedReceiptNumber) return null;
+  return c2b;
+}
+
+function correlatedStkPayload(stk: MpesaPayment, c2b: MpesaPayment, stkCallback?: unknown) {
+  return jsonValue({
+    initiation: stk.callbackPayload ?? {},
+    ...(stkCallback === undefined ? {} : { stkCallback }),
+    correlation: {
+      source: "C2B",
+      paymentId: c2b.id,
+      receiptNumber: c2b.receiptNumber,
+      transactionId: c2b.transactionId,
+      correlatedAt: new Date().toISOString(),
+    },
+  });
+}
+
+/**
+ * Marks an STK request as confirmed by its matching, already-applied C2B
+ * receipt.  It deliberately does not copy the receipt/transaction ID: those
+ * fields are unique ledger keys and belong to the C2B payment that performed
+ * the single accounting application.
+ */
+async function correlatePendingStkWithConfirmedC2b(paymentId: string, stkCallback?: unknown, expectedReceiptNumber?: string | null) {
+  return prisma.$transaction(async (tx) => {
+    const stk = await tx.mpesaPayment.findUnique({ where: { id: paymentId } });
+    if (!stk || stk.channel !== "STK" || stk.status !== "PENDING") return false;
+    const c2b = await findConfirmedC2bForStk(tx, stk, expectedReceiptNumber);
+    if (!c2b) return false;
+
+    const claimed = await tx.mpesaPayment.updateMany({
+      where: { id: stk.id, status: "PENDING" },
+      data: {
+        status: "SUCCESS",
+        amount: c2b.amount,
+        resultCode: 0,
+        resultDescription: stkCallback === undefined
+          ? `Confirmed by matching C2B receipt ${c2b.receiptNumber || c2b.transactionId || ""}`.trim()
+          : `STK callback confirmed; matching C2B receipt ${c2b.receiptNumber || c2b.transactionId || ""} was already applied`.trim(),
+        transactionAt: c2b.transactionAt,
+        callbackPayload: correlatedStkPayload(stk, c2b, stkCallback),
+      },
+    });
+    return claimed.count === 1;
+  });
 }
 
 function parseStkMetadata(callback: Record<string, unknown>) {
@@ -632,6 +766,32 @@ export async function handleStkCallback(payload: unknown) {
   }
   if (resultCode === 0) {
     const metadata = parseStkMetadata(callback);
+    // When the C2B confirmation won the delivery race, it owns the globally
+    // unique Safaricom receipt and has already applied the funds.  Correlate
+    // this STK callback to that row instead of attempting a second ledger
+    // receipt or a second order increment.
+    if (payment.status === "PENDING" && metadata.receiptNumber) {
+      const correlated = await correlatePendingStkWithConfirmedC2b(payment.id, payload, metadata.receiptNumber);
+      if (correlated) return;
+    }
+    if (payment.status === "SUCCESS" && !payment.receiptNumber) {
+      // A status-poll recovery may have correlated the C2B notification
+      // before Daraja retried this STK callback. Keep the raw STK callback for
+      // auditability without duplicating the C2B receipt or applying money.
+      await prisma.mpesaPayment.update({
+        where: { id: payment.id },
+        data: {
+          resultCode,
+          resultDescription: `STK callback confirmed; ${payment.resultDescription || "payment was already confirmed"}`,
+          callbackPayload: jsonValue({
+            correlation: readObject(readObject(payment.callbackPayload).correlation),
+            initiation: readObject(payment.callbackPayload).initiation || payment.callbackPayload || {},
+            stkCallback: payload,
+          }),
+        },
+      });
+      return;
+    }
     await applyConfirmedPayment(payment.id, { ...metadata, phoneNumber: normalizeDarajaPhone(metadata.phoneNumber || "") || payment.phoneNumber, resultCode, resultDescription, payload });
     return;
   }
@@ -674,6 +834,32 @@ export async function handleC2bConfirmation(payload: unknown) {
   });
   if (!payment || !target) return;
   await applyConfirmedPayment(payment.id, { amount, receiptNumber, transactionId, phoneNumber, transactionAt, resultCode: 0, resultDescription: "C2B payment received", payload });
+  // C2B is a real confirmation for PayBill STK too.  A matching pending STK
+  // request becomes successful here, but only the C2B row above applies its
+  // amount to the order.  Receipt numbers stay unique to the C2B ledger row.
+  const c2b = await prisma.mpesaPayment.findUnique({ where: { id: payment.id } });
+  if (!c2b || c2b.status !== "SUCCESS") return;
+  const candidates = await prisma.mpesaPayment.findMany({
+    where: {
+      channel: "STK",
+      status: "PENDING",
+      accountReference: { equals: c2b.accountReference || "", mode: "insensitive" },
+      requestedAmount: c2b.amount,
+      ...(c2b.phoneNumber ? { phoneNumber: c2b.phoneNumber } : {}),
+      createdAt: {
+        gte: new Date(c2b.createdAt.getTime() - STK_C2B_CORRELATION_WINDOW_MS),
+        lte: new Date(c2b.createdAt.getTime() + 2 * 60 * 1000),
+      },
+      ...(c2b.orderId ? { orderId: c2b.orderId } : c2b.websiteOrderId ? { websiteOrderId: c2b.websiteOrderId } : { id: "__no_stk_target__" }),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+  });
+  const stk = candidates[0];
+  if (!stk) return;
+  // Reuse the inner correlation guard, which re-reads both rows and claims
+  // the PENDING STK state atomically.
+  await correlatePendingStkWithConfirmedC2b(stk.id);
 }
 
 export async function canAcceptC2bReference(reference: string) {
