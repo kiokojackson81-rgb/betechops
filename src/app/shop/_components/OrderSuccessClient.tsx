@@ -8,6 +8,7 @@ import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getLastMockOrder, type MockOrderRecord } from "@/app/shop/shopStorage";
 import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 
 type OrderSuccessClientProps = {
   orderRef?: string;
@@ -27,6 +28,8 @@ type LiveOrderRecord = {
   status: LiveOrderStatus;
   subtotal: number;
   total: number;
+  amountDueNow?: number;
+  amountPaid?: number;
   receiptId: string | null;
   receipt: { id: string; receiptNumber: string | null; generatedAt: string } | null;
   processingAt: string | null;
@@ -235,6 +238,11 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
             Continue Shopping
           </Link>
         </div>
+        {liveOrder && Math.max(0, Number(liveOrder.amountDueNow || 0) - Number(liveOrder.amountPaid || 0)) > 0 ? (
+          <div className="mt-6 max-w-2xl">
+            <MpesaStkPaymentPanel resourceType="ORDER" reference={liveOrder.orderRef} amountDue={Math.max(0, Number(liveOrder.amountDueNow || 0) - Number(liveOrder.amountPaid || 0))} initialPhone={liveOrder.customerPhone} />
+          </div>
+        ) : null}
       </div>
       <ShopSupportStrip />
     </div>

@@ -18,6 +18,9 @@ function serialize(payment: {
   id: string;
   channel: MpesaPaymentChannel;
   status: MpesaPaymentStatus;
+  purpose: string;
+  resourceType: string | null;
+  resourceId: string | null;
   accountReference: string | null;
   requestedAmount: unknown;
   amount: unknown;
@@ -41,6 +44,9 @@ function serialize(payment: {
     id: payment.id,
     channel: payment.channel,
     status: payment.status,
+    purpose: payment.purpose,
+    resourceType: payment.resourceType,
+    resourceId: payment.resourceId,
     accountReference: payment.accountReference,
     requestedAmount: payment.requestedAmount == null ? null : number(payment.requestedAmount),
     amount: payment.amount == null ? null : number(payment.amount),
@@ -101,6 +107,7 @@ export async function GET(request: NextRequest) {
         { phoneNumber: { contains: query } },
         { merchantRequestId: { contains: query, mode: "insensitive" } },
         { checkoutRequestId: { contains: query, mode: "insensitive" } },
+        { resourceType: { contains: query, mode: "insensitive" } },
       ],
     } : {}),
   };

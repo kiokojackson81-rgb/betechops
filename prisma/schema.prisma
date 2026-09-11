@@ -1846,6 +1846,12 @@ model MpesaPayment {
   status            MpesaPaymentStatus @default(PENDING)
   orderId           String?
   websiteOrderId    String?
+  /// Business purpose and generic resource identity make non-order STK
+  /// payments (for example, Site Visits and Lipa Pole Pole) visible in the
+  /// same immutable Daraja ledger without duplicating payment providers.
+  purpose           MpesaPaymentPurpose @default(ORDER_PAYMENT)
+  resourceType      String?
+  resourceId        String?
   accountReference  String?
   requestedAmount   Decimal?           @db.Decimal(14, 2)
   amount            Decimal?           @db.Decimal(14, 2)
@@ -1866,6 +1872,7 @@ model MpesaPayment {
   @@index([orderId, status, createdAt])
   @@index([websiteOrderId, status, createdAt])
   @@index([accountReference, status, createdAt])
+  @@index([resourceType, resourceId, status, createdAt])
 }
 
 model ReceiptFile {
@@ -3019,6 +3026,14 @@ enum MpesaPaymentStatus {
   FAILED
   CANCELLED
   UNMATCHED
+}
+
+enum MpesaPaymentPurpose {
+  ORDER_PAYMENT
+  ORDER_DEPOSIT
+  ORDER_TRANSPORT
+  SITE_VISIT_FEE
+  LPP_INSTALLMENT
 }
 
 enum LipaPolePoleStatus {

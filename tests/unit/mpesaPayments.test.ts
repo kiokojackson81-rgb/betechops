@@ -10,7 +10,7 @@ jest.mock("@/lib/prisma", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { handleC2bConfirmation, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
+import { handleC2bConfirmation, handleStkCallback, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
 
 const transactionId = "TESTMPESA001";
 const basePayment = {
@@ -52,7 +52,7 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
   it("automatically matches a known C2B reference and applies the payment once", async () => {
     const pendingPayment = { ...basePayment, status: "PENDING", orderId: "order-1", accountReference: "ORD-001" };
     const tx = {
-      mpesaPayment: { findUnique: jest.fn().mockResolvedValue(pendingPayment), update: jest.fn().mockResolvedValue({}) },
+      mpesaPayment: { findUnique: jest.fn().mockResolvedValue(pendingPayment), updateMany: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({}) },
       order: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "order-1", totalAmount: 100, paidAmount: 20, status: "PENDING" }),
         update: jest.fn().mockResolvedValue({}),
@@ -158,5 +158,25 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
     await expect(reconcileUnmatchedMpesaPayment({ paymentId: "payment-1", target: { kind: "ORDER", id: "order-1" }, actorId: "admin-1" }))
       .rejects.toThrow("already been reconciled");
     expect(tx.order.findUniqueOrThrow).not.toHaveBeenCalled();
+  });
+
+  it("applies a successful STK callback once and ignores a duplicate callback", async () => {
+    const pending = { ...basePayment, channel: "STK", status: "PENDING", orderId: "order-1", checkoutRequestId: "ws_CO_123" };
+    const tx = {
+      mpesaPayment: { updateMany: jest.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 }), findUnique: jest.fn().mockResolvedValue(pending), update: jest.fn().mockResolvedValue({}) },
+      order: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "order-1", totalAmount: 100, paidAmount: 0, status: "PENDING" }), update: jest.fn().mockResolvedValue({}) },
+      websiteOrder: { findUniqueOrThrow: jest.fn(), update: jest.fn() },
+    };
+    (prisma.mpesaPayment.findUnique as jest.Mock).mockResolvedValue(pending);
+    (prisma.$transaction as jest.Mock).mockImplementation(async (work) => work(tx));
+    const callback = { Body: { stkCallback: { CheckoutRequestID: "ws_CO_123", MerchantRequestID: "merchant-1", ResultCode: 0, ResultDesc: "Success", CallbackMetadata: { Item: [
+      { Name: "Amount", Value: 10 }, { Name: "MpesaReceiptNumber", Value: "TST123ABC4" }, { Name: "PhoneNumber", Value: "254700000000" }, { Name: "TransactionDate", Value: "20260911100000" },
+    ] } } } };
+
+    await handleStkCallback(callback);
+    await handleStkCallback(callback);
+
+    expect(tx.order.update).toHaveBeenCalledTimes(1);
+    expect(tx.order.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ paidAmount: 10 }) }));
   });
 });

@@ -431,6 +431,8 @@ export async function GET(request: Request) {
         status: serialized.status,
         subtotal: serialized.subtotal,
         total: serialized.total,
+        amountDueNow: Number((serialized.metadata && typeof serialized.metadata === "object" ? (serialized.metadata as Record<string, unknown>).amountDueNow : 0) || 0),
+        amountPaid: Number((serialized.metadata && typeof serialized.metadata === "object" ? (serialized.metadata as Record<string, unknown>).amountPaid : 0) || 0),
         receiptId: serialized.receiptId,
         receipt: serialized.receipt,
         createdAt: serialized.createdAt,

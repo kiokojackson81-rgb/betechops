@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { LIPA_POLE_POLE_MPESA_ACCOUNT, LIPA_POLE_POLE_MPESA_PAYBILL } from "@/lib/lipaPolePoleConfig";
-import { formatMpesaReferenceInput } from "@/lib/mpesaReference";
 import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 
 type LppDetail = {
   account: {
@@ -80,15 +79,6 @@ function formatDate(value: string | null | undefined) {
 
 export default function LppAccountDetailClient({ initialDetail }: { initialDetail: LppDetail }) {
   const [detail, setDetail] = useState(initialDetail);
-  const [paymentForm, setPaymentForm] = useState({
-    amount: "",
-    method: "MPESA",
-    reference: "",
-    notes: "",
-  });
-  const [submitting, setSubmitting] = useState(false);
-  const [banner, setBanner] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const nextInstallment = getNextLppInstallment(detail.installments, detail.summary.totalPaid);
 
   async function refresh() {
@@ -100,41 +90,6 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
       throw new Error(data?.error || "Failed to refresh account.");
     }
     setDetail(data);
-  }
-
-  async function submitPayment(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    setBanner(null);
-    try {
-      const response = await fetch(`/api/shop/lipa-pole-pole/${encodeURIComponent(detail.account.id)}/payments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: Number(paymentForm.amount || 0),
-          method: paymentForm.method,
-          reference: paymentForm.reference,
-          notes: paymentForm.notes,
-        }),
-      });
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to record payment.");
-      }
-      await refresh();
-      setPaymentForm({
-        amount: "",
-        method: "MPESA",
-        reference: "",
-        notes: "",
-      });
-      setBanner("Payment submitted for verification. We will update your balance after confirming the payment.");
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Failed to record payment.");
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   return (
@@ -235,64 +190,12 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-        <form
-          id="make-payment"
-          onSubmit={submitPayment}
-          className="rounded-[28px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_22px_60px_rgba(15,23,42,0.08)]"
-        >
+        <section id="make-payment" className="rounded-[28px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
           <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Continue paying</div>
           <h2 className="mt-2 text-2xl font-black text-slate-950">Pay with M-Pesa</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Send your payment to Paybill <strong>{LIPA_POLE_POLE_MPESA_PAYBILL}</strong>, account number <strong>{LIPA_POLE_POLE_MPESA_ACCOUNT}</strong>, then submit the confirmation code. Pending payments do not reduce your balance until verified.
-          </p>
-          {banner ? <div className="mt-4 rounded-[18px] border border-[#0f9d58]/15 bg-[#f4fff7] px-4 py-3 text-sm text-[#0f9d58]">{banner}</div> : null}
-          {error ? <div className="mt-4 rounded-[18px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-          <div className="mt-5 grid gap-3">
-            <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              Amount
-              <input
-                value={paymentForm.amount}
-                onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))}
-                className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4"
-                type="number"
-                min={1}
-                max={detail.summary.balance}
-                required
-              />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              M-Pesa transaction code
-              <input
-                value={paymentForm.reference}
-                onChange={(event) => setPaymentForm((current) => ({ ...current, reference: formatMpesaReferenceInput(event.target.value) }))}
-                className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4"
-                placeholder="e.g. UHG3K3STB0 or paste the full message"
-                required
-              />
-              <span className="text-xs font-medium text-slate-500">Paste the full message if easier. Only the M-Pesa transaction code is saved.</span>
-            </label>
-            <div className="rounded-[16px] border border-[#7a0000]/10 bg-[#fffaf4] p-4 text-sm text-slate-700">
-              <div>Current balance: <strong>{formatCurrency(detail.summary.balance)}</strong></div>
-              <div className="mt-1">Balance after verification: <strong>{formatCurrency(Math.max(0, detail.summary.balance - Number(paymentForm.amount || 0)))}</strong></div>
-            </div>
-            <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              Notes
-              <textarea
-                value={paymentForm.notes}
-                onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))}
-                className="min-h-[92px] rounded-[16px] border border-[#7a0000]/10 bg-white px-4 py-3"
-                placeholder="Optional notes about this payment."
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-[18px] bg-[#7a0000] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
-            >
-              {submitting ? "Submitting..." : "Submit payment"}
-            </button>
-          </div>
-        </form>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Choose an installment amount and we will send a secure M-Pesa prompt. Your balance changes only after Safaricom confirms payment.</p>
+          <div className="mt-5"><MpesaStkPaymentPanel resourceType="LPP" reference={detail.account.reference} amountDue={detail.summary.balance} initialPhone={detail.account.customerPhone} allowAmountChoice onSuccess={() => void refresh()} /></div>
+        </section>
 
         <section className="rounded-[28px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_22px_60px_rgba(15,23,42,0.08)]">
           <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Payment history</div>

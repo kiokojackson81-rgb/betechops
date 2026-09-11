@@ -57,6 +57,8 @@ export type CustomerAccountOrderDetail = {
   customerPhone: string;
   customerEmail: string | null;
   paymentMethod: string;
+  amountDueNow: number;
+  amountPaid: number;
   notes: string | null;
   receiptId: string | null;
   receiptNumber: string | null;
@@ -531,6 +533,8 @@ export async function getCustomerAccountOrderDetail(args: {
         typeof metadata.paymentMethod === "string" && metadata.paymentMethod.trim()
           ? metadata.paymentMethod.trim()
           : "CASH",
+      amountDueNow: 0,
+      amountPaid: toNumber(receipt.order.totalAmount),
       notes: typeof metadata.notes === "string" && metadata.notes.trim() ? metadata.notes.trim() : null,
       receiptId: receipt.id,
       receiptNumber: receipt.receiptNumber,
@@ -601,6 +605,7 @@ export async function getCustomerAccountOrderDetail(args: {
 
   if (!canAccessWebsiteOrder) return null;
 
+  const paymentMetadata = readJsonObject(websiteOrder.metadata);
   return {
     routeId: args.routeId,
     orderRef: websiteOrder.orderRef,
@@ -614,6 +619,8 @@ export async function getCustomerAccountOrderDetail(args: {
     customerPhone: websiteOrder.customerPhone,
     customerEmail: websiteOrder.customerEmail,
     paymentMethod: websiteOrder.paymentMethod,
+    amountDueNow: Math.max(0, Number(paymentMetadata.amountDueNow || 0) - Number(paymentMetadata.amountPaid || 0)),
+    amountPaid: Math.max(0, Number(paymentMetadata.amountPaid || 0)),
     notes: websiteOrder.notes,
     receiptId: websiteOrder.receiptId,
     receiptNumber: websiteOrder.receipt?.receiptNumber || null,

@@ -6,6 +6,7 @@ import CustomerAccountSidebar from "@/app/shop/_components/CustomerAccountSideba
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
@@ -200,6 +201,9 @@ export default async function ShopAccountOrderDetailPage({
                       </div>
                     </div>
                   </section>
+                  {order.source === "WEBSITE" && order.amountDueNow > 0 ? (
+                    <MpesaStkPaymentPanel resourceType="ORDER" reference={order.orderRef} amountDue={order.amountDueNow} initialPhone={order.customerPhone} />
+                  ) : null}
 
                   <section className={`${shopStyles.lightCard} p-5`}>
                     <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">

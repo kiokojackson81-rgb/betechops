@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarCheck2, CreditCard, MapPin, Plus, X } from "lucide-react";
+import { CalendarCheck2, MapPin, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   getServiceZone,
@@ -9,6 +9,7 @@ import {
   kenyaCountyOptions,
 } from "@/lib/agents/kenyaMarkets";
 import type { CustomerSiteVisit } from "@/lib/siteVisitShared";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 
 type Profile = {
   name: string;
@@ -158,14 +159,10 @@ export default function CustomerSiteVisitsClient({
     );
   }
 
-  function submitPayment(visit: CustomerSiteVisit) {
-    const reference = window.prompt("Enter the M-Pesa or payment reference");
-    if (reference?.trim())
-      void action(visit.id, {
-        action: "SUBMIT_PAYMENT",
-        paymentMethod: "MPESA",
-        paymentReference: reference.trim(),
-      });
+  async function refreshVisits() {
+    const response = await fetch("/api/shop/site-visits", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok && Array.isArray(payload.siteVisits)) setVisits(payload.siteVisits);
   }
 
   function requestReschedule(visit: CustomerSiteVisit) {
@@ -289,17 +286,6 @@ export default function CustomerSiteVisitsClient({
                 </div>
               ) : null}
               <div className="mt-5 flex flex-wrap gap-2">
-                {visit.paymentStatus === "UNPAID" &&
-                visit.paymentVerificationStatus !== "PENDING" ? (
-                  <button
-                    disabled={busy}
-                    onClick={() => submitPayment(visit)}
-                    className="rounded-full bg-[#8f0000] px-4 py-2 text-sm font-black text-white"
-                  >
-                    <CreditCard className="mr-2 inline h-4 w-4" />
-                    Submit payment
-                  </button>
-                ) : null}
                 <button
                   disabled={busy || visit.status === "CLOSED"}
                   onClick={() => requestReschedule(visit)}
@@ -326,6 +312,11 @@ export default function CustomerSiteVisitsClient({
                   </button>
                 ) : null}
               </div>
+              {visit.paymentStatus === "UNPAID" ? (
+                <div className="mt-5">
+                  <MpesaStkPaymentPanel resourceType="SITE_VISIT" reference={visit.visitRef} amountDue={visit.totalPayable} initialPhone={profile.phone} onSuccess={() => void refreshVisits()} />
+                </div>
+              ) : null}
             </article>
           ))
         ) : (

@@ -1,16 +1,24 @@
 import "server-only";
 
-import { MpesaPayment, Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
+import { MpesaPayment, MpesaPaymentPurpose, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
+import { ensureSiteVisitsSchema } from "@/lib/siteVisits";
+import { getLppAccountSummary, recordLppPayment } from "@/lib/lipaPolePoleService";
 
 const DARAJA_PRODUCTION_BASE_URL = "https://api.safaricom.co.ke";
 const DEFAULT_CALLBACK_BASE_URL = "https://betech.co.ke";
 export const MPESA_C2B_PAYBILL = "1231008";
 
 type PaymentTarget =
-  | { kind: "ORDER"; id: string; reference: string; total: number; paid: number; customerPhone: string | null }
-  | { kind: "WEBSITE_ORDER"; id: string; reference: string; total: number; paid: number; dueNow: number; customerPhone: string | null };
+  | { kind: "ORDER"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: MpesaPaymentPurpose }
+  | { kind: "WEBSITE_ORDER"; id: string; reference: string; total: number; paid: number; dueNow: number; customerPhone: string | null; purpose: MpesaPaymentPurpose }
+  | { kind: "SITE_VISIT"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "SITE_VISIT_FEE" }
+  | { kind: "LPP"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "LPP_INSTALLMENT" };
+
+export const MPESA_STK_RESOURCE_TYPES = ["ORDER", "SITE_VISIT", "LPP"] as const;
+export type MpesaStkResourceType = (typeof MPESA_STK_RESOURCE_TYPES)[number];
 
 export type MpesaReconciliationTarget = {
   kind: "ORDER" | "WEBSITE_ORDER";
@@ -120,6 +128,7 @@ async function findPaymentTarget(reference: string): Promise<PaymentTarget | nul
   });
   if (websiteOrder && websiteOrder.status !== "CANCELLED") {
     const metadata = paymentMetadata(websiteOrder.metadata);
+    const option = String(metadata.paymentOption || "");
     return {
       kind: "WEBSITE_ORDER",
       id: websiteOrder.id,
@@ -128,6 +137,11 @@ async function findPaymentTarget(reference: string): Promise<PaymentTarget | nul
       paid: Math.max(0, toNumber(metadata.amountPaid)),
       dueNow: Math.max(0, toNumber(metadata.amountDueNow) || toNumber(websiteOrder.total)),
       customerPhone: websiteOrder.customerPhone,
+      purpose: option === "PAY_30_PERCENT_DEPOSIT" || option === "PAY_10_PERCENT_COMMITMENT"
+        ? "ORDER_DEPOSIT"
+        : option === "PAY_TRANSPORT_FEE_FIRST"
+          ? "ORDER_TRANSPORT"
+          : "ORDER_PAYMENT",
     };
   }
 
@@ -149,6 +163,7 @@ async function findPaymentTarget(reference: string): Promise<PaymentTarget | nul
     total: toNumber(order.totalAmount),
     paid: Math.max(0, toNumber(order.paidAmount)),
     customerPhone: order.customerPhone,
+    purpose: "ORDER_PAYMENT",
   };
 }
 
@@ -161,21 +176,82 @@ function permittedStkAmount(target: PaymentTarget) {
   return amount;
 }
 
-export async function initiateStkPush(input: { orderReference: string; phoneNumber?: string | null }) {
-  const target = await findPaymentTarget(input.orderReference);
-  if (!target) throw new Error("Order or invoice was not found");
+type SiteVisitPaymentRow = {
+  id: string;
+  visitRef: string;
+  customerPhone: string;
+  totalPayable: number | null;
+  paymentAmount: number | null;
+  paymentStatus: string | null;
+};
+
+async function findSiteVisitPaymentTarget(reference: string): Promise<PaymentTarget | null> {
+  await ensureSiteVisitsSchema();
+  const rows = await prisma.$queryRaw<SiteVisitPaymentRow[]>(Prisma.sql`
+    SELECT "id", "visitRef", "customerPhone", "totalPayable", "paymentAmount", "paymentStatus"
+    FROM "SiteVisit"
+    WHERE LOWER("visitRef") = LOWER(${reference.trim()})
+    LIMIT 1
+  `);
+  const visit = rows[0];
+  if (!visit || visit.paymentStatus === "PAID" || visit.paymentStatus === "WAIVED") return null;
+  return {
+    kind: "SITE_VISIT", id: visit.id, reference: visit.visitRef,
+    total: Math.max(0, toNumber(visit.totalPayable)), paid: Math.max(0, toNumber(visit.paymentAmount)),
+    customerPhone: visit.customerPhone || null, purpose: "SITE_VISIT_FEE",
+  };
+}
+
+async function findLppPaymentTarget(reference: string): Promise<PaymentTarget | null> {
+  const lpp = await prisma.lipaPolePole.findFirst({
+    where: { reference: { equals: reference.trim(), mode: "insensitive" } },
+    select: { id: true, reference: true, agreedTotal: true, customer: { select: { phone: true } } },
+  });
+  if (!lpp) return null;
+  const summary = await getLppAccountSummary(lpp.id);
+  if (summary.summary.balance.lte(0)) return null;
+  return {
+    kind: "LPP", id: lpp.id, reference: lpp.reference, total: toNumber(lpp.agreedTotal),
+    paid: toNumber(summary.summary.totalPaid), customerPhone: lpp.customer.phone || null, purpose: "LPP_INSTALLMENT",
+  };
+}
+
+async function findStkTarget(resourceType: MpesaStkResourceType, reference: string) {
+  if (resourceType === "ORDER") return findPaymentTarget(reference);
+  if (resourceType === "SITE_VISIT") return findSiteVisitPaymentTarget(reference);
+  return findLppPaymentTarget(reference);
+}
+
+function permittedStkAmountForTarget(target: PaymentTarget, chosenAmount?: number | null) {
+  if (target.kind !== "LPP") return permittedStkAmount(target);
+  const balance = Math.max(0, target.total - target.paid);
+  const amount = Number(chosenAmount);
+  if (!Number.isInteger(amount) || amount < 1 || amount > balance) {
+    throw new Error("Enter a whole-KES installment amount that does not exceed the outstanding balance");
+  }
+  return amount;
+}
+
+export async function initiateStkPushForResource(input: {
+  resourceType: MpesaStkResourceType;
+  reference: string;
+  phoneNumber?: string | null;
+  installmentAmount?: number | null;
+}) {
+  const target = await findStkTarget(input.resourceType, input.reference);
+  if (!target) throw new Error("The payment record was not found or has no outstanding balance");
   const customerPhone = normalizeDarajaPhone(target.customerPhone || "");
   const requestedPhone = normalizeDarajaPhone(input.phoneNumber || target.customerPhone || "");
   if (!requestedPhone) throw new Error("A valid Kenyan mobile number is required");
   // A public order reference is not authority to send prompts to arbitrary numbers.
   if (customerPhone && requestedPhone !== customerPhone) throw new Error("The M-Pesa number must match the order contact number");
-  const amount = permittedStkAmount(target);
+  const amount = permittedStkAmountForTarget(target, input.installmentAmount);
 
   const pending = await prisma.mpesaPayment.findFirst({
     where: {
       channel: "STK",
       status: "PENDING",
-      ...(target.kind === "ORDER" ? { orderId: target.id } : { websiteOrderId: target.id }),
+      ...(target.kind === "ORDER" ? { orderId: target.id } : target.kind === "WEBSITE_ORDER" ? { websiteOrderId: target.id } : { resourceType: target.kind, resourceId: target.id }),
       phoneNumber: requestedPhone,
       createdAt: { gte: new Date(Date.now() - 2 * 60 * 1000) },
     },
@@ -203,7 +279,7 @@ export async function initiateStkPush(input: { orderReference: string; phoneNumb
       PhoneNumber: requestedPhone,
       CallBackURL: callbackUrl,
       AccountReference: target.reference,
-      TransactionDesc: `Betech order ${target.reference}`.slice(0, 182),
+      TransactionDesc: `Betech ${target.kind.toLowerCase().replace(/_/g, " ")} ${target.reference}`.slice(0, 182),
     }),
   });
   const result = await response.json().catch(() => ({})) as StkResult;
@@ -215,7 +291,8 @@ export async function initiateStkPush(input: { orderReference: string; phoneNumb
     data: {
       channel: "STK",
       status: "PENDING",
-      ...(target.kind === "ORDER" ? { orderId: target.id } : { websiteOrderId: target.id }),
+      ...(target.kind === "ORDER" ? { orderId: target.id } : target.kind === "WEBSITE_ORDER" ? { websiteOrderId: target.id } : { resourceType: target.kind, resourceId: target.id }),
+      purpose: target.purpose,
       accountReference: target.reference,
       requestedAmount: amount,
       phoneNumber: requestedPhone,
@@ -226,6 +303,26 @@ export async function initiateStkPush(input: { orderReference: string; phoneNumb
     },
   });
   return { checkoutRequestId: result.CheckoutRequestID, amount, alreadyPending: false };
+}
+
+/** Backwards-compatible order-only entry point used by the public STK route. */
+export async function initiateStkPush(input: { orderReference: string; phoneNumber?: string | null }) {
+  return initiateStkPushForResource({ resourceType: "ORDER", reference: input.orderReference, phoneNumber: input.phoneNumber });
+}
+
+export async function getStkPaymentStatus(checkoutRequestId: string) {
+  const payment = await prisma.mpesaPayment.findUnique({
+    where: { checkoutRequestId },
+    select: { status: true, requestedAmount: true, amount: true, receiptNumber: true, resultDescription: true, accountReference: true, channel: true },
+  });
+  if (!payment || payment.channel !== "STK") return null;
+  return {
+    status: payment.status,
+    amount: payment.amount == null ? toNumber(payment.requestedAmount) : toNumber(payment.amount),
+    receiptNumber: payment.receiptNumber,
+    resultDescription: payment.resultDescription,
+    accountReference: payment.accountReference,
+  };
 }
 
 function parseStkMetadata(callback: Record<string, unknown>) {
@@ -275,7 +372,7 @@ async function applyConfirmedPaymentInTransaction(
   payment: MpesaPayment,
   input: ConfirmedPaymentInput,
 ): Promise<PaymentApplicationResult> {
-  if (payment.status === "SUCCESS" || payment.status === "UNMATCHED") {
+  if (payment.status === "UNMATCHED") {
     return { applied: false, paidBefore: 0, paidAfter: 0, total: 0 };
   }
 
@@ -291,7 +388,7 @@ async function applyConfirmedPaymentInTransaction(
     ...(input.preserveCallbackPayload ? {} : { callbackPayload: jsonValue(input.payload) }),
   };
 
-  if (!payment.orderId && !payment.websiteOrderId) {
+  if (!payment.orderId && !payment.websiteOrderId && !payment.resourceType) {
     await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "UNMATCHED" } });
     return { applied: false, paidBefore: 0, paidAfter: 0, total: 0 };
   }
@@ -332,12 +429,49 @@ async function applyConfirmedPaymentInTransaction(
       },
     });
   }
+  if (payment.resourceType === "SITE_VISIT" && payment.resourceId) {
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "SiteVisit"
+      SET "paymentStatus" = 'PAID', "paymentMethod" = 'MPESA_STK',
+          "paymentReference" = ${input.receiptNumber || payment.receiptNumber || payment.checkoutRequestId},
+          "paymentAmount" = ${amount}, "paymentPaidAt" = ${input.transactionAt || new Date()},
+          "paymentVerificationStatus" = 'VERIFIED', "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${payment.resourceId} AND "paymentStatus" <> 'PAID'
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "SiteVisitEvent" ("id", "siteVisitId", "eventType", "eventLabel", "eventDetail", "metadata")
+      VALUES (${randomUUID()}, ${payment.resourceId}, 'MPESA_STK_CONFIRMED', 'M-Pesa STK payment confirmed',
+        ${`KES ${amount.toLocaleString("en-KE")} · ${input.receiptNumber || payment.receiptNumber || "receipt pending"}`},
+        ${JSON.stringify({ mpesaPaymentId: payment.id, receiptNumber: input.receiptNumber || payment.receiptNumber || null })}::jsonb)
+    `);
+    total = amount;
+    paidBefore = 0;
+    paidAfter = amount;
+  }
+  if (payment.resourceType === "LPP" && payment.resourceId) {
+    const lppPayment = await recordLppPayment({
+      lipaPolePoleId: payment.resourceId,
+      amount,
+      method: "MPESA",
+      reference: input.receiptNumber || payment.receiptNumber || payment.transactionId || payment.checkoutRequestId,
+      receivedAt: input.transactionAt || new Date(),
+      notes: `Daraja STK receipt for ${payment.accountReference || "Lipa Pole Pole installment"}.`,
+      status: "SUCCESS",
+    }, tx);
+    total = toNumber(lppPayment.summary.agreedTotal);
+    paidAfter = toNumber(lppPayment.summary.totalPaid);
+    paidBefore = Math.max(0, paidAfter - amount);
+  }
   await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "SUCCESS" } });
   return { applied: true, paidBefore, paidAfter, total };
 }
 
 async function applyConfirmedPayment(paymentId: string, input: ConfirmedPaymentInput) {
   await prisma.$transaction(async (tx) => {
+    // This conditional claim makes duplicate/retried Daraja callbacks harmless:
+    // only the transaction that changes PENDING can apply the accounting entry.
+    const claimed = await tx.mpesaPayment.updateMany({ where: { id: paymentId, status: "PENDING" }, data: { status: "SUCCESS" } });
+    if (!claimed.count) return;
     const payment = await tx.mpesaPayment.findUnique({ where: { id: paymentId } });
     if (!payment) return;
     await applyConfirmedPaymentInTransaction(tx, payment, input);
@@ -361,6 +495,7 @@ async function findReconciliationTarget(
       total: toNumber(order.totalAmount),
       paid: Math.max(0, toNumber(order.paidAmount)),
       customerPhone: order.customerPhone,
+      purpose: "ORDER_PAYMENT",
     };
   }
 
@@ -378,6 +513,7 @@ async function findReconciliationTarget(
     paid: Math.max(0, toNumber(metadata.amountPaid)),
     dueNow: Math.max(0, toNumber(metadata.amountDueNow) || toNumber(websiteOrder.total)),
     customerPhone: websiteOrder.customerPhone,
+    purpose: "ORDER_PAYMENT",
   };
 }
 

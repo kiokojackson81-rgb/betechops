@@ -7,12 +7,16 @@ type Payment = {
   id: string;
   channel: "STK" | "C2B";
   status: PaymentStatus;
+  purpose: string;
+  resourceType: string | null;
+  resourceId: string | null;
   accountReference: string | null;
   requestedAmount: number | null;
   amount: number | null;
   phoneNumber: string | null;
   receiptNumber: string | null;
   transactionId: string | null;
+  checkoutRequestId: string | null;
   resultDescription: string | null;
   transactionAt: string | null;
   createdAt: string;
@@ -155,8 +159,8 @@ export default function MpesaPaymentsClient() {
         {error ? <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</div> : null}
         <section className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/60">
           <table className="min-w-[1200px] w-full text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-slate-400"><tr><th className="p-3">Receipt / transaction</th><th className="p-3">Date</th><th className="p-3">Channel</th><th className="p-3">Phone</th><th className="p-3">Account reference</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3">Linked order</th><th className="p-3">Result</th><th className="p-3">Action</th></tr></thead>
-            <tbody>{payments.map((payment) => <tr key={payment.id} className="border-b border-white/5 align-top hover:bg-white/[0.025]"><td className="p-3 font-mono text-xs text-slate-200">{payment.receiptNumber || payment.transactionId || "—"}<div className="mt-1 font-sans text-[11px] text-slate-500">Created {formatDate(payment.createdAt)}</div></td><td className="p-3 whitespace-nowrap">{formatDate(payment.transactionAt)}</td><td className="p-3">{payment.channel}</td><td className="p-3 font-mono text-xs">{payment.phoneNumber || "—"}</td><td className="p-3">{payment.accountReference || "—"}</td><td className="p-3 whitespace-nowrap font-semibold">{money.format(payment.amount ?? payment.requestedAmount ?? 0)}</td><td className="p-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(payment.status)}`}>{payment.status}</span></td><td className="p-3">{payment.order ? <><div className="font-medium">{payment.order.reference}</div><div className="text-xs text-slate-400">{payment.order.kind === "ORDER" ? "POS order" : "Website order"} · {money.format(payment.order.paid)} / {money.format(payment.order.total)}</div></> : "—"}</td><td className="max-w-[220px] p-3 text-xs text-slate-300">{payment.resultDescription || "—"}</td><td className="p-3">{payment.status === "UNMATCHED" && payment.channel === "C2B" ? <button type="button" onClick={() => selectForReconciliation(payment)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1.5 text-xs font-bold text-amber-100 hover:bg-amber-300/20">Reconcile</button> : "—"}</td></tr>)}{!loading && !payments.length ? <tr><td colSpan={10} className="p-8 text-center text-slate-400">No matching M-Pesa payments.</td></tr> : null}</tbody>
+            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-slate-400"><tr><th className="p-3">Receipt / transaction</th><th className="p-3">Date</th><th className="p-3">Channel</th><th className="p-3">Phone</th><th className="p-3">Account reference</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3">Purpose / linked record</th><th className="p-3">Result</th><th className="p-3">Action</th></tr></thead>
+            <tbody>{payments.map((payment) => <tr key={payment.id} className="border-b border-white/5 align-top hover:bg-white/[0.025]"><td className="p-3 font-mono text-xs text-slate-200">{payment.receiptNumber || payment.transactionId || "—"}<div className="mt-1 font-sans text-[11px] text-slate-500">Created {formatDate(payment.createdAt)}<br />Checkout: {payment.checkoutRequestId || "—"}</div></td><td className="p-3 whitespace-nowrap">{formatDate(payment.transactionAt)}</td><td className="p-3">{payment.channel}</td><td className="p-3 font-mono text-xs">{payment.phoneNumber || "—"}</td><td className="p-3">{payment.accountReference || "—"}</td><td className="p-3 whitespace-nowrap font-semibold">{money.format(payment.amount ?? payment.requestedAmount ?? 0)}</td><td className="p-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(payment.status)}`}>{payment.status}</span></td><td className="p-3"><div className="font-medium">{payment.purpose.replace(/_/g, " ")}</div>{payment.order ? <div className="text-xs text-slate-400">{payment.order.kind === "ORDER" ? "POS" : "Website"}: {payment.order.reference}</div> : payment.resourceType ? <div className="text-xs text-slate-400">{payment.resourceType}: {payment.accountReference || payment.resourceId}</div> : "—"}</td><td className="max-w-[220px] p-3 text-xs text-slate-300">{payment.resultDescription || "—"}</td><td className="p-3">{payment.status === "UNMATCHED" && payment.channel === "C2B" ? <button type="button" onClick={() => selectForReconciliation(payment)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1.5 text-xs font-bold text-amber-100 hover:bg-amber-300/20">Reconcile</button> : "—"}</td></tr>)}{!loading && !payments.length ? <tr><td colSpan={10} className="p-8 text-center text-slate-400">No matching M-Pesa payments.</td></tr> : null}</tbody>
           </table>
         </section>
 
