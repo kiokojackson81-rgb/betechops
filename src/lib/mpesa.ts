@@ -13,7 +13,7 @@ export const MPESA_C2B_PAYBILL = "1231008";
 
 type PaymentTarget =
   | { kind: "ORDER"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: MpesaPaymentPurpose }
-  | { kind: "WEBSITE_ORDER"; id: string; reference: string; total: number; paid: number; dueNow: number; customerPhone: string | null; purpose: MpesaPaymentPurpose }
+  | { kind: "WEBSITE_ORDER"; id: string; reference: string; total: number; paid: number; dueNow: number; customerPhone: string | null; purpose: MpesaPaymentPurpose; awaitingPayment: boolean; paymentAccessToken: string | null }
   | { kind: "SITE_VISIT"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "SITE_VISIT_FEE" }
   | { kind: "LPP"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "LPP_INSTALLMENT" };
 
@@ -142,6 +142,8 @@ async function findPaymentTarget(reference: string): Promise<PaymentTarget | nul
         : option === "PAY_TRANSPORT_FEE_FIRST"
           ? "ORDER_TRANSPORT"
           : "ORDER_PAYMENT",
+      awaitingPayment: websiteOrder.status === "AWAITING_PAYMENT",
+      paymentAccessToken: typeof metadata.paymentAccessToken === "string" ? metadata.paymentAccessToken : null,
     };
   }
 
@@ -237,14 +239,17 @@ export async function initiateStkPushForResource(input: {
   reference: string;
   phoneNumber?: string | null;
   installmentAmount?: number | null;
+  paymentAccessToken?: string | null;
 }) {
   const target = await findStkTarget(input.resourceType, input.reference);
   if (!target) throw new Error("The payment record was not found or has no outstanding balance");
-  const customerPhone = normalizeDarajaPhone(target.customerPhone || "");
+  if (target.kind === "WEBSITE_ORDER" && target.awaitingPayment && target.paymentAccessToken !== String(input.paymentAccessToken || "")) {
+    throw new Error("This checkout payment session has expired. Return to checkout and try again.");
+  }
   const requestedPhone = normalizeDarajaPhone(input.phoneNumber || target.customerPhone || "");
   if (!requestedPhone) throw new Error("A valid Kenyan mobile number is required");
-  // A public order reference is not authority to send prompts to arbitrary numbers.
-  if (customerPhone && requestedPhone !== customerPhone) throw new Error("The M-Pesa number must match the order contact number");
+  // The payer's M-Pesa number is deliberately independent from the order or
+  // account contact number: a customer may pay from another authorised line.
   const amount = permittedStkAmountForTarget(target, input.installmentAmount);
 
   const pending = await prisma.mpesaPayment.findFirst({
@@ -414,15 +419,19 @@ async function applyConfirmedPaymentInTransaction(
     paidBefore = Math.max(0, toNumber(metadata.amountPaid));
     paidAfter = Math.min(total, paidBefore + amount);
     const fullyPaid = paidAfter >= total;
+    const wasAwaitingPayment = order.status === "AWAITING_PAYMENT";
     await tx.websiteOrder.update({
       where: { id: order.id },
       data: {
-        status: fullyPaid ? "PAYMENT_CONFIRMED" : order.status,
+        // A deposit/transport payment is sufficient to place a reservation;
+        // only a full settlement gets the stronger PAYMENT_CONFIRMED status.
+        status: fullyPaid ? "PAYMENT_CONFIRMED" : wasAwaitingPayment ? "CONFIRMED" : order.status,
         metadata: {
           ...metadata,
           amountPaid: paidAfter,
           totalOutstanding: Math.max(0, total - paidAfter),
           mpesaPaymentStatus: fullyPaid ? "SUCCESS" : "PARTIAL",
+          checkoutPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(),
           lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null,
           lastMpesaPaymentAt: (input.transactionAt || payment.transactionAt || new Date()).toISOString(),
         },
@@ -514,6 +523,8 @@ async function findReconciliationTarget(
     dueNow: Math.max(0, toNumber(metadata.amountDueNow) || toNumber(websiteOrder.total)),
     customerPhone: websiteOrder.customerPhone,
     purpose: "ORDER_PAYMENT",
+    awaitingPayment: websiteOrder.status === "AWAITING_PAYMENT",
+    paymentAccessToken: typeof metadata.paymentAccessToken === "string" ? metadata.paymentAccessToken : null,
   };
 }
 

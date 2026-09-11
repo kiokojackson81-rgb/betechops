@@ -37,6 +37,7 @@ import {
   summarizeCheckoutFulfilment,
   type CheckoutPaymentOption,
 } from "@/lib/checkoutDeliveryPayment";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 
 type CheckoutClientProps = {
   products: ShopProduct[];
@@ -96,6 +97,12 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     ? "Warehouse items are available for pickup or dispatch within 1 business day."
     : null;
   const [submitting, setSubmitting] = useState(false);
+  const [pendingPaymentOrder, setPendingPaymentOrder] = useState<{
+    orderRef: string;
+    amountDueNow: number;
+    successUrl: string;
+    paymentAccessToken: string | null;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
   const [installationPricing, setInstallationPricing] = useState<InstallationPricing[]>([]);
@@ -366,6 +373,20 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               } : undefined,
             });
 
+            // A server-issued reference now exists, but orders requiring an
+            // advance payment remain AWAITING_PAYMENT until the Daraja
+            // callback confirms it. Keep the cart intact for cancellation or
+            // retry and render the shared STK panel in this checkout.
+            if (orderResponse.requiresImmediatePayment) {
+              setPendingPaymentOrder({
+                orderRef: orderResponse.orderRef,
+                amountDueNow: orderResponse.amountDueNow,
+                successUrl: orderResponse.successUrl || getShopOrderSuccessHref(orderResponse.orderRef),
+                paymentAccessToken: orderResponse.paymentAccessToken,
+              });
+              return;
+            }
+
             saveShopCustomerProfile({
               fullName: form.fullName.trim(),
               phone: form.phoneNumber.trim(),
@@ -574,10 +595,10 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
             <div className="mt-5 grid gap-2.5 xl:hidden">
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || Boolean(pendingPaymentOrder)}
                 className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]"
               >
-                {submitting ? "Placing Order..." : "Place Order"}
+                {submitting ? "Preparing payment..." : pendingPaymentOrder ? "Awaiting M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? "Continue to M-Pesa" : "Place Order"}
               </button>
               <TrackedWhatsAppLink
                 href={summaryWhatsappHref}
@@ -598,10 +619,11 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
 
         {fieldErrors.cart ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{fieldErrors.cart}</div> : null}
         {error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+        {pendingPaymentOrder ? <div className="mt-5"><MpesaStkPaymentPanel resourceType="ORDER" reference={pendingPaymentOrder.orderRef} amountDue={pendingPaymentOrder.amountDueNow} initialPhone={form.phoneNumber} paymentAccessToken={pendingPaymentOrder.paymentAccessToken} onSuccess={() => { clearCartAfterOrder(); router.push(pendingPaymentOrder.successUrl); }} /></div> : null}
 
         <div className="mt-5 hidden flex-col gap-2.5 xl:flex xl:flex-row">
-          <button type="submit" disabled={submitting} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
-            {submitting ? "Placing Order..." : "Place Order"}
+          <button type="submit" disabled={submitting || Boolean(pendingPaymentOrder)} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
+            {submitting ? "Preparing payment..." : pendingPaymentOrder ? "Awaiting M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? "Continue to M-Pesa" : "Place Order"}
           </button>
           <Link href={SHOP_CART_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
             Back to Cart
@@ -651,10 +673,10 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
           <button
             type="submit"
             form="shop-checkout-form"
-            disabled={submitting}
+            disabled={submitting || Boolean(pendingPaymentOrder)}
             className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)]"
           >
-            {submitting ? "Placing Order..." : "Place Order"}
+            {submitting ? "Preparing payment..." : pendingPaymentOrder ? "Awaiting M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? "Continue to M-Pesa" : "Place Order"}
           </button>
           <TrackedWhatsAppLink
             href={summaryWhatsappHref}

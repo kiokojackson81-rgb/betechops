@@ -10,13 +10,14 @@ function kes(value: number) {
 }
 
 export default function MpesaStkPaymentPanel({
-  resourceType, reference, amountDue, initialPhone, allowAmountChoice = false, onSuccess,
+  resourceType, reference, amountDue, initialPhone, allowAmountChoice = false, paymentAccessToken, onSuccess,
 }: {
   resourceType: ResourceType;
   reference: string;
   amountDue: number;
   initialPhone?: string | null;
   allowAmountChoice?: boolean;
+  paymentAccessToken?: string | null;
   onSuccess?: () => void;
 }) {
   const [phoneNumber, setPhoneNumber] = useState(initialPhone || "");
@@ -59,7 +60,7 @@ export default function MpesaStkPaymentPanel({
     try {
       const response = await fetch("/api/payments/mpesa/stk", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resourceType, reference, phoneNumber, ...(allowAmountChoice ? { installmentAmount: Number(installmentAmount) } : {}) }),
+        body: JSON.stringify({ resourceType, reference, phoneNumber, paymentAccessToken: paymentAccessToken || undefined, ...(allowAmountChoice ? { installmentAmount: Number(installmentAmount) } : {}) }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || !body.ok) throw new Error(body.error || "M-Pesa could not start the payment request.");
@@ -76,7 +77,7 @@ export default function MpesaStkPaymentPanel({
     <h2 className="mt-2 text-xl font-black text-slate-950">Pay with M-Pesa</h2>
     <p className="mt-2 text-sm leading-6 text-slate-600">Reference: <strong>{reference}</strong>. The amount is verified by Betech before Safaricom receives the request.</p>
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-      <label className="grid gap-1 text-sm font-bold text-slate-700">Phone number<input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} inputMode="tel" placeholder="07XXXXXXXX" disabled={disabled} className="min-h-11 rounded-xl border border-[#7a0000]/15 bg-white px-3 font-normal" /></label>
+      <label className="grid gap-1 text-sm font-bold text-slate-700">M-Pesa number<input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} inputMode="tel" placeholder="07XXXXXXXX" disabled={disabled} className="min-h-11 rounded-xl border border-[#7a0000]/15 bg-white px-3 font-normal" /><span className="text-xs font-medium text-slate-500">You may use a different M-Pesa number from the order contact number.</span></label>
       {allowAmountChoice ? <label className="grid gap-1 text-sm font-bold text-slate-700">Installment amount<input value={installmentAmount} onChange={(e) => setInstallmentAmount(e.target.value)} type="number" min={1} max={amountDue} disabled={disabled} className="min-h-11 rounded-xl border border-[#7a0000]/15 bg-white px-3 font-normal" /></label> : <div className="rounded-xl border border-[#7a0000]/10 bg-white px-4 py-2"><div className="text-xs font-bold text-slate-500">Amount due now</div><div className="text-lg font-black text-slate-950">{kes(amountDue)}</div></div>}
     </div>
     {allowAmountChoice ? <p className="mt-2 text-xs text-slate-600">Outstanding balance: {kes(amountDue)}. Betech validates the requested installment before sending a prompt.</p> : null}

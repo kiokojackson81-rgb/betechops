@@ -14,7 +14,7 @@ type OrderSuccessClientProps = {
   orderRef?: string;
 };
 
-type LiveOrderStatus = "PENDING" | "PROCESSING" | "RECEIPT_ISSUED" | "DISPATCHED" | "PAYMENT_CONFIRMED" | "DELIVERED" | "CANCELLED";
+type LiveOrderStatus = "AWAITING_PAYMENT" | "PENDING" | "CONFIRMED" | "PROCESSING" | "RECEIPT_ISSUED" | "DISPATCHED" | "PAYMENT_CONFIRMED" | "DELIVERED" | "CANCELLED";
 
 type LiveOrderRecord = {
   orderRef: string;
@@ -30,6 +30,11 @@ type LiveOrderRecord = {
   total: number;
   amountDueNow?: number;
   amountPaid?: number;
+  totalOutstanding?: number;
+  remainingProductBalance?: number;
+  remainingDeliveryBalance?: number;
+  paymentPlan?: string;
+  lastMpesaReceiptNumber?: string | null;
   receiptId: string | null;
   receipt: { id: string; receiptNumber: string | null; generatedAt: string } | null;
   processingAt: string | null;
@@ -135,13 +140,23 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
   const deliveryMethod = liveOrder?.deliveryMethod || (!orderRef ? order?.deliveryMethod : null);
   const paymentMethod = liveOrder?.paymentMethod || (!orderRef ? order?.paymentPreference : null);
   const subtotal = liveOrder?.subtotal ?? (!orderRef ? order?.subtotal : undefined);
+  const paymentConfirmed = Boolean(liveOrder?.lastMpesaReceiptNumber);
+  const awaitingPayment = liveOrder?.status === "AWAITING_PAYMENT";
   const heading = hasVerifiedOrder
-    ? "Your order has been received. Our Betech Solar team will confirm availability, delivery, and payment details shortly."
+    ? awaitingPayment
+      ? "Your order is reserved, but not placed yet."
+      : paymentConfirmed
+        ? "Payment received. Your order is now confirmed."
+        : "Your order has been received. Our Betech Solar team will confirm availability, delivery, and payment details shortly."
     : isVerifying
       ? "We are verifying your order with Betech Solar."
       : "We could not verify your order with Betech Solar.";
   const intro = hasVerifiedOrder
-    ? "Payment has not been processed automatically on this page. Your website checkout stays pending until a Betech Solar admin confirms the order and issues the correct receipt."
+    ? awaitingPayment
+      ? "Complete the required M-Pesa payment from checkout to place this order."
+      : paymentConfirmed
+        ? "Safaricom confirmed your M-Pesa payment. Any balance shown below remains payable only under your selected delivery and payment plan."
+        : "This order is awaiting the next required confirmation step."
     : isVerifying
       ? "Please wait while we confirm that your order reached the customer service queue."
       : "Your order has not been confirmed. Please return to checkout and try again, or contact Betech Solar with the reference shown below.";
@@ -150,7 +165,7 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
     <div className="grid gap-5">
       <div className={`${shopStyles.darkPanel} p-6 sm:p-10`}>
         <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-          {hasVerifiedOrder ? "Order received" : isVerifying ? "Verifying order" : "Order verification needed"}
+          {awaitingPayment ? "Payment required" : hasVerifiedOrder ? "Order received" : isVerifying ? "Verifying order" : "Order verification needed"}
         </div>
         <h1 className="mt-4 text-4xl font-black tracking-tight text-white">{heading}</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-white/76">
@@ -192,6 +207,7 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
                     {liveOrder.paymentConfirmationReference ? ` · ${liveOrder.paymentConfirmationReference}` : ""}
                   </div>
                 ) : null}
+                {paymentConfirmed ? <div className="text-emerald-300">M-Pesa receipt: {liveOrder?.lastMpesaReceiptNumber}</div> : null}
               </div>
             ) : null}
             {statusError ? <div className="mt-4 text-sm text-amber-300">Order verification failed: {statusError}</div> : null}
@@ -217,6 +233,7 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
             ) : (
               <p className="mt-4 text-sm leading-6 text-white/76">Your latest order summary will appear here after checkout submission.</p>
             )}
+            {liveOrder ? <div className="mt-4 border-t border-white/10 pt-4 text-sm text-white/80"><div className="flex justify-between"><span>Amount paid</span><strong>{formatCurrency(liveOrder.amountPaid || 0)}</strong></div><div className="mt-1 flex justify-between"><span>Remaining balance</span><strong>{formatCurrency(liveOrder.totalOutstanding ?? Math.max(0, liveOrder.total - (liveOrder.amountPaid || 0)))}</strong></div>{liveOrder.paymentPlan ? <div className="mt-2 text-xs text-white/65">{liveOrder.paymentPlan}</div> : null}</div> : null}
           </div>
         </div>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">

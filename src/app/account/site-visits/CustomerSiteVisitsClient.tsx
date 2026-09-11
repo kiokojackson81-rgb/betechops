@@ -137,7 +137,7 @@ export default function CustomerSiteVisitsClient({
     setStep(1);
     setForm(emptyForm(profile));
     setMessage(
-      `${payload.visit.visitRef} was submitted successfully. Complete payment to confirm scheduling.`,
+      `${payload.visit.visitRef} is reserved and awaiting M-Pesa payment. It is not confirmed for scheduling until Safaricom confirms the payment.`,
     );
     router.replace("/account/site-visits", { scroll: false });
   }
@@ -223,7 +223,7 @@ export default function CustomerSiteVisitsClient({
                   </div>
                 </div>
                 <span className="rounded-full bg-[#fff0cf] px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#7a0000]">
-                  {label(visit.status)}
+                  {visit.paymentStatus === "UNPAID" ? "Awaiting payment" : label(visit.status)}
                 </span>
               </div>
               {visit.originProductName ? (

@@ -23,6 +23,7 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
   BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WebsiteOrderStatus') THEN
       CREATE TYPE "WebsiteOrderStatus" AS ENUM (
+        'AWAITING_PAYMENT',
         'PENDING',
         'CONFIRMED',
         'PROCESSING',
@@ -36,6 +37,7 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
   END $$`,
   `ALTER TYPE "WebsiteOrderStatus" ADD VALUE IF NOT EXISTS 'DISPATCHED'`,
   `ALTER TYPE "WebsiteOrderStatus" ADD VALUE IF NOT EXISTS 'PAYMENT_CONFIRMED'`,
+  `ALTER TYPE "WebsiteOrderStatus" ADD VALUE IF NOT EXISTS 'AWAITING_PAYMENT' BEFORE 'PENDING'`,
   `DO $$
   BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WebsiteOrderType') THEN

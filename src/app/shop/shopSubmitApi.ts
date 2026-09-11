@@ -64,8 +64,11 @@ export type ShopOrderResponse = {
   ok: true;
   source: "website";
   orderRef: string;
-  status: "PENDING";
+  status: "PENDING" | "AWAITING_PAYMENT";
   successUrl: string;
+  requiresImmediatePayment: boolean;
+  amountDueNow: number;
+  paymentAccessToken: string | null;
   order: unknown;
 };
 

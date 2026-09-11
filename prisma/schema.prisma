@@ -3078,6 +3078,7 @@ enum LipaPolePolePaymentMethod {
 }
 
 enum WebsiteOrderStatus {
+  AWAITING_PAYMENT
   PENDING
   CONFIRMED
   PROCESSING

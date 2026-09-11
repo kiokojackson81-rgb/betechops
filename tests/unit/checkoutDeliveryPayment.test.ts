@@ -67,6 +67,13 @@ describe("checkout delivery and payment rules", () => {
       .toMatchObject({ amountDueNow: 30_000, remainingProductBalance: 70_000, remainingDeliveryBalance: 2_500, totalOutstanding: 72_500 });
   });
 
+  it("charges KSh 21, not KSh 1,570, for a KSh 70 deposit order with later transport", () => {
+    const deposit = calculateCheckoutPaymentPlan({ option: "PAY_30_PERCENT_DEPOSIT", productSubtotal: 70, deliveryFee: 1_500, fulfilment: shopOnly });
+    const full = calculateCheckoutPaymentPlan({ option: "PAY_IN_FULL", productSubtotal: 70, deliveryFee: 1_500, fulfilment: shopOnly });
+    expect(deposit).toMatchObject({ amountDueNow: 21, remainingProductBalance: 49, remainingDeliveryBalance: 1_500, totalOutstanding: 1_549 });
+    expect(full).toMatchObject({ amountDueNow: 1_570, totalOutstanding: 0 });
+  });
+
   it("calculates transport-fee-first separately from the product balance", () => {
     expect(calculateCheckoutPaymentPlan({ option: "PAY_TRANSPORT_FEE_FIRST", productSubtotal: 100_000, deliveryFee: 2_500, fulfilment: shopOnly }))
       .toMatchObject({ amountDueNow: 2_500, remainingProductBalance: 100_000, remainingDeliveryBalance: 0, totalOutstanding: 100_000 });

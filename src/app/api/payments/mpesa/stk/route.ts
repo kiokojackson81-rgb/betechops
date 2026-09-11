@@ -17,6 +17,7 @@ const requestSchema = z.object({
   // This is permitted only for a flexible Lipa Pole Pole installment. It is
   // independently bounded by the agreement balance in the service.
   installmentAmount: z.coerce.number().int().positive().optional(),
+  paymentAccessToken: z.string().trim().min(16).max(120).optional(),
 });
 
 async function assertCustomerOwnsPrivateResource(resourceType: "SITE_VISIT" | "LPP", reference: string) {

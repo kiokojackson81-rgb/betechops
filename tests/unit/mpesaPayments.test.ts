@@ -10,7 +10,7 @@ jest.mock("@/lib/prisma", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { handleC2bConfirmation, handleStkCallback, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
+import { handleC2bConfirmation, handleStkCallback, initiateStkPush, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
 
 const transactionId = "TESTMPESA001";
 const basePayment = {
@@ -178,5 +178,34 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
 
     expect(tx.order.update).toHaveBeenCalledTimes(1);
     expect(tx.order.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ paidAmount: 10 }) }));
+  });
+
+  it("uses the server-calculated order amount and permits a different valid M-Pesa payer number", async () => {
+    const oldEnv = { ...process.env };
+    process.env.MPESA_CONSUMER_KEY = "test-key";
+    process.env.MPESA_CONSUMER_SECRET = "test-secret";
+    process.env.MPESA_PASSKEY = "test-passkey";
+    process.env.MPESA_SHORTCODE = "1231008";
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: "token" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ResponseCode: "0", MerchantRequestID: "merchant-2", CheckoutRequestID: "ws_CO_456", ResponseDescription: "Accepted" }) });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    (prisma.websiteOrder.findFirst as jest.Mock).mockResolvedValue({ id: "web-1", orderRef: "BT-WEB-1", total: 1_570, customerPhone: "+254700000000", metadata: { amountDueNow: 21, amountPaid: 0, paymentOption: "PAY_30_PERCENT_DEPOSIT" }, status: "PENDING" });
+    (prisma.mpesaPayment as unknown as { findFirst: jest.Mock }).findFirst = jest.fn().mockResolvedValue(null);
+    (prisma.mpesaPayment.create as jest.Mock).mockResolvedValue({});
+
+    await expect(initiateStkPush({ orderReference: "BT-WEB-1", phoneNumber: "0705663175" })).resolves.toMatchObject({ amount: 21, checkoutRequestId: "ws_CO_456" });
+    const stkBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(stkBody).toMatchObject({ Amount: 21, PartyA: "254705663175", PartyB: "1231008", AccountReference: "BT-WEB-1" });
+    process.env = oldEnv;
+  });
+
+  it("records an STK cancellation without touching the linked order", async () => {
+    const pending = { ...basePayment, channel: "STK", status: "PENDING", orderId: "order-1", checkoutRequestId: "ws_CO_cancel" };
+    (prisma.mpesaPayment.findUnique as jest.Mock).mockResolvedValue(pending);
+    (prisma.mpesaPayment as unknown as { update: jest.Mock }).update = jest.fn().mockResolvedValue({});
+    await handleStkCallback({ Body: { stkCallback: { CheckoutRequestID: "ws_CO_cancel", ResultCode: 1032, ResultDesc: "Request cancelled by user" } } });
+    expect((prisma.mpesaPayment as unknown as { update: jest.Mock }).update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "CANCELLED" }) }));
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

@@ -271,6 +271,7 @@ export async function POST(request: NextRequest) {
   });
   const deliveryMethodLabel = getCheckoutDeliveryMethodLabel(deliveryMethod);
   const orderType = deriveWebsiteOrderType(deliveryMethodLabel, paymentPlan.label);
+  const requiresImmediatePayment = paymentPlan.amountDueNow > 0;
   const customerIdentity = await findOrCreateCustomerIdentityUser({
     customerName: data.customerName.trim(),
     customerPhone: data.customerPhone.trim(),
@@ -293,7 +294,9 @@ export async function POST(request: NextRequest) {
       deliveryMethod: deliveryMethodLabel,
       paymentMethod: paymentPlan.label,
       orderType,
-      status: "PENDING",
+      // The reference is intentionally reserved before Daraja receives an
+      // STK request, but mandatory-payment orders are not placed yet.
+      status: requiresImmediatePayment ? "AWAITING_PAYMENT" : "PENDING",
       subtotal,
       deliveryFee,
       total,
@@ -337,6 +340,7 @@ export async function POST(request: NextRequest) {
         remainingDeliveryBalance: paymentPlan.remainingDeliveryBalance,
         totalOutstanding: paymentPlan.totalOutstanding,
         paymentSummary: paymentPlan.description,
+        paymentAccessToken: requiresImmediatePayment ? buildEntityId() : null,
       },
       items: {
         create: items.map((item) => ({
@@ -391,6 +395,11 @@ export async function POST(request: NextRequest) {
     source: "website",
     orderRef: createdRow.orderRef,
     status: createdRow.status,
+    requiresImmediatePayment,
+    amountDueNow: paymentPlan.amountDueNow,
+    paymentAccessToken: requiresImmediatePayment && createdRow.metadata && typeof createdRow.metadata === "object"
+      ? String((createdRow.metadata as Record<string, unknown>).paymentAccessToken || "") || null
+      : null,
     successUrl: getShopOrderSuccessHref(createdRow.orderRef),
     order: await serializeWebsiteOrder(createdRow),
   });
@@ -416,6 +425,9 @@ export async function GET(request: Request) {
     }
 
     const serialized = await serializeWebsiteOrder(order);
+    const paymentMetadata = serialized.metadata && typeof serialized.metadata === "object"
+      ? serialized.metadata as Record<string, unknown>
+      : {};
     return NextResponse.json({
       ok: true,
       order: {
@@ -431,8 +443,13 @@ export async function GET(request: Request) {
         status: serialized.status,
         subtotal: serialized.subtotal,
         total: serialized.total,
-        amountDueNow: Number((serialized.metadata && typeof serialized.metadata === "object" ? (serialized.metadata as Record<string, unknown>).amountDueNow : 0) || 0),
-        amountPaid: Number((serialized.metadata && typeof serialized.metadata === "object" ? (serialized.metadata as Record<string, unknown>).amountPaid : 0) || 0),
+        amountDueNow: Number(paymentMetadata.amountDueNow || 0),
+        amountPaid: Number(paymentMetadata.amountPaid || 0),
+        totalOutstanding: Number(paymentMetadata.totalOutstanding || 0),
+        remainingProductBalance: Number(paymentMetadata.remainingProductBalance || 0),
+        remainingDeliveryBalance: Number(paymentMetadata.remainingDeliveryBalance || 0),
+        paymentPlan: String(paymentMetadata.paymentSummary || serialized.paymentMethod || ""),
+        lastMpesaReceiptNumber: typeof paymentMetadata.lastMpesaReceiptNumber === "string" ? paymentMetadata.lastMpesaReceiptNumber : null,
         receiptId: serialized.receiptId,
         receipt: serialized.receipt,
         createdAt: serialized.createdAt,
