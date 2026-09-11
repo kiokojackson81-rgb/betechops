@@ -131,6 +131,21 @@ function getReceiptHref(order: Pick<SerializedWebsiteOrder, "receiptId">) {
   return order.receiptId ? `/receipts/${encodeURIComponent(order.receiptId)}` : "/receipts";
 }
 
+function getWebsiteOrderPaymentSummary(order: SerializedWebsiteOrder) {
+  const details = order.checkoutPaymentDetails;
+  const paid = Math.max(0, details.amountPaid ?? 0);
+  const balance = Math.max(0, details.totalOutstanding ?? order.total - paid);
+  const isConfirmed = paid > 0 || order.status === "PAYMENT_CONFIRMED";
+  return {
+    paid,
+    balance,
+    isConfirmed,
+    receipt: details.lastMpesaReceiptNumber || order.paymentConfirmationReference || null,
+    paymentDate: details.lastMpesaPaymentAt || order.paymentConfirmedAt || null,
+    method: details.lastMpesaReceiptNumber ? "M-PESA" : order.paymentConfirmationMethod || order.paymentMethod,
+  };
+}
+
 export default function WebsiteOrdersDeskClient({
   initialOrders = [],
   apiBasePath,
@@ -439,6 +454,31 @@ export default function WebsiteOrdersDeskClient({
 
                   {open ? (
                     <div className="border-t border-white/10 bg-[#0f1520] px-4 py-4">
+                      {(() => {
+                        const payment = getWebsiteOrderPaymentSummary(order);
+                        return (
+                          <section className="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-300">Payment summary</div>
+                                <div className="mt-2 text-base font-bold text-white">
+                                  Payment confirmed: {payment.isConfirmed ? `Yes — ${formatCurrency(payment.paid)} received` : "No payment received"}
+                                </div>
+                              </div>
+                              <Link href="/admin/mpesa-payments" className="rounded-lg border border-emerald-400/25 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/10">
+                                View M-PESA transactions
+                              </Link>
+                            </div>
+                            <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                              <div><div className="text-xs text-slate-400">Order total</div><div className="mt-1 font-semibold text-white">{formatCurrency(order.total)}</div></div>
+                              <div><div className="text-xs text-slate-400">Paid</div><div className="mt-1 font-semibold text-emerald-200">{formatCurrency(payment.paid)}</div></div>
+                              <div><div className="text-xs text-slate-400">Balance</div><div className="mt-1 font-semibold text-white">{formatCurrency(payment.balance)}</div></div>
+                              <div><div className="text-xs text-slate-400">M-PESA receipt</div><div className="mt-1 font-semibold text-white">{payment.receipt || "-"}</div></div>
+                            </div>
+                            {payment.paymentDate ? <div className="mt-3 text-xs text-slate-300">Last payment: {payment.method} · {formatDateTime(payment.paymentDate)}</div> : null}
+                          </section>
+                        );
+                      })()}
                       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
                         <div className="space-y-3">
                           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -458,7 +498,7 @@ export default function WebsiteOrdersDeskClient({
                               {order.checkoutPaymentDetails.amountDueNow != null ? <div><span className="text-slate-500">Amount due now:</span> {formatCurrency(order.checkoutPaymentDetails.amountDueNow)}</div> : null}
                               {order.checkoutPaymentDetails.totalOutstanding != null ? <div><span className="text-slate-500">Balance due later:</span> {formatCurrency(order.checkoutPaymentDetails.totalOutstanding)}</div> : null}
                               <div><span className="text-slate-500">Order type:</span> {order.orderType.replace(/_/g, " ")}</div>
-                              <div><span className="text-slate-500">Payment confirmed:</span> {order.paymentConfirmationMethod ? `${order.paymentConfirmationMethod}${order.paymentConfirmationReference ? ` · ${order.paymentConfirmationReference}` : ""}` : "-"}</div>
+                              <div><span className="text-slate-500">Payment confirmed:</span> {getWebsiteOrderPaymentSummary(order).isConfirmed ? `Yes — ${formatCurrency(getWebsiteOrderPaymentSummary(order).paid)} received` : "No"}</div>
                               <div><span className="text-slate-500">Notes:</span> {order.notes || "-"}</div>
                               <div><span className="text-slate-500">Confirmed by:</span> {order.confirmedBy?.name || "-"}</div>
                               <div><span className="text-slate-500">Assigned to:</span> {order.assignedAttendant?.name || "-"}</div>

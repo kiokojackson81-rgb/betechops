@@ -351,6 +351,9 @@ export type SerializedWebsiteOrder = {
     remainingProductBalance: number | null;
     remainingDeliveryBalance: number | null;
     totalOutstanding: number | null;
+    mpesaPaymentStatus: string | null;
+    lastMpesaReceiptNumber: string | null;
+    lastMpesaPaymentAt: string | null;
   };
   paymentMethod: string;
   orderType: WebsiteOrderType;
@@ -505,6 +508,9 @@ function readWebsiteOrderMetadata(metadata: unknown) {
       remainingProductBalance: readNumber("remainingProductBalance"),
       remainingDeliveryBalance: readNumber("remainingDeliveryBalance"),
       totalOutstanding: readNumber("totalOutstanding"),
+      mpesaPaymentStatus: readString("mpesaPaymentStatus"),
+      lastMpesaReceiptNumber: readString("lastMpesaReceiptNumber"),
+      lastMpesaPaymentAt: readString("lastMpesaPaymentAt"),
     },
   } as const;
 }
