@@ -6,5 +6,6 @@ compatibility_date = "2026-09-10"
 # This is deliberately the only route the Worker owns. All other
 # betech.co.ke traffic keeps its existing Vercel redirect/site behaviour.
 routes = [
-  { pattern = "betech.co.ke/api/mpesa/*", zone_name = "betech.co.ke" }
+  { pattern = "betech.co.ke/api/mpesa/*", zone_name = "betech.co.ke" },
+  { pattern = "betech.co.ke/api/payments/c2b/*", zone_name = "betech.co.ke" }
 ]

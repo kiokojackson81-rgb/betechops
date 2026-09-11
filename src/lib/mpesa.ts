@@ -51,8 +51,8 @@ export function mpesaCallbackUrls() {
   const base = callbackBaseUrl();
   return {
     stk: `${base}/api/mpesa/stk/callback`,
-    c2bValidation: `${base}/api/mpesa/c2b/validation`,
-    c2bConfirmation: `${base}/api/mpesa/c2b/confirmation`,
+    c2bValidation: `${base}/api/payments/c2b/validation`,
+    c2bConfirmation: `${base}/api/payments/c2b/confirmation`,
   };
 }
 
