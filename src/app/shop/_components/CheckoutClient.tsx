@@ -104,6 +104,8 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     paymentAccessToken: string | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [payerPhone, setPayerPhone] = useState("");
+  const [editingPayerPhone, setEditingPayerPhone] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
   const [installationPricing, setInstallationPricing] = useState<InstallationPricing[]>([]);
   const [pricingLoading, setPricingLoading] = useState(false);
@@ -595,6 +597,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               </div>
               {fieldErrors.paymentPreference ? <span className="mt-2 block text-xs font-semibold text-red-600">{fieldErrors.paymentPreference}</span> : null}
               {paymentPlan ? <div className="mt-3 rounded-[16px] border border-emerald-300/40 bg-emerald-50 p-3 text-sm text-slate-700"><div className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-800">Payment Summary</div><div className="mt-2 grid gap-1"><div className="flex justify-between"><span>Products</span><b>{formatCurrency(subtotal)}</b></div><div className="flex justify-between"><span>Delivery / transport</span><b>{formatCurrency(orderDeliveryFee)}</b></div><div className="flex justify-between border-t border-emerald-900/10 pt-2 text-base"><span>Amount due now</span><b className="text-emerald-900">{formatCurrency(paymentPlan.amountDueNow)}</b></div><div className="flex justify-between"><span>Remaining product balance</span><b>{formatCurrency(paymentPlan.remainingProductBalance)}</b></div><div className="flex justify-between"><span>Remaining delivery balance</span><b>{formatCurrency(paymentPlan.remainingDeliveryBalance)}</b></div></div></div> : null}
+              {paymentPlan && paymentPlan.amountDueNow > 0 ? <div className="mt-3 rounded-[16px] border border-[#7a0000]/10 bg-white p-3 text-sm text-slate-700"><div className="font-bold text-slate-950">Secure M-PESA payment</div><div className="mt-1">STK prompt will be sent to <strong>{payerPhone || form.phoneNumber || "your M-PESA number"}</strong>.</div><button type="button" onClick={() => setEditingPayerPhone((open) => !open)} className="mt-2 text-xs font-bold text-[#7a0000] underline">{editingPayerPhone ? "Use this M-PESA number" : "Change M-PESA number"}</button>{editingPayerPhone ? <input value={payerPhone || form.phoneNumber} onChange={(event) => setPayerPhone(event.target.value)} inputMode="tel" placeholder="07XXXXXXXX" className="mt-2 min-h-11 w-full rounded-xl border border-[#7a0000]/15 bg-white px-3" /> : null}<div className="mt-2 text-xs text-slate-500">Enter your PIN only in Safaricom’s prompt. Betech never asks for or stores your PIN.</div></div> : null}
             </>}
             <div className="mt-5 grid gap-2.5 xl:hidden">
               <button
@@ -623,7 +626,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
 
         {fieldErrors.cart ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{fieldErrors.cart}</div> : null}
         {error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-        {pendingPaymentOrder ? <div className="mt-5"><MpesaStkPaymentPanel resourceType="ORDER" reference={pendingPaymentOrder.orderRef} amountDue={pendingPaymentOrder.amountDueNow} initialPhone={form.phoneNumber} paymentAccessToken={pendingPaymentOrder.paymentAccessToken} autoStart compact onSuccess={() => { clearCartAfterOrder(); router.push(pendingPaymentOrder.successUrl); }} /></div> : null}
+        {pendingPaymentOrder ? <div className="mt-5"><MpesaStkPaymentPanel resourceType="ORDER" reference={pendingPaymentOrder.orderRef} amountDue={pendingPaymentOrder.amountDueNow} initialPhone={payerPhone || form.phoneNumber} paymentAccessToken={pendingPaymentOrder.paymentAccessToken} autoStart compact onSuccess={() => { clearCartAfterOrder(); router.push(pendingPaymentOrder.successUrl); }} /></div> : null}
 
         <div className="mt-5 hidden flex-col gap-2.5 xl:flex xl:flex-row">
           <button type="submit" disabled={submitting || Boolean(pendingPaymentOrder)} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
