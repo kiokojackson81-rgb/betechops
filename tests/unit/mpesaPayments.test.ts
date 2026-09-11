@@ -10,7 +10,7 @@ jest.mock("@/lib/prisma", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { getStkPaymentStatus, handleC2bConfirmation, handleStkCallback, initiateStkPush, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
+import { getStkPaymentStatus, handleC2bConfirmation, handleStkCallback, initiateStkPush, initiateStkPushForResource, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
 
 const transactionId = "TESTMPESA001";
 const basePayment = {
@@ -210,6 +210,49 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
     const stkBody = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(stkBody).toMatchObject({ Amount: 21, PartyA: "254705663175", PartyB: "1231008", AccountReference: "BT-WEB-1" });
     process.env = oldEnv;
+  });
+
+  it("uses an installation reservation's server-calculated fee, never a browser amount", async () => {
+    const oldEnv = { ...process.env };
+    process.env.MPESA_CONSUMER_KEY = "test-key";
+    process.env.MPESA_CONSUMER_SECRET = "test-secret";
+    process.env.MPESA_PASSKEY = "test-passkey";
+    process.env.MPESA_SHORTCODE = "1231008";
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: "token" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ResponseCode: "0", MerchantRequestID: "merchant-installation", CheckoutRequestID: "ws_CO_installation", ResponseDescription: "Accepted" }) });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue({ id: "installation-order", orderNumber: "Betech-PROJECT-1", customerPhone: "254700000000", paidAmount: 0, metadata: { installationPaymentState: "AWAITING_PAYMENT", installationPaymentDue: 35_000, installationPaymentExpiresAt: new Date(Date.now() + 60_000).toISOString() } });
+    (prisma.mpesaPayment as unknown as { findFirst: jest.Mock }).findFirst = jest.fn().mockResolvedValue(null);
+    (prisma.order as unknown as { findUniqueOrThrow: jest.Mock }).findUniqueOrThrow = jest.fn().mockResolvedValue({ metadata: { installationPaymentState: "AWAITING_PAYMENT" } });
+    (prisma.order as unknown as { update: jest.Mock }).update = jest.fn().mockResolvedValue({});
+    (prisma.mpesaPayment.create as jest.Mock).mockResolvedValue({});
+
+    await expect(initiateStkPushForResource({ resourceType: "INSTALLATION_PROJECT", reference: "Betech-PROJECT-1", phoneNumber: "0705663175", installmentAmount: 1 })).resolves.toMatchObject({ amount: 35_000 });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ Amount: 35_000, AccountReference: "Betech-PROJECT-1", PartyB: "1231008" });
+    process.env = oldEnv;
+  });
+
+  it("confirms an installation reservation once after STK success and promotes it to a project", async () => {
+    const pending = { ...basePayment, channel: "STK", status: "PENDING", orderId: null, websiteOrderId: null, resourceType: "INSTALLATION_PROJECT", resourceId: "installation-order", requestedAmount: 35_000, amount: null, checkoutRequestId: "ws_CO_installation_success" };
+    const tx = {
+      mpesaPayment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUnique: jest.fn().mockResolvedValue(pending), update: jest.fn().mockResolvedValue({}) },
+      order: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "installation-order", orderNumber: "Betech-PROJECT-1", totalAmount: 100_000, paidAmount: 0, metadata: { installationPaymentTerm: "DEPOSIT_AND_BALANCE", installationDepositPercent: 30 }, receipt: { id: "receipt-1", data: { installationPaymentState: "AWAITING_PAYMENT" } } }), update: jest.fn().mockResolvedValue({}) },
+      receipt: { update: jest.fn().mockResolvedValue({}) },
+      websiteOrder: { findUniqueOrThrow: jest.fn(), update: jest.fn() },
+    };
+    (prisma.mpesaPayment.findUnique as jest.Mock).mockResolvedValue(pending);
+    (prisma.order as unknown as { findUnique: jest.Mock }).findUnique = jest.fn().mockResolvedValue(null);
+    (prisma.$transaction as jest.Mock).mockImplementation(async (work) => work(tx));
+    const callback = { Body: { stkCallback: { CheckoutRequestID: "ws_CO_installation_success", ResultCode: 0, ResultDesc: "Success", CallbackMetadata: { Item: [
+      { Name: "Amount", Value: 35_000 }, { Name: "MpesaReceiptNumber", Value: "INSTALLRECEIPT1" }, { Name: "PhoneNumber", Value: "254700000000" }, { Name: "TransactionDate", Value: "20260911100000" },
+    ] } } } };
+
+    await handleStkCallback(callback);
+
+    expect(tx.order.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ paidAmount: 35_000, metadata: expect.objectContaining({ installationPaymentState: "CONFIRMED" }) }) }));
+    expect(tx.receipt.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ data: expect.objectContaining({ customerType: "project", installationPaymentState: "CONFIRMED" }) }) }));
+    expect(tx.mpesaPayment.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "SUCCESS", amount: 35_000, receiptNumber: "INSTALLRECEIPT1" }) }));
   });
 
   it("records an STK cancellation without touching the linked order", async () => {

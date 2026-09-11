@@ -25,6 +25,8 @@ export function getStandardSiteVisitFee(county: string | null | undefined, town?
 }
 
 const VALID_TRANSITIONS: Record<SiteVisitStatus, readonly SiteVisitStatus[]> = {
+  PAYMENT_PENDING: ["PAYMENT_PENDING", "PAYMENT_FAILED", "PENDING", "CLOSED"],
+  PAYMENT_FAILED: ["PAYMENT_FAILED", "PAYMENT_PENDING", "CLOSED"],
   PENDING: ["PENDING", "SCHEDULED", "CLOSED"],
   SCHEDULED: ["SCHEDULED", "PENDING", "VISITED", "CLOSED"],
   VISITED: ["VISITED", "SCHEDULED", "CLOSED"],

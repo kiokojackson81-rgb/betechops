@@ -6,7 +6,6 @@ import { auth } from "@/lib/auth";
 import { findSafeUserById } from "@/lib/customerIdentity";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
-import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import {
   calculateAccessoriesEstimate,
   calculateInstallationFee,
@@ -14,9 +13,6 @@ import {
   inferLegacyProductCataloguePolicy,
   productCatalogueConfigurationSchema,
 } from "@/lib/productCataloguePolicy";
-import { buildReceiptProjectFlow } from "@/lib/receiptProjects";
-import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
-import { sendTransactionalSms } from "@/lib/africasTalking";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +28,7 @@ const createSchema = z.object({
   paymentStructure: z.enum(["FULL_UPFRONT", "DEPOSIT_30"]),
   preferredInstallationDate: z.coerce.date(),
   termsAccepted: z.literal(true),
+  bookingAttemptId: z.string().trim().min(12).max(120),
 });
 
 const INSTALLATION_TERMS_URL = "https://www.betech.co.ke/p/terms";
@@ -131,23 +128,25 @@ export async function POST(request: NextRequest) {
   const paymentTerm = input.paymentStructure === "DEPOSIT_30"
     ? "DEPOSIT_AND_BALANCE"
     : "FULL_BEFORE_INSTALLATION";
+  const amountDue = input.paymentStructure === "DEPOSIT_30"
+    ? Math.round(totalAmount * 0.3)
+    : totalAmount;
+  // A retry from the same modal must recover the same unpaid reservation,
+  // rather than putting multiple installation jobs in operations queues.
+  const existingReservation = await prisma.order.findFirst({
+    where: { metadata: { path: ["installationBookingAttemptId"], equals: input.bookingAttemptId } },
+    select: { id: true, orderNumber: true, metadata: true, receipt: { select: { id: true } } },
+  });
+  if (existingReservation?.receipt) {
+    const metadata = existingReservation.metadata && typeof existingReservation.metadata === "object" && !Array.isArray(existingReservation.metadata)
+      ? existingReservation.metadata as Record<string, unknown> : {};
+    const state = String(metadata.installationPaymentState || "AWAITING_PAYMENT");
+    if (["AWAITING_PAYMENT", "PAYMENT_FAILED"].includes(state)) {
+      return NextResponse.json({ ok: true, source: "project", projectRef: existingReservation.orderNumber, receiptId: existingReservation.receipt.id, amountDue: Number(metadata.installationPaymentDue || amountDue), installationPaymentState: state });
+    }
+  }
   const projectRef = await buildUniqueProjectRef();
   const location = [input.exactLocation, input.town, input.county].join(", ");
-  const projectFlow = buildReceiptProjectFlow({
-    stage: "RECEIPT_CREATED",
-    paymentTerm,
-    projectValue: totalAmount,
-    depositPercent: input.paymentStructure === "DEPOSIT_30" ? 30 : 0,
-    depositPaidAmount: 0,
-    amountPaidTotal: 0,
-    // A customer preference is not a confirmed installation appointment.
-    scheduledDate: null,
-    postedReceiptNumber: projectRef,
-    internalNotes: "Installation booked by customer from the website.",
-    paymentNotes: input.paymentStructure === "DEPOSIT_30"
-      ? "30% deposit required before project scheduling is confirmed."
-      : "Full payment required before project scheduling is confirmed.",
-  });
 
   const shop = await prisma.shop.findFirst({ where: { isActive: true }, select: { id: true } });
   if (!shop) {
@@ -168,7 +167,7 @@ export async function POST(request: NextRequest) {
         paidAmount: 0,
         metadata: {
           customerUserId: customerIdentity.id,
-          customerType: "project",
+          customerType: "installation-payment-reservation",
           deliveryAddress: location,
           bookingSource: "WEBSITE_INSTALLATION",
           county: input.county,
@@ -179,7 +178,12 @@ export async function POST(request: NextRequest) {
           termsAccepted: true,
           termsAcceptedAt: termsAcceptedAt.toISOString(),
           termsUrl: INSTALLATION_TERMS_URL,
-          projectFlow,
+          installationBookingAttemptId: input.bookingAttemptId,
+          installationPaymentState: "AWAITING_PAYMENT",
+          installationPaymentDue: amountDue,
+          installationPaymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          installationPaymentTerm: paymentTerm,
+          installationDepositPercent: input.paymentStructure === "DEPOSIT_30" ? 30 : 0,
         },
         items: {
           create: {
@@ -209,7 +213,7 @@ export async function POST(request: NextRequest) {
           needsPricing: true,
         },
         data: {
-          customerType: "project",
+          customerType: "installation-payment-reservation",
           orderRef: projectRef,
           customerName,
           customerPhone,
@@ -223,7 +227,11 @@ export async function POST(request: NextRequest) {
           termsAccepted: true,
           termsAcceptedAt: termsAcceptedAt.toISOString(),
           termsUrl: INSTALLATION_TERMS_URL,
-          projectFlow,
+          installationPaymentState: "AWAITING_PAYMENT",
+          installationPaymentDue: amountDue,
+          installationPaymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          installationPaymentTerm: paymentTerm,
+          installationDepositPercent: input.paymentStructure === "DEPOSIT_30" ? 30 : 0,
           items: [{
             productId: product.id,
             title: product.name,
@@ -243,41 +251,12 @@ export async function POST(request: NextRequest) {
     });
   });
 
-  await syncPosReceiptToCustomerAccount(receipt.id).catch((error) => {
-    console.error("[installation-projects] failed to sync customer project", {
-      receiptId: receipt.id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  });
-
-  await notifyAdminCriticalSms({
-    eventType: "WEB_PROJECT_BOOKED",
-    entityId: receipt.id,
-    title: `New web installation project ${projectRef}`,
-    details: [
-      `Customer: ${customerName}`,
-      `Product: ${product.name}`,
-      `Total: KSh ${totalAmount.toLocaleString("en-KE")}`,
-      `Payment: ${input.paymentStructure === "DEPOSIT_30" ? "30% deposit" : "full upfront"}`,
-      `Location: ${input.town}, ${input.county}`,
-      `Preferred date: ${input.preferredInstallationDate.toISOString().slice(0, 10)}`,
-    ],
-    actionPath: `/admin/returns?project=${encodeURIComponent(receipt.id)}`,
-    payload: { projectRef, receiptId: receipt.id },
-  });
-
-  const projectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.betech.co.ke"}/account/projects/${receipt.id}`;
-  void sendTransactionalSms(
-    customerPhone,
-    `Betech Solar: Your installation request ${projectRef} has been received. Preferred date: ${input.preferredInstallationDate.toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi", day: "numeric", month: "short", year: "numeric" })} (awaiting confirmation). Track your project: ${projectUrl}. We will notify you once your installation schedule is confirmed.`,
-  ).catch((error) => console.error("[installation-projects] customer project SMS failed", error));
-
   return NextResponse.json({
     ok: true,
     source: "project",
     projectRef,
     receiptId: receipt.id,
-    projectUrl: `/account/projects/${receipt.id}`,
-    successUrl: `/project-booking-success?ref=${encodeURIComponent(projectRef)}&project=${encodeURIComponent(receipt.id)}`,
+    amountDue,
+    installationPaymentState: "AWAITING_PAYMENT",
   });
 }

@@ -84,6 +84,8 @@ export type InstallationProjectInput = {
   paymentStructure: "FULL_UPFRONT" | "DEPOSIT_30";
   preferredInstallationDate: string;
   termsAccepted: true;
+  /** Stable for one open booking modal so a retry reuses its reservation. */
+  bookingAttemptId: string;
 };
 
 export type InstallationProjectResponse = {
@@ -91,7 +93,8 @@ export type InstallationProjectResponse = {
   source: "project";
   projectRef: string;
   receiptId: string;
-  successUrl: string;
+  amountDue: number;
+  installationPaymentState: "AWAITING_PAYMENT" | "PAYMENT_FAILED" | "PAYMENT_EXPIRED";
 };
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {

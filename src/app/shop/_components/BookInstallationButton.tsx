@@ -11,6 +11,7 @@ import { getShopCustomerProfile, saveShopCustomerProfile } from "@/app/shop/shop
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import { getDeliveryZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 
 type InstallationCustomer = {
   isAuthenticated: boolean;
@@ -100,6 +101,9 @@ export default function BookInstallationButton({ product, customer = emptyCustom
   const [pricing, setPricing] = useState<InstallationPricing | null>(null);
   const [error, setError] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [paymentSession, setPaymentSession] = useState<{ projectRef: string; receiptId: string; amountDue: number } | null>(null);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [bookingAttemptId] = useState(() => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `installation-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const [form, setForm] = useState({
     name: customer.name,
     email: customer.email,
@@ -211,6 +215,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
         paymentStructure: form.paymentStructure,
         preferredInstallationDate: form.installationDate,
         termsAccepted: true,
+        bookingAttemptId,
       });
 
       saveShopCustomerProfile({
@@ -229,7 +234,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
         paymentPreference: paymentLabel,
         orderIntent: "INSTALLATION_PROJECT",
       });
-      router.push(response.successUrl);
+      setPaymentSession({ projectRef: response.projectRef, receiptId: response.receiptId, amountDue: response.amountDue });
     } catch (submissionError) {
       if ((submissionError as ShopApiError)?.status === 401) {
         router.push(buildInstallationLoginHref(product));
@@ -249,7 +254,8 @@ export default function BookInstallationButton({ product, customer = emptyCustom
           <button type="button" onClick={() => setOpen(false)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#7a0000]/12 bg-white text-slate-700" aria-label="Close installation booking"><X className="h-5 w-5" /></button>
         </div>
 
-        <form onSubmit={submitBooking} className="min-h-0 overflow-y-auto overscroll-contain">
+        {paymentSession ? <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-7">
+          {paymentConfirmed ? <section className="rounded-[22px] border border-emerald-200 bg-emerald-50 p-6 text-emerald-950"><div className="flex items-center gap-2 font-black"><CheckCircle2 className="h-6 w-6" /> Payment received</div><h3 className="mt-3 text-xl font-black">Installation successfully booked</h3><dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-emerald-800/70">Booking reference</dt><dd className="font-black">{paymentSession.projectRef}</dd></div><div><dt className="text-emerald-800/70">Paid now</dt><dd className="font-black">{formatCurrency(paymentSession.amountDue)}</dd></div><div><dt className="text-emerald-800/70">Preferred date</dt><dd className="font-black">{form.installationDate}</dd></div><div><dt className="text-emerald-800/70">Location</dt><dd className="font-black">{form.exactLocation}, {form.town}</dd></div></dl><button type="button" onClick={() => router.push(`/account/projects/${encodeURIComponent(paymentSession.receiptId)}`)} className="mt-6 rounded-[16px] bg-[#7a0000] px-5 py-3 text-sm font-black text-white">View installation booking</button></section> : <><MpesaStkPaymentPanel resourceType="INSTALLATION_PROJECT" reference={paymentSession.projectRef} amountDue={paymentSession.amountDue} initialPhone={customer.phone || form.phone} autoStart compact actionLabel={`Pay Installation Fee ${formatCurrency(paymentSession.amountDue)} & Book`} onSuccess={() => setPaymentConfirmed(true)} /><p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">Your installation is confirmed only after Safaricom confirms payment. If you close this window, the payment reservation remains available briefly; it is not a confirmed booking.</p></>}</div> : <form onSubmit={submitBooking} className="min-h-0 overflow-y-auto overscroll-contain">
           <div className="grid gap-5 p-4 sm:p-7 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
             <div className="grid gap-5">
               <section>
@@ -308,9 +314,9 @@ export default function BookInstallationButton({ product, customer = emptyCustom
 
           <div className="sticky bottom-0 flex flex-col gap-3 border-t border-[#7a0000]/10 bg-white/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <div className="min-h-5 text-sm font-semibold text-red-700">{error || (requiresAssessment ? "A site assessment and custom quotation are required for this system." : "")}</div>
-            <button type="submit" disabled={submitting || pricingLoading || !pricing || requiresAssessment || !termsAccepted} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[16px] bg-[#7a0000] px-7 font-black text-white transition hover:bg-[#620000] disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}{submitting ? "Creating booking..." : "Book & Pay"}</button>
+            <div className="text-right"><div className="mb-1 text-xs font-semibold text-slate-500">Secure M-Pesa payment · Enter your PIN only in Safaricom&apos;s prompt.</div><button type="submit" disabled={submitting || pricingLoading || !pricing || requiresAssessment || !termsAccepted} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[16px] bg-[#7a0000] px-7 font-black text-white transition hover:bg-[#620000] disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}{submitting ? "Preparing secure payment..." : `Pay Installation Fee ${pricing ? formatCurrency(amountDue) : ""} & Book`}</button></div>
           </div>
-        </form>
+        </form>}
       </div>
     </div>
   ) : null;

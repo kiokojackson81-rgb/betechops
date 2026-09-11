@@ -8,6 +8,9 @@ import { ensureSiteVisitsSchema } from "@/lib/siteVisits";
 import { getLppAccountSummary, recordLppPayment } from "@/lib/lipaPolePoleService";
 import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import { dispatchSiteVisitCreated } from "@/lib/siteVisitNotifications";
+import { buildReceiptProjectFlow } from "@/lib/receiptProjects";
+import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
+import { sendTransactionalSms } from "@/lib/africasTalking";
 
 const DARAJA_PRODUCTION_BASE_URL = "https://api.safaricom.co.ke";
 const DEFAULT_CALLBACK_BASE_URL = "https://betech.co.ke";
@@ -17,9 +20,10 @@ type PaymentTarget =
   | { kind: "ORDER"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: MpesaPaymentPurpose }
   | { kind: "WEBSITE_ORDER"; id: string; reference: string; total: number; paid: number; dueNow: number; customerPhone: string | null; purpose: MpesaPaymentPurpose; awaitingPayment: boolean; paymentAccessToken: string | null }
   | { kind: "SITE_VISIT"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "SITE_VISIT_FEE" }
-  | { kind: "LPP"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "LPP_INSTALLMENT" };
+  | { kind: "LPP"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "LPP_INSTALLMENT" }
+  | { kind: "INSTALLATION_PROJECT"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "ORDER_DEPOSIT" };
 
-export const MPESA_STK_RESOURCE_TYPES = ["ORDER", "SITE_VISIT", "LPP"] as const;
+export const MPESA_STK_RESOURCE_TYPES = ["ORDER", "SITE_VISIT", "LPP", "INSTALLATION_PROJECT"] as const;
 export type MpesaStkResourceType = (typeof MPESA_STK_RESOURCE_TYPES)[number];
 
 export type MpesaReconciliationTarget = {
@@ -220,10 +224,25 @@ async function findLppPaymentTarget(reference: string): Promise<PaymentTarget | 
   };
 }
 
+async function findInstallationProjectPaymentTarget(reference: string): Promise<PaymentTarget | null> {
+  const order = await prisma.order.findFirst({
+    where: { orderNumber: { equals: reference.trim(), mode: "insensitive" } },
+    select: { id: true, orderNumber: true, customerPhone: true, metadata: true, paidAmount: true },
+  });
+  if (!order) return null;
+  const metadata = paymentMetadata(order.metadata);
+  const state = String(metadata.installationPaymentState || "");
+  const due = Math.max(0, toNumber(metadata.installationPaymentDue));
+  const expiresAt = new Date(String(metadata.installationPaymentExpiresAt || ""));
+  if (!["AWAITING_PAYMENT", "PAYMENT_FAILED"].includes(state) || !due || (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() < Date.now())) return null;
+  return { kind: "INSTALLATION_PROJECT", id: order.id, reference: order.orderNumber, total: due, paid: Math.max(0, toNumber(order.paidAmount)), customerPhone: order.customerPhone, purpose: "ORDER_DEPOSIT" };
+}
+
 async function findStkTarget(resourceType: MpesaStkResourceType, reference: string) {
   if (resourceType === "ORDER") return findPaymentTarget(reference);
   if (resourceType === "SITE_VISIT") return findSiteVisitPaymentTarget(reference);
-  return findLppPaymentTarget(reference);
+  if (resourceType === "LPP") return findLppPaymentTarget(reference);
+  return findInstallationProjectPaymentTarget(reference);
 }
 
 function permittedStkAmountForTarget(target: PaymentTarget, chosenAmount?: number | null) {
@@ -299,6 +318,9 @@ export async function initiateStkPushForResource(input: {
   }
   if (target.kind === "SITE_VISIT") {
     await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "status" = 'PAYMENT_PENDING', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${target.id} AND "status" IN ('PAYMENT_PENDING', 'PAYMENT_FAILED')`);
+  }
+  if (target.kind === "INSTALLATION_PROJECT") {
+    await prisma.order.update({ where: { id: target.id }, data: { metadata: { ...paymentMetadata((await prisma.order.findUniqueOrThrow({ where: { id: target.id }, select: { metadata: true } })).metadata), installationPaymentState: "AWAITING_PAYMENT", installationPaymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), installationPaymentFailureReason: null } } });
   }
 
   await prisma.mpesaPayment.create({
@@ -571,9 +593,34 @@ async function notifyConfirmedSiteVisit(siteVisitId: string) {
   if (visit?.paymentStatus === "PAID") await dispatchSiteVisitCreated({ ...visit, scheduledAt: visit.scheduledAt?.toISOString() || null }, "Customer payment confirmed");
 }
 
+async function notifyConfirmedInstallationProject(orderId: string, receiptNumber: string | null, payerPhone: string | null) {
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, orderNumber: true, customerName: true, customerPhone: true, paidAmount: true, totalAmount: true, metadata: true, receipt: { select: { id: true, data: true } } } });
+  if (!order?.receipt) return;
+  const data = paymentMetadata(order.receipt.data);
+  if (String(data.installationPaymentState || "") !== "CONFIRMED") return;
+  const location = String(data.deliveryAddress || "Not specified");
+  const preferredDate = String(data.preferredInstallationDate || "").slice(0, 10) || "Not specified";
+  await notifyAdminCriticalSms({
+    eventType: "WEB_PROJECT_PAID",
+    entityId: order.id,
+    title: `PAID INSTALLATION BOOKING ${order.orderNumber}`,
+    details: [`Customer: ${order.customerName}`, `Installation fee paid: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")}`, receiptNumber ? `M-Pesa receipt: ${receiptNumber}` : "M-Pesa receipt pending", `Location: ${location}`, `Preferred date: ${preferredDate}`],
+    actionPath: `/admin/returns?project=${encodeURIComponent(order.receipt.id)}`,
+    payload: { orderRef: order.orderNumber, receiptNumber, payerPhone: maskedPhone(payerPhone), paid: toNumber(order.paidAmount), total: toNumber(order.totalAmount) },
+  });
+  await syncPosReceiptToCustomerAccount(order.receipt.id).catch((error) => console.error("[mpesa] installation project account sync failed", error));
+  // This call occurs only after the conditional PENDING->SUCCESS claim. The
+  // callback cannot apply or announce the booking a second time.
+  await sendTransactionalSms(order.customerPhone || payerPhone || "", `Betech Solar: M-Pesa payment received for installation booking ${order.orderNumber}. Paid: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")}. Receipt: ${receiptNumber || "pending"}. Preferred date: ${preferredDate}. We will confirm the installation schedule separately.`).catch((error) => console.error("[mpesa] installation confirmation SMS failed", error));
+}
+
 async function markStkResourcePaymentFailed(payment: MpesaPayment) {
   if (payment.resourceType === "LPP" && payment.resourceId) await prisma.$executeRaw(Prisma.sql`UPDATE "LipaPolePole" SET "status" = 'PAYMENT_FAILED'::"LipaPolePoleStatus", "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${payment.resourceId} AND "status" = 'AWAITING_PAYMENT'::"LipaPolePoleStatus"`);
   if (payment.resourceType === "SITE_VISIT" && payment.resourceId) await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "status" = 'PAYMENT_FAILED', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${payment.resourceId} AND "status" = 'PAYMENT_PENDING'`);
+  if (payment.resourceType === "INSTALLATION_PROJECT" && payment.resourceId) {
+    const order = await prisma.order.findUnique({ where: { id: payment.resourceId }, select: { metadata: true } });
+    if (order) await prisma.order.update({ where: { id: payment.resourceId }, data: { metadata: { ...paymentMetadata(order.metadata), installationPaymentState: "PAYMENT_FAILED", installationPaymentFailureReason: payment.resultDescription || "M-Pesa payment was not completed" } } });
+  }
 }
 
 /**
@@ -679,6 +726,29 @@ async function applyConfirmedPaymentInTransaction(
     total = toNumber(lppPayment.summary.agreedTotal);
     paidAfter = toNumber(lppPayment.summary.totalPaid);
     paidBefore = Math.max(0, paidAfter - amount);
+  }
+  if (payment.resourceType === "INSTALLATION_PROJECT" && payment.resourceId) {
+    const order = await tx.order.findUniqueOrThrow({ where: { id: payment.resourceId }, include: { receipt: true } });
+    const metadata = paymentMetadata(order.metadata);
+    const receipt = order.receipt;
+    if (!receipt) throw new Error("Installation payment reservation is missing its receipt");
+    const receiptData = paymentMetadata(receipt.data);
+    const projectValue = toNumber(order.totalAmount);
+    paidBefore = Math.max(0, toNumber(order.paidAmount));
+    paidAfter = Math.min(projectValue, paidBefore + amount);
+    total = projectValue;
+    const paymentTerm = String(metadata.installationPaymentTerm || receiptData.installationPaymentTerm || "FULL_BEFORE_INSTALLATION");
+    const flow = buildReceiptProjectFlow({
+      stage: "RECEIPT_CREATED", paymentTerm, projectValue,
+      depositPercent: toNumber(metadata.installationDepositPercent || receiptData.installationDepositPercent),
+      depositPaidAmount: paidAfter, amountPaidTotal: paidAfter,
+      depositPaymentMethod: "MPESA", depositReference: input.receiptNumber || payment.receiptNumber,
+      scheduledDate: null, postedReceiptNumber: order.orderNumber,
+      internalNotes: "Installation booking confirmed by M-Pesa STK payment.",
+      paymentNotes: paymentTerm === "DEPOSIT_AND_BALANCE" ? "Deposit received by M-Pesa; balance remains due after installation." : "Full payment received by M-Pesa.",
+    });
+    await tx.order.update({ where: { id: order.id }, data: { paidAmount: paidAfter, paymentStatus: paidAfter >= projectValue ? "PAID" : "PARTIAL", status: "PENDING", metadata: { ...metadata, customerType: "project", installationPaymentState: "CONFIRMED", installationPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(), lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null, lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null, projectFlow: flow } } });
+    await tx.receipt.update({ where: { id: receipt.id }, data: { data: { ...receiptData, customerType: "project", installationPaymentState: "CONFIRMED", installationPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(), lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null, lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null, projectFlow: flow } } });
   }
   await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "SUCCESS" } });
   return { applied: true, paidBefore, paidAfter, total };
@@ -891,6 +961,7 @@ export async function handleStkCallback(payload: unknown) {
       });
     }
     if (confirmation?.application.applied && confirmation.payment.resourceType === "SITE_VISIT" && confirmation.payment.resourceId) await notifyConfirmedSiteVisit(confirmation.payment.resourceId);
+    if (confirmation?.application.applied && confirmation.payment.resourceType === "INSTALLATION_PROJECT" && confirmation.payment.resourceId) await notifyConfirmedInstallationProject(confirmation.payment.resourceId, metadata.receiptNumber, normalizeDarajaPhone(metadata.phoneNumber || "") || confirmation.payment.phoneNumber);
     return;
   }
   await prisma.mpesaPayment.update({

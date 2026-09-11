@@ -20,13 +20,23 @@ const requestSchema = z.object({
   paymentAccessToken: z.string().trim().min(16).max(120).optional(),
 });
 
-async function assertCustomerOwnsPrivateResource(resourceType: "SITE_VISIT" | "LPP", reference: string) {
+async function assertCustomerOwnsPrivateResource(resourceType: "SITE_VISIT" | "LPP" | "INSTALLATION_PROJECT", reference: string) {
   const session = await auth();
   const user = session?.user as { id?: string | null; phone?: string | null; email?: string | null } | undefined;
   if (!user?.id) throw Object.assign(new Error("Sign in to pay this record."), { status: 401 });
   if (resourceType === "LPP") {
     const lpp = await prisma.lipaPolePole.findFirst({ where: { reference: { equals: reference, mode: "insensitive" } }, select: { customerId: true } });
     if (!lpp || lpp.customerId !== user.id) throw Object.assign(new Error("Payment record not found."), { status: 404 });
+    return;
+  }
+  if (resourceType === "INSTALLATION_PROJECT") {
+    const order = await prisma.order.findFirst({
+      where: { orderNumber: { equals: reference, mode: "insensitive" } },
+      select: { metadata: true },
+    });
+    const metadata = order?.metadata && typeof order.metadata === "object" && !Array.isArray(order.metadata)
+      ? order.metadata as Record<string, unknown> : {};
+    if (!order || String(metadata.customerUserId || "") !== user.id) throw Object.assign(new Error("Installation payment record not found."), { status: 404 });
     return;
   }
   const identity = buildCustomerAccountIdentity({ id: user.id, phone: user.phone || null, email: user.email || null }, null);

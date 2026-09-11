@@ -2,15 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type ResourceType = "ORDER" | "SITE_VISIT" | "LPP";
+type ResourceType = "ORDER" | "SITE_VISIT" | "LPP" | "INSTALLATION_PROJECT";
 type StkState = "READY" | "REQUESTING" | "PENDING" | "SUCCESS" | "FAILED" | "CANCELLED" | "TIMEOUT";
 
 function kes(value: number) {
   return new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(value);
 }
 
+function maskPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 9 ? `+${digits.slice(0, 6)}••••${digits.slice(-3)}` : value;
+}
+
 export default function MpesaStkPaymentPanel({
-  resourceType, reference, amountDue, initialPhone, allowAmountChoice = false, paymentAccessToken, autoStart = false, compact = false, onSuccess,
+  resourceType, reference, amountDue, initialPhone, allowAmountChoice = false, paymentAccessToken, autoStart = false, compact = false, actionLabel, onSuccess,
 }: {
   resourceType: ResourceType;
   reference: string;
@@ -22,6 +27,7 @@ export default function MpesaStkPaymentPanel({
   autoStart?: boolean;
   /** Keep checkout confirmation focused instead of showing a second form. */
   compact?: boolean;
+  actionLabel?: string;
   onSuccess?: () => void;
 }) {
   const [phoneNumber, setPhoneNumber] = useState(initialPhone || "");
@@ -76,7 +82,7 @@ export default function MpesaStkPaymentPanel({
       const body = await response.json().catch(() => ({}));
       if (!response.ok || !body.ok) throw new Error(body.error || "M-Pesa could not start the payment request.");
       setCheckoutRequestId(body.checkoutRequestId); started.current = Date.now(); setState("PENDING");
-      setMessage(`M-Pesa request sent to ${phoneNumber.replace(/^\+/, "")}. Check your phone and enter your M-Pesa PIN.`);
+      setMessage(`An M-Pesa request was sent to ${maskPhone(phoneNumber)}. Check your phone and enter your M-Pesa PIN.`);
     } catch (error) {
       setState("FAILED"); setMessage(error instanceof Error ? error.message : "M-Pesa could not start the payment request.");
     }
@@ -93,14 +99,14 @@ export default function MpesaStkPaymentPanel({
     <div className="text-xs font-black uppercase tracking-[.16em] text-[#7a0000]">Secure M-Pesa payment</div>
     <h2 className="mt-2 text-xl font-black text-slate-950">{state === "PENDING" ? "Check your phone" : state === "SUCCESS" ? "Payment received" : "Pay with M-Pesa"}</h2>
     <p className="mt-2 text-sm leading-6 text-slate-600">Reference: <strong>{reference}</strong>. The amount is verified by Betech before Safaricom receives the request.</p>
-    {compact ? <div className="mt-4 rounded-xl border border-[#7a0000]/10 bg-white px-4 py-3 text-sm text-slate-700"><div className="font-bold">Pay now: {kes(amountDue)}</div><div className="mt-1">STK prompt will be sent to <strong>{phoneNumber || "your M-Pesa number"}</strong>.</div>{!disabled ? <button type="button" onClick={() => setShowPhoneEditor((open) => !open)} className="mt-2 text-xs font-bold text-[#7a0000] underline">{showPhoneEditor ? "Use this number" : "Change M-Pesa number"}</button> : null}</div> : null}
+    {compact ? <div className="mt-4 rounded-xl border border-[#7a0000]/10 bg-white px-4 py-3 text-sm text-slate-700"><div className="font-bold">Pay now: {kes(amountDue)}</div><div className="mt-1">STK prompt will be sent to <strong>{phoneNumber ? maskPhone(phoneNumber) : "your M-Pesa number"}</strong>.</div>{!disabled ? <button type="button" onClick={() => setShowPhoneEditor((open) => !open)} className="mt-2 text-xs font-bold text-[#7a0000] underline">{showPhoneEditor ? "Use this number" : "Change M-Pesa number"}</button> : null}</div> : null}
     <div className={`mt-4 grid gap-3 sm:grid-cols-2 ${compact && !showPhoneEditor ? "hidden" : ""}`}>
       <label className="grid gap-1 text-sm font-bold text-slate-700">M-Pesa number<input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} inputMode="tel" placeholder="07XXXXXXXX" disabled={disabled} className="min-h-11 rounded-xl border border-[#7a0000]/15 bg-white px-3 font-normal" /><span className="text-xs font-medium text-slate-500">You may use a different M-Pesa number from the order contact number.</span></label>
       {allowAmountChoice ? <label className="grid gap-1 text-sm font-bold text-slate-700">Installment amount<input value={installmentAmount} onChange={(e) => setInstallmentAmount(e.target.value)} type="number" min={1} max={amountDue} disabled={disabled} className="min-h-11 rounded-xl border border-[#7a0000]/15 bg-white px-3 font-normal" /></label> : <div className="rounded-xl border border-[#7a0000]/10 bg-white px-4 py-2"><div className="text-xs font-bold text-slate-500">Amount due now</div><div className="text-lg font-black text-slate-950">{kes(amountDue)}</div></div>}
     </div>
     {allowAmountChoice ? <p className="mt-2 text-xs text-slate-600">Outstanding balance: {kes(amountDue)}. Betech validates the requested installment before sending a prompt.</p> : null}
     {message ? <div role="status" className={`mt-4 rounded-xl px-4 py-3 text-sm ${state === "SUCCESS" ? "bg-emerald-50 text-emerald-800" : state === "PENDING" ? "bg-sky-50 text-sky-800" : "bg-amber-50 text-amber-900"}`}>{message}</div> : null}
-    {!compact || state === "FAILED" || state === "CANCELLED" || state === "TIMEOUT" ? <button type="button" onClick={() => void requestStk()} disabled={disabled} className="mt-4 min-h-11 rounded-xl bg-[#7a0000] px-5 text-sm font-black text-white disabled:opacity-50">{state === "REQUESTING" ? "Sending request…" : state === "PENDING" ? "Waiting for M-Pesa…" : state === "SUCCESS" ? "Payment confirmed" : state === "FAILED" || state === "CANCELLED" || state === "TIMEOUT" ? "Retry M-Pesa prompt" : `Pay ${kes(amountDue)} with M-Pesa`}</button> : null}
+    {!compact || state === "FAILED" || state === "CANCELLED" || state === "TIMEOUT" ? <button type="button" onClick={() => void requestStk()} disabled={disabled} className="mt-4 min-h-11 rounded-xl bg-[#7a0000] px-5 text-sm font-black text-white disabled:opacity-50">{state === "REQUESTING" ? "Sending request…" : state === "PENDING" ? "Waiting for M-Pesa…" : state === "SUCCESS" ? "Payment confirmed" : state === "FAILED" || state === "CANCELLED" || state === "TIMEOUT" ? "Retry M-Pesa" : actionLabel || `Pay ${kes(amountDue)} with M-Pesa`}</button> : null}
     <p className="mt-3 text-xs text-slate-500">Never enter your M-Pesa PIN on this website. Enter it only in Safaricom’s prompt on your phone.</p>
   </section>;
 }
