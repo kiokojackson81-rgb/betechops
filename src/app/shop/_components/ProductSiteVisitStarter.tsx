@@ -98,9 +98,13 @@ export default function ProductSiteVisitStarter({
   // Show the acknowledgement as selected on the final confirmation step;
   // customers can still review or change it before requesting payment.
   const [termsAccepted, setTermsAccepted] = useState(true);
+  const [paymentPreference, setPaymentPreference] = useState<
+    "MPESA_NOW" | "PAY_ON_SITE"
+  >("MPESA_NOW");
   const [createdVisit, setCreatedVisit] = useState<{
     id: string;
     visitRef: string;
+    paymentPreference: "MPESA_NOW" | "PAY_ON_SITE";
   } | null>(null);
   const [bookingAttemptId] = useState(() => crypto.randomUUID());
   const [portalReady, setPortalReady] = useState(false);
@@ -251,6 +255,7 @@ export default function ProductSiteVisitStarter({
           originProductSlug: product.slug,
           dataLoggerRequested: loggerRequested,
           dataLoggerDays: loggerDays,
+          paymentPreference,
         }),
       });
       const payload = await response.json();
@@ -259,11 +264,13 @@ export default function ProductSiteVisitStarter({
       setCreatedVisit({
         id: payload.visit.id,
         visitRef: payload.visit.visitRef,
+        paymentPreference,
       });
       trackSiteVisitEvent("site_visit_booking_completed", {
         productId,
         visitRef: payload.visit.visitRef,
         totalPayable: pricing.totalPayable,
+        paymentPreference,
       });
     } catch (requestError) {
       setError(
@@ -369,9 +376,22 @@ export default function ProductSiteVisitStarter({
                     <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-700">
                       <Check className="h-7 w-7" />
                     </div>
-                    <h3 className="mt-5 text-2xl font-black text-slate-950">Pay Site Visit Fee {money(pricing?.totalPayable || 0)} &amp; Book</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">Secure M-Pesa payment. We’ll send a prompt to your phone; your site visit is confirmed only after Safaricom confirms payment.</p>
-                    <div className="mt-6"><MpesaStkPaymentPanel resourceType="SITE_VISIT" reference={createdVisit.visitRef} amountDue={pricing?.totalPayable || 0} initialPhone={customer.phone} autoStart onSuccess={() => { trackSiteVisitEvent("site_visit_payment_confirmed", { productId, visitRef: createdVisit.visitRef }); window.location.assign("/account/site-visits"); }} /></div>
+                    {createdVisit.paymentPreference === "PAY_ON_SITE" ? (
+                      <>
+                        <h3 className="mt-5 text-2xl font-black text-slate-950">Site visit requested</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">Your request is awaiting technician assignment. The {money(pricing?.totalPayable || 0)} fee is marked for collection on site; no M-Pesa prompt has been sent.</p>
+                        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                          <div className="font-black">Pay on site</div>
+                          Please pay Betech&apos;s authorised technician or team during the visit and request your acknowledgement.
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="mt-5 text-2xl font-black text-slate-950">Pay Site Visit Fee {money(pricing?.totalPayable || 0)} &amp; Book</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">Secure M-Pesa payment. We&apos;ll send a prompt to your phone; your site visit is confirmed only after Safaricom confirms payment.</p>
+                        <div className="mt-6"><MpesaStkPaymentPanel resourceType="SITE_VISIT" reference={createdVisit.visitRef} amountDue={pricing?.totalPayable || 0} initialPhone={customer.phone} autoStart onSuccess={() => { trackSiteVisitEvent("site_visit_payment_confirmed", { productId, visitRef: createdVisit.visitRef }); window.location.assign("/account/site-visits"); }} /></div>
+                      </>
+                    )}
                     <Link
                       href="/account/site-visits"
                       className="mt-4 inline-flex min-h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 font-bold text-slate-900"
@@ -657,6 +677,17 @@ export default function ProductSiteVisitStarter({
                           credited according to the applicable quotation policy.
                           Data Logger fees are separate and non-creditable.
                         </div>
+                        <fieldset className="grid gap-3" aria-label="Payment arrangement">
+                          <legend className="text-sm font-black text-slate-950">How would you like to pay?</legend>
+                          <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${paymentPreference === "MPESA_NOW" ? "border-[#7a0000] bg-red-50" : "border-slate-200 bg-white"}`}>
+                            <input type="radio" name="site-visit-payment" value="MPESA_NOW" checked={paymentPreference === "MPESA_NOW"} onChange={() => setPaymentPreference("MPESA_NOW")} className="mt-1 h-4 w-4 accent-[#7a0000]" />
+                            <span><strong className="block text-slate-950">Pay now with M-Pesa</strong><span className="mt-1 block text-sm leading-5 text-slate-600">Receive a secure Safaricom prompt now. The visit is released for scheduling after payment confirmation.</span></span>
+                          </label>
+                          <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${paymentPreference === "PAY_ON_SITE" ? "border-[#7a0000] bg-red-50" : "border-slate-200 bg-white"}`}>
+                            <input type="radio" name="site-visit-payment" value="PAY_ON_SITE" checked={paymentPreference === "PAY_ON_SITE"} onChange={() => setPaymentPreference("PAY_ON_SITE")} className="mt-1 h-4 w-4 accent-[#7a0000]" />
+                            <span><strong className="block text-slate-950">Pay on site</strong><span className="mt-1 block text-sm leading-5 text-slate-600">Book the visit now and pay {money(pricing?.totalPayable || 0)} to Betech&apos;s authorised team during the visit. No M-Pesa prompt is sent.</span></span>
+                          </label>
+                        </fieldset>
                         <label className="flex gap-3 text-sm leading-6 text-slate-700">
                           <input
                             type="checkbox"
@@ -716,7 +747,9 @@ export default function ProductSiteVisitStarter({
                         >
                           {submitting
                             ? "Creating booking..."
-                            : `Pay Site Visit Fee ${money(pricing?.totalPayable || 0)} & Book`}
+                            : paymentPreference === "PAY_ON_SITE"
+                              ? `Book & Pay ${money(pricing?.totalPayable || 0)} on Site`
+                              : `Pay Site Visit Fee ${money(pricing?.totalPayable || 0)} & Book`}
                         </button>
                       )}
                     </footer>

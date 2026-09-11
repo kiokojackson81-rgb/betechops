@@ -7,6 +7,7 @@ const createSiteVisit = jest.fn();
 const listAdminSiteVisits = jest.fn();
 const findOrCreateCustomerIdentityUser = jest.fn();
 const notifySiteVisitCustomer = jest.fn();
+const dispatchSiteVisitCreated = jest.fn();
 const notifyAdminCriticalSms = jest.fn();
 const userFindUnique = jest.fn();
 const userFindFirst = jest.fn();
@@ -14,7 +15,7 @@ const userFindFirst = jest.fn();
 jest.mock("@/lib/auth", () => ({ requireAttendant }));
 jest.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: userFindUnique, findFirst: userFindFirst } } }));
 jest.mock("@/lib/customerIdentity", () => ({ findOrCreateCustomerIdentityUser }));
-jest.mock("@/lib/siteVisitNotifications", () => ({ notifySiteVisitCustomer }));
+jest.mock("@/lib/siteVisitNotifications", () => ({ notifySiteVisitCustomer, dispatchSiteVisitCreated }));
 jest.mock("@/lib/adminCriticalSms", () => ({ notifyAdminCriticalSms }));
 jest.mock("@/lib/siteVisits", () => ({
   siteVisitCreateSchema: {
@@ -60,6 +61,7 @@ describe("receipts site visit API", () => {
       normalizedEmail: "customer@example.com",
     });
     notifySiteVisitCustomer.mockResolvedValue([]);
+    dispatchSiteVisitCreated.mockResolvedValue({ status: "SENT" });
     notifyAdminCriticalSms.mockResolvedValue({ sent: 1, failed: 0, skipped: 0 });
   });
 
@@ -123,10 +125,10 @@ describe("receipts site visit API", () => {
       }),
       expect.objectContaining({ id: "staff-1", customerUserId: "customer-1" }),
     );
-    expect(notifyAdminCriticalSms).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: "SITE_VISIT_REQUESTED",
-      entityId: "visit-1",
-    }));
+    expect(dispatchSiteVisitCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "visit-1", visitRef: "SV-2026-000001" }),
+      "Jennifer",
+    );
   });
 
   it("rejects an unknown or inactive selected owner", async () => {

@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     }
     const dataLoggerRequested = Boolean(parsed.data.dataLoggerRequested);
     const dataLoggerDays = dataLoggerRequested ? Math.max(1, Math.min(3, Number(parsed.data.dataLoggerDays || 1))) : undefined;
+    const payOnSite = parsed.data.paymentPreference === "PAY_ON_SITE";
     const visit = await createSiteVisit({
       ...parsed.data,
       customerName,
@@ -83,8 +84,12 @@ export async function POST(request: Request) {
       dataLoggerRequested,
       dataLoggerDays,
       source: "CUSTOMER_REQUEST",
-      paymentStatus: "UNPAID",
-      status: "PAYMENT_PENDING",
+      // This is an explicit collection arrangement, not a completed payment.
+      // It allows Operations to schedule the visit while retaining the fee as
+      // outstanding for the technician/team to collect on site.
+      paymentStatus: payOnSite ? "COLLECT_ON_SITE" : "UNPAID",
+      paymentMethod: payOnSite ? "PAY_ON_SITE" : undefined,
+      status: payOnSite ? "PENDING" : "PAYMENT_PENDING",
     }, {
       id: sessionUser.id,
       customerUserId: sessionUser.id,

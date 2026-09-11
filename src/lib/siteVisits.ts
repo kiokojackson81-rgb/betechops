@@ -575,6 +575,10 @@ export const siteVisitUpdateSchema = siteVisitCreateSchema.extend({
 
 export const customerSiteVisitCreateSchema = z.object({
   bookingAttemptId: z.string().uuid().optional(),
+  // Customers choose whether to settle now by M-Pesa or have the visit fee
+  // collected in person. This is a booking preference, never evidence that a
+  // payment was received.
+  paymentPreference: z.enum(["MPESA_NOW", "PAY_ON_SITE"]).optional(),
   projectType: z.enum(QUOTE_PROJECT_TYPES),
   visitReason: z.enum(SITE_VISIT_REASONS),
   customerRequirements: z.string().trim().min(10).max(4000),
