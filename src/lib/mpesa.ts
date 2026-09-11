@@ -360,6 +360,9 @@ export async function getStkPaymentStatus(checkoutRequestId: string) {
       channel: true,
       orderId: true,
       websiteOrderId: true,
+      resourceType: true,
+      resourceId: true,
+      purpose: true,
       phoneNumber: true,
       createdAt: true,
       callbackPayload: true,
@@ -374,6 +377,11 @@ export async function getStkPaymentStatus(checkoutRequestId: string) {
   // after the same strict correlation checks used by callback processing.
   if (payment.status === "PENDING") {
     await correlatePendingStkWithConfirmedC2b(payment.id);
+    // Earlier deployments correctly retained an unmatched C2B callback but
+    // did not recognise Lipa Pole Pole as a C2B target. Recover only the
+    // exact STK attempt that generated the PayBill payment; this preserves
+    // the original callback and cannot create a second account payment.
+    await recoverPendingLppStkWithUnmatchedC2b(payment.id);
     payment = await prisma.mpesaPayment.findUnique({
       where: { checkoutRequestId },
       select: {
@@ -387,6 +395,9 @@ export async function getStkPaymentStatus(checkoutRequestId: string) {
         channel: true,
         orderId: true,
         websiteOrderId: true,
+        resourceType: true,
+        resourceId: true,
+        purpose: true,
         phoneNumber: true,
         createdAt: true,
         callbackPayload: true,
@@ -415,18 +426,27 @@ function correlatedReceiptNumber(payload: unknown) {
   return receipt || null;
 }
 
-function canCorrelateStkAndC2b(stk: Pick<MpesaPayment, "orderId" | "websiteOrderId" | "accountReference" | "requestedAmount" | "phoneNumber" | "createdAt">) {
+type CorrelatablePayment = Pick<MpesaPayment, "orderId" | "websiteOrderId" | "resourceType" | "resourceId" | "accountReference" | "requestedAmount" | "phoneNumber" | "createdAt">;
+
+function paymentTargetWhere(payment: Pick<MpesaPayment, "orderId" | "websiteOrderId" | "resourceType" | "resourceId">) {
+  if (payment.orderId) return { orderId: payment.orderId };
+  if (payment.websiteOrderId) return { websiteOrderId: payment.websiteOrderId };
+  if (payment.resourceType && payment.resourceId) return { resourceType: payment.resourceType, resourceId: payment.resourceId };
+  return { id: "__no_mpesa_target__" };
+}
+
+function canCorrelateStkAndC2b(stk: CorrelatablePayment) {
   const amount = toNumber(stk.requestedAmount);
   return Boolean(
     amount > 0
     && stk.accountReference
-    && (stk.orderId || stk.websiteOrderId),
+    && (stk.orderId || stk.websiteOrderId || (stk.resourceType && stk.resourceId)),
   );
 }
 
 async function findConfirmedC2bForStk(
   tx: Prisma.TransactionClient,
-  stk: Pick<MpesaPayment, "orderId" | "websiteOrderId" | "accountReference" | "requestedAmount" | "phoneNumber" | "createdAt">,
+  stk: CorrelatablePayment,
   expectedReceiptNumber?: string | null,
 ) {
   if (!canCorrelateStkAndC2b(stk)) return null;
@@ -443,7 +463,7 @@ async function findConfirmedC2bForStk(
       // reference and short delivery window remain mandatory.
       ...(stk.phoneNumber ? { OR: [{ phoneNumber: stk.phoneNumber }, { phoneNumber: null }] } : {}),
       createdAt: { gte: createdAfter, lte: createdBefore },
-      ...(stk.orderId ? { orderId: stk.orderId } : { websiteOrderId: stk.websiteOrderId! }),
+      ...paymentTargetWhere(stk),
     },
   });
   if (!c2b) return null;
@@ -492,6 +512,68 @@ async function correlatePendingStkWithConfirmedC2b(paymentId: string, stkCallbac
       },
     });
     return claimed.count === 1;
+  });
+}
+
+/**
+ * Repairs the one legacy LPP gap safely: before LPP was accepted as a C2B
+ * target, a PayBill notification for a successful STK payment was retained as
+ * UNMATCHED. It may be recovered only by the pending STK request that has the
+ * same LPP account, reference, whole-KES amount and delivery window.
+ */
+async function recoverPendingLppStkWithUnmatchedC2b(paymentId: string) {
+  return prisma.$transaction(async (tx) => {
+    const stk = await tx.mpesaPayment.findUnique({ where: { id: paymentId } });
+    if (!stk || stk.channel !== "STK" || stk.status !== "PENDING" || stk.resourceType !== "LPP" || !stk.resourceId || !canCorrelateStkAndC2b(stk)) return false;
+
+    const createdAfter = new Date(stk.createdAt.getTime() - 2 * 60 * 1000);
+    const createdBefore = new Date(stk.createdAt.getTime() + STK_C2B_CORRELATION_WINDOW_MS);
+    const c2b = await tx.mpesaPayment.findFirst({
+      where: {
+        channel: "C2B",
+        status: "UNMATCHED",
+        accountReference: { equals: stk.accountReference!, mode: "insensitive" },
+        amount: toNumber(stk.requestedAmount),
+        ...(stk.phoneNumber ? { OR: [{ phoneNumber: stk.phoneNumber }, { phoneNumber: null }] } : {}),
+        createdAt: { gte: createdAfter, lte: createdBefore },
+      },
+    });
+    if (!c2b) return false;
+
+    const claimedC2b = await tx.mpesaPayment.updateMany({
+      where: { id: c2b.id, status: "UNMATCHED" },
+      data: { status: "PENDING", resourceType: "LPP", resourceId: stk.resourceId, purpose: "LPP_INSTALLMENT" },
+    });
+    if (claimedC2b.count !== 1) return false;
+
+    const linkedC2b: MpesaPayment = { ...c2b, status: "PENDING", resourceType: "LPP", resourceId: stk.resourceId, purpose: "LPP_INSTALLMENT" };
+    const application = await applyConfirmedPaymentInTransaction(tx, linkedC2b, {
+      amount: toNumber(c2b.amount),
+      receiptNumber: c2b.receiptNumber,
+      transactionId: c2b.transactionId,
+      phoneNumber: c2b.phoneNumber,
+      transactionAt: c2b.transactionAt,
+      resultCode: 0,
+      resultDescription: "C2B payment received; matched to the pending Lipa Pole Pole STK request",
+      payload: c2b.callbackPayload,
+      preserveCallbackPayload: true,
+    });
+    if (!application.applied) throw new Error("The matched Lipa Pole Pole C2B payment could not be applied");
+    const confirmedC2b = await tx.mpesaPayment.findUnique({ where: { id: c2b.id } });
+    if (!confirmedC2b) throw new Error("The matched Lipa Pole Pole C2B payment is missing after application");
+
+    const claimedStk = await tx.mpesaPayment.updateMany({
+      where: { id: stk.id, status: "PENDING" },
+      data: {
+        status: "SUCCESS",
+        amount: confirmedC2b.amount,
+        resultCode: 0,
+        resultDescription: `Confirmed by matching C2B receipt ${confirmedC2b.receiptNumber || confirmedC2b.transactionId || ""}`.trim(),
+        transactionAt: confirmedC2b.transactionAt,
+        callbackPayload: correlatedStkPayload(stk, confirmedC2b),
+      },
+    });
+    return claimedStk.count === 1;
   });
 }
 
@@ -720,7 +802,7 @@ async function applyConfirmedPaymentInTransaction(
       method: "MPESA",
       reference: input.receiptNumber || payment.receiptNumber || payment.transactionId || payment.checkoutRequestId,
       receivedAt: input.transactionAt || new Date(),
-      notes: `Daraja STK receipt for ${payment.accountReference || "Lipa Pole Pole installment"}.`,
+      notes: `Daraja M-Pesa receipt for ${payment.accountReference || "Lipa Pole Pole installment"}.`,
       status: "SUCCESS",
     }, tx);
     total = toNumber(lppPayment.summary.agreedTotal);
@@ -964,6 +1046,9 @@ export async function handleStkCallback(payload: unknown) {
     if (confirmation?.application.applied && confirmation.payment.resourceType === "INSTALLATION_PROJECT" && confirmation.payment.resourceId) await notifyConfirmedInstallationProject(confirmation.payment.resourceId, metadata.receiptNumber, normalizeDarajaPhone(metadata.phoneNumber || "") || confirmation.payment.phoneNumber);
     return;
   }
+  // A C2B notification may already have safely confirmed this PayBill STK
+  // payment. A late negative/retry callback must never downgrade it.
+  if (payment.status === "SUCCESS") return;
   await prisma.mpesaPayment.update({
     where: { id: payment.id },
     data: { status: resultCode === 1032 ? "CANCELLED" : "FAILED", resultCode: Number.isFinite(resultCode) ? resultCode : null, resultDescription, callbackPayload: jsonValue(payload) },
@@ -979,7 +1064,10 @@ export async function handleC2bConfirmation(payload: unknown) {
   const existing = await prisma.mpesaPayment.findUnique({ where: { transactionId } });
   if (existing) return;
   const reference = String(body.BillRefNumber || "").trim();
-  const target = await findPaymentTarget(reference);
+  // Manual PayBill payments normally target orders/invoices. LPP accounts are
+  // also a valid customer-facing reference and use the same atomic ledger
+  // application path as their STK installments.
+  const target = await findPaymentTarget(reference) ?? await findLppPaymentTarget(reference);
   const amount = toNumber(body.TransAmount);
   const transactionAt = parseDarajaTransactionDate(String(body.TransTime || ""));
   const phoneNumber = normalizeDarajaPhone(String(body.MSISDN || "")) || null;
@@ -987,7 +1075,7 @@ export async function handleC2bConfirmation(payload: unknown) {
     data: {
       channel: "C2B",
       status: target ? "PENDING" : "UNMATCHED",
-      ...(target?.kind === "ORDER" ? { orderId: target.id } : target?.kind === "WEBSITE_ORDER" ? { websiteOrderId: target.id } : {}),
+      ...(target?.kind === "ORDER" ? { orderId: target.id } : target?.kind === "WEBSITE_ORDER" ? { websiteOrderId: target.id } : target ? { resourceType: target.kind, resourceId: target.id, purpose: target.purpose } : {}),
       accountReference: reference || null,
       amount,
       phoneNumber,
@@ -1028,7 +1116,7 @@ export async function handleC2bConfirmation(payload: unknown) {
         gte: new Date(c2b.createdAt.getTime() - STK_C2B_CORRELATION_WINDOW_MS),
         lte: new Date(c2b.createdAt.getTime() + 2 * 60 * 1000),
       },
-      ...(c2b.orderId ? { orderId: c2b.orderId } : c2b.websiteOrderId ? { websiteOrderId: c2b.websiteOrderId } : { id: "__no_stk_target__" }),
+      ...paymentTargetWhere(c2b),
     },
     orderBy: { createdAt: "desc" },
     take: 1,
@@ -1041,7 +1129,7 @@ export async function handleC2bConfirmation(payload: unknown) {
 }
 
 export async function canAcceptC2bReference(reference: string) {
-  return Boolean(await findPaymentTarget(reference));
+  return Boolean(await findPaymentTarget(reference) ?? await findLppPaymentTarget(reference));
 }
 
 export function isExpectedC2bPaybill(payload: unknown) {

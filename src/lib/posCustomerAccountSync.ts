@@ -101,6 +101,7 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
           customerPhone: true,
           customerEmail: true,
           totalAmount: true,
+          paidAmount: true,
           metadata: true,
           items: {
             select: {
@@ -156,20 +157,35 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
         : "POS Delivery";
   const paymentMethod = pickFirstNonEmpty(String(data.paymentMethod || ""), "CASH");
   const receiptRef = receipt.receiptNumber || order.orderNumber;
+  const projectTotal = Math.max(0, Number(order.totalAmount || 0));
+  const projectPaid = Math.max(0, Number(order.paidAmount || 0));
+  const projectPaymentState = isProject
+    ? projectFlow
+      ? projectFlow.stage === "RECEIPT_CREATED" ? "PAYMENT_CONFIRMED" : "PROJECT_CONFIRMED"
+      : projectTotal > 0 && projectPaid >= projectTotal
+        ? "PAYMENT_CONFIRMED"
+        : "AWAITING_PAYMENT"
+    : null;
   const lifecyclePatch = {
     receiptIssuedAt: receipt.generatedAt.toISOString(),
-    paymentConfirmedAt: receipt.createdAt.toISOString(),
+    paymentConfirmedAt:
+      !isProject || projectPaymentState === "PAYMENT_CONFIRMED" || projectPaymentState === "PROJECT_CONFIRMED"
+        ? receipt.createdAt.toISOString()
+        : null,
     paymentConfirmationMethod: paymentMethod,
     receiptFlowMode: isProject ? "project" : orderType === WebsiteOrderType.POD ? "pod" : "normal",
     posReceiptId: receipt.id,
     posOrderId: order.id,
     posReceiptNumber: receiptRef,
-    ...(isProject && projectFlow
+    ...(isProject
       ? {
           customerType: "project",
+          projectPaymentState,
+          ...(projectFlow ? {
           projectStage: projectFlow.stage,
           projectScheduledDate: projectFlow.scheduledDate,
           deliveredAt: projectFlow.stage === "COMPLETED_POSTED" ? receipt.createdAt.toISOString() : null,
+          } : {}),
         }
       : {}),
     ...(!isProject ? { deliveredAt: receipt.createdAt.toISOString() } : {}),
@@ -194,8 +210,12 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
   const existingMetadata = readJsonObject(existing?.metadata);
   const nextSource = isProject || existing?.source === "WEBSITE" ? "WEBSITE" : "POS";
   const nextStatus =
-    isProject && projectFlow
-      ? mapProjectStageToWebsiteStatus(projectFlow.stage)
+    isProject
+      ? projectFlow
+        ? mapProjectStageToWebsiteStatus(projectFlow.stage)
+        : projectPaymentState === "PAYMENT_CONFIRMED"
+          ? WebsiteOrderStatus.PAYMENT_CONFIRMED
+          : WebsiteOrderStatus.AWAITING_PAYMENT
       : existing?.source === "WEBSITE"
       ? existing.status
       : orderType === WebsiteOrderType.POD
@@ -227,7 +247,7 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
     receiptId: receipt.id,
     confirmedAt:
       isProject
-        ? projectFlow?.stage !== "RECEIPT_CREATED"
+        ? projectFlow?.stage && projectFlow.stage !== "RECEIPT_CREATED"
           ? receipt.createdAt
           : null
         : existing?.source === "WEBSITE"

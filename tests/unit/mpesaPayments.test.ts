@@ -4,13 +4,20 @@ jest.mock("@/lib/prisma", () => ({
   prisma: {
     websiteOrder: { findFirst: jest.fn() },
     order: { findFirst: jest.fn() },
+    lipaPolePole: { findFirst: jest.fn() },
     mpesaPayment: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
     $transaction: jest.fn(),
   },
 }));
 
+jest.mock("@/lib/lipaPolePoleService", () => ({
+  getLppAccountSummary: jest.fn(),
+  recordLppPayment: jest.fn(),
+}));
+
 import { prisma } from "@/lib/prisma";
 import { getStkPaymentStatus, handleC2bConfirmation, handleStkCallback, initiateStkPush, initiateStkPushForResource, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
+import { recordLppPayment } from "@/lib/lipaPolePoleService";
 
 const transactionId = "TESTMPESA001";
 const basePayment = {
@@ -82,6 +89,75 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
 
     expect(prisma.mpesaPayment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "UNMATCHED", accountReference: "TEST001", transactionId }) }));
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("recovers a pending LPP STK payment from its exact legacy unmatched C2B callback and applies it once", async () => {
+    const pendingStk = {
+      ...basePayment,
+      id: "stk-lpp-1",
+      channel: "STK",
+      status: "PENDING",
+      requestedAmount: 13,
+      amount: null,
+      receiptNumber: null,
+      transactionId: null,
+      orderId: null,
+      websiteOrderId: null,
+      resourceType: "LPP",
+      resourceId: "lpp-1",
+      purpose: "LPP_INSTALLMENT",
+      accountReference: "LPP-2026-000014",
+      checkoutRequestId: "ws_CO_lpp_legacy",
+      callbackPayload: { ResponseCode: "0" },
+    };
+    const unmatchedC2b = {
+      ...basePayment,
+      id: "c2b-lpp-1",
+      status: "UNMATCHED",
+      amount: 13,
+      accountReference: "LPP-2026-000014",
+      resourceType: null,
+      resourceId: null,
+      purpose: "LPP_INSTALLMENT",
+      receiptNumber: "LPPRECEIPT1",
+      transactionId: "LPPRECEIPT1",
+      createdAt: new Date("2026-09-11T07:00:10.000Z"),
+    };
+    const confirmedC2b = { ...unmatchedC2b, status: "SUCCESS", resourceType: "LPP", resourceId: "lpp-1" };
+    const recoveredStk = {
+      ...pendingStk,
+      status: "SUCCESS",
+      amount: 13,
+      resultDescription: "Confirmed by matching C2B receipt LPPRECEIPT1",
+      callbackPayload: { correlation: { receiptNumber: "LPPRECEIPT1" } },
+    };
+    const tx = {
+      mpesaPayment: {
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(pendingStk) // normal confirmed-C2B correlation
+          .mockResolvedValueOnce(pendingStk) // legacy recovery STK lookup
+          .mockResolvedValueOnce(confirmedC2b),
+        findFirst: jest.fn()
+          .mockResolvedValueOnce(null) // no already-successful C2B row
+          .mockResolvedValueOnce(unmatchedC2b),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    (recordLppPayment as jest.Mock).mockResolvedValue({ summary: { agreedTotal: 13_000, totalPaid: 13 } });
+    (prisma.mpesaPayment.findUnique as jest.Mock)
+      .mockResolvedValueOnce(pendingStk)
+      .mockResolvedValueOnce(recoveredStk);
+    (prisma.$transaction as jest.Mock).mockImplementation(async (work) => work(tx));
+
+    await expect(getStkPaymentStatus("ws_CO_lpp_legacy")).resolves.toEqual(expect.objectContaining({
+      status: "SUCCESS", amount: 13, receiptNumber: "LPPRECEIPT1",
+    }));
+    expect(recordLppPayment).toHaveBeenCalledTimes(1);
+    expect(tx.mpesaPayment.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "c2b-lpp-1", status: "UNMATCHED" },
+      data: expect.objectContaining({ resourceType: "LPP", resourceId: "lpp-1", status: "PENDING" }),
+    }));
   });
 
   it("does not create a second ledger payment for a duplicate Safaricom TransID", async () => {
@@ -236,7 +312,7 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
   it("confirms an installation reservation once after STK success and promotes it to a project", async () => {
     const pending = { ...basePayment, channel: "STK", status: "PENDING", orderId: null, websiteOrderId: null, resourceType: "INSTALLATION_PROJECT", resourceId: "installation-order", requestedAmount: 35_000, amount: null, checkoutRequestId: "ws_CO_installation_success" };
     const tx = {
-      mpesaPayment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUnique: jest.fn().mockResolvedValue(pending), update: jest.fn().mockResolvedValue({}) },
+      mpesaPayment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUnique: jest.fn().mockResolvedValue(pending), findFirst: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}) },
       order: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "installation-order", orderNumber: "Betech-PROJECT-1", totalAmount: 100_000, paidAmount: 0, metadata: { installationPaymentTerm: "DEPOSIT_AND_BALANCE", installationDepositPercent: 30 }, receipt: { id: "receipt-1", data: { installationPaymentState: "AWAITING_PAYMENT" } } }), update: jest.fn().mockResolvedValue({}) },
       receipt: { update: jest.fn().mockResolvedValue({}) },
       websiteOrder: { findUniqueOrThrow: jest.fn(), update: jest.fn() },

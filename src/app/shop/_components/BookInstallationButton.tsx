@@ -100,7 +100,9 @@ export default function BookInstallationButton({ product, customer = emptyCustom
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricing, setPricing] = useState<InstallationPricing | null>(null);
   const [error, setError] = useState("");
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  // The booking flow starts with the acknowledgement visibly selected.
+  // Customers may still review or untick it before submitting.
+  const [termsAccepted, setTermsAccepted] = useState(true);
   const [paymentSession, setPaymentSession] = useState<{ projectRef: string; receiptId: string; amountDue: number } | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [bookingAttemptId] = useState(() => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `installation-${Date.now()}-${Math.random().toString(36).slice(2)}`);

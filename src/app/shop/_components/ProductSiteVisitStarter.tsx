@@ -95,7 +95,9 @@ export default function ProductSiteVisitStarter({
   const [loadingPricing, setLoadingPricing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  // Show the acknowledgement as selected on the final confirmation step;
+  // customers can still review or change it before requesting payment.
+  const [termsAccepted, setTermsAccepted] = useState(true);
   const [createdVisit, setCreatedVisit] = useState<{
     id: string;
     visitRef: string;
