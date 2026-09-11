@@ -321,6 +321,8 @@ export type LppAssignmentMethod = "ROUND_ROBIN" | "MANUAL";
 
 export type CreateLppInput = {
   customerId: string;
+  /** Customer self-service records remain inert until M-Pesa settlement. */
+  initialStatus?: "DRAFT" | "AWAITING_PAYMENT";
   productId?: string | null;
   customProductName?: string | null;
   itemSerial?: string | null;
@@ -1185,7 +1187,7 @@ export async function createLipaPolePole(
         ${agreedUnitPrice},
         ${agreedTotal},
         ${trimToNull(input.currency) ?? "KES"},
-        ${"DRAFT"}::"LipaPolePoleStatus",
+        ${input.initialStatus ?? "DRAFT"}::"LipaPolePoleStatus",
         ${trimToNull(input.paymentMode) ?? "FLEXIBLE"}::"LipaPolePolePaymentMode",
         ${trimToNull(input.reservationMode) ?? "SOFT_RESERVE"}::"LipaPolePoleReservationMode",
         ${normalizeOptionalDate(input.expectedCompletionDate)},

@@ -7,6 +7,7 @@ import { normalizeKenyanPhone } from "@/lib/phone";
 import { ensureSiteVisitsSchema } from "@/lib/siteVisits";
 import { getLppAccountSummary, recordLppPayment } from "@/lib/lipaPolePoleService";
 import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
+import { dispatchSiteVisitCreated } from "@/lib/siteVisitNotifications";
 
 const DARAJA_PRODUCTION_BASE_URL = "https://api.safaricom.co.ke";
 const DEFAULT_CALLBACK_BASE_URL = "https://betech.co.ke";
@@ -293,6 +294,13 @@ export async function initiateStkPushForResource(input: {
     throw new Error(result.errorMessage || result.ResponseDescription || "M-Pesa could not start the payment request");
   }
 
+  if (target.kind === "LPP") {
+    await prisma.$executeRaw(Prisma.sql`UPDATE "LipaPolePole" SET "status" = 'AWAITING_PAYMENT'::"LipaPolePoleStatus", "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${target.id} AND "status" IN ('AWAITING_PAYMENT'::"LipaPolePoleStatus", 'PAYMENT_FAILED'::"LipaPolePoleStatus")`);
+  }
+  if (target.kind === "SITE_VISIT") {
+    await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "status" = 'PAYMENT_PENDING', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${target.id} AND "status" IN ('PAYMENT_PENDING', 'PAYMENT_FAILED')`);
+  }
+
   await prisma.mpesaPayment.create({
     data: {
       channel: "STK",
@@ -557,6 +565,17 @@ async function notifyConfirmedWebsiteOrder(input: {
   });
 }
 
+async function notifyConfirmedSiteVisit(siteVisitId: string) {
+  const rows = await prisma.$queryRaw<Array<{ id: string; visitRef: string; customerName: string; customerPhone: string; county: string | null; town: string | null; location: string | null; landmark: string | null; assignedTechnicianId: string | null; assignedTechnicianName: string | null; scheduledAt: Date | null; paymentStatus: string; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number }>>(Prisma.sql`SELECT "id", "visitRef", "customerName", "customerPhone", "county", "town", "location", "landmark", "assignedTechnicianId", "assignedTechnicianName", "scheduledAt", "paymentStatus", "visitFee", "dataLoggerRequested", "dataLoggerDays", "dataLoggerFee" FROM "SiteVisit" WHERE "id" = ${siteVisitId} LIMIT 1`);
+  const visit = rows[0];
+  if (visit?.paymentStatus === "PAID") await dispatchSiteVisitCreated({ ...visit, scheduledAt: visit.scheduledAt?.toISOString() || null }, "Customer payment confirmed");
+}
+
+async function markStkResourcePaymentFailed(payment: MpesaPayment) {
+  if (payment.resourceType === "LPP" && payment.resourceId) await prisma.$executeRaw(Prisma.sql`UPDATE "LipaPolePole" SET "status" = 'PAYMENT_FAILED'::"LipaPolePoleStatus", "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${payment.resourceId} AND "status" = 'AWAITING_PAYMENT'::"LipaPolePoleStatus"`);
+  if (payment.resourceType === "SITE_VISIT" && payment.resourceId) await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "status" = 'PAYMENT_FAILED', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${payment.resourceId} AND "status" = 'PAYMENT_PENDING'`);
+}
+
 /**
  * The one accounting path for both confirmed callbacks and staff reconciliation.
  * It must be called inside the transaction that owns the payment-status change.
@@ -631,7 +650,7 @@ async function applyConfirmedPaymentInTransaction(
   if (payment.resourceType === "SITE_VISIT" && payment.resourceId) {
     await tx.$executeRaw(Prisma.sql`
       UPDATE "SiteVisit"
-      SET "paymentStatus" = 'PAID', "paymentMethod" = 'MPESA_STK',
+      SET "paymentStatus" = 'PAID', "status" = CASE WHEN "status" IN ('PAYMENT_PENDING', 'PAYMENT_FAILED') THEN 'PENDING' ELSE "status" END, "paymentMethod" = 'MPESA_STK',
           "paymentReference" = ${input.receiptNumber || payment.receiptNumber || payment.checkoutRequestId},
           "paymentAmount" = ${amount}, "paymentPaidAt" = ${input.transactionAt || new Date()},
           "paymentVerificationStatus" = 'VERIFIED', "updatedAt" = CURRENT_TIMESTAMP
@@ -871,12 +890,14 @@ export async function handleStkCallback(payload: unknown) {
         payerPhone: normalizeDarajaPhone(metadata.phoneNumber || "") || confirmation.payment.phoneNumber,
       });
     }
+    if (confirmation?.application.applied && confirmation.payment.resourceType === "SITE_VISIT" && confirmation.payment.resourceId) await notifyConfirmedSiteVisit(confirmation.payment.resourceId);
     return;
   }
   await prisma.mpesaPayment.update({
     where: { id: payment.id },
     data: { status: resultCode === 1032 ? "CANCELLED" : "FAILED", resultCode: Number.isFinite(resultCode) ? resultCode : null, resultDescription, callbackPayload: jsonValue(payload) },
   });
+  await markStkResourcePaymentFailed(payment);
 }
 
 export async function handleC2bConfirmation(payload: unknown) {

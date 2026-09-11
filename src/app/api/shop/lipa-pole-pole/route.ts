@@ -197,6 +197,7 @@ export async function POST(request: Request) {
   try {
     const created = await createLipaPolePole({
       customerId: user.id,
+      initialStatus: "AWAITING_PAYMENT",
       productId: product.id,
       customProductName: productConfig.name,
       quantity: payload.quantity,
@@ -220,16 +221,9 @@ export async function POST(request: Request) {
         assignedById: user.id,
         method: "MANUAL",
       },
-      initialPayment: initialPaymentReference
-        ? {
-            amount: payload.initialPaymentAmount,
-            method: payload.initialPaymentMethod,
-            reference: initialPaymentReference,
-            notes: normalizeOptional(payload.initialPaymentNotes) || "Customer portal deposit.",
-            receivedById: null,
-            status: "PENDING",
-          }
-        : null,
+      // The authoritative Daraja callback records the initial payment. A
+      // browser-supplied code or initiation response must never activate it.
+      initialPayment: null,
     });
 
     return noStoreJson({ ok: true, id: created.id, reference: created.reference }, { status: 201 });

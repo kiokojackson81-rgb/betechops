@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 
 export const LPP_STATUSES = [
   "DRAFT",
+  "AWAITING_PAYMENT",
+  "PAYMENT_FAILED",
   "ACTIVE",
   "DUE_SOON",
   "OVERDUE",
@@ -149,7 +151,7 @@ export function deriveLppOperationalStatus(input: {
   }
 
   if (current === "ON_HOLD") return "ON_HOLD";
-  if (current === "DRAFT" && summary.totalPaid.lte(ZERO)) return "DRAFT";
+  if (["DRAFT", "AWAITING_PAYMENT", "PAYMENT_FAILED"].includes(current) && summary.totalPaid.lte(ZERO)) return current;
 
   const now = input.now ?? new Date();
   const expectedCompletionDate = input.expectedCompletionDate ? new Date(input.expectedCompletionDate) : null;

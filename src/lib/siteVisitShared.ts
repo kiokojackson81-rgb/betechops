@@ -1,6 +1,6 @@
 import type { QuoteProjectType } from "@/lib/quoteRequests";
 
-export const SITE_VISIT_STATUSES = ["PENDING", "SCHEDULED", "VISITED", "CLOSED"] as const;
+export const SITE_VISIT_STATUSES = ["PAYMENT_PENDING", "PAYMENT_FAILED", "PENDING", "SCHEDULED", "VISITED", "CLOSED"] as const;
 export type SiteVisitStatus = (typeof SITE_VISIT_STATUSES)[number];
 
 export const SITE_VISIT_OUTCOMES = [

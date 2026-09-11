@@ -60,7 +60,9 @@ export default function MpesaStkPaymentPanel({
       }
     };
     void poll();
-    const id = window.setInterval(() => void poll(), 3500);
+    // Payment state is authoritative on the server; detect a delivered
+    // callback promptly instead of leaving the payer on a stale wait screen.
+    const id = window.setInterval(() => void poll(), 2000);
     return () => { active = false; window.clearInterval(id); };
   }, [checkoutRequestId, onSuccess, state]);
 

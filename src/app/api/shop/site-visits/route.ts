@@ -84,6 +84,7 @@ export async function POST(request: Request) {
       dataLoggerDays,
       source: "CUSTOMER_REQUEST",
       paymentStatus: "UNPAID",
+      status: "PAYMENT_PENDING",
     }, {
       id: sessionUser.id,
       customerUserId: sessionUser.id,
@@ -91,7 +92,8 @@ export async function POST(request: Request) {
       email: user?.email || sessionUser.email || null,
     });
     if (!visit) return NextResponse.json({ ok: false, error: "Unable to create the site visit request." }, { status: 500 });
-    void dispatchSiteVisitCreated(visit, "Customer");
+    // This is an internal payment reservation. Operations are notified only
+    // after the authoritative M-Pesa settlement confirms the booking.
     return NextResponse.json({ ok: true, visit: toCustomerSiteVisit(visit) }, { status: 201 });
   } catch (error) {
     console.error("[shop.site-visits] POST failed", error);

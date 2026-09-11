@@ -535,6 +535,7 @@ export const siteVisitCreateSchema = z.object({
   transportMethod: z.string().trim().max(120).optional(),
   visitFee: z.coerce.number().min(0).max(100000000).optional(),
   paymentStatus: z.enum(SITE_VISIT_PAYMENT_STATUSES).optional(),
+  status: z.enum(SITE_VISIT_STATUSES).optional(),
   paymentReference: z.string().trim().max(160).optional(),
   source: z.enum(["STAFF", "CUSTOMER_REQUEST"]).optional(),
   feeOverrideReason: z.string().trim().max(500).optional(),
@@ -915,7 +916,7 @@ export async function createSiteVisit(
   });
 
   const visitRef = await buildVisitRef();
-  const status: SiteVisitStatus = input.scheduledAt ? "SCHEDULED" : "PENDING";
+  const status: SiteVisitStatus = input.status || (input.scheduledAt ? "SCHEDULED" : "PENDING");
   const scheduledAt = input.scheduledAt?.trim() ? new Date(input.scheduledAt) : null;
   const preferredDate = input.preferredDate?.trim() ? new Date(`${input.preferredDate.trim()}T00:00:00.000`) : null;
   const effectiveCounty = input.county?.trim() || linkedQuote?.county || null;

@@ -11,6 +11,7 @@ import {
   MapPin,
   X,
 } from "lucide-react";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { trackSiteVisitEvent } from "@/app/shop/shopAnalytics";
 import {
@@ -99,8 +100,6 @@ export default function ProductSiteVisitStarter({
     id: string;
     visitRef: string;
   } | null>(null);
-  const [paymentReference, setPaymentReference] = useState("");
-  const [paymentSubmitted, setPaymentSubmitted] = useState(false);
   const [bookingAttemptId] = useState(() => crypto.randomUUID());
   const [portalReady, setPortalReady] = useState(false);
 
@@ -275,38 +274,6 @@ export default function ProductSiteVisitStarter({
     }
   }
 
-  async function submitPayment() {
-    if (!createdVisit || paymentSubmitted || submitting) return;
-    setSubmitting(true);
-    setError("");
-    trackSiteVisitEvent("site_visit_payment_started", {
-      productId,
-      visitRef: createdVisit.visitRef,
-    });
-    try {
-      const response = await fetch(`/api/shop/site-visits/${createdVisit.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "SUBMIT_PAYMENT",
-          paymentMethod: "MPESA",
-          paymentReference,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok || !payload.ok)
-        throw new Error(payload.error || "Unable to submit payment.");
-      setPaymentSubmitted(true);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to submit payment.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   const triggerClass =
     "inline-flex min-h-[3.35rem] items-center justify-center gap-2 rounded-[20px] border border-amber-500/50 bg-amber-50 px-4 py-3 text-sm font-bold text-[#7a0000] shadow-[0_14px_30px_rgba(242,178,15,0.12)] transition hover:-translate-y-0.5 hover:bg-amber-100";
@@ -400,48 +367,9 @@ export default function ProductSiteVisitStarter({
                     <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-700">
                       <Check className="h-7 w-7" />
                     </div>
-                    <h3 className="mt-5 text-2xl font-black text-slate-950">
-                      Booking {createdVisit.visitRef} created
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Pay {money(pricing?.totalPayable || 0)} and enter only the
-                      10-character M-Pesa transaction code. The visit is
-                      confirmed after verification.
-                    </p>
-                    {paymentSubmitted ? (
-                      <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
-                        <strong>Payment submitted.</strong> Our team will verify
-                        it and update your booking status.
-                      </div>
-                    ) : (
-                      <div className="mt-6 grid gap-3">
-                        <label className="text-sm font-bold text-slate-800">
-                          M-Pesa transaction code
-                          <input
-                            value={paymentReference}
-                            onChange={(event) =>
-                              setPaymentReference(
-                                event.target.value.toUpperCase(),
-                              )
-                            }
-                            placeholder="e.g. UHG3K3STB0"
-                            className="mt-2 min-h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-bold uppercase outline-none focus:border-[#7a0000]"
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          disabled={
-                            submitting || paymentReference.trim().length < 10
-                          }
-                          onClick={submitPayment}
-                          className="min-h-14 rounded-2xl bg-[#7a0000] px-5 font-bold text-white disabled:opacity-50"
-                        >
-                          {submitting
-                            ? "Submitting..."
-                            : "Submit payment for verification"}
-                        </button>
-                      </div>
-                    )}
+                    <h3 className="mt-5 text-2xl font-black text-slate-950">Pay Site Visit Fee {money(pricing?.totalPayable || 0)} &amp; Book</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">Secure M-Pesa payment. We’ll send a prompt to your phone; your site visit is confirmed only after Safaricom confirms payment.</p>
+                    <div className="mt-6"><MpesaStkPaymentPanel resourceType="SITE_VISIT" reference={createdVisit.visitRef} amountDue={pricing?.totalPayable || 0} initialPhone={customer.phone} autoStart onSuccess={() => { trackSiteVisitEvent("site_visit_payment_confirmed", { productId, visitRef: createdVisit.visitRef }); window.location.assign("/account/site-visits"); }} /></div>
                     <Link
                       href="/account/site-visits"
                       className="mt-4 inline-flex min-h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 font-bold text-slate-900"
@@ -786,7 +714,7 @@ export default function ProductSiteVisitStarter({
                         >
                           {submitting
                             ? "Creating booking..."
-                            : `Create booking · ${money(pricing?.totalPayable || 0)}`}
+                            : `Pay Site Visit Fee ${money(pricing?.totalPayable || 0)} & Book`}
                         </button>
                       )}
                     </footer>

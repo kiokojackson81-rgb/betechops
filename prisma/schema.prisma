@@ -3038,6 +3038,8 @@ enum MpesaPaymentPurpose {
 
 enum LipaPolePoleStatus {
   DRAFT
+  AWAITING_PAYMENT
+  PAYMENT_FAILED
   ACTIVE
   DUE_SOON
   OVERDUE

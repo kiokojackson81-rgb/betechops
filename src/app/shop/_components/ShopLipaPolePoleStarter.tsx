@@ -9,13 +9,11 @@ import { CheckCircle2, WalletCards, X } from "lucide-react";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import {
   LIPA_POLE_POLE_MIN_DEPOSIT,
-  LIPA_POLE_POLE_MPESA_ACCOUNT,
-  LIPA_POLE_POLE_MPESA_PAYBILL,
   getLipaPolePoleDefaultInstallments,
   getLipaPolePoleMaxInstallments,
 } from "@/lib/lipaPolePoleConfig";
-import { formatMpesaReferenceInput } from "@/lib/mpesaReference";
 import { LIPA_POLE_POLE_TERMS_PATH } from "@/lib/lipaPolePoleTerms";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 
 type ShopLipaPolePoleStarterProps = {
   product: {
@@ -108,7 +106,6 @@ export default function ShopLipaPolePoleStarter({
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpPhone, setOtpPhone] = useState("");
-  const [transactionCode, setTransactionCode] = useState("");
   const [plan, setPlan] = useState<{ id: string; reference: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,7 +183,6 @@ export default function ShopLipaPolePoleStarter({
     setOtpCode("");
     setOtpPhone("");
     setPlan(null);
-    setTransactionCode("");
     setOpen(true);
   }
 
@@ -311,31 +307,6 @@ export default function ShopLipaPolePoleStarter({
     }
   }
 
-  async function submitPayment(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!plan) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/shop/lipa-pole-pole/${encodeURIComponent(plan.id)}/payments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: initialPayment,
-          method: "MPESA",
-          reference: transactionCode,
-          notes: "Customer portal initial payment.",
-        }),
-      });
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) throw new Error(data.error || "Unable to submit payment.");
-      window.location.assign(`/shop/account/lipa-pole-pole/${encodeURIComponent(plan.id)}`);
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to submit payment.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   return (
     <>
@@ -438,7 +409,8 @@ export default function ShopLipaPolePoleStarter({
                         <span>I understand that the product will only be released after full payment and I agree to the Betech Solar Solutions <Link href={LIPA_POLE_POLE_TERMS_PATH} target="_blank" className="font-black text-[#7a0000] underline underline-offset-4">Lipa Pole Pole Terms &amp; Conditions</Link>.</span>
                       </label>
                       {error ? <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
-                      <button type="submit" disabled={submitting} className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-[18px] bg-[#7a0000] px-5 py-3 text-sm font-black uppercase tracking-[0.06em] text-white shadow-[0_18px_34px_rgba(122,0,0,0.22)] disabled:opacity-50">{submitting ? "Starting..." : customer.isAuthenticated ? "Start Lipa Pole Pole" : "Continue with OTP"}</button>
+                      <button type="submit" disabled={submitting} className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-[18px] bg-[#7a0000] px-5 py-3 text-sm font-black uppercase tracking-[0.06em] text-white shadow-[0_18px_34px_rgba(122,0,0,0.22)] disabled:opacity-50">{submitting ? "Preparing secure payment..." : customer.isAuthenticated ? `Pay Initial Amount ${formatCurrency(initialPayment)} via M-Pesa` : "Continue with OTP"}</button>
+                      {customer.isAuthenticated ? <p className="mt-3 text-center text-xs leading-5 text-slate-500">We’ll send a secure M-Pesa prompt to your phone. Your Lipa Pole Pole plan is activated only after Safaricom confirms payment.</p> : null}
                     </form>
                   ) : null}
 
@@ -478,31 +450,16 @@ export default function ShopLipaPolePoleStarter({
                     </form>
                   ) : null}
 
-                  {step === "payment" ? (
-                    <form onSubmit={submitPayment} className="mx-auto max-w-2xl">
-                      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#0f9d58]">Booking created</div>
-                      <h3 id="lpp-dialog-title" className="mt-2 text-3xl font-black tracking-tight text-slate-950">Pay with M-Pesa</h3>
-                      <div className="mt-5 rounded-[22px] border border-[#0f9d58]/20 bg-[#f3fff7] p-5">
-                        <div className="text-xs font-black uppercase tracking-[0.14em] text-[#0f9d58]">Amount to pay</div>
-                        <div className="mt-1 text-3xl font-black text-slate-950">{formatCurrency(initialPayment)}</div>
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-white p-4"><div className="text-xs font-bold text-slate-500">Paybill</div><div className="mt-1 text-xl font-black text-slate-950">{LIPA_POLE_POLE_MPESA_PAYBILL}</div></div><div className="rounded-2xl bg-white p-4"><div className="text-xs font-bold text-slate-500">Account Number</div><div className="mt-1 text-xl font-black text-slate-950">{LIPA_POLE_POLE_MPESA_ACCOUNT}</div></div></div>
-                      </div>
-                      <ol className="mt-5 grid gap-2 rounded-[22px] border border-[#7a0000]/10 bg-white p-5 text-sm leading-6 text-slate-700">
-                        {["Open M-Pesa.", "Select Lipa na M-Pesa.", "Select Pay Bill.", `Enter Business Number ${LIPA_POLE_POLE_MPESA_PAYBILL}.`, `Enter Account Number ${LIPA_POLE_POLE_MPESA_ACCOUNT}.`, `Enter ${formatCurrency(initialPayment)}.`, "Complete payment.", "Enter the M-Pesa confirmation code below."].map((instruction, index) => <li key={instruction} className="flex gap-3"><span className="font-black text-[#7a0000]">{index + 1}.</span><span>{instruction}</span></li>)}
-                      </ol>
-                      <label className="mt-5 grid gap-2 text-sm font-bold text-slate-700">M-Pesa Transaction Code<input value={transactionCode} onChange={(event) => setTransactionCode(formatMpesaReferenceInput(event.target.value))} className={inputClass} placeholder="e.g. UHG3K3STB0 or paste the full message" autoCapitalize="characters" required /><span className="text-xs font-medium text-slate-500">You can paste the full M-Pesa message. Only the 10-character transaction code will be saved.</span></label>
-                      <p className="mt-3 text-xs leading-5 text-slate-500">Submitting a code does not credit your balance. Betech staff must verify the payment first.</p>
-                      {error ? <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
-                      <button type="submit" disabled={submitting} className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-[18px] bg-[#0f9d58] px-5 py-3 text-sm font-black uppercase tracking-[0.06em] text-white shadow-[0_18px_34px_rgba(15,157,88,0.22)] disabled:opacity-50">{submitting ? "Submitting..." : "Submit Payment"}</button>
-                    </form>
+                  {step === "payment" && plan ? (
+                    <div className="mx-auto max-w-2xl"><div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#0f9d58]">Secure activation payment</div><h3 id="lpp-dialog-title" className="mt-2 text-3xl font-black tracking-tight text-slate-950">Pay {formatCurrency(initialPayment)} via M-Pesa</h3><p className="mt-3 text-sm leading-6 text-slate-600">Your plan is reserved and will activate only after Safaricom confirms this payment.</p><div className="mt-5"><MpesaStkPaymentPanel resourceType="LPP" reference={plan.reference} amountDue={initialPayment} initialPhone={form.customerPhone} autoStart onSuccess={() => { setStep("success"); }} /></div></div>
                   ) : null}
 
                   {step === "success" && plan ? (
                     <div className="mx-auto flex max-w-2xl flex-col items-center py-8 text-center sm:py-14">
                       <span className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-[#e9fff1] text-[#0f9d58]"><CheckCircle2 className="h-10 w-10" /></span>
-                      <div className="mt-5 text-[11px] font-black uppercase tracking-[0.18em] text-[#0f9d58]">Payment submitted for verification</div>
+                      <div className="mt-5 text-[11px] font-black uppercase tracking-[0.18em] text-[#0f9d58]">Payment confirmed</div>
                       <h3 id="lpp-dialog-title" className="mt-2 text-3xl font-black tracking-tight text-slate-950">Your booking is in your Betech account.</h3>
-                      <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">We have received your payment details. Your Lipa Pole Pole balance will update after Betech verifies the payment.</p>
+                      <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">Your initial payment was received and your Lipa Pole Pole plan is now active.</p>
                       <div className="mt-7 grid w-full gap-3 sm:grid-cols-2">
                         <Link href={`/shop/account/lipa-pole-pole/${encodeURIComponent(plan.id)}`} className="inline-flex min-h-14 items-center justify-center rounded-[18px] bg-[#7a0000] px-5 py-3 text-sm font-black text-white">View My Lipa Pole Pole</Link>
                         <Link href="/" className="inline-flex min-h-14 items-center justify-center rounded-[18px] border border-[#7a0000]/16 bg-white px-5 py-3 text-sm font-black text-[#7a0000]">Continue Shopping</Link>
