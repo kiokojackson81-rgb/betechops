@@ -255,21 +255,23 @@ export default function CustomerSiteVisitsClient({
                   </b>
                 </div>
                 <div className="rounded-2xl bg-white p-3">
-                  <div className="text-xs text-slate-500">Total / payment</div>
-                  <b>
-                    {money(visit.totalPayable)} ·{" "}
-                    {label(
-                      visit.paymentVerificationStatus === "PENDING"
-                        ? "VERIFYING"
-                        : visit.paymentStatus,
-                    )}
-                  </b>
+                  <div className="text-xs text-slate-500">Payment status</div>
+                  <b>{label(visit.paymentVerificationStatus === "PENDING" ? "VERIFYING" : visit.paymentStatus)}</b>
+                </div>
+                <div className="rounded-2xl bg-white p-3">
+                  <div className="text-xs text-slate-500">Paid / balance</div>
+                  <b>{money(visit.paymentAmount || 0)} / {money(Math.max(0, visit.totalPayable - (visit.paymentAmount || 0)))}</b>
+                </div>
+                <div className="rounded-2xl bg-white p-3">
+                  <div className="text-xs text-slate-500">M-PESA receipt</div>
+                  <b>{visit.paymentReference || "-"}</b>
                 </div>
                 <div className="rounded-2xl bg-white p-3">
                   <div className="text-xs text-slate-500">Schedule</div>
                   <b>{displayDate(visit.scheduledAt || visit.preferredDate)}</b>
                 </div>
               </div>
+              {visit.paymentPaidAt ? <div className="mt-3 text-xs text-slate-500">Payment received: {displayDate(visit.paymentPaidAt)}{visit.paymentMethod ? ` · ${visit.paymentMethod}` : ""}</div> : null}
               <div className="mt-4 flex gap-2 text-sm text-slate-600">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#7a0000]" />
                 <span>

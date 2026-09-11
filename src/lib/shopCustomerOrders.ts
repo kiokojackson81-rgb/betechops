@@ -59,6 +59,11 @@ export type CustomerAccountOrderDetail = {
   paymentMethod: string;
   amountDueNow: number;
   amountPaid: number;
+  balance: number;
+  paymentPlan: string | null;
+  paymentStatus: string;
+  lastMpesaReceiptNumber: string | null;
+  lastMpesaPaymentAt: string | null;
   notes: string | null;
   receiptId: string | null;
   receiptNumber: string | null;
@@ -535,6 +540,11 @@ export async function getCustomerAccountOrderDetail(args: {
           : "CASH",
       amountDueNow: 0,
       amountPaid: toNumber(receipt.order.totalAmount),
+      balance: 0,
+      paymentPlan: null,
+      paymentStatus: "PAID",
+      lastMpesaReceiptNumber: null,
+      lastMpesaPaymentAt: null,
       notes: typeof metadata.notes === "string" && metadata.notes.trim() ? metadata.notes.trim() : null,
       receiptId: receipt.id,
       receiptNumber: receipt.receiptNumber,
@@ -606,11 +616,13 @@ export async function getCustomerAccountOrderDetail(args: {
   if (!canAccessWebsiteOrder) return null;
 
   const paymentMetadata = readJsonObject(websiteOrder.metadata);
+  const amountPaid = Math.max(0, Number(paymentMetadata.amountPaid || 0));
+  const total = toNumber(websiteOrder.total);
   return {
     routeId: args.routeId,
     orderRef: websiteOrder.orderRef,
     status: buildCustomerProjectStatus(readJsonObject(websiteOrder.metadata), websiteOrder.status),
-    total: toNumber(websiteOrder.total),
+    total,
     subtotal: toNumber(websiteOrder.subtotal),
     createdAt: websiteOrder.createdAt.toISOString(),
     deliveryMethod: websiteOrder.deliveryMethod,
@@ -619,8 +631,15 @@ export async function getCustomerAccountOrderDetail(args: {
     customerPhone: websiteOrder.customerPhone,
     customerEmail: websiteOrder.customerEmail,
     paymentMethod: websiteOrder.paymentMethod,
-    amountDueNow: Math.max(0, Number(paymentMetadata.amountDueNow || 0) - Number(paymentMetadata.amountPaid || 0)),
-    amountPaid: Math.max(0, Number(paymentMetadata.amountPaid || 0)),
+    amountDueNow: Math.max(0, Number(paymentMetadata.amountDueNow || 0) - amountPaid),
+    amountPaid,
+    balance: Math.max(0, total - amountPaid),
+    paymentPlan: typeof paymentMetadata.paymentOption === "string" ? paymentMetadata.paymentOption.replaceAll("_", " ") : null,
+    paymentStatus: typeof paymentMetadata.mpesaPaymentStatus === "string"
+      ? paymentMetadata.mpesaPaymentStatus
+      : amountPaid >= total ? "PAID" : amountPaid > 0 ? "PARTIAL" : "UNPAID",
+    lastMpesaReceiptNumber: typeof paymentMetadata.lastMpesaReceiptNumber === "string" ? paymentMetadata.lastMpesaReceiptNumber : null,
+    lastMpesaPaymentAt: typeof paymentMetadata.lastMpesaPaymentAt === "string" ? paymentMetadata.lastMpesaPaymentAt : null,
     notes: websiteOrder.notes,
     receiptId: websiteOrder.receiptId,
     receiptNumber: websiteOrder.receipt?.receiptNumber || null,

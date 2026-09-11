@@ -230,19 +230,23 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     setForm((current) => {
       const deliveryMethod = normalizeCheckoutDeliveryMethod(current.deliveryMethod);
       if (deliveryMethod && eligibleDeliveryMethods.includes(deliveryMethod)) return current;
-      if (!current.deliveryMethod && !current.paymentPreference) return current;
-      return { ...current, deliveryMethod: "", paymentPreference: "" };
+      // Prefer the normal delivery/courier option for the selected zone. Shop
+      // pickup remains available, but should not be an unnecessary first step.
+      const defaultDelivery = eligibleDeliveryMethods.find((method) => method !== "SHOP_PICKUP") || eligibleDeliveryMethods[0] || "";
+      return { ...current, deliveryMethod: defaultDelivery, paymentPreference: "" };
     });
   }, [eligibleDeliveryMethods]);
 
   useEffect(() => {
-    setForm((current) => (
-      eligiblePaymentOptions.includes(current.paymentPreference as CheckoutPaymentOption)
-        ? current
-        : current.paymentPreference
-          ? { ...current, paymentPreference: "" }
-          : current
-    ));
+    setForm((current) => {
+      if (eligiblePaymentOptions.includes(current.paymentPreference as CheckoutPaymentOption)) return current;
+      // Pay in full is the clear default whenever it is permitted; deposits
+      // and pickup/COD choices stay explicitly selectable alternatives.
+      const defaultPayment = eligiblePaymentOptions.includes("PAY_IN_FULL")
+        ? "PAY_IN_FULL"
+        : eligiblePaymentOptions[0] || "";
+      return { ...current, paymentPreference: defaultPayment };
+    });
   }, [eligiblePaymentOptions]);
 
   useEffect(() => {
@@ -598,7 +602,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 disabled={submitting || Boolean(pendingPaymentOrder)}
                 className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]"
               >
-                {submitting ? "Preparing payment..." : pendingPaymentOrder ? "Awaiting M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? "Continue to M-Pesa" : "Place Order"}
+                {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with M-Pesa` : "Place Order"}
               </button>
               <TrackedWhatsAppLink
                 href={summaryWhatsappHref}
@@ -619,11 +623,11 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
 
         {fieldErrors.cart ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{fieldErrors.cart}</div> : null}
         {error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-        {pendingPaymentOrder ? <div className="mt-5"><MpesaStkPaymentPanel resourceType="ORDER" reference={pendingPaymentOrder.orderRef} amountDue={pendingPaymentOrder.amountDueNow} initialPhone={form.phoneNumber} paymentAccessToken={pendingPaymentOrder.paymentAccessToken} onSuccess={() => { clearCartAfterOrder(); router.push(pendingPaymentOrder.successUrl); }} /></div> : null}
+        {pendingPaymentOrder ? <div className="mt-5"><MpesaStkPaymentPanel resourceType="ORDER" reference={pendingPaymentOrder.orderRef} amountDue={pendingPaymentOrder.amountDueNow} initialPhone={form.phoneNumber} paymentAccessToken={pendingPaymentOrder.paymentAccessToken} autoStart compact onSuccess={() => { clearCartAfterOrder(); router.push(pendingPaymentOrder.successUrl); }} /></div> : null}
 
         <div className="mt-5 hidden flex-col gap-2.5 xl:flex xl:flex-row">
           <button type="submit" disabled={submitting || Boolean(pendingPaymentOrder)} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
-            {submitting ? "Preparing payment..." : pendingPaymentOrder ? "Awaiting M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? "Continue to M-Pesa" : "Place Order"}
+            {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with M-Pesa` : "Place Order"}
           </button>
           <Link href={SHOP_CART_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
             Back to Cart
@@ -676,7 +680,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
             disabled={submitting || Boolean(pendingPaymentOrder)}
             className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)]"
           >
-            {submitting ? "Preparing payment..." : pendingPaymentOrder ? "Awaiting M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? "Continue to M-Pesa" : "Place Order"}
+            {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with M-Pesa` : "Place Order"}
           </button>
           <TrackedWhatsAppLink
             href={summaryWhatsappHref}

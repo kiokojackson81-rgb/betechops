@@ -165,9 +165,30 @@ export default async function ShopAccountOrderDetailPage({
                   <section className={`${shopStyles.lightCard} p-5`}>
                     <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">
                       <ReceiptText className="h-4 w-4" />
-                      Order summary
+                      Payment
                     </div>
                     <div className="mt-4 space-y-2 text-sm text-slate-600">
+                      <div className="flex items-start justify-between gap-3">
+                        <span>Payment status</span>
+                        <span className="text-right font-black text-slate-950">{formatOrderStatus(order.paymentStatus)}</span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span>Total</span>
+                        <span className="text-right font-semibold text-slate-950">{formatCurrency(order.total)}</span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span>Paid</span>
+                        <span className="text-right font-semibold text-emerald-700">{formatCurrency(order.amountPaid)}</span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span>Balance</span>
+                        <span className="text-right font-semibold text-slate-950">{formatCurrency(order.balance)}</span>
+                      </div>
+                      {order.paymentPlan ? <div className="flex items-start justify-between gap-3"><span>Payment plan</span><span className="text-right font-semibold text-slate-950">{formatOrderStatus(order.paymentPlan)}</span></div> : null}
+                      {order.lastMpesaReceiptNumber ? <div className="flex items-start justify-between gap-3"><span>Last M-PESA receipt</span><span className="text-right font-semibold text-slate-950">{order.lastMpesaReceiptNumber}</span></div> : null}
+                      {order.lastMpesaPaymentAt ? <div className="flex items-start justify-between gap-3"><span>Last payment</span><span className="text-right font-semibold text-slate-950">{formatDate(order.lastMpesaPaymentAt)}</span></div> : null}
+                      <div className="border-t border-[#7a0000]/10 pt-2" />
+                      <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Order details</div>
                       <div className="flex items-start justify-between gap-3">
                         <span>Customer</span>
                         <span className="text-right font-semibold text-slate-950">{order.customerName}</span>
@@ -190,14 +211,9 @@ export default async function ShopAccountOrderDetailPage({
                           <span className="text-right font-semibold text-slate-950">{order.receiptNumber}</span>
                         </div>
                       ) : null}
-                      <div className="border-t border-[#7a0000]/10 pt-2" />
                       <div className="flex items-start justify-between gap-3">
                         <span>Subtotal</span>
                         <span className="text-right font-semibold text-slate-950">{formatCurrency(order.subtotal)}</span>
-                      </div>
-                      <div className="flex items-start justify-between gap-3">
-                        <span>Total</span>
-                        <span className="text-right text-lg font-black text-slate-950">{formatCurrency(order.total)}</span>
                       </div>
                     </div>
                   </section>
