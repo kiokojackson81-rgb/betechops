@@ -114,15 +114,17 @@ export default function BookInstallationButton({ product, customer = emptyCustom
     town: customer.town,
     exactLocation: resolveExactLocation(customer),
     installationDate: getNextWorkingDay(),
-    paymentStructure: "DEPOSIT_30" as "DEPOSIT_30" | "FULL_UPFRONT",
+    paymentStructure: "DEPOSIT_30" as "DEPOSIT_30" | "CUSTOM_DEPOSIT",
+    preferredDepositAmount: "10000",
   });
 
   const towns = useMemo(() => getTownsForCounty(form.county), [form.county]);
   const zone = useMemo(() => getDeliveryZone(form.county, form.town), [form.county, form.town]);
   const minimumDate = useMemo(() => getNextWorkingDay(), []);
+  const customDepositAmount = Number(form.preferredDepositAmount);
   const amountDue = form.paymentStructure === "DEPOSIT_30"
     ? Math.round((pricing?.estimatedTotal ?? 0) * 0.3)
-    : pricing?.estimatedTotal ?? 0;
+    : Number.isInteger(customDepositAmount) && customDepositAmount > 0 ? customDepositAmount : 0;
   const requiresAssessment = pricing?.installation?.status === "ASSESSMENT";
 
   useEffect(() => setPortalReady(true), []);
@@ -201,10 +203,24 @@ export default function BookInstallationButton({ product, customer = emptyCustom
       setError("Accept the Solar Installation Terms & Conditions to continue.");
       return;
     }
+    if (form.paymentStructure === "CUSTOM_DEPOSIT") {
+      if (!Number.isInteger(customDepositAmount) || customDepositAmount < 10_000) {
+        setError("Enter a whole-KSh preferred deposit of at least KSh 10,000.");
+        return;
+      }
+      if (customDepositAmount > pricing.estimatedTotal) {
+        setError("Your preferred deposit cannot exceed the installation booking total.");
+        return;
+      }
+    }
 
     setSubmitting(true);
     try {
-      const paymentLabel = form.paymentStructure === "DEPOSIT_30" ? "30% deposit, balance after installation" : "Full payment before installation";
+      const paymentLabel = form.paymentStructure === "DEPOSIT_30"
+        ? "30% deposit, balance after installation"
+        : customDepositAmount >= pricing.estimatedTotal
+          ? "Full payment before installation"
+          : `Custom deposit ${formatCurrency(customDepositAmount)}, balance after installation`;
       const response = await createInstallationProject({
         productId: product.id,
         customerName: form.name.trim(),
@@ -215,6 +231,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
         exactLocation: form.exactLocation.trim(),
         zone: zone.id,
         paymentStructure: form.paymentStructure,
+        preferredDepositAmount: form.paymentStructure === "CUSTOM_DEPOSIT" ? customDepositAmount : undefined,
         preferredInstallationDate: form.installationDate,
         termsAccepted: true,
         bookingAttemptId,
@@ -257,7 +274,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
         </div>
 
         {paymentSession ? <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-7">
-          {paymentConfirmed ? <section className="rounded-[22px] border border-emerald-200 bg-emerald-50 p-6 text-emerald-950"><div className="flex items-center gap-2 font-black"><CheckCircle2 className="h-6 w-6" /> Payment received</div><h3 className="mt-3 text-xl font-black">Installation successfully booked</h3><dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-emerald-800/70">Booking reference</dt><dd className="font-black">{paymentSession.projectRef}</dd></div><div><dt className="text-emerald-800/70">Paid now</dt><dd className="font-black">{formatCurrency(paymentSession.amountDue)}</dd></div><div><dt className="text-emerald-800/70">Preferred date</dt><dd className="font-black">{form.installationDate}</dd></div><div><dt className="text-emerald-800/70">Location</dt><dd className="font-black">{form.exactLocation}, {form.town}</dd></div></dl><button type="button" onClick={() => router.push(`/account/projects/${encodeURIComponent(paymentSession.receiptId)}`)} className="mt-6 rounded-[16px] bg-[#7a0000] px-5 py-3 text-sm font-black text-white">View installation booking</button></section> : <><MpesaStkPaymentPanel resourceType="INSTALLATION_PROJECT" reference={paymentSession.projectRef} amountDue={paymentSession.amountDue} initialPhone={customer.phone || form.phone} autoStart compact actionLabel={`Pay Installation Fee ${formatCurrency(paymentSession.amountDue)} & Book`} onSuccess={() => setPaymentConfirmed(true)} /><p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">Your installation is confirmed only after Safaricom confirms payment. If you close this window, the payment reservation remains available briefly; it is not a confirmed booking.</p></>}</div> : <form onSubmit={submitBooking} className="min-h-0 overflow-y-auto overscroll-contain">
+          {paymentConfirmed ? <section className="rounded-[22px] border border-emerald-200 bg-emerald-50 p-6 text-emerald-950"><div className="flex items-center gap-2 font-black"><CheckCircle2 className="h-6 w-6" /> Deposit received</div><h3 className="mt-3 text-xl font-black">Installation successfully booked</h3><dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-emerald-800/70">Booking reference</dt><dd className="font-black">{paymentSession.projectRef}</dd></div><div><dt className="text-emerald-800/70">Deposit paid now</dt><dd className="font-black">{formatCurrency(paymentSession.amountDue)}</dd></div><div><dt className="text-emerald-800/70">Preferred date</dt><dd className="font-black">{form.installationDate}</dd></div><div><dt className="text-emerald-800/70">Location</dt><dd className="font-black">{form.exactLocation}, {form.town}</dd></div></dl><button type="button" onClick={() => router.push(`/account/projects/${encodeURIComponent(paymentSession.receiptId)}`)} className="mt-6 rounded-[16px] bg-[#7a0000] px-5 py-3 text-sm font-black text-white">View installation booking</button></section> : <><MpesaStkPaymentPanel resourceType="INSTALLATION_PROJECT" reference={paymentSession.projectRef} amountDue={paymentSession.amountDue} initialPhone={customer.phone || form.phone} autoStart compact actionLabel={`Pay Deposit ${formatCurrency(paymentSession.amountDue)} & Book`} onSuccess={() => setPaymentConfirmed(true)} /><p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">Your installation is confirmed only after Safaricom confirms the deposit. If you close this window, the payment reservation remains available briefly; it is not a confirmed booking.</p></>}</div> : <form onSubmit={submitBooking} className="min-h-0 overflow-y-auto overscroll-contain">
           <div className="grid gap-5 p-4 sm:p-7 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
             <div className="grid gap-5">
               <section>
@@ -286,8 +303,9 @@ export default function BookInstallationButton({ product, customer = emptyCustom
               <section>
                 <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Payment procedure</div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {([{"value":"DEPOSIT_30","title":"Pay 30% deposit","copy":"Clear the balance after installation."},{"value":"FULL_UPFRONT","title":"Pay in full","copy":"Pay the complete booking total."}] as const).map((option) => <button key={option.value} type="button" onClick={() => setForm((current) => ({ ...current, paymentStructure: option.value }))} className={`rounded-[18px] border p-4 text-left transition ${form.paymentStructure === option.value ? "border-[#7a0000] bg-[#fff3d8] shadow-sm" : "border-[#7a0000]/10 bg-white"}`}><span className="flex items-center gap-2 font-black text-slate-950">{form.paymentStructure === option.value ? <CheckCircle2 className="h-4 w-4 text-[#7a0000]" /> : null}{option.title}</span><span className="mt-1 block text-xs leading-5 text-slate-600">{option.copy}</span></button>)}
+                  {([{"value":"DEPOSIT_30","title":"Pay 30% deposit","copy":"Pay the standard booking deposit; clear the balance after installation."},{"value":"CUSTOM_DEPOSIT","title":"Choose your deposit","copy":"Enter a preferred whole-KSh deposit from KSh 10,000."}] as const).map((option) => <button key={option.value} type="button" onClick={() => setForm((current) => ({ ...current, paymentStructure: option.value }))} className={`rounded-[18px] border p-4 text-left transition ${form.paymentStructure === option.value ? "border-[#7a0000] bg-[#fff3d8] shadow-sm" : "border-[#7a0000]/10 bg-white"}`}><span className="flex items-center gap-2 font-black text-slate-950">{form.paymentStructure === option.value ? <CheckCircle2 className="h-4 w-4 text-[#7a0000]" /> : null}{option.title}</span><span className="mt-1 block text-xs leading-5 text-slate-600">{option.copy}</span></button>)}
                 </div>
+                {form.paymentStructure === "CUSTOM_DEPOSIT" ? <label className="mt-3 grid gap-1.5 text-sm font-bold text-slate-700">Preferred deposit amount (minimum KSh 10,000)<input type="number" inputMode="numeric" min={10_000} max={pricing?.estimatedTotal || undefined} step={1} value={form.preferredDepositAmount} onChange={(event) => setForm((current) => ({ ...current, preferredDepositAmount: event.target.value }))} className={fieldClass} /><span className="text-xs font-medium text-slate-500">Betech verifies the amount against the live booking total before Safaricom receives the request.</span></label> : null}
               </section>
 
               <label className="flex cursor-pointer items-start gap-3 rounded-[18px] border border-[#7a0000]/12 bg-[#fffaf3] p-4 text-sm leading-6 text-slate-700">
@@ -307,8 +325,8 @@ export default function BookInstallationButton({ product, customer = emptyCustom
               </div>
               <div className="mt-4 border-t border-white/15 pt-4">
                 <div className="flex items-end justify-between gap-3"><span className="text-sm text-white/70">Estimated total</span><span className="text-xl font-black text-amber-300">{pricing ? formatCurrency(pricing.estimatedTotal) : "Select location"}</span></div>
-                <div className="mt-2 flex items-end justify-between gap-3"><span className="text-sm text-white/70">Pay now</span><span className="text-lg font-black">{pricing ? formatCurrency(amountDue) : "-"}</span></div>
-                {form.paymentStructure === "DEPOSIT_30" && pricing ? <div className="mt-1 text-right text-xs text-white/65">Balance after deposit: {formatCurrency(pricing.estimatedTotal - amountDue)}</div> : null}
+                <div className="mt-2 flex items-end justify-between gap-3"><span className="text-sm text-white/70">Deposit now</span><span className="text-lg font-black">{pricing ? formatCurrency(amountDue) : "-"}</span></div>
+                {pricing && amountDue > 0 && amountDue < pricing.estimatedTotal ? <div className="mt-1 text-right text-xs text-white/65">Balance after deposit: {formatCurrency(pricing.estimatedTotal - amountDue)}</div> : null}
               </div>
               <div className="mt-4 rounded-xl bg-white/10 px-3 py-2 text-xs leading-5 text-white/80">For systems below KES 100,000, a local electrician is usually more economical. Betech technical guidance remains available remotely.</div>
             </aside>
@@ -316,7 +334,7 @@ export default function BookInstallationButton({ product, customer = emptyCustom
 
           <div className="sticky bottom-0 flex flex-col gap-3 border-t border-[#7a0000]/10 bg-white/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <div className="min-h-5 text-sm font-semibold text-red-700">{error || (requiresAssessment ? "A site assessment and custom quotation are required for this system." : "")}</div>
-            <div className="text-right"><div className="mb-1 text-xs font-semibold text-slate-500">Secure M-Pesa payment · Enter your PIN only in Safaricom&apos;s prompt.</div><button type="submit" disabled={submitting || pricingLoading || !pricing || requiresAssessment || !termsAccepted} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[16px] bg-[#7a0000] px-7 font-black text-white transition hover:bg-[#620000] disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}{submitting ? "Preparing secure payment..." : `Pay Installation Fee ${pricing ? formatCurrency(amountDue) : ""} & Book`}</button></div>
+            <div className="text-right"><div className="mb-1 text-xs font-semibold text-slate-500">Secure M-Pesa payment · Enter your PIN only in Safaricom&apos;s prompt.</div><button type="submit" disabled={submitting || pricingLoading || !pricing || requiresAssessment || !termsAccepted} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[16px] bg-[#7a0000] px-7 font-black text-white transition hover:bg-[#620000] disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}{submitting ? "Preparing secure payment..." : `Pay Deposit ${pricing ? formatCurrency(amountDue) : ""} & Book`}</button></div>
           </div>
         </form>}
       </div>

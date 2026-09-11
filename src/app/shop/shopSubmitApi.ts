@@ -81,7 +81,8 @@ export type InstallationProjectInput = {
   town: string;
   exactLocation: string;
   zone: "ZONE_1" | "ZONE_2" | "ZONE_3";
-  paymentStructure: "FULL_UPFRONT" | "DEPOSIT_30";
+  paymentStructure: "DEPOSIT_30" | "CUSTOM_DEPOSIT";
+  preferredDepositAmount?: number;
   preferredInstallationDate: string;
   termsAccepted: true;
   /** Stable for one open booking modal so a retry reuses its reservation. */

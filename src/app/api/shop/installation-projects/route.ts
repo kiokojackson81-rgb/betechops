@@ -16,6 +16,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const MINIMUM_INSTALLATION_DEPOSIT = 10_000;
+
 const createSchema = z.object({
   productId: z.string().trim().min(1),
   customerName: z.string().trim().min(2).max(160),
@@ -25,7 +27,8 @@ const createSchema = z.object({
   town: z.string().trim().min(2).max(120),
   exactLocation: z.string().trim().min(2).max(300),
   zone: z.enum(["ZONE_1", "ZONE_2", "ZONE_3"]),
-  paymentStructure: z.enum(["FULL_UPFRONT", "DEPOSIT_30"]),
+  paymentStructure: z.enum(["DEPOSIT_30", "CUSTOM_DEPOSIT"]),
+  preferredDepositAmount: z.coerce.number().int().positive().optional(),
   preferredInstallationDate: z.coerce.date(),
   termsAccepted: z.literal(true),
   bookingAttemptId: z.string().trim().min(12).max(120),
@@ -125,12 +128,26 @@ export async function POST(request: NextRequest) {
   const transportFee = Number(transport.amount || 0);
   const accessoriesFee = Number(accessories.amount || 0);
   const totalAmount = productAmount + installationFee + transportFee + accessoriesFee;
-  const paymentTerm = input.paymentStructure === "DEPOSIT_30"
-    ? "DEPOSIT_AND_BALANCE"
-    : "FULL_BEFORE_INSTALLATION";
+  const requestedCustomDeposit = Number(input.preferredDepositAmount || 0);
+  if (input.paymentStructure === "CUSTOM_DEPOSIT" && requestedCustomDeposit < MINIMUM_INSTALLATION_DEPOSIT) {
+    return NextResponse.json({ ok: false, error: `Enter a preferred deposit of at least KSh ${MINIMUM_INSTALLATION_DEPOSIT.toLocaleString("en-KE")}.` }, { status: 400 });
+  }
+  if (input.paymentStructure === "CUSTOM_DEPOSIT" && requestedCustomDeposit > totalAmount) {
+    return NextResponse.json({ ok: false, error: "The preferred deposit cannot exceed the installation booking total." }, { status: 400 });
+  }
   const amountDue = input.paymentStructure === "DEPOSIT_30"
     ? Math.round(totalAmount * 0.3)
-    : totalAmount;
+    : requestedCustomDeposit;
+  const isFullSettlement = amountDue >= totalAmount;
+  const paymentTerm = isFullSettlement ? "FULL_BEFORE_INSTALLATION" : "DEPOSIT_AND_BALANCE";
+  const depositPercent = isFullSettlement || totalAmount <= 0
+    ? 0
+    : Math.round((amountDue / totalAmount) * 10_000) / 100;
+  const paymentMethod = isFullSettlement
+    ? "Full payment before installation"
+    : input.paymentStructure === "DEPOSIT_30"
+      ? "30% deposit, balance after installation"
+      : `Custom deposit KSh ${amountDue.toLocaleString("en-KE")}, balance after installation`;
   // A retry from the same modal must recover the same unpaid reservation,
   // rather than putting multiple installation jobs in operations queues.
   const existingReservation = await prisma.order.findFirst({
@@ -183,7 +200,7 @@ export async function POST(request: NextRequest) {
           installationPaymentDue: amountDue,
           installationPaymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
           installationPaymentTerm: paymentTerm,
-          installationDepositPercent: input.paymentStructure === "DEPOSIT_30" ? 30 : 0,
+          installationDepositPercent: depositPercent,
         },
         items: {
           create: {
@@ -219,9 +236,7 @@ export async function POST(request: NextRequest) {
           customerPhone,
           customerEmail,
           deliveryAddress: location,
-          paymentMethod: input.paymentStructure === "DEPOSIT_30"
-            ? "30% deposit, balance after installation"
-            : "Full payment before installation",
+          paymentMethod,
           source: "WEBSITE_INSTALLATION",
           customerUserId: customerIdentity.id,
           termsAccepted: true,
@@ -231,7 +246,7 @@ export async function POST(request: NextRequest) {
           installationPaymentDue: amountDue,
           installationPaymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
           installationPaymentTerm: paymentTerm,
-          installationDepositPercent: input.paymentStructure === "DEPOSIT_30" ? 30 : 0,
+          installationDepositPercent: depositPercent,
           items: [{
             productId: product.id,
             title: product.name,
