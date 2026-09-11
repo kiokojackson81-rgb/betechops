@@ -1,6 +1,6 @@
 import "server-only";
 
-import { Prisma } from "@prisma/client";
+import { MpesaPayment, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
 
@@ -11,6 +11,11 @@ export const MPESA_C2B_PAYBILL = "1231008";
 type PaymentTarget =
   | { kind: "ORDER"; id: string; reference: string; total: number; paid: number; customerPhone: string | null }
   | { kind: "WEBSITE_ORDER"; id: string; reference: string; total: number; paid: number; dueNow: number; customerPhone: string | null };
+
+export type MpesaReconciliationTarget = {
+  kind: "ORDER" | "WEBSITE_ORDER";
+  id: string;
+};
 
 type StkResult = {
   MerchantRequestID?: string;
@@ -242,57 +247,226 @@ function parseDarajaTransactionDate(value: string) {
   return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]) - 3, Number(match[5]), Number(match[6])));
 }
 
-async function applyConfirmedPayment(paymentId: string, input: { amount: number; receiptNumber?: string | null; transactionId?: string | null; phoneNumber?: string | null; transactionAt?: Date | null; resultCode?: number | null; resultDescription?: string | null; payload: unknown }) {
+type ConfirmedPaymentInput = {
+  amount: number;
+  receiptNumber?: string | null;
+  transactionId?: string | null;
+  phoneNumber?: string | null;
+  transactionAt?: Date | null;
+  resultCode?: number | null;
+  resultDescription?: string | null;
+  payload: unknown;
+  preserveCallbackPayload?: boolean;
+};
+
+type PaymentApplicationResult = {
+  applied: boolean;
+  paidBefore: number;
+  paidAfter: number;
+  total: number;
+};
+
+/**
+ * The one accounting path for both confirmed callbacks and staff reconciliation.
+ * It must be called inside the transaction that owns the payment-status change.
+ */
+async function applyConfirmedPaymentInTransaction(
+  tx: Prisma.TransactionClient,
+  payment: MpesaPayment,
+  input: ConfirmedPaymentInput,
+): Promise<PaymentApplicationResult> {
+  if (payment.status === "SUCCESS" || payment.status === "UNMATCHED") {
+    return { applied: false, paidBefore: 0, paidAfter: 0, total: 0 };
+  }
+
+  const amount = Math.max(0, input.amount);
+  const common = {
+    amount,
+    receiptNumber: input.receiptNumber || payment.receiptNumber,
+    transactionId: input.transactionId || payment.transactionId,
+    phoneNumber: input.phoneNumber || payment.phoneNumber,
+    transactionAt: input.transactionAt || payment.transactionAt,
+    resultCode: input.resultCode ?? payment.resultCode,
+    resultDescription: input.resultDescription || payment.resultDescription,
+    ...(input.preserveCallbackPayload ? {} : { callbackPayload: jsonValue(input.payload) }),
+  };
+
+  if (!payment.orderId && !payment.websiteOrderId) {
+    await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "UNMATCHED" } });
+    return { applied: false, paidBefore: 0, paidAfter: 0, total: 0 };
+  }
+
+  let paidBefore = 0;
+  let paidAfter = 0;
+  let total = 0;
+  if (payment.orderId) {
+    const order = await tx.order.findUniqueOrThrow({ where: { id: payment.orderId } });
+    total = toNumber(order.totalAmount);
+    paidBefore = Math.max(0, toNumber(order.paidAmount));
+    paidAfter = Math.min(total, paidBefore + amount);
+    await tx.order.update({
+      where: { id: order.id },
+      data: { paidAmount: paidAfter, paymentStatus: paidAfter >= total ? "PAID" : "PARTIAL", status: paidAfter >= total ? "PROCESSING" : order.status },
+    });
+  }
+
+  if (payment.websiteOrderId) {
+    const order = await tx.websiteOrder.findUniqueOrThrow({ where: { id: payment.websiteOrderId } });
+    const metadata = paymentMetadata(order.metadata);
+    total = toNumber(order.total);
+    paidBefore = Math.max(0, toNumber(metadata.amountPaid));
+    paidAfter = Math.min(total, paidBefore + amount);
+    const fullyPaid = paidAfter >= total;
+    await tx.websiteOrder.update({
+      where: { id: order.id },
+      data: {
+        status: fullyPaid ? "PAYMENT_CONFIRMED" : order.status,
+        metadata: {
+          ...metadata,
+          amountPaid: paidAfter,
+          totalOutstanding: Math.max(0, total - paidAfter),
+          mpesaPaymentStatus: fullyPaid ? "SUCCESS" : "PARTIAL",
+          lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null,
+          lastMpesaPaymentAt: (input.transactionAt || payment.transactionAt || new Date()).toISOString(),
+        },
+      },
+    });
+  }
+  await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "SUCCESS" } });
+  return { applied: true, paidBefore, paidAfter, total };
+}
+
+async function applyConfirmedPayment(paymentId: string, input: ConfirmedPaymentInput) {
   await prisma.$transaction(async (tx) => {
     const payment = await tx.mpesaPayment.findUnique({ where: { id: paymentId } });
-    if (!payment || payment.status === "SUCCESS" || payment.status === "UNMATCHED") return;
-    const amount = Math.max(0, input.amount);
-    const common = {
-      amount,
-      receiptNumber: input.receiptNumber || payment.receiptNumber,
-      transactionId: input.transactionId || payment.transactionId,
-      phoneNumber: input.phoneNumber || payment.phoneNumber,
-      transactionAt: input.transactionAt || payment.transactionAt,
-      resultCode: input.resultCode ?? payment.resultCode,
-      resultDescription: input.resultDescription || payment.resultDescription,
-      callbackPayload: jsonValue(input.payload),
+    if (!payment) return;
+    await applyConfirmedPaymentInTransaction(tx, payment, input);
+  });
+}
+
+async function findReconciliationTarget(
+  tx: Prisma.TransactionClient,
+  target: MpesaReconciliationTarget,
+): Promise<PaymentTarget | null> {
+  if (target.kind === "ORDER") {
+    const order = await tx.order.findUnique({
+      where: { id: target.id },
+      select: { id: true, orderNumber: true, totalAmount: true, paidAmount: true, customerPhone: true, status: true },
+    });
+    if (!order || order.status === "CANCELED") return null;
+    return {
+      kind: "ORDER",
+      id: order.id,
+      reference: order.orderNumber,
+      total: toNumber(order.totalAmount),
+      paid: Math.max(0, toNumber(order.paidAmount)),
+      customerPhone: order.customerPhone,
     };
+  }
 
-    if (!payment.orderId && !payment.websiteOrderId) {
-      await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "UNMATCHED" } });
-      return;
+  const websiteOrder = await tx.websiteOrder.findUnique({
+    where: { id: target.id },
+    select: { id: true, orderRef: true, total: true, customerPhone: true, metadata: true, status: true },
+  });
+  if (!websiteOrder || websiteOrder.status === "CANCELLED") return null;
+  const metadata = paymentMetadata(websiteOrder.metadata);
+  return {
+    kind: "WEBSITE_ORDER",
+    id: websiteOrder.id,
+    reference: websiteOrder.orderRef,
+    total: toNumber(websiteOrder.total),
+    paid: Math.max(0, toNumber(metadata.amountPaid)),
+    dueNow: Math.max(0, toNumber(metadata.amountDueNow) || toNumber(websiteOrder.total)),
+    customerPhone: websiteOrder.customerPhone,
+  };
+}
+
+/**
+ * Atomically links an unmatched C2B receipt and applies its original ledger
+ * amount through the same accounting function used by automatic matching.
+ */
+export async function reconcileUnmatchedMpesaPayment(input: {
+  paymentId: string;
+  target: MpesaReconciliationTarget;
+  actorId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.mpesaPayment.findUnique({ where: { id: input.paymentId } });
+    if (!payment) throw new Error("M-Pesa payment was not found");
+    if (payment.channel !== "C2B" || payment.status !== "UNMATCHED") {
+      throw new Error("Only unmatched C2B payments can be reconciled");
     }
 
-    if (payment.orderId) {
-      const order = await tx.order.findUniqueOrThrow({ where: { id: payment.orderId } });
-      const paidAmount = Math.min(toNumber(order.totalAmount), Math.max(0, toNumber(order.paidAmount)) + amount);
-      await tx.order.update({
-        where: { id: order.id },
-        data: { paidAmount, paymentStatus: paidAmount >= toNumber(order.totalAmount) ? "PAID" : "PARTIAL", status: paidAmount >= toNumber(order.totalAmount) ? "PROCESSING" : order.status },
-      });
-    }
+    const target = await findReconciliationTarget(tx, input.target);
+    if (!target) throw new Error("The selected order is unavailable or cancelled");
+    const amount = toNumber(payment.amount ?? payment.requestedAmount);
+    if (amount <= 0) throw new Error("This M-Pesa payment has no positive amount to apply");
 
-    if (payment.websiteOrderId) {
-      const order = await tx.websiteOrder.findUniqueOrThrow({ where: { id: payment.websiteOrderId } });
-      const metadata = paymentMetadata(order.metadata);
-      const paidAmount = Math.min(toNumber(order.total), Math.max(0, toNumber(metadata.amountPaid)) + amount);
-      const fullyPaid = paidAmount >= toNumber(order.total);
-      await tx.websiteOrder.update({
-        where: { id: order.id },
-        data: {
-          status: fullyPaid ? "PAYMENT_CONFIRMED" : order.status,
-          metadata: {
-            ...metadata,
-            amountPaid: paidAmount,
-            totalOutstanding: Math.max(0, toNumber(order.total) - paidAmount),
-            mpesaPaymentStatus: fullyPaid ? "SUCCESS" : "PARTIAL",
-            lastMpesaReceiptNumber: input.receiptNumber || null,
-            lastMpesaPaymentAt: (input.transactionAt || new Date()).toISOString(),
-          },
-        },
-      });
-    }
-    await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "SUCCESS" } });
+    // This conditional write is the transaction claim. A concurrent click sees
+    // zero affected rows and cannot increment the order a second time.
+    const claimed = await tx.mpesaPayment.updateMany({
+      where: { id: payment.id, status: "UNMATCHED" },
+      data: {
+        status: "PENDING",
+        ...(target.kind === "ORDER" ? { orderId: target.id, websiteOrderId: null } : { websiteOrderId: target.id, orderId: null }),
+      },
+    });
+    if (claimed.count !== 1) throw new Error("This M-Pesa payment has already been reconciled");
+
+    const linkedPayment: MpesaPayment = {
+      ...payment,
+      status: "PENDING",
+      orderId: target.kind === "ORDER" ? target.id : null,
+      websiteOrderId: target.kind === "WEBSITE_ORDER" ? target.id : null,
+    };
+    const application = await applyConfirmedPaymentInTransaction(tx, linkedPayment, {
+      amount,
+      receiptNumber: payment.receiptNumber,
+      transactionId: payment.transactionId,
+      phoneNumber: payment.phoneNumber,
+      transactionAt: payment.transactionAt,
+      resultCode: payment.resultCode,
+      resultDescription: payment.resultDescription,
+      payload: payment.callbackPayload,
+      preserveCallbackPayload: true,
+    });
+    if (!application.applied) throw new Error("This M-Pesa payment could not be applied");
+
+    await tx.actionLog.create({
+      data: {
+        actorId: input.actorId,
+        entity: "MpesaPayment",
+        entityId: payment.id,
+        action: "RECONCILE_UNMATCHED_C2B",
+        before: jsonValue({
+          status: payment.status,
+          accountReference: payment.accountReference,
+          amount,
+          transactionId: payment.transactionId,
+          receiptNumber: payment.receiptNumber,
+        }),
+        after: jsonValue({
+          status: "SUCCESS",
+          targetKind: target.kind,
+          targetId: target.id,
+          targetReference: target.reference,
+          paidBefore: application.paidBefore,
+          paidAfter: application.paidAfter,
+          total: application.total,
+        }),
+      },
+    });
+
+    return {
+      paymentId: payment.id,
+      targetKind: target.kind,
+      targetId: target.id,
+      targetReference: target.reference,
+      amount,
+      paidBefore: application.paidBefore,
+      paidAfter: application.paidAfter,
+      balance: Math.max(0, application.total - application.paidAfter),
+    };
   });
 }
 
