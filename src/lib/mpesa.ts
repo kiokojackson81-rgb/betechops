@@ -72,6 +72,8 @@ export function mpesaCallbackUrls() {
     stk: `${base}/api/mpesa/stk/callback`,
     c2bValidation: `${base}/api/payments/c2b/validation`,
     c2bConfirmation: `${base}/api/payments/c2b/confirmation`,
+    refundResult: `${base}/api/mpesa/refund/result`,
+    refundTimeout: `${base}/api/mpesa/refund/timeout`,
   };
 }
 
@@ -113,6 +115,16 @@ async function darajaAccessToken() {
   const token = typeof body?.access_token === "string" ? body.access_token : "";
   if (!response.ok || !token) throw new Error("Unable to obtain an M-Pesa access token");
   return token;
+}
+
+// Reversal requests share the same Daraja application access token, but use
+// separate, server-only Safaricom reversal credentials in mpesaRefunds.ts.
+export async function getMpesaDarajaAccessToken() {
+  return darajaAccessToken();
+}
+
+export function getMpesaShortcode() {
+  return mpesaCredentials().shortcode;
 }
 
 function normalizeDarajaPhone(value: string) {

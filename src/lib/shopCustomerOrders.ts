@@ -64,6 +64,8 @@ export type CustomerAccountOrderDetail = {
   paymentStatus: string;
   lastMpesaReceiptNumber: string | null;
   lastMpesaPaymentAt: string | null;
+  lastMpesaRefundAmount: number | null;
+  lastMpesaRefundAt: string | null;
   notes: string | null;
   receiptId: string | null;
   receiptNumber: string | null;
@@ -480,6 +482,7 @@ export async function getCustomerAccountOrderDetail(args: {
             customerPhone: true,
             customerEmail: true,
             totalAmount: true,
+            paidAmount: true,
             metadata: true,
             items: {
               select: {
@@ -538,13 +541,15 @@ export async function getCustomerAccountOrderDetail(args: {
         typeof metadata.paymentMethod === "string" && metadata.paymentMethod.trim()
           ? metadata.paymentMethod.trim()
           : "CASH",
-      amountDueNow: 0,
-      amountPaid: toNumber(receipt.order.totalAmount),
-      balance: 0,
+      amountDueNow: Math.max(0, toNumber(receipt.order.totalAmount) - toNumber(receipt.order.paidAmount)),
+      amountPaid: toNumber(receipt.order.paidAmount),
+      balance: Math.max(0, toNumber(receipt.order.totalAmount) - toNumber(receipt.order.paidAmount)),
       paymentPlan: null,
-      paymentStatus: "PAID",
+      paymentStatus: toNumber(receipt.order.paidAmount) >= toNumber(receipt.order.totalAmount) ? "PAID" : toNumber(receipt.order.paidAmount) > 0 ? "PARTIAL" : "UNPAID",
       lastMpesaReceiptNumber: null,
       lastMpesaPaymentAt: null,
+      lastMpesaRefundAmount: Number.isFinite(Number(metadata.lastMpesaRefundAmount)) ? Number(metadata.lastMpesaRefundAmount) : null,
+      lastMpesaRefundAt: typeof metadata.lastMpesaRefundAt === "string" ? metadata.lastMpesaRefundAt : null,
       notes: typeof metadata.notes === "string" && metadata.notes.trim() ? metadata.notes.trim() : null,
       receiptId: receipt.id,
       receiptNumber: receipt.receiptNumber,
@@ -640,6 +645,8 @@ export async function getCustomerAccountOrderDetail(args: {
       : amountPaid >= total ? "PAID" : amountPaid > 0 ? "PARTIAL" : "UNPAID",
     lastMpesaReceiptNumber: typeof paymentMetadata.lastMpesaReceiptNumber === "string" ? paymentMetadata.lastMpesaReceiptNumber : null,
     lastMpesaPaymentAt: typeof paymentMetadata.lastMpesaPaymentAt === "string" ? paymentMetadata.lastMpesaPaymentAt : null,
+    lastMpesaRefundAmount: Number.isFinite(Number(paymentMetadata.lastMpesaRefundAmount)) ? Number(paymentMetadata.lastMpesaRefundAmount) : null,
+    lastMpesaRefundAt: typeof paymentMetadata.lastMpesaRefundAt === "string" ? paymentMetadata.lastMpesaRefundAt : null,
     notes: websiteOrder.notes,
     receiptId: websiteOrder.receiptId,
     receiptNumber: websiteOrder.receipt?.receiptNumber || null,

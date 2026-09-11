@@ -5,6 +5,8 @@ const ALLOWED_PATHS = new Set([
   "/api/mpesa/stk/callback",
   "/api/mpesa/c2b/validation",
   "/api/mpesa/c2b/confirmation",
+  "/api/mpesa/refund/result",
+  "/api/mpesa/refund/timeout",
   "/api/payments/c2b/validation",
   "/api/payments/c2b/confirmation",
 ]);

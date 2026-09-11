@@ -41,6 +41,8 @@ model User {
   attendantCategory                    AttendantCategory?
   password                             String?
   actionLogs                           ActionLog[]
+  mpesaRefundsRequested                MpesaRefund[]                  @relation("MpesaRefundRequestedBy")
+  mpesaRefundsAuthorized               MpesaRefund[]                  @relation("MpesaRefundAuthorizedBy")
   activities                           AttendantActivity[]
   categoryAssignments                  AttendantCategoryAssignment[]
   attendantCommissions                 AttendantCommission[]
@@ -1868,11 +1870,50 @@ model MpesaPayment {
   updatedAt         DateTime           @updatedAt
   order             Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
   websiteOrder      WebsiteOrder?      @relation(fields: [websiteOrderId], references: [id], onDelete: SetNull)
+  refunds           MpesaRefund[]
 
   @@index([orderId, status, createdAt])
   @@index([websiteOrderId, status, createdAt])
   @@index([accountReference, status, createdAt])
   @@index([resourceType, resourceId, status, createdAt])
+}
+
+/// Refund requests remain separate from the immutable inbound M-Pesa ledger.
+/// A request is applied to Betech accounting only after Safaricom's reversal
+/// result callback confirms it, never when an administrator starts it.
+model MpesaRefund {
+  id                     String            @id @default(cuid())
+  originalPaymentId      String
+  amount                 Decimal           @db.Decimal(14, 2)
+  status                 MpesaRefundStatus @default(DRAFT)
+  reason                 String
+  originalPayerPhone     String
+  otpHash                String?
+  otpExpiresAt           DateTime?
+  otpAttempts            Int               @default(0)
+  otpLastSentAt          DateTime?
+  requestedById          String
+  authorizedById         String?
+  authorizedAt           DateTime?
+  processingAt           DateTime?
+  completedAt            DateTime?
+  failedAt               DateTime?
+  cancelledAt            DateTime?
+  providerConversationId String?           @unique
+  providerOriginatorId   String?           @unique
+  providerResultCode     Int?
+  providerResultDesc     String?
+  requestPayload         Json?
+  callbackPayload        Json?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  originalPayment        MpesaPayment      @relation(fields: [originalPaymentId], references: [id], onDelete: Restrict)
+  requestedBy            User              @relation("MpesaRefundRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  authorizedBy           User?             @relation("MpesaRefundAuthorizedBy", fields: [authorizedById], references: [id], onDelete: SetNull)
+
+  @@index([originalPaymentId, status])
+  @@index([status, createdAt])
+  @@index([requestedById, createdAt])
 }
 
 model ReceiptFile {
@@ -3034,6 +3075,17 @@ enum MpesaPaymentPurpose {
   ORDER_TRANSPORT
   SITE_VISIT_FEE
   LPP_INSTALLMENT
+}
+
+enum MpesaRefundStatus {
+  DRAFT
+  OTP_PENDING
+  AUTHORIZED
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
+  EXPIRED
 }
 
 enum LipaPolePoleStatus {

@@ -118,6 +118,10 @@ export default async function AccountOrderDetailPage({
                 ["Email", order.customerEmail || "-"],
                 ["Payment", order.paymentMethod],
                 ["Total", formatCurrency(order.total)],
+                ["M-Pesa paid", formatCurrency(order.amountPaid)],
+                ["Balance", formatCurrency(order.balance)],
+                ["Payment status", formatStatus(order.paymentStatus)],
+                ...(order.lastMpesaRefundAmount != null ? [["Confirmed M-Pesa refund", `${formatCurrency(order.lastMpesaRefundAmount)}${order.lastMpesaRefundAt ? ` · ${formatDate(order.lastMpesaRefundAt)}` : ""}`] as [string, string]] : []),
               ].map(([term, value]) => (
                 <div key={term} className="flex justify-between gap-3">
                   <dt className="text-slate-500">{term}</dt>

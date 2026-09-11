@@ -54,6 +54,7 @@ export const NAV: AdminNavItem[] = [
       { href: "/admin/receipts/missing-buying", label: "Pending Pricing", countKey: "pendingPricing" },
       { href: "/admin/receipts?tab=website-orders", label: "Website Orders", countKey: "websiteOrders" },
       { href: "/admin/mpesa-payments", label: "M-Pesa Payments" },
+      { href: "/admin/mpesa-refunds", label: "M-Pesa Refunds" },
       { href: "/admin/quotation-center", label: "Quotation Center", countKey: "quotationCenter" },
       { href: "/admin/quotation-center/site-visits", label: "Site Visits", countKey: "siteVisits" },
     ],
