@@ -155,7 +155,7 @@ const presets: LoadPreset[] = [
   },
 ];
 const input =
-  "mt-1 w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-white";
+  "mt-1 min-h-12 w-full rounded-xl border border-white/10 bg-slate-950 p-3 text-base text-white";
 const readNumber = (value: NumericField | null) =>
   typeof value === "number" ? value : 0;
 const numberOrBlank = (value: string): NumericField =>
@@ -424,7 +424,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="text-sm font-semibold text-slate-200">
+    <label className="block min-w-0 text-sm font-semibold text-slate-200">
       {label}
       {children}
     </label>
@@ -1052,15 +1052,15 @@ export default function SiteAssessmentPublicClient({
   return (
     <main
       ref={assessmentRootRef}
-      className="min-h-screen bg-slate-950 p-3 text-slate-100"
+      className="min-h-screen min-w-0 bg-slate-950 p-3 text-slate-100 sm:p-5"
     >
-      <div className="mx-auto max-w-3xl space-y-5">
-        <header className="rounded-3xl bg-cyan-400 p-6 text-slate-950">
+      <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
+        <header className="rounded-2xl bg-cyan-400 p-5 text-slate-950 sm:rounded-3xl sm:p-6">
           <b className="text-xs uppercase tracking-widest">
             Betech Solar Solutions
           </b>
-          <h1 className="mt-2 text-3xl font-black">Field Site Assessment</h1>
-          <p>
+          <h1 className="mt-2 text-2xl font-black sm:text-3xl">Field Site Assessment</h1>
+          <p className="break-words text-sm sm:text-base">
             {visit.visitRef} · {visit.customerName}
           </p>
         </header>
@@ -1070,8 +1070,8 @@ export default function SiteAssessmentPublicClient({
           skippedSteps={skippedSteps}
           onStepSelect={(index) => changeStep(index)}
         />
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm text-cyan-100">
-          <span>
+        <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm text-cyan-100 sm:flex-row sm:items-center sm:justify-between">
+          <span className="min-w-0 break-words">
             {draftLoaded
               ? "Assessment details save automatically on this device."
               : "Loading saved assessment..."}
@@ -1079,13 +1079,13 @@ export default function SiteAssessmentPublicClient({
           <button
             type="button"
             onClick={clearDraft}
-            className="rounded-lg border border-rose-300/50 px-3 py-2 font-bold text-rose-200"
+            className="min-h-11 w-full rounded-lg border border-rose-300/50 px-3 py-2 font-bold text-rose-200 touch-manipulation sm:w-auto"
           >
             Clear saved draft
           </button>
         </div>
         <div hidden={activeStep !== 0}>
-        <section className="rounded-3xl bg-slate-900 p-5">
+        <section className="rounded-2xl bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-xl font-bold">Home and project details</h2>
           <p className="mt-1 text-sm text-slate-400">
             Capture the household scale and customer requirements before
@@ -1133,7 +1133,7 @@ export default function SiteAssessmentPublicClient({
         </section>
         </div>
         <div hidden={activeStep !== 1}>
-        <section className="rounded-3xl bg-slate-900 p-5">
+        <section className="rounded-2xl bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-xl font-bold">Add customer loads</h2>
           <p className="mt-1 text-sm text-slate-400">
             Add each appliance, then save its technical details into a compact
@@ -1151,7 +1151,7 @@ export default function SiteAssessmentPublicClient({
                       type="button"
                       key={preset.key}
                       onClick={() => add(preset)}
-                      className="rounded-full border border-cyan-400/40 px-3 py-2 text-sm font-bold"
+                      className="min-h-11 rounded-full border border-cyan-400/40 px-3 py-2 text-sm font-bold touch-manipulation"
                     >
                       + {preset.name}
                     </button>
@@ -1163,24 +1163,24 @@ export default function SiteAssessmentPublicClient({
           <button
             type="button"
             onClick={addUnknown}
-            className="mt-5 rounded-full bg-white/10 px-4 py-3"
+            className="mt-5 min-h-11 rounded-full bg-white/10 px-4 py-3 touch-manipulation"
           >
             + Unknown equipment
           </button>
           <div className="mt-5 grid gap-3">
             {loadGroups.map((group) => (
               <section key={group.kind} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/45">
-                <div className="flex flex-wrap items-center justify-between gap-2 p-2">
+                <div className="flex flex-col items-stretch gap-2 p-2 sm:flex-row sm:items-center sm:justify-between">
                   <button
                     type="button"
                     onClick={() => setExpandedLoadKinds((current) => ({
                       ...current,
                       [group.kind]: !current[group.kind],
                     }))}
-                    className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl p-2 text-left hover:bg-white/5"
+                    className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-xl p-2 text-left touch-manipulation hover:bg-white/5"
                     aria-expanded={Boolean(expandedLoadKinds[group.kind])}
                   >
-                    <span className="font-black text-cyan-100">
+                    <span className="min-w-0 break-words font-black text-cyan-100">
                       {expandedLoadKinds[group.kind] ? "⌄" : "›"} {group.name}{" "}
                       <span className="text-sm text-slate-400">({group.loads.length})</span>
                     </span>
@@ -1191,7 +1191,7 @@ export default function SiteAssessmentPublicClient({
                   <button
                     type="button"
                     onClick={() => addAnotherLoad(group.kind)}
-                    className="rounded-xl border border-cyan-400/30 px-3 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/10"
+                    className="min-h-11 w-full rounded-xl border border-cyan-400/30 px-3 py-2 text-sm font-bold text-cyan-100 touch-manipulation hover:bg-cyan-400/10 sm:w-auto"
                   >
                     + Add another {group.name}
                   </button>
@@ -1502,7 +1502,7 @@ export default function SiteAssessmentPublicClient({
         </Section>
         </div>
         <div hidden={activeStep !== 6}>
-        <section className="rounded-3xl bg-slate-900 p-5">
+        <section className="rounded-2xl bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-xl font-bold">Required evidence</h2>
           <p className="mt-1 text-sm text-slate-400">
             Capture objective evidence before analysis.
@@ -1566,7 +1566,7 @@ export default function SiteAssessmentPublicClient({
             placeholder="What must work during an outage? Budget, expansion, concerns, or special requests."
           />
         </section>
-        <section className="mt-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
+        <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-xl font-bold">Assessment review</h2>
           <div className="mt-4 grid gap-3">
             {assessmentSteps.slice(0, 7).map((name, index) => (
@@ -1748,7 +1748,7 @@ export default function SiteAssessmentPublicClient({
             </div>
           </div>
         </section>
-        <section className="mt-5 rounded-3xl border border-cyan-400/30 bg-cyan-400/10 p-5">
+        <section className="mt-5 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-xl font-bold">Known-load summary</h2>
           <div className="mt-3 grid gap-3 text-lg font-bold sm:grid-cols-3">
             <span>{(connected / 1000).toFixed(2)} kW connected</span>
@@ -1756,7 +1756,7 @@ export default function SiteAssessmentPublicClient({
             <span>{unknown} unknown ratings</span>
           </div>
         </section>
-        <section className="mt-5 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5">
+        <section className="mt-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 sm:rounded-3xl sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold">Preliminary system proposal</h2>
@@ -1821,7 +1821,7 @@ export default function SiteAssessmentPublicClient({
             </>
           )}
         </section>
-        <section className="mt-5 rounded-3xl border border-emerald-300/40 bg-emerald-400/10 p-5">
+        <section className="mt-5 rounded-2xl border border-emerald-300/40 bg-emerald-400/10 p-4 sm:rounded-3xl sm:p-5">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-200">
             Final step
           </p>
@@ -1961,11 +1961,12 @@ function WizardProgress({
   onStepSelect: (index: number) => void;
 }) {
   return (
-    <section className="rounded-2xl border border-cyan-400/25 bg-slate-900/90 p-4">
+    <section className="rounded-2xl border border-cyan-400/25 bg-slate-900/90 p-3 sm:p-4">
       <p className="text-sm font-black text-cyan-100">
         Step {activeStep + 1} of {assessmentSteps.length} — {assessmentSteps[activeStep]}
       </p>
-      <div className="mt-3 flex flex-wrap gap-x-2 gap-y-2 text-xs font-bold">
+      <div className="-mx-1 mt-3 overflow-x-auto pb-1">
+        <div className="flex w-max min-w-full gap-1.5 px-1 text-xs font-bold">
         {assessmentSteps.map((step, index) => {
           const marker = completedSteps[index]
             ? "✓"
@@ -1980,7 +1981,7 @@ function WizardProgress({
               key={step}
               onClick={() => onStepSelect(index)}
               aria-current={index === activeStep ? "step" : undefined}
-              className={`rounded px-1 py-0.5 text-left transition hover:bg-white/10 hover:text-cyan-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 ${
+              className={`min-h-10 whitespace-nowrap rounded-lg px-2 py-1.5 text-left transition touch-manipulation hover:bg-white/10 hover:text-cyan-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 ${
                 index === activeStep
                   ? "text-cyan-200"
                   : skippedSteps[index]
@@ -1992,6 +1993,7 @@ function WizardProgress({
             </button>
           );
         })}
+        </div>
       </div>
     </section>
   );
@@ -2015,7 +2017,7 @@ function WizardNavigation({
   if (activeStep === 8) {
     return (
       <nav className="flex justify-start">
-        <button type="button" onClick={onBack} className="rounded-xl border border-white/20 px-4 py-3 font-bold">
+        <button type="button" onClick={onBack} className="min-h-12 w-full rounded-xl border border-white/20 px-4 py-3 font-bold touch-manipulation sm:w-auto">
           ← Back to assessment
         </button>
       </nav>
@@ -2023,32 +2025,32 @@ function WizardNavigation({
   }
   if (activeStep === 7) {
     return (
-      <nav className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={onBack} className="rounded-xl border border-white/20 px-4 py-3 font-bold">
+      <nav className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <button type="button" onClick={onBack} className="min-h-12 rounded-xl border border-white/20 px-4 py-3 font-bold touch-manipulation">
           ← Back
         </button>
-        <button type="button" onClick={onAnalyse} disabled={!canAnalyse} className="rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950 disabled:opacity-40">
+        <button type="button" onClick={onAnalyse} disabled={!canAnalyse} className="min-h-12 rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950 touch-manipulation disabled:opacity-40">
           Analyse Assessment with AI →
         </button>
       </nav>
     );
   }
   return (
-    <nav className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex gap-2">
+    <nav className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="grid grid-cols-2 gap-2 sm:flex">
         <button
           type="button"
           onClick={onBack}
           disabled={activeStep === 0}
-          className="rounded-xl border border-white/20 px-4 py-3 font-bold disabled:opacity-40"
+          className="min-h-12 rounded-xl border border-white/20 px-4 py-3 font-bold touch-manipulation disabled:opacity-40"
         >
           ← Back
         </button>
-        <button type="button" onClick={onSkip} className="rounded-xl border border-amber-300/40 px-4 py-3 font-bold text-amber-100">
+        <button type="button" onClick={onSkip} className="min-h-12 rounded-xl border border-amber-300/40 px-4 py-3 font-bold text-amber-100 touch-manipulation">
           {activeStep === 4 ? "Skip — assess later" : "Skip section"}
         </button>
       </div>
-      <button type="button" onClick={onContinue} className="rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950">
+      <button type="button" onClick={onContinue} className="min-h-12 w-full rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950 touch-manipulation sm:w-auto">
         Save & Continue →
       </button>
     </nav>
@@ -2075,17 +2077,17 @@ function LoadSummaryCard({
     ? `${readNumber(load.qty)} × ${readNumber(load.watts)}W`
     : "Rating unknown";
   return (
-    <article className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <article className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <b>{load.name} {index + 1}</b>
-          <p className="mt-1 text-sm text-slate-300">
+          <p className="mt-1 break-words text-sm leading-6 text-slate-300">
             {rating} · {load.details.area || load.period} · {usage}{load.essential ? " · Essential" : ""}
           </p>
         </div>
-        <div className="flex gap-3 text-sm font-bold">
-          <button type="button" onClick={onEdit} className="text-cyan-200">Edit</button>
-          <button type="button" onClick={onRemove} className="text-rose-300">Remove</button>
+        <div className="grid grid-cols-2 gap-2 text-sm font-bold sm:flex sm:gap-3">
+          <button type="button" onClick={onEdit} className="min-h-10 rounded-lg px-2 text-cyan-200 touch-manipulation hover:bg-cyan-400/10">Edit</button>
+          <button type="button" onClick={onRemove} className="min-h-10 rounded-lg px-2 text-rose-300 touch-manipulation hover:bg-rose-400/10">Remove</button>
         </div>
       </div>
     </article>
@@ -2100,7 +2102,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-3xl bg-slate-900 p-5">
+    <section className="rounded-2xl bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
       <h2 className="text-xl font-bold">{title}</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">{children}</div>
     </section>
@@ -2174,13 +2176,13 @@ function LoadCard({
     <article
       id={`assessment-load-${load.id}`}
       hidden={!isOpen}
-      className="mt-5 scroll-mt-5 rounded-2xl border border-cyan-400/30 bg-slate-950 p-4"
+      className="mt-5 scroll-mt-5 rounded-2xl border border-cyan-400/30 bg-slate-950 p-3 sm:p-4"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <b>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <b className="break-words">
           {load.name} {index + 1}
         </b>
-        <button type="button" onClick={onCancel} className="text-slate-300">
+        <button type="button" onClick={onCancel} className="min-h-10 self-start rounded-lg px-2 text-slate-300 touch-manipulation hover:bg-white/10 sm:self-auto">
           Cancel
         </button>
       </div>
@@ -2570,11 +2572,11 @@ function LoadCard({
           </select>
         </Field>
       </div>
-      <div className="mt-5 flex justify-end gap-3 border-t border-white/10 pt-4">
-        <button type="button" onClick={onCancel} className="rounded-xl border border-white/20 px-4 py-3 font-bold">
+      <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 sm:flex sm:justify-end">
+        <button type="button" onClick={onCancel} className="min-h-12 rounded-xl border border-white/20 px-4 py-3 font-bold touch-manipulation">
           Cancel
         </button>
-        <button type="button" onClick={onSave} className="rounded-xl bg-cyan-400 px-4 py-3 font-black text-slate-950">
+        <button type="button" onClick={onSave} className="min-h-12 rounded-xl bg-cyan-400 px-4 py-3 font-black text-slate-950 touch-manipulation">
           Save {load.name}
         </button>
       </div>
