@@ -36,6 +36,14 @@ export const siteAssessmentReportSchema = z
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Similar-project link must be a TikTok URL." });
         }
       }),
+    signatures: z
+      .object({
+        customerName: text(160).min(2),
+        customerAccepted: z.literal(true),
+        technicianName: text(160).min(2),
+        technicianAccepted: z.literal(true),
+      })
+      .optional(),
     calculation: z.object({
       connectedKw: z.number().finite().nonnegative().max(100000),
       dailyKwh: z.number().finite().nonnegative().max(100000),
@@ -148,6 +156,12 @@ export async function generateSiteAssessmentReportPdf(input: {
   if (review?.risks.length || review?.dataGaps.length) {
     section("Items to confirm before quotation");
     [...(review.risks || []), ...(review.dataGaps || [])].forEach((item) => draw(`• ${item}`));
+  }
+  if (input.report.signatures) {
+    section("Customer and technician sign-off");
+    draw(`Customer / authorised representative: ${input.report.signatures.customerName}`);
+    draw(`Betech technician: ${input.report.signatures.technicianName}`);
+    draw(`Electronic acknowledgements recorded when this report was submitted on ${new Date(input.report.submittedAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}.`);
   }
   y -= 8;
   draw("This report is a field-planning recommendation. Final electrical design, stock confirmation and installation scope are confirmed in the official quotation.", { size: 9, color: rgb(0.3, 0.35, 0.45) });

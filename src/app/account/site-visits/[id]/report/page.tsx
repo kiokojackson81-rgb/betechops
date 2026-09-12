@@ -60,6 +60,18 @@ export default async function CustomerSiteVisitReportPage({ params }: { params: 
         {list("Recommended next actions", report.aiReview?.recommendations || [])}
         {list("Items to confirm", [...(report.aiReview?.risks || []), ...(report.aiReview?.dataGaps || [])])}
       </div>
+      {report.signatures ? (
+        <section className="mt-6 rounded-2xl border border-[#7a0000]/10 bg-white p-5 shadow-sm">
+          <h2 className="font-black text-slate-900">Assessment sign-off</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            This report was electronically acknowledged by the customer or authorised representative and the Betech technician when it was shared.
+          </p>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div><dt className="font-bold text-slate-500">Customer / representative</dt><dd className="mt-1 font-semibold text-slate-900">{report.signatures.customerName}</dd></div>
+            <div><dt className="font-bold text-slate-500">Betech technician</dt><dd className="mt-1 font-semibold text-slate-900">{report.signatures.technicianName}</dd></div>
+          </dl>
+        </section>
+      ) : null}
     </main>
   );
 }

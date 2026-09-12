@@ -34,8 +34,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Assessment report details are invalid." }, { status: 400 });
   }
   const validation = siteAssessmentReportSchema.safeParse(parsedReport);
-  if (!validation.success) {
-    return NextResponse.json({ ok: false, error: "Complete a valid Betech recommendation before publishing the report." }, { status: 400 });
+  if (!validation.success || !validation.data.signatures) {
+    return NextResponse.json({ ok: false, error: "Complete the final customer and technician electronic sign-off before sharing the report." }, { status: 400 });
   }
   const photos = form.getAll("photos").filter((entry): entry is File => entry instanceof File).slice(0, MAX_PHOTOS);
   if (photos.some((file) => !file.type.startsWith("image/") || file.size > MAX_PHOTO_BYTES)) {
@@ -49,6 +49,12 @@ export async function POST(request: Request) {
   };
   const report: SiteAssessmentReport = {
     ...validation.data,
+    signatures: {
+      ...validation.data.signatures,
+      // The signed link is bound to the assigned technician. Record that
+      // verified Betech identity rather than trusting a browser-entered name.
+      technicianName: actor.name,
+    },
     version: 1,
     submittedAt: new Date().toISOString(),
     submittedByName: actor.name,

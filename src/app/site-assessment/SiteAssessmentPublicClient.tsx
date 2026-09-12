@@ -461,6 +461,14 @@ export default function SiteAssessmentPublicClient({
   const catalogInputRef = useRef<HTMLInputElement>(null);
   const [recommendationNotes, setRecommendationNotes] = useState("");
   const [tiktokUrl, setTiktokUrl] = useState("");
+  const [customerSignatureName, setCustomerSignatureName] = useState(
+    visit.customerName || "",
+  );
+  const [customerAcceptedReport, setCustomerAcceptedReport] = useState(false);
+  const [technicianSignatureName, setTechnicianSignatureName] = useState(
+    visit.assignedTechnicianName || "",
+  );
+  const [technicianAcceptedReport, setTechnicianAcceptedReport] = useState(false);
   const [isSearchingCatalog, setIsSearchingCatalog] = useState(false);
   const [catalogError, setCatalogError] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
@@ -493,6 +501,10 @@ export default function SiteAssessmentPublicClient({
           selectedProduct: CatalogProduct;
           recommendationNotes: string;
           tiktokUrl: string;
+          customerSignatureName: string;
+          customerAcceptedReport: boolean;
+          technicianSignatureName: string;
+          technicianAcceptedReport: boolean;
         }>;
         if (parsed.visitId === visit.id) {
           if (parsed.loads) setLoads(parsed.loads);
@@ -513,6 +525,14 @@ export default function SiteAssessmentPublicClient({
           if (parsed.selectedProduct) setSelectedProduct(parsed.selectedProduct);
           if (parsed.recommendationNotes) setRecommendationNotes(parsed.recommendationNotes);
           if (parsed.tiktokUrl) setTiktokUrl(parsed.tiktokUrl);
+          if (parsed.customerSignatureName)
+            setCustomerSignatureName(parsed.customerSignatureName);
+          if (typeof parsed.customerAcceptedReport === "boolean")
+            setCustomerAcceptedReport(parsed.customerAcceptedReport);
+          if (parsed.technicianSignatureName)
+            setTechnicianSignatureName(parsed.technicianSignatureName);
+          if (typeof parsed.technicianAcceptedReport === "boolean")
+            setTechnicianAcceptedReport(parsed.technicianAcceptedReport);
         }
       }
     } catch {
@@ -541,6 +561,10 @@ export default function SiteAssessmentPublicClient({
           selectedProduct,
           recommendationNotes,
           tiktokUrl,
+          customerSignatureName,
+          customerAcceptedReport,
+          technicianSignatureName,
+          technicianAcceptedReport,
         }),
       );
   }, [
@@ -560,6 +584,10 @@ export default function SiteAssessmentPublicClient({
     selectedProduct,
     storageKey,
     tiktokUrl,
+    customerSignatureName,
+    customerAcceptedReport,
+    technicianSignatureName,
+    technicianAcceptedReport,
     visit.id,
   ]);
   const clearDraft = () => {
@@ -582,6 +610,10 @@ export default function SiteAssessmentPublicClient({
     setSelectedProduct(null);
     setRecommendationNotes("");
     setTiktokUrl("");
+    setCustomerSignatureName(visit.customerName || "");
+    setCustomerAcceptedReport(false);
+    setTechnicianSignatureName(visit.assignedTechnicianName || "");
+    setTechnicianAcceptedReport(false);
     localStorage.removeItem(storageKey);
   };
   const openLoad = (load: Load) => {
@@ -903,10 +935,21 @@ export default function SiteAssessmentPublicClient({
     setCatalogError("");
     window.requestAnimationFrame(() => catalogInputRef.current?.focus());
   };
+  const signaturesComplete =
+    customerSignatureName.trim().length >= 2 &&
+    customerAcceptedReport &&
+    technicianSignatureName.trim().length >= 2 &&
+    technicianAcceptedReport;
   const publishReport = async () => {
     if (isPublishing || !loads.length) return;
     if (recommendationType === "CATALOG_PRODUCT" && !selectedProduct) {
       setPublishError("Search and select a Betech catalog product, or choose Custom quotation.");
+      return;
+    }
+    if (!signaturesComplete) {
+      setPublishError(
+        "The customer and technician must both complete the final electronic sign-off before the report can be shared.",
+      );
       return;
     }
     setIsPublishing(true);
@@ -930,6 +973,12 @@ export default function SiteAssessmentPublicClient({
             : {}),
           notes: recommendationNotes.trim() || undefined,
           tiktokUrl: tiktokUrl.trim() || undefined,
+        },
+        signatures: {
+          customerName: customerSignatureName.trim(),
+          customerAccepted: customerAcceptedReport,
+          technicianName: technicianSignatureName.trim(),
+          technicianAccepted: technicianAcceptedReport,
         },
         calculation: {
           connectedKw: connected / 1000,
@@ -1690,11 +1739,6 @@ export default function SiteAssessmentPublicClient({
                 <input className={input} type="url" value={tiktokUrl} onChange={(event) => setTiktokUrl(event.target.value)} placeholder="https://www.tiktok.com/..." />
               </Field>
             </div>
-            <button type="button" onClick={() => void publishReport()} disabled={isPublishing || Boolean(publishMessage)} className="mt-5 w-full rounded-xl bg-emerald-400 py-4 font-black text-slate-950 disabled:opacity-40">
-              {isPublishing ? "Publishing report..." : publishMessage ? "Report published" : "Publish report & notify customer"}
-            </button>
-            {publishError ? <p className="mt-3 text-sm font-semibold text-rose-200">{publishError}</p> : null}
-            {publishMessage ? <p className="mt-3 text-sm font-semibold text-emerald-200">{publishMessage}</p> : null}
           </div>
         </section>
         <section className="mt-5 rounded-3xl border border-cyan-400/30 bg-cyan-400/10 p-5">
@@ -1773,6 +1817,79 @@ export default function SiteAssessmentPublicClient({
               </div>
             </>
           )}
+        </section>
+        <section className="mt-5 rounded-3xl border border-emerald-300/40 bg-emerald-400/10 p-5">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-200">
+            Final step
+          </p>
+          <h2 className="mt-1 text-xl font-black">Customer & technician sign-off</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200">
+            Review the assessment, preliminary proposal and recommendation above together. Each person types their full name as an electronic signature before Betech generates the final report and shares the proposal.
+          </p>
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+              <Field label="Customer or authorised representative — electronic signature">
+                <input
+                  className={input}
+                  value={customerSignatureName}
+                  onChange={(event) => setCustomerSignatureName(event.target.value)}
+                  placeholder="Type full name"
+                  autoComplete="name"
+                />
+              </Field>
+              <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={customerAcceptedReport}
+                  onChange={(event) => setCustomerAcceptedReport(event.target.checked)}
+                  className="mt-1 h-4 w-4 accent-emerald-400"
+                />
+                <span>I have reviewed this assessment and understand that the recommendation is preliminary and subject to Betech&apos;s final quotation.</span>
+              </label>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+              <Field label="Betech technician — verified electronic signature">
+                <input
+                  className={input}
+                  value={technicianSignatureName}
+                  readOnly
+                  placeholder="Type full name"
+                  autoComplete="name"
+                />
+              </Field>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                The technician identity is verified from this assigned assessment link.
+              </p>
+              <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={technicianAcceptedReport}
+                  onChange={(event) => setTechnicianAcceptedReport(event.target.checked)}
+                  className="mt-1 h-4 w-4 accent-emerald-400"
+                />
+                <span>I confirm that these field inputs and the preliminary proposal were recorded during this site assessment.</span>
+              </label>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void publishReport()}
+            disabled={isPublishing || Boolean(publishMessage) || !signaturesComplete}
+            className="mt-5 w-full rounded-xl bg-emerald-400 py-4 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isPublishing
+              ? "Generating report..."
+              : publishMessage
+                ? "Report shared"
+                : "Generate report & share proposal"}
+          </button>
+          {!signaturesComplete && !publishMessage ? (
+            <p className="mt-3 text-sm text-amber-100">
+              Both electronic signatures and acknowledgements are required before sharing.
+            </p>
+          ) : null}
+          {publishError ? <p className="mt-3 text-sm font-semibold text-rose-200">{publishError}</p> : null}
+          {publishMessage ? <p className="mt-3 text-sm font-semibold text-emerald-200">{publishMessage}</p> : null}
         </section>
         </div>
         <WizardNavigation

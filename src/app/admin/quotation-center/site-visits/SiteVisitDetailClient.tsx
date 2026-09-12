@@ -84,6 +84,15 @@ function PublishedAssessmentReport({ visit }: { visit: SerializedSiteVisit }) {
         <ReportList title="Site observations" items={report.aiReview?.observations || []} fallback="No additional observations recorded." />
         <ReportList title="Items to confirm" items={confirmationItems} fallback="No outstanding confirmation items recorded." />
       </div>
+      {report.signatures ? (
+        <section className="rounded-2xl border border-white/10 bg-slate-950 p-4">
+          <h3 className="font-bold text-white">Electronic sign-off</h3>
+          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+            <p className="text-slate-300"><span className="text-slate-500">Customer / representative:</span> {report.signatures.customerName}</p>
+            <p className="text-slate-300"><span className="text-slate-500">Betech technician:</span> {report.signatures.technicianName}</p>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
