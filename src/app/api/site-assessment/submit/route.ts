@@ -4,6 +4,7 @@ import { createSiteVisitAttachment, getSiteVisitById, publishSiteAssessmentRepor
 import { verifySiteAssessmentToken } from "@/lib/siteAssessmentLink";
 import { siteAssessmentReportSchema, type SiteAssessmentReport } from "@/lib/siteAssessmentReport";
 import { dispatchSiteAssessmentReportPublished } from "@/lib/siteVisitNotifications";
+import { searchLiveCatalog } from "@/lib/aiCatalog";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,32 @@ export async function POST(request: Request) {
   if (!validation.success || !validation.data.signatures) {
     return NextResponse.json({ ok: false, error: "Complete the final customer and technician electronic sign-off before sharing the report." }, { status: 400 });
   }
+  let reportData = validation.data;
+  if (reportData.recommendation.type === "CATALOG_PRODUCT") {
+    const catalog = await searchLiveCatalog({
+      query: reportData.recommendation.productName || "",
+      origin: "https://www.betech.co.ke",
+      limit: 12,
+    });
+    const selectedUrl = (reportData.recommendation.productUrl || "").replace(/\/+$/, "");
+    const matchedProduct = catalog.products.find((product) => product.productUrl.replace(/\/+$/, "") === selectedUrl);
+    if (!matchedProduct) {
+      return NextResponse.json({ ok: false, error: "The selected Betech product could not be verified against the live catalogue. Search and select it again, or choose Custom quotation." }, { status: 400 });
+    }
+    // Use the live catalogue record, not browser-supplied product facts, when
+    // determining whether a standard system can be shown as technically fit.
+    reportData = {
+      ...reportData,
+      recommendation: {
+        ...reportData.recommendation,
+        productName: matchedProduct.productName,
+        productUrl: matchedProduct.productUrl,
+        productPrice: matchedProduct.price,
+        productCategory: matchedProduct.productCategory,
+        productShortDescription: matchedProduct.shortDescription,
+      },
+    };
+  }
   const photos = form.getAll("photos").filter((entry): entry is File => entry instanceof File).slice(0, MAX_PHOTOS);
   if (photos.some((file) => !file.type.startsWith("image/") || file.size > MAX_PHOTO_BYTES)) {
     return NextResponse.json({ ok: false, error: "Evidence photos must be images smaller than 5 MB." }, { status: 400 });
@@ -49,7 +76,7 @@ export async function POST(request: Request) {
     email: null,
   };
   const report: SiteAssessmentReport = {
-    ...validation.data,
+    ...reportData,
     signatures: {
       ...validation.data.signatures,
       // The signed link is bound to the assigned technician. Record that

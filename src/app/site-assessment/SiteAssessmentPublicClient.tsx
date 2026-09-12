@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
+import { analyseSiteAssessment } from "@/lib/siteAssessmentAnalysis";
 
 type UsageMode = "DAILY_HOURS" | "EVENTS_DAILY" | "EVENTS_WEEKLY" | "ALWAYS_ON";
 type NumericField = number | "";
@@ -732,104 +733,31 @@ export default function SiteAssessmentPublicClient({
     edit(load.id, { details: { ...load.details, [key]: value } });
   const setSiteDetail = (key: string, value: string) =>
     setSiteDetails((current) => ({ ...current, [key]: value }));
+  const analysis = analyseSiteAssessment({
+    loads,
+    electrical,
+    siteDetails,
+    evidenceNames,
+    selectedProduct: selectedProduct ? { ...selectedProduct, shortDescription: selectedProduct.shortDescription } : null,
+  });
   const loadWh = (load: Load) =>
-    !readNumber(load.watts)
-      ? 0
-      : load.usageMode === "ALWAYS_ON"
-        ? readNumber(load.qty) * readNumber(load.watts) * 24
-        : load.usageMode === "DAILY_HOURS"
-          ? readNumber(load.qty) *
-            readNumber(load.watts) *
-            readNumber(load.hours)
-          : (readNumber(load.qty) *
-              readNumber(load.watts) *
-              readNumber(load.uses) *
-              readNumber(load.minutes)) /
-            60 /
-            (load.usageMode === "EVENTS_WEEKLY" ? 7 : 1);
-  const connected = loads.reduce(
-    (total, load) => total + readNumber(load.watts) * readNumber(load.qty),
-    0,
-  );
-  const daily = loads.reduce((total, load) => total + loadWh(load), 0);
+    (analysis.loads.find((item) => item.id === load.id)?.energyKwh || 0) * 1000;
+  const connected = analysis.connectedKw * 1000;
+  const daily = analysis.dailyKwh * 1000;
   const unknown = loads.filter((load) => !load.ratingKnown).length;
-  const solarLoads = loads.filter(
-    (load) => load.design !== "No - leave on grid",
+  const solarLoads = analysis.loads.filter(
+    (load) => !String(load.design || "").toLowerCase().includes("leave on grid"),
   );
-  const essentialLoads = solarLoads.filter((load) => load.essential);
-  const wattsFor = (load: Load) =>
-    readNumber(load.watts) * readNumber(load.qty);
-  const continuous = solarLoads
-    .filter((load) => load.usageMode === "ALWAYS_ON")
-    .reduce((total, load) => total + wattsFor(load), 0);
-  const simultaneousPeak = solarLoads.reduce(
-    (total, load) =>
-      total +
-      readNumber(load.watts) *
-        Math.min(readNumber(load.qty), readNumber(load.simultaneous)),
-    0,
-  );
-  const motorLoads = solarLoads.filter((load) =>
-    [
-      "fridge",
-      "freezer",
-      "water-pump",
-      "borehole-pump",
-      "electric-gate",
-      "ac",
-    ].includes(load.kind),
-  );
-  const largestMotor = motorLoads.reduce(
-    (largest, load) => Math.max(largest, readNumber(load.watts)),
-    0,
-  );
-  const inverterWatts = Math.max(
-    simultaneousPeak * 1.25,
-    continuous * 1.25,
-    simultaneousPeak + largestMotor * 2,
-  );
+  const continuous = analysis.continuousKw * 1000;
+  const simultaneousPeak = analysis.simultaneousPeakKw * 1000;
+  const largestMotor = analysis.inverterRequiredKw > analysis.simultaneousPeakKw * 1.25;
+  const systemEnergyWh = analysis.rawBackupEnergyKwh * 1000;
   const backupHours = Number(electrical.backupHours) || 8;
-  const essentialDaily = essentialLoads.reduce(
-    (total, load) => total + loadWh(load),
-    0,
-  );
-  const essentialContinuous = essentialLoads
-    .filter((load) => load.usageMode === "ALWAYS_ON")
-    .reduce((total, load) => total + wattsFor(load), 0);
-  const backupEnergyWh = Math.max(
-    essentialContinuous * backupHours,
-    essentialDaily * Math.min(backupHours / 24, 1),
-  );
-  const systemEnergyWh =
-    electrical.systemGoal === "Completely off-grid"
-      ? daily
-      : Math.max(backupEnergyWh, continuous * backupHours);
-  const batteryKwh = systemEnergyWh / 1000 / 0.8 / 0.9;
-  const pvKw = daily / 1000 / 4.5 / 0.78;
-  const inverterCatalogueKw = [1.5, 3, 5, 6, 8, 10, 12, 16, 20];
-  const batteryCatalogueKwh = [2.56, 5.12, 7.68, 10, 15, 16];
-  const roundUp = (value: number, sizes: number[]) =>
-    sizes.find((size) => size >= value) || sizes[sizes.length - 1];
-  const inverterKw = roundUp(
-    Math.max(inverterWatts / 1000, inverterCatalogueKw[0]),
-    inverterCatalogueKw,
-  );
-  const batteryModuleKwh = roundUp(
-    Math.max(batteryKwh, batteryCatalogueKwh[0]),
-    batteryCatalogueKwh,
-  );
-  const batteryModuleCount =
-    batteryKwh > batteryCatalogueKwh[batteryCatalogueKwh.length - 1]
-      ? Math.ceil(
-          batteryKwh / batteryCatalogueKwh[batteryCatalogueKwh.length - 1],
-        )
-      : 1;
-  const recommendedBatteryKwh = batteryModuleCount * batteryModuleKwh;
-  const batteryRecommendation =
-    batteryModuleCount > 1
-      ? `${batteryModuleCount} x ${batteryModuleKwh.toFixed(2)} kWh`
-      : `${batteryModuleKwh.toFixed(2)} kWh`;
-  const panelCount = Math.max(1, Math.ceil((pvKw * 1000) / 600));
+  const inverterKw = analysis.inverterKw;
+  const recommendedBatteryKwh = analysis.batteryKwh;
+  const batteryRecommendation = `${analysis.batteryKwh.toFixed(2)} kWh`;
+  const pvKw = analysis.pvCalculatedKwp;
+  const panelCount = analysis.panelCount;
   const assessmentPayload = () => ({
     loads,
     home,
@@ -839,11 +767,11 @@ export default function SiteAssessmentPublicClient({
     calculation: {
       connectedKw: connected / 1000,
       dailyKwh: daily / 1000,
-      continuousKw: continuous / 1000,
-      simultaneousPeakKw: simultaneousPeak / 1000,
+      continuousKw: analysis.continuousKw,
+      simultaneousPeakKw: analysis.simultaneousPeakKw,
       inverterKw,
       batteryRecommendation,
-      batteryKwh: recommendedBatteryKwh,
+      batteryKwh: analysis.batteryKwh,
       pvKw,
       panelCount,
       panelWatts: 600,
@@ -969,7 +897,7 @@ export default function SiteAssessmentPublicClient({
             productUrl: published.recommendation.productUrl,
             price: published.recommendation.productPrice || 0,
             productCategory: published.recommendation.productCategory || "Betech system",
-            shortDescription: null,
+            shortDescription: published.recommendation.productShortDescription || null,
             availability: "Previously selected Betech system",
           }
         : null,
@@ -1014,6 +942,10 @@ export default function SiteAssessmentPublicClient({
       setPublishError("Search and select a Betech catalog product, or choose Custom quotation.");
       return;
     }
+    if (recommendationType === "CATALOG_PRODUCT" && analysis.productMatch.status !== "PASS") {
+      setPublishError("This catalog product cannot yet be validated against the recorded inverter, battery and PV requirements. Choose Custom quotation or select a fully suitable system.");
+      return;
+    }
     if (!signaturesComplete) {
       setPublishError(
         "The customer and technician must both complete the final electronic sign-off before the report can be shared.",
@@ -1038,6 +970,7 @@ export default function SiteAssessmentPublicClient({
                 productUrl: selectedProduct.productUrl,
                 productPrice: selectedProduct.price,
                 productCategory: selectedProduct.productCategory,
+                productShortDescription: selectedProduct.shortDescription,
               }
             : {}),
           notes: recommendationNotes.trim() || undefined,
@@ -1759,6 +1692,9 @@ export default function SiteAssessmentPublicClient({
                         <p className="mt-1 text-sm text-slate-300">
                           KES {selectedProduct.price.toLocaleString("en-KE")} · {selectedProduct.availability} · {selectedProduct.productCategory}
                         </p>
+                        <p className={`mt-2 text-sm font-bold ${analysis.productMatch.status === "PASS" ? "text-emerald-200" : "text-amber-200"}`}>
+                          Technical fit: {analysis.productMatch.status === "PASS" ? "PASS — meets the recorded requirement" : `${analysis.productMatch.status} — ${analysis.productMatch.reasons[0]}`}
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <a
@@ -1863,21 +1799,17 @@ export default function SiteAssessmentPublicClient({
                 <ProposalMetric
                   label="Recommended lithium storage"
                   value={`${recommendedBatteryKwh.toFixed(2)} kWh`}
-                  detail={`${batteryRecommendation} from our 2.56/5.12/7.68/10/15/16 kWh lithium range for a ${backupHours}h target.`}
+                  detail={`Calculated from ${analysis.rawBackupEnergyKwh.toFixed(2)} kWh of recorded essential-load backup energy, then adjusted for 92% efficiency, 90% usable DoD and reserve.`}
                 />
                 <ProposalMetric
-                  label="Indicative PV array"
-                  value={`${pvKw.toFixed(2)} kWp`}
-                  detail={`About ${panelCount} x 600 W panels, assuming 4.5 peak-sun-hours and 78% performance.`}
+                  label="PV requirement / practical array"
+                  value={`${pvKw.toFixed(2)} / ${analysis.pvPracticalKwp.toFixed(2)} kWp`}
+                  detail={`Calculated PV requirement, then rounded up to ${panelCount} x 600 W panels. Expected average production: ${analysis.expectedSolarProductionKwh.toFixed(2)} kWh/day.`}
                 />
                 <ProposalMetric
-                  label="Daily energy to cover"
+                  label="Essential backup energy"
                   value={`${(systemEnergyWh / 1000).toFixed(2)} kWh`}
-                  detail={
-                    electrical.systemGoal === "Completely off-grid"
-                      ? "One full day of entered load energy for the off-grid objective."
-                      : "The greater of essential-load backup energy or continuous-load backup energy."
-                  }
+                  detail={`Uses each essential appliance's expected runtime during the ${backupHours}h outage target; estimated delivery is ${analysis.expectedBackupHours.toFixed(1)}h at the recorded essential-load profile.`}
                 />
               </div>
               <div className="mt-5 rounded-2xl border border-amber-300/30 bg-slate-950/60 p-4 text-sm text-amber-100">
