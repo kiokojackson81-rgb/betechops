@@ -589,6 +589,12 @@ export default function SiteAssessmentPublicClient({
     setLoadEditorSnapshot(null);
     setActiveLoadId(id);
     setExpandedLoadKinds((current) => ({ ...current, [preset.key]: true }));
+    window.setTimeout(() => {
+      document.getElementById(`assessment-load-${id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
   };
   const addUnknown = () => {
     const id = Date.now();
@@ -616,6 +622,20 @@ export default function SiteAssessmentPublicClient({
     setLoadEditorSnapshot(null);
     setActiveLoadId(id);
     setExpandedLoadKinds((current) => ({ ...current, unknown: true }));
+    window.setTimeout(() => {
+      document.getElementById(`assessment-load-${id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  };
+  const addAnotherLoad = (kind: string) => {
+    const preset = presets.find((item) => item.key === kind);
+    if (preset) {
+      add(preset);
+      return;
+    }
+    addUnknown();
   };
   const edit = (id: number, patch: Partial<Load>) =>
     setLoads((current) =>
@@ -822,14 +842,6 @@ export default function SiteAssessmentPublicClient({
       : completedSteps[index]
         ? "COMPLETE"
         : "IN PROGRESS";
-  const duplicateLoad = (load: Load) => {
-    const id = Date.now();
-    const copy = { ...structuredClone(load), id };
-    setLoads((current) => [...current, copy]);
-    setLoadEditorSnapshot(null);
-    setActiveLoadId(id);
-    setExpandedLoadKinds((current) => ({ ...current, [load.kind]: true }));
-  };
   return (
     <main
       ref={assessmentRootRef}
@@ -951,18 +963,32 @@ export default function SiteAssessmentPublicClient({
           <div className="mt-5 grid gap-3">
             {loadGroups.map((group) => (
               <section key={group.kind} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/45">
-                <button
-                  type="button"
-                  onClick={() => setExpandedLoadKinds((current) => ({
-                    ...current,
-                    [group.kind]: !current[group.kind],
-                  }))}
-                  className="flex w-full items-center justify-between gap-3 p-4 text-left"
-                  aria-expanded={Boolean(expandedLoadKinds[group.kind])}
-                >
-                  <span className="font-black text-cyan-100">{expandedLoadKinds[group.kind] ? "⌄" : "›"} {group.name} <span className="text-sm text-slate-400">({group.loads.length})</span></span>
-                  <span className="text-xs font-bold text-slate-400">{expandedLoadKinds[group.kind] ? "Hide" : "View loads"}</span>
-                </button>
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLoadKinds((current) => ({
+                      ...current,
+                      [group.kind]: !current[group.kind],
+                    }))}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl p-2 text-left hover:bg-white/5"
+                    aria-expanded={Boolean(expandedLoadKinds[group.kind])}
+                  >
+                    <span className="font-black text-cyan-100">
+                      {expandedLoadKinds[group.kind] ? "⌄" : "›"} {group.name}{" "}
+                      <span className="text-sm text-slate-400">({group.loads.length})</span>
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">
+                      {expandedLoadKinds[group.kind] ? "Hide" : "View loads"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addAnotherLoad(group.kind)}
+                    className="rounded-xl border border-cyan-400/30 px-3 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/10"
+                  >
+                    + Add another {group.name}
+                  </button>
+                </div>
                 <div hidden={!expandedLoadKinds[group.kind]} className="border-t border-white/10 p-3">
                   <div className="grid gap-3">
                     {group.loads.map(({ load, index }) => (
@@ -972,7 +998,6 @@ export default function SiteAssessmentPublicClient({
                           index={index}
                           dailyWh={loadWh(load)}
                           onEdit={() => openLoad(load)}
-                          onDuplicate={() => duplicateLoad(load)}
                           onRemove={() =>
                             setLoads((current) => current.filter((item) => item.id !== load.id))
                           }
@@ -1609,14 +1634,12 @@ function LoadSummaryCard({
   index,
   dailyWh,
   onEdit,
-  onDuplicate,
   onRemove,
 }: {
   load: Load;
   index: number;
   dailyWh: number;
   onEdit: () => void;
-  onDuplicate: () => void;
   onRemove: () => void;
 }) {
   const usage = load.usageMode === "ALWAYS_ON"
@@ -1636,7 +1659,6 @@ function LoadSummaryCard({
         </div>
         <div className="flex gap-3 text-sm font-bold">
           <button type="button" onClick={onEdit} className="text-cyan-200">Edit</button>
-          <button type="button" onClick={onDuplicate} className="text-cyan-200">Duplicate</button>
           <button type="button" onClick={onRemove} className="text-rose-300">Remove</button>
         </div>
       </div>
