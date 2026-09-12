@@ -42,6 +42,15 @@ type AssessmentAiReview = {
   recommendations: string[];
   dataGaps: string[];
 };
+type CatalogProduct = {
+  productName: string;
+  price: number;
+  productCategory: string;
+  shortDescription: string | null;
+  productUrl: string;
+  availability: string;
+};
+type RecommendationType = "CATALOG_PRODUCT" | "CUSTOM_QUOTATION";
 
 const presets: LoadPreset[] = [
   { key: "lights", name: "Lights", watts: 10, group: "Lighting" },
@@ -446,6 +455,21 @@ export default function SiteAssessmentPublicClient({
   const [loadEditorSnapshot, setLoadEditorSnapshot] = useState<Load | null>(null);
   const [expandedLoadKinds, setExpandedLoadKinds] = useState<Record<string, boolean>>({});
   const [evidenceNames, setEvidenceNames] = useState<Record<string, string>>({});
+  const [recommendationType, setRecommendationType] = useState<RecommendationType>("CATALOG_PRODUCT");
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogResults, setCatalogResults] = useState<CatalogProduct[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
+  const [recommendationNotes, setRecommendationNotes] = useState("");
+  const [tiktokUrl, setTiktokUrl] = useState("");
+  const [isSearchingCatalog, setIsSearchingCatalog] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishMessage, setPublishMessage] = useState(() =>
+    visit.assessmentReport
+      ? "This site assessment report has already been published. Open the Site Visit workspace to review the final report."
+      : "",
+  );
+  const [publishError, setPublishError] = useState("");
   useEffect(() => {
     try {
       // Scope drafts to a visit. A field device can safely hold several
@@ -465,6 +489,10 @@ export default function SiteAssessmentPublicClient({
           skippedSteps: Record<number, boolean>;
           evidenceNames: Record<string, string>;
           expandedLoadKinds: Record<string, boolean>;
+          recommendationType: RecommendationType;
+          selectedProduct: CatalogProduct;
+          recommendationNotes: string;
+          tiktokUrl: string;
         }>;
         if (parsed.loads) setLoads(parsed.loads);
         if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
@@ -480,6 +508,10 @@ export default function SiteAssessmentPublicClient({
         if (parsed.evidenceNames) setEvidenceNames(parsed.evidenceNames);
         if (parsed.expandedLoadKinds)
           setExpandedLoadKinds(parsed.expandedLoadKinds);
+        if (parsed.recommendationType) setRecommendationType(parsed.recommendationType);
+        if (parsed.selectedProduct) setSelectedProduct(parsed.selectedProduct);
+        if (parsed.recommendationNotes) setRecommendationNotes(parsed.recommendationNotes);
+        if (parsed.tiktokUrl) setTiktokUrl(parsed.tiktokUrl);
       }
     } catch {
       localStorage.removeItem(storageKey);
@@ -502,6 +534,10 @@ export default function SiteAssessmentPublicClient({
           skippedSteps,
           evidenceNames,
           expandedLoadKinds,
+          recommendationType,
+          selectedProduct,
+          recommendationNotes,
+          tiktokUrl,
         }),
       );
   }, [
@@ -516,7 +552,11 @@ export default function SiteAssessmentPublicClient({
     skippedSteps,
     evidenceNames,
     expandedLoadKinds,
+    recommendationNotes,
+    recommendationType,
+    selectedProduct,
     storageKey,
+    tiktokUrl,
   ]);
   const clearDraft = () => {
     if (!window.confirm("Clear the saved site-assessment draft from this device? This cannot be undone.")) return;
@@ -532,6 +572,12 @@ export default function SiteAssessmentPublicClient({
     setLoadEditorSnapshot(null);
     setExpandedLoadKinds({});
     setEvidenceNames({});
+    setRecommendationType("CATALOG_PRODUCT");
+    setCatalogQuery("");
+    setCatalogResults([]);
+    setSelectedProduct(null);
+    setRecommendationNotes("");
+    setTiktokUrl("");
     localStorage.removeItem(storageKey);
   };
   const openLoad = (load: Load) => {
@@ -743,6 +789,33 @@ export default function SiteAssessmentPublicClient({
       ? `${batteryModuleCount} x ${batteryModuleKwh.toFixed(2)} kWh`
       : `${batteryModuleKwh.toFixed(2)} kWh`;
   const panelCount = Math.max(1, Math.ceil((pvKw * 1000) / 600));
+  const assessmentPayload = () => ({
+    loads,
+    home,
+    electrical,
+    siteDetails,
+    calculation: {
+      connectedKw: connected / 1000,
+      dailyKwh: daily / 1000,
+      continuousKw: continuous / 1000,
+      simultaneousPeakKw: simultaneousPeak / 1000,
+      inverterKw,
+      batteryRecommendation,
+      batteryKwh: recommendedBatteryKwh,
+      pvKw,
+      panelCount,
+      panelWatts: 600,
+    },
+  });
+  const evidenceFiles = () =>
+    Array.from(
+      assessmentRootRef.current?.querySelectorAll<HTMLInputElement>(
+        'input[type="file"]',
+      ) || [],
+    )
+      .flatMap((element) => Array.from(element.files || []))
+      .filter((file) => file.type.startsWith("image/"))
+      .slice(0, 8);
   const analyseAssessment = async () => {
     if (!loads.length || isAnalysing) return;
     setIsAnalysing(true);
@@ -750,34 +823,8 @@ export default function SiteAssessmentPublicClient({
     try {
       const form = new FormData();
       form.set("token", assessmentToken);
-      form.set(
-        "assessment",
-        JSON.stringify({
-          loads,
-          home,
-          electrical,
-          siteDetails,
-          calculation: {
-            connectedKw: connected / 1000,
-            dailyKwh: daily / 1000,
-            continuousKw: continuous / 1000,
-            simultaneousPeakKw: simultaneousPeak / 1000,
-            inverterKw,
-            batteryRecommendation,
-            panelCount,
-            panelWatts: 600,
-          },
-        }),
-      );
-      const files = Array.from(
-        assessmentRootRef.current?.querySelectorAll<HTMLInputElement>(
-          'input[type="file"]',
-        ) || [],
-      )
-        .flatMap((input) => Array.from(input.files || []))
-        .filter((file) => file.type.startsWith("image/"))
-        .slice(0, 8);
-      files.forEach((file) => form.append("photos", file));
+      form.set("assessment", JSON.stringify(assessmentPayload()));
+      evidenceFiles().forEach((file) => form.append("photos", file));
       const response = await fetch("/api/site-assessment/analyze", {
         method: "POST",
         body: form,
@@ -796,6 +843,76 @@ export default function SiteAssessmentPublicClient({
       );
     } finally {
       setIsAnalysing(false);
+    }
+  };
+  const searchCatalog = async () => {
+    const query = catalogQuery.trim();
+    if (query.length < 2 || isSearchingCatalog) return;
+    setIsSearchingCatalog(true);
+    setCatalogError("");
+    try {
+      const response = await fetch("/api/site-assessment/catalog-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: assessmentToken, query }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Could not search the Betech catalog.");
+      setCatalogResults((data?.products || []) as CatalogProduct[]);
+      if (!(data?.products || []).length) setCatalogError("No suitable live catalog product was found. Choose Custom quotation instead.");
+    } catch (error) {
+      setCatalogError(error instanceof Error ? error.message : "Could not search the Betech catalog.");
+    } finally {
+      setIsSearchingCatalog(false);
+    }
+  };
+  const publishReport = async () => {
+    if (isPublishing || !loads.length) return;
+    if (recommendationType === "CATALOG_PRODUCT" && !selectedProduct) {
+      setPublishError("Search and select a Betech catalog product, or choose Custom quotation.");
+      return;
+    }
+    setIsPublishing(true);
+    setPublishError("");
+    setPublishMessage("");
+    try {
+      const form = new FormData();
+      form.set("token", assessmentToken);
+      form.set("report", JSON.stringify({
+        assessment: assessmentPayload(),
+        aiReview,
+        recommendation: {
+          type: recommendationType,
+          ...(selectedProduct && recommendationType === "CATALOG_PRODUCT"
+            ? {
+                productName: selectedProduct.productName,
+                productUrl: selectedProduct.productUrl,
+                productPrice: selectedProduct.price,
+                productCategory: selectedProduct.productCategory,
+              }
+            : {}),
+          notes: recommendationNotes.trim() || undefined,
+          tiktokUrl: tiktokUrl.trim() || undefined,
+        },
+        calculation: {
+          connectedKw: connected / 1000,
+          dailyKwh: daily / 1000,
+          inverterKw,
+          batteryKwh: recommendedBatteryKwh,
+          pvKw,
+          panelCount,
+        },
+      }));
+      evidenceFiles().forEach((file) => form.append("photos", file));
+      const response = await fetch("/api/site-assessment/submit", { method: "POST", body: form });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Could not publish the site assessment report.");
+      localStorage.removeItem(storageKey);
+      setPublishMessage("Report published. The customer has been notified by SMS and, when an email address is available, by email with the PDF attached.");
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : "Could not publish the site assessment report.");
+    } finally {
+      setIsPublishing(false);
     }
   };
   const groups = Array.from(new Set(presets.map((preset) => preset.group))).map(
@@ -1428,6 +1545,85 @@ export default function SiteAssessmentPublicClient({
               />
             </div>
           ) : null}
+          <div className="mt-5 rounded-2xl border border-emerald-400/30 bg-slate-950/70 p-4">
+            <h3 className="font-black text-emerald-200">Customer recommendation & report delivery</h3>
+            <p className="mt-1 text-sm text-slate-300">
+              Select a live Betech website product, or clearly record that this project needs a custom quotation. The published report is saved to the customer account and sent by SMS; a PDF is attached to email when an address is available.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setRecommendationType("CATALOG_PRODUCT")}
+                className={`rounded-xl border p-3 text-left font-bold ${recommendationType === "CATALOG_PRODUCT" ? "border-emerald-300 bg-emerald-400/15 text-emerald-100" : "border-white/10 text-slate-300"}`}
+              >
+                Recommend a Betech website system
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecommendationType("CUSTOM_QUOTATION")}
+                className={`rounded-xl border p-3 text-left font-bold ${recommendationType === "CUSTOM_QUOTATION" ? "border-emerald-300 bg-emerald-400/15 text-emerald-100" : "border-white/10 text-slate-300"}`}
+              >
+                Prepare a custom quotation
+              </button>
+            </div>
+            {recommendationType === "CATALOG_PRODUCT" ? (
+              <div className="mt-4">
+                <label className="text-sm font-bold text-slate-200">
+                  Search live Betech products
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      className={input}
+                      value={catalogQuery}
+                      onChange={(event) => setCatalogQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void searchCatalog();
+                        }
+                      }}
+                      placeholder="Example: 5kW lithium solar kit"
+                    />
+                    <button type="button" onClick={() => void searchCatalog()} disabled={isSearchingCatalog || catalogQuery.trim().length < 2} className="mt-1 rounded-xl bg-cyan-400 px-4 font-black text-slate-950 disabled:opacity-40">
+                      {isSearchingCatalog ? "Searching..." : "Search"}
+                    </button>
+                  </div>
+                </label>
+                {catalogError ? <p className="mt-2 text-sm text-amber-200">{catalogError}</p> : null}
+                {catalogResults.length ? (
+                  <div className="mt-3 grid gap-2">
+                    {catalogResults.map((product) => (
+                      <button
+                        type="button"
+                        key={product.productUrl}
+                        onClick={() => setSelectedProduct(product)}
+                        className={`rounded-xl border p-3 text-left ${selectedProduct?.productUrl === product.productUrl ? "border-emerald-300 bg-emerald-400/10" : "border-white/10 hover:bg-white/5"}`}
+                      >
+                        <span className="block font-bold text-white">{product.productName}</span>
+                        <span className="mt-1 block text-sm text-slate-300">KES {product.price.toLocaleString("en-KE")} · {product.availability}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-4 rounded-xl border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
+                The report will state that Betech will prepare a tailored quotation after reviewing the field findings.
+              </p>
+            )}
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="Recommendation notes for the customer">
+                <textarea className={`${input} min-h-28`} value={recommendationNotes} onChange={(event) => setRecommendationNotes(event.target.value)} placeholder="Explain the recommendation, scope or next steps..." />
+              </Field>
+              <Field label="Similar Betech TikTok project (optional)">
+                <input className={input} type="url" value={tiktokUrl} onChange={(event) => setTiktokUrl(event.target.value)} placeholder="https://www.tiktok.com/..." />
+              </Field>
+            </div>
+            <button type="button" onClick={() => void publishReport()} disabled={isPublishing || Boolean(publishMessage)} className="mt-5 w-full rounded-xl bg-emerald-400 py-4 font-black text-slate-950 disabled:opacity-40">
+              {isPublishing ? "Publishing report..." : publishMessage ? "Report published" : "Publish report & notify customer"}
+            </button>
+            {publishError ? <p className="mt-3 text-sm font-semibold text-rose-200">{publishError}</p> : null}
+            {publishMessage ? <p className="mt-3 text-sm font-semibold text-emerald-200">{publishMessage}</p> : null}
+          </div>
         </section>
         <section className="mt-5 rounded-3xl border border-cyan-400/30 bg-cyan-400/10 p-5">
           <h2 className="text-xl font-bold">Known-load summary</h2>

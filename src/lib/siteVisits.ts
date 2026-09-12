@@ -34,6 +34,11 @@ import {
   validateSiteVisitLifecycle,
 } from "@/lib/siteVisitPolicy";
 import { getServiceZone } from "@/lib/agents/kenyaMarkets";
+import {
+  parseSiteAssessmentReport,
+  reportRecommendationLabel,
+  type SiteAssessmentReport,
+} from "@/lib/siteAssessmentReport";
 
 export {
   SITE_VISIT_OUTCOMES,
@@ -162,6 +167,11 @@ const SITE_VISIT_SCHEMA_SQL = [
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "rescheduleReason" TEXT`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "cancellationRequestedAt" TIMESTAMP(3)`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "cancellationReason" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReport" JSONB`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReportPdfUrl" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReportPublishedAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReportPublishedById" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReportPublishedByName" TEXT`,
   `CREATE INDEX IF NOT EXISTS "SiteVisit_status_scheduledAt_idx" ON "SiteVisit"("status","scheduledAt")`,
   `CREATE INDEX IF NOT EXISTS "SiteVisit_customerUserId_createdAt_idx" ON "SiteVisit"("customerUserId","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "SiteVisit_customerPhone_createdAt_idx" ON "SiteVisit"("customerPhone","createdAt")`,
@@ -371,6 +381,11 @@ type SiteVisitRow = {
   recommendedItems: string | null;
   risks: string | null;
   nextAction: string | null;
+  assessmentReport: Prisma.JsonValue | null;
+  assessmentReportPdfUrl: string | null;
+  assessmentReportPublishedAt: Date | string | null;
+  assessmentReportPublishedById: string | null;
+  assessmentReportPublishedByName: string | null;
   outcome: string | null;
   closedReason: string | null;
   completedAt: Date | string | null;
@@ -498,6 +513,11 @@ const SITE_VISIT_SELECT_SQL = Prisma.sql`
   "recommendedItems",
   "risks",
   "nextAction",
+  "assessmentReport",
+  "assessmentReportPdfUrl",
+  "assessmentReportPublishedAt",
+  "assessmentReportPublishedById",
+  "assessmentReportPublishedByName",
   "outcome",
   "closedReason",
   "completedAt",
@@ -749,6 +769,11 @@ function serializeSiteVisit(row: SiteVisitRow): SerializedSiteVisit {
     recommendedItems: row.recommendedItems,
     risks: row.risks,
     nextAction: row.nextAction,
+    assessmentReport: parseSiteAssessmentReport(row.assessmentReport),
+    assessmentReportPdfUrl: row.assessmentReportPdfUrl,
+    assessmentReportPublishedAt: toIso(row.assessmentReportPublishedAt),
+    assessmentReportPublishedById: row.assessmentReportPublishedById,
+    assessmentReportPublishedByName: row.assessmentReportPublishedByName,
     outcome: isSiteVisitOutcome(row.outcome) ? (String(row.outcome).trim().toUpperCase() as SiteVisitOutcome) : null,
     closedReason: row.closedReason,
     completedAt: toIso(row.completedAt),
@@ -1228,6 +1253,49 @@ export async function createSiteVisitAttachment(
   return attachment;
 }
 
+export async function publishSiteAssessmentReport(
+  visitId: string,
+  report: SiteAssessmentReport,
+  actor: { id: string; name: string | null; email: string | null },
+) {
+  await ensureSiteVisitsSchema();
+  const publishedRows = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
+    UPDATE "SiteVisit"
+    SET
+      "assessmentReport" = ${report as unknown as Prisma.JsonObject},
+      "assessmentReportPdfUrl" = ${`/account/site-visits/${visitId}/report`},
+      "assessmentReportPublishedAt" = CURRENT_TIMESTAMP,
+      "assessmentReportPublishedById" = ${actor.id},
+      "assessmentReportPublishedByName" = ${actor.name ?? actor.email ?? "Betech Technician"},
+      "assessmentSummary" = ${report.aiReview?.summary || "Field assessment report submitted."},
+      "recommendedSystem" = ${reportRecommendationLabel(report)},
+      "recommendedItems" = ${report.recommendation.type === "CATALOG_PRODUCT" ? report.recommendation.productName || null : "Custom quotation required"},
+      "nextAction" = ${report.aiReview?.recommendations[0] || "Prepare the customer quotation."},
+      "status" = CASE WHEN "status" IN ('PENDING', 'SCHEDULED') THEN 'VISITED' ELSE "status" END,
+      "completedAt" = CASE WHEN "status" IN ('PENDING', 'SCHEDULED') THEN CURRENT_TIMESTAMP ELSE "completedAt" END,
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${visitId} AND "assessmentReport" IS NULL
+    RETURNING ${SITE_VISIT_SELECT_SQL}
+  `);
+  const visit = publishedRows[0] ? serializeSiteVisit(publishedRows[0]) : null;
+  if (!visit) return null;
+
+  await recordSiteVisitEvent({
+    siteVisitId: visit.id,
+    eventType: "SITE_ASSESSMENT_REPORT_PUBLISHED",
+    eventLabel: "Site assessment report published",
+    eventDetail: reportRecommendationLabel(report),
+    actorUserId: actor.id,
+    actorName: actor.name ?? actor.email ?? "Betech Technician",
+    metadata: {
+      recommendationType: report.recommendation.type,
+      productName: report.recommendation.productName || null,
+      tiktokUrl: report.recommendation.tiktokUrl || null,
+    },
+  });
+  return visit;
+}
+
 export async function updateSiteVisit(
   id: string,
   input: z.infer<typeof siteVisitUpdateSchema>,
@@ -1530,6 +1598,9 @@ export function toCustomerSiteVisit(visit: SerializedSiteVisit) {
     totalPayable: visit.totalPayable,
     quotationCreditStatus: visit.quotationCreditStatus,
     outcome: visit.outcome,
+    assessmentReport: visit.assessmentReport,
+    assessmentReportPdfUrl: visit.assessmentReportPdfUrl,
+    assessmentReportPublishedAt: visit.assessmentReportPublishedAt,
     rescheduleRequestedAt: visit.rescheduleRequestedAt,
     rescheduleRequestedDate: visit.rescheduleRequestedDate,
     rescheduleRequestedTimeLabel: visit.rescheduleRequestedTimeLabel,

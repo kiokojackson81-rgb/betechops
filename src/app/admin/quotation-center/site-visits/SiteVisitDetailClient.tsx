@@ -54,6 +54,48 @@ function Field({
   );
 }
 
+function PublishedAssessmentReport({ visit }: { visit: SerializedSiteVisit }) {
+  const report = visit.assessmentReport;
+  if (!report) return null;
+  const recommendation = report.recommendation.type === "CUSTOM_QUOTATION"
+    ? "Custom quotation required"
+    : report.recommendation.productName || "Betech catalog product";
+  const confirmationItems = [...(report.aiReview?.risks || []), ...(report.aiReview?.dataGaps || [])];
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-5">
+        <p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-200">Published customer report</p>
+        <h2 className="mt-2 text-xl font-black text-white">{recommendation}</h2>
+        <p className="mt-2 text-sm text-slate-300">Submitted by {report.submittedByName} on {new Date(report.submittedAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}</p>
+        <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
+          <a href={`/api/admin/site-visits/${visit.id}/report/pdf`} className="rounded-full border border-emerald-300/40 px-4 py-2 text-emerald-100">Download customer PDF</a>
+          {report.recommendation.productUrl ? <a href={report.recommendation.productUrl} target="_blank" rel="noreferrer" className="rounded-full border border-cyan-300/40 px-4 py-2 text-cyan-100">Open recommended product</a> : null}
+          {report.recommendation.tiktokUrl ? <a href={report.recommendation.tiktokUrl} target="_blank" rel="noreferrer" className="rounded-full border border-cyan-300/40 px-4 py-2 text-cyan-100">Open similar TikTok project</a> : null}
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <ReportMetric label="Daily energy" value={`${report.calculation.dailyKwh.toFixed(2)} kWh`} />
+        <ReportMetric label="Indicative inverter" value={`${report.calculation.inverterKw.toFixed(1)} kW`} />
+        <ReportMetric label="Indicative storage" value={`${report.calculation.batteryKwh.toFixed(2)} kWh`} />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <ReportList title="Assessment summary" items={report.aiReview?.summary ? [report.aiReview.summary] : []} fallback="Technician completed the structured field assessment." />
+        <ReportList title="Recommended next actions" items={report.aiReview?.recommendations || []} fallback={report.recommendation.notes || "Prepare the final Betech quotation."} />
+        <ReportList title="Site observations" items={report.aiReview?.observations || []} fallback="No additional observations recorded." />
+        <ReportList title="Items to confirm" items={confirmationItems} fallback="No outstanding confirmation items recorded." />
+      </div>
+    </div>
+  );
+}
+
+function ReportMetric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-white/10 bg-slate-950 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 text-lg font-black text-white">{value}</p></div>;
+}
+
+function ReportList({ title, items, fallback }: { title: string; items: string[]; fallback: string }) {
+  return <section className="rounded-2xl border border-white/10 bg-slate-950 p-4"><h3 className="font-bold text-white">{title}</h3>{items.length ? <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">{items.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-3 text-sm text-slate-400">{fallback}</p>}</section>;
+}
+
 export default function SiteVisitDetailClient({
   initialVisit,
   initialEvents,
@@ -662,31 +704,36 @@ export default function SiteVisitDetailClient({
         ) : null}
         {tab === "assessment" ? (
           <div>
-            <h2 className="text-xl font-semibold">Structured assessment</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Capture evidence for quotation preparation. The layout leaves room
-              for future appliance load rows.
-            </p>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {[
-                ["Customer requirements", "customerRequirements"],
-                ["Equipment / appliances inspected", "appliancesToInspect"],
-                ["Visit findings", "findings"],
-                ["Assessment summary", "assessmentSummary"],
-                ["Recommended system", "recommendedSystem"],
-                ["Recommended products / accessories", "recommendedItems"],
-                ["Risks / blockers", "risks"],
-                ["Next action", "nextAction"],
-              ].map(([name, key]) => (
-                <Field key={key} name={name}>
-                  <textarea
-                    className={`${input} min-h-32`}
-                    value={String(draft[key as keyof typeof draft] || "")}
-                    onChange={(e) => patchDraft({ [key]: e.target.value })}
-                  />
-                </Field>
-              ))}
-            </div>
+            {visit.assessmentReport ? (
+              <PublishedAssessmentReport visit={visit} />
+            ) : (
+              <>
+                <h2 className="text-xl font-semibold">Structured assessment</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  The assigned technician can complete the field assessment and publish the customer report from the technician assessment link.
+                </p>
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  {[
+                    ["Customer requirements", "customerRequirements"],
+                    ["Equipment / appliances inspected", "appliancesToInspect"],
+                    ["Visit findings", "findings"],
+                    ["Assessment summary", "assessmentSummary"],
+                    ["Recommended system", "recommendedSystem"],
+                    ["Recommended products / accessories", "recommendedItems"],
+                    ["Risks / blockers", "risks"],
+                    ["Next action", "nextAction"],
+                  ].map(([name, key]) => (
+                    <Field key={key} name={name}>
+                      <textarea
+                        className={`${input} min-h-32`}
+                        value={String(draft[key as keyof typeof draft] || "")}
+                        onChange={(e) => patchDraft({ [key]: e.target.value })}
+                      />
+                    </Field>
+                  ))}
+                </div>
+              </>
+            )}
             <div className="mt-6 flex flex-wrap gap-2">
               {visit.status === "PENDING" ? (
                 <button

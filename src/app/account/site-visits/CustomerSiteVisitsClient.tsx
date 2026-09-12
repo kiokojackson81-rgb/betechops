@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { CalendarCheck2, MapPin, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -288,6 +289,14 @@ export default function CustomerSiteVisitsClient({
                 </div>
               ) : null}
               <div className="mt-5 flex flex-wrap gap-2">
+                {visit.assessmentReportPublishedAt ? (
+                  <Link
+                    href={`/account/site-visits/${visit.id}/report`}
+                    className="rounded-full bg-[#087f5b] px-4 py-2 text-sm font-bold text-white"
+                  >
+                    View assessment report
+                  </Link>
+                ) : null}
                 <button
                   disabled={busy || visit.status === "CLOSED"}
                   onClick={() => requestReschedule(visit)}

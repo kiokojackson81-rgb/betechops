@@ -1,4 +1,5 @@
 import type { QuoteProjectType } from "@/lib/quoteRequests";
+import type { SiteAssessmentReport } from "@/lib/siteAssessmentReport";
 
 export const SITE_VISIT_STATUSES = ["PAYMENT_PENDING", "PAYMENT_FAILED", "PENDING", "SCHEDULED", "VISITED", "CLOSED"] as const;
 export type SiteVisitStatus = (typeof SITE_VISIT_STATUSES)[number];
@@ -131,6 +132,11 @@ export type SerializedSiteVisit = {
   recommendedItems: string | null;
   risks: string | null;
   nextAction: string | null;
+  assessmentReport: SiteAssessmentReport | null;
+  assessmentReportPdfUrl: string | null;
+  assessmentReportPublishedAt: string | null;
+  assessmentReportPublishedById: string | null;
+  assessmentReportPublishedByName: string | null;
   outcome: SiteVisitOutcome | null;
   closedReason: string | null;
   completedAt: string | null;
@@ -183,6 +189,9 @@ export type CustomerSiteVisit = Pick<
   | "totalPayable"
   | "quotationCreditStatus"
   | "outcome"
+  | "assessmentReport"
+  | "assessmentReportPdfUrl"
+  | "assessmentReportPublishedAt"
   | "rescheduleRequestedAt"
   | "rescheduleRequestedDate"
   | "rescheduleRequestedTimeLabel"
