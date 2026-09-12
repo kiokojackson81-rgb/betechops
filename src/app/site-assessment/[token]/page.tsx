@@ -15,5 +15,5 @@ export default async function PublicSiteAssessmentPage({
   const visit = payload ? await getSiteVisitById(payload.visitId) : null;
   if (!payload || !visit || visit.assignedTechnicianId !== payload.technicianId)
     notFound();
-  return <SiteAssessmentPublicClient visit={visit} assessmentToken={token} />;
+  return <SiteAssessmentPublicClient key={visit.id} visit={visit} assessmentToken={token} />;
 }

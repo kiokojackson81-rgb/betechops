@@ -159,9 +159,8 @@ const readNumber = (value: NumericField | null) =>
   typeof value === "number" ? value : 0;
 const numberOrBlank = (value: string): NumericField =>
   value === "" ? "" : Number(value);
-const legacyDraftStorageKey = "betech-site-assessment-draft-v1";
 const draftStorageKey = (visitId: string) =>
-  `betech-site-assessment-draft-v2:${visitId}`;
+  `betech-site-assessment-draft-v3:${visitId}`;
 const assessmentSteps = [
   "Project",
   "Loads",
@@ -472,13 +471,13 @@ export default function SiteAssessmentPublicClient({
   const [publishError, setPublishError] = useState("");
   useEffect(() => {
     try {
-      // Scope drafts to a visit. A field device can safely hold several
-      // assessments without one technician's work replacing another's.
-      const draft =
-        localStorage.getItem(storageKey) ||
-        localStorage.getItem(legacyDraftStorageKey);
+      // Never import legacy/unscoped browser drafts. Each saved assessment is
+      // bound to one SiteVisit, so one customer's loads cannot appear on
+      // another customer's assessment.
+      const draft = localStorage.getItem(storageKey);
       if (draft) {
         const parsed = JSON.parse(draft) as Partial<{
+          visitId: string;
           loads: Load[];
           home: typeof emptyHome;
           electrical: typeof emptyElectrical;
@@ -494,36 +493,39 @@ export default function SiteAssessmentPublicClient({
           recommendationNotes: string;
           tiktokUrl: string;
         }>;
-        if (parsed.loads) setLoads(parsed.loads);
-        if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
-        if (parsed.electrical)
-          setElectrical({ ...emptyElectrical, ...parsed.electrical });
-        if (parsed.siteDetails)
-          setSiteDetails({ ...emptySiteDetails, ...parsed.siteDetails });
-        if (parsed.aiReview) setAiReview(parsed.aiReview);
-        if (typeof parsed.activeStep === "number")
-          setActiveStep(Math.min(assessmentSteps.length - 1, Math.max(0, parsed.activeStep)));
-        if (parsed.completedSteps) setCompletedSteps(parsed.completedSteps);
-        if (parsed.skippedSteps) setSkippedSteps(parsed.skippedSteps);
-        if (parsed.evidenceNames) setEvidenceNames(parsed.evidenceNames);
-        if (parsed.expandedLoadKinds)
-          setExpandedLoadKinds(parsed.expandedLoadKinds);
-        if (parsed.recommendationType) setRecommendationType(parsed.recommendationType);
-        if (parsed.selectedProduct) setSelectedProduct(parsed.selectedProduct);
-        if (parsed.recommendationNotes) setRecommendationNotes(parsed.recommendationNotes);
-        if (parsed.tiktokUrl) setTiktokUrl(parsed.tiktokUrl);
+        if (parsed.visitId === visit.id) {
+          if (parsed.loads) setLoads(parsed.loads);
+          if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
+          if (parsed.electrical)
+            setElectrical({ ...emptyElectrical, ...parsed.electrical });
+          if (parsed.siteDetails)
+            setSiteDetails({ ...emptySiteDetails, ...parsed.siteDetails });
+          if (parsed.aiReview) setAiReview(parsed.aiReview);
+          if (typeof parsed.activeStep === "number")
+            setActiveStep(Math.min(assessmentSteps.length - 1, Math.max(0, parsed.activeStep)));
+          if (parsed.completedSteps) setCompletedSteps(parsed.completedSteps);
+          if (parsed.skippedSteps) setSkippedSteps(parsed.skippedSteps);
+          if (parsed.evidenceNames) setEvidenceNames(parsed.evidenceNames);
+          if (parsed.expandedLoadKinds)
+            setExpandedLoadKinds(parsed.expandedLoadKinds);
+          if (parsed.recommendationType) setRecommendationType(parsed.recommendationType);
+          if (parsed.selectedProduct) setSelectedProduct(parsed.selectedProduct);
+          if (parsed.recommendationNotes) setRecommendationNotes(parsed.recommendationNotes);
+          if (parsed.tiktokUrl) setTiktokUrl(parsed.tiktokUrl);
+        }
       }
     } catch {
       localStorage.removeItem(storageKey);
     } finally {
       setDraftLoaded(true);
     }
-  }, [storageKey]);
+  }, [storageKey, visit.id]);
   useEffect(() => {
     if (draftLoaded)
       localStorage.setItem(
         storageKey,
         JSON.stringify({
+          visitId: visit.id,
           loads,
           home,
           electrical,
@@ -557,6 +559,7 @@ export default function SiteAssessmentPublicClient({
     selectedProduct,
     storageKey,
     tiktokUrl,
+    visit.id,
   ]);
   const clearDraft = () => {
     if (!window.confirm("Clear the saved site-assessment draft from this device? This cannot be undone.")) return;
