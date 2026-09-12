@@ -9,7 +9,10 @@ import {
   siteVisitUpdateSchema,
   updateSiteVisit,
 } from "@/lib/siteVisits";
-import { dispatchSiteVisitTechnicianAssignment, notifySiteVisitCustomer } from "@/lib/siteVisitNotifications";
+import {
+  dispatchSiteVisitCreated,
+  dispatchSiteVisitTechnicianAssignment,
+} from "@/lib/siteVisitNotifications";
 
 export const dynamic = "force-dynamic";
 
@@ -95,14 +98,7 @@ export async function PATCH(
   }
 
   if (existing.paymentStatus !== "PAID" && visit.paymentStatus === "PAID") {
-    void notifySiteVisitCustomer({
-      event: "PAYMENT_CONFIRMED",
-      customerName: visit.customerName,
-      phone: visit.customerPhone,
-      email: visit.customerEmail,
-      visitRef: visit.visitRef,
-      detail: `KES ${visit.visitFee.toLocaleString("en-KE")} confirmed.`,
-    });
+    void dispatchSiteVisitCreated(visit, "Payment confirmed by BetechOps");
   }
   const technicianChanged = existing.assignedTechnicianId !== visit.assignedTechnicianId;
   if (technicianChanged && visit.assignedTechnicianId) void dispatchSiteVisitTechnicianAssignment(visit, existing.assignedTechnicianId);

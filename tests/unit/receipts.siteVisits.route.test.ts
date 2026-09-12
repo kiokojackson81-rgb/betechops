@@ -149,6 +149,30 @@ describe("receipts site visit API", () => {
     expect(createSiteVisit).not.toHaveBeenCalled();
   });
 
+  it("does not notify customers or operations for an unpaid site-visit record", async () => {
+    createSiteVisit.mockResolvedValueOnce({
+      id: "visit-unpaid",
+      visitRef: "SV-2026-000002",
+      customerName: "Customer One",
+      customerPhone: "+254722000111",
+      paymentStatus: "UNPAID",
+    });
+
+    const response = await POST(request({
+      customerName: "Customer One",
+      customerPhone: "0722 000 111",
+      county: "Nairobi",
+      town: "Nairobi CBD",
+      location: "Moi Avenue",
+      preferredDate: "2026-09-02",
+      assignedStaffId: "staff-1",
+      paymentStatus: "UNPAID",
+    }));
+
+    expect(response.status).toBe(201);
+    expect(dispatchSiteVisitCreated).not.toHaveBeenCalled();
+  });
+
   it("prevents ordinary staff from waiving payment", async () => {
     const response = await POST(request({
       customerName: "Customer One",

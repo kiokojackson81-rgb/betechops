@@ -163,10 +163,11 @@ function buildLifecycleCustomerSms(context: LppLifecycleNotificationContext) {
 }
 
 function buildLifecycleAgentSms(context: LppLifecycleNotificationContext) {
-  const action =
-    context.event === "PAYMENT_SUBMITTED"
-      ? `${context.customerName || "A customer"} submitted ${formatCurrency(context.paymentAmount || 0, context.currency)} for verification.`
-      : `New Lipa Pole Pole account ${context.reference} has been assigned to you for ${context.customerName || "a customer"}.`;
+  const action = ["PAYMENT_RECEIVED", "PAYMENT_VERIFIED", "PLAN_COMPLETED"].includes(
+    context.event,
+  )
+    ? `${context.customerName || "A customer"} has a confirmed payment of ${formatCurrency(context.paymentAmount || 0, context.currency)} on ${context.reference}.`
+    : `Lipa Pole Pole account ${context.reference} has an update for ${context.customerName || "a customer"}.`;
   return `Hello ${context.agentName || "Team member"}, ${action} Product: ${context.productName || "Not specified"}. Open: ${context.adminUrl} - BetechOps`;
 }
 

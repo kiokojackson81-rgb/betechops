@@ -15,7 +15,6 @@ import {
 } from "@/lib/websiteOrders";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { getShopOrderSuccessHref } from "@/app/shop/storefrontPaths";
-import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import {
   calculateTransportFee,
   getDefaultTransportFee,
@@ -192,6 +191,16 @@ export async function POST(request: NextRequest) {
       bookingType: item.bookingType,
     };
   });
+  const installationRequiredItem = items.find((item) => {
+    const policy = productMap.get(item.cartProductId)?.catalogueConfiguration;
+    return Boolean(policy && policy.installationType !== "NOT_REQUIRED" && policy.installationFeeMode !== "UNAVAILABLE");
+  });
+  if (installationRequiredItem) {
+    return NextResponse.json(
+      { ok: false, error: `${installationRequiredItem.productName} requires Betech installation. Use Book Installation to reserve the project separately from product checkout.` },
+      { status: 400 },
+    );
+  }
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const isShopPickup = deliveryMethod === "SHOP_PICKUP";
   let deliveryFee: number | null = isShopPickup ? 0 : null;
@@ -269,6 +278,15 @@ export async function POST(request: NextRequest) {
     deliveryFee: deliveryFee ?? 0,
     fulfilment,
   });
+  const paymentDueStage = paymentPlan.option === "PAY_ON_PICKUP"
+    ? "AT_COLLECTION"
+    : paymentPlan.option === "PAY_ON_DELIVERY"
+      ? "ON_DELIVERY"
+      : paymentPlan.option === "PAY_TRANSPORT_FEE_FIRST"
+        ? "PRODUCT_BALANCE_ON_DELIVERY"
+        : paymentPlan.option === "PAY_10_PERCENT_COMMITMENT"
+          ? (deliveryMethod === "SHOP_PICKUP" ? "BALANCE_AT_COLLECTION" : "BALANCE_ON_DELIVERY")
+          : "SETTLED_NOW";
   const deliveryMethodLabel = getCheckoutDeliveryMethodLabel(deliveryMethod);
   const orderType = deriveWebsiteOrderType(deliveryMethodLabel, paymentPlan.label);
   const requiresImmediatePayment = paymentPlan.amountDueNow > 0;
@@ -331,10 +349,16 @@ export async function POST(request: NextRequest) {
         warehouseStockSubtotal: fulfilment.warehouseStockSubtotal,
         orderOnRequestSubtotal: fulfilment.orderOnRequestSubtotal,
         commitmentEligibleSubtotal: fulfilment.commitmentEligibleSubtotal,
+        // Product-order commitments are deliberately distinct from the
+        // installation booking deposit stored by installation-projects.
+        orderCommitmentAmount: paymentPlan.option === "PAY_10_PERCENT_COMMITMENT" ? paymentPlan.amountDueNow : 0,
         productSubtotal: subtotal,
+        deliveryFee: deliveryFee ?? 0,
         paymentOption: paymentPlan.option,
         paymentPercentage: paymentPlan.paymentPercentage,
         amountDueNow: paymentPlan.amountDueNow,
+        amountPaidNow: 0,
+        paymentDueStage,
         amountPaid: 0,
         remainingProductBalance: paymentPlan.remainingProductBalance,
         remainingDeliveryBalance: paymentPlan.remainingDeliveryBalance,
@@ -375,25 +399,9 @@ export async function POST(request: NextRequest) {
     });
   });
 
-  // Mandatory-prepayment checkout records are reservations, not operational
-  // orders.  Their single idempotent notification is sent only after an
-  // authoritative M-Pesa settlement confirms the reservation.
-  if (!requiresImmediatePayment) {
-    await notifyAdminCriticalSms({
-      eventType: "WEB_ORDER_CREATED",
-      entityId: created.id,
-      title: `New web order ${createdRow.orderRef}`,
-      details: [
-        `Customer: ${createdRow.customerName}`,
-        `Total: KSh ${Number(createdRow.total).toLocaleString("en-KE")}`,
-        `Payment: ${createdRow.paymentMethod}`,
-        `Delivery: ${createdRow.deliveryMethod}`,
-        `Location: ${createdRow.customerLocation}`,
-      ],
-      actionPath: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(created.id)}`,
-      payload: { orderRef: createdRow.orderRef, status: createdRow.status },
-    });
-  }
+  // A checkout record is a reservation until its payment is confirmed.  The
+  // single operational notification is sent by the authoritative settlement
+  // path, never when the customer merely submits a checkout form.
 
   return NextResponse.json({
     ok: true,

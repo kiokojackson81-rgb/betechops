@@ -778,6 +778,7 @@ async function applyConfirmedPaymentInTransaction(
         metadata: {
           ...metadata,
           amountPaid: paidAfter,
+          amountPaidNow: paidAfter,
           totalOutstanding: Math.max(0, total - paidAfter),
           mpesaPaymentStatus: fullyPaid ? "SUCCESS" : "PARTIAL",
           checkoutPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(),

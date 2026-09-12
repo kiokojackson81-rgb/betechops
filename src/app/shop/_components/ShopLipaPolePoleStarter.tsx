@@ -103,7 +103,10 @@ export default function ShopLipaPolePoleStarter({
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<BookingStep>("setup");
   const [form, setForm] = useState<BookingForm>(initialForm);
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  // Choosing the Lipa Pole Pole flow is the affirmative action. The current
+  // terms remain visible and linked, but customers are not asked to tick the
+  // same acceptance again after selecting this dedicated transaction.
+  const [termsAccepted, setTermsAccepted] = useState(true);
   const [otpCode, setOtpCode] = useState("");
   const [otpPhone, setOtpPhone] = useState("");
   const [plan, setPlan] = useState<{ id: string; reference: string } | null>(null);
@@ -151,7 +154,7 @@ export default function ShopLipaPolePoleStarter({
             installmentCount: String(restoredCount),
           };
         });
-        setTermsAccepted(Boolean(parsed.termsAccepted));
+        setTermsAccepted(true);
         restored = true;
       }
     } catch {
@@ -183,6 +186,7 @@ export default function ShopLipaPolePoleStarter({
     setOtpCode("");
     setOtpPhone("");
     setPlan(null);
+    setTermsAccepted(true);
     setOpen(true);
   }
 
@@ -212,7 +216,7 @@ export default function ShopLipaPolePoleStarter({
         initialPaymentAmount: initialPayment,
         initialPaymentMethod: "MPESA",
         initialPaymentReference: "",
-        termsAccepted,
+        termsAccepted: true,
       }),
     });
     const data = (await response.json().catch(() => ({}))) as { error?: string; id?: string; reference?: string };
@@ -404,10 +408,10 @@ export default function ShopLipaPolePoleStarter({
                       </div>
 
                       {product.lipaPolePoleTerms ? <div className="mt-4 rounded-[18px] border border-[#7a0000]/10 bg-white px-4 py-3 text-sm leading-6 text-slate-600">{product.lipaPolePoleTerms}</div> : null}
-                      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-[18px] border border-[#7a0000]/10 bg-white p-4 text-sm leading-6 text-slate-700">
-                        <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#7a0000]" required />
-                        <span>I understand that the product will only be released after full payment and I agree to the Betech Solar Solutions <Link href={LIPA_POLE_POLE_TERMS_PATH} target="_blank" className="font-black text-[#7a0000] underline underline-offset-4">Lipa Pole Pole Terms &amp; Conditions</Link>.</span>
-                      </label>
+                      <div className="mt-4 flex items-start gap-3 rounded-[18px] border border-[#7a0000]/10 bg-white p-4 text-sm leading-6 text-slate-700">
+                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#7a0000]" aria-hidden="true" />
+                        <span>By proceeding with Lipa Pole Pole, you agree to the Betech Solar Solutions <Link href={LIPA_POLE_POLE_TERMS_PATH} target="_blank" className="font-black text-[#7a0000] underline underline-offset-4">Lipa Pole Pole Terms &amp; Conditions</Link>. The product is released only after full payment.</span>
+                      </div>
                       {error ? <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
                       <button type="submit" disabled={submitting} className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-[18px] bg-[#7a0000] px-5 py-3 text-sm font-black uppercase tracking-[0.06em] text-white shadow-[0_18px_34px_rgba(122,0,0,0.22)] disabled:opacity-50">{submitting ? "Preparing secure payment..." : customer.isAuthenticated ? `Pay Initial Amount ${formatCurrency(initialPayment)} via M-Pesa` : "Continue with OTP"}</button>
                       {customer.isAuthenticated ? <p className="mt-3 text-center text-xs leading-5 text-slate-500">We’ll send a secure M-Pesa prompt to your phone. Your Lipa Pole Pole plan is activated only after Safaricom confirms payment.</p> : null}

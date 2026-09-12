@@ -114,6 +114,10 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const router = useRouter();
   const { items, hydrated: cartHydrated } = useShopCart();
   const detailedItems = useMemo(() => buildDetailedCart(items, products), [items, products]);
+  const installationRequiredCartItems = useMemo(() => detailedItems.filter((item) => {
+    const policy = item.product.catalogueConfiguration;
+    return Boolean(policy && policy.installationType !== "NOT_REQUIRED" && policy.installationFeeMode !== "UNAVAILABLE");
+  }), [detailedItems]);
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const installationItems = useMemo(() => detailedItems.filter((item) => item.bookingType === "INSTALLATION"), [detailedItems]);
   const priceableItems = useMemo(() => detailedItems.filter((item) => item.product.opsProductId), [detailedItems]);
@@ -340,6 +344,20 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     );
   }
 
+  // Older browser carts may still contain a system added before the product
+  // card was separated from the installation flow. Do not let that stale cart
+  // fall through to normal delivery/checkout rules.
+  if (installationRequiredCartItems.length) {
+    return (
+      <div className="rounded-[20px] border border-amber-300/40 bg-[#fffaf2] p-5 shadow-[0_14px_32px_rgba(15,23,42,0.05)] sm:p-6">
+        <div className={shopStyles.sectionEyebrow}>Installation booking required</div>
+        <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">Installation systems are booked separately.</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{installationRequiredCartItems.map((item) => item.product.name).join(", ")} requires Betech installation. Remove it from this product cart, then use Book Installation on the product page to reserve technicians, materials and a date.</p>
+        <div className="mt-4 flex flex-col gap-2.5 sm:flex-row"><Link href={SHOP_CART_HREF} className={shopStyles.primaryButton}>Review cart</Link><Link href={SHOP_HOME_HREF} className={shopStyles.secondaryButton}>Find the system</Link></div>
+      </div>
+    );
+  }
+
   const whatsappCheckoutMessage = [
     `Hello Betech Solar, I want to complete checkout for ${detailedItems.map((item) => `${item.product.name} x${item.quantity}`).join(", ")}.`,
     form.fullName.trim() ? `Customer: ${form.fullName.trim()}.` : "",
@@ -401,10 +419,6 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
               notes: [form.locationNotes.trim(), `WhatsApp: ${form.whatsappNumber.trim()}`, form.email.trim() ? `Email: ${form.email.trim()}` : ""]
                 .filter(Boolean)
                 .join(" | "),
-              projectBooking: hasInstallationBooking && deliveryZone ? {
-                zone: deliveryZone.id,
-                paymentStructure: selectedPaymentOption === "PAY_30_PERCENT_DEPOSIT" ? "DEPOSIT_30" : "FULL_UPFRONT",
-              } : undefined,
             });
 
             // A server-issued reference now exists, but orders requiring an

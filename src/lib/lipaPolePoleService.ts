@@ -17,7 +17,6 @@ import {
 } from "@/lib/mpesaReference";
 import { getLipaPolePoleMaxInstallments } from "@/lib/lipaPolePoleConfig";
 import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
-import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import {
   sendLppLifecycleChannelNotification,
   sendLppReminderChannelNotification,
@@ -1156,7 +1155,7 @@ export async function createLipaPolePole(
   const itemSerial = firstItem.serial;
   const itemWarranty = firstItem.warranty;
 
-  const created = await withLppTransaction(db, async (tx) => {
+  const result = await withLppTransaction(db, async (tx) => {
     const now = new Date();
     const reference = await nextLppReference(tx, now);
     const id = randomUUID();
@@ -1256,8 +1255,9 @@ export async function createLipaPolePole(
       } as Prisma.JsonObject,
     });
 
+    let initialPaymentResult: Awaited<ReturnType<typeof recordLppPayment>> | null = null;
     if (input.initialPayment) {
-      await recordLppPayment(
+      initialPaymentResult = await recordLppPayment(
         {
           lipaPolePoleId: id,
           amount: input.initialPayment.amount,
@@ -1305,19 +1305,22 @@ export async function createLipaPolePole(
 
     const finalRow = await getLppById(tx, id);
     if (!finalRow) throw new Error("LPP_NOT_FOUND_AFTER_CREATE");
-    return finalRow;
+    return { lpp: finalRow, initialPaymentResult };
   });
+  const created = result.lpp;
   if (db === prisma) {
-    await safelyDispatchLppLifecycleNotifications({
-      lipaPolePoleId: created.id,
-      event: "ACCOUNT_CREATED",
-    });
-    if (input.initialPayment && (input.initialPayment.status ?? "SUCCESS") === "PENDING") {
-      await notifyAdminOfPendingLppPayment(created.id).catch((error) => {
-        console.error("[admin-critical-sms] failed to load pending LPP payment", {
-          lipaPolePoleId: created.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+    // A plan can be created while its M-Pesa prompt is still pending.  Do not
+    // announce a booking or notify an assigned agent until money is confirmed.
+    if (
+      result.initialPaymentResult &&
+      (input.initialPayment?.status ?? "SUCCESS") === "SUCCESS"
+    ) {
+      await safelyDispatchLppLifecycleNotifications({
+        lipaPolePoleId: created.id,
+        paymentId: result.initialPaymentResult.paymentId,
+        event: result.initialPaymentResult.summary.isFullyPaid
+          ? "PLAN_COMPLETED"
+          : "PAYMENT_RECEIVED",
       });
     }
   }
@@ -1470,29 +1473,14 @@ export async function recordLppPayment(
       summary: completion.summary,
     };
   });
-  if (db === prisma) {
+  if (db === prisma && paymentStatus === "SUCCESS") {
     await safelyDispatchLppLifecycleNotifications({
       lipaPolePoleId: input.lipaPolePoleId,
       paymentId: result.paymentId,
-      event:
-        paymentStatus === "SUCCESS"
-          ? result.summary.isFullyPaid
-            ? "PLAN_COMPLETED"
-            : "PAYMENT_RECEIVED"
-          : "PAYMENT_SUBMITTED",
+      event: result.summary.isFullyPaid
+        ? "PLAN_COMPLETED"
+        : "PAYMENT_RECEIVED",
     });
-    if (paymentStatus === "PENDING") {
-      await notifyAdminOfPendingLppPayment(
-        input.lipaPolePoleId,
-        result.paymentId,
-      ).catch((error) => {
-        console.error("[admin-critical-sms] failed to load pending LPP payment", {
-          lipaPolePoleId: input.lipaPolePoleId,
-          paymentId: result.paymentId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
-    }
   }
   return result;
 }
@@ -2131,60 +2119,14 @@ type LppLifecycleDispatchInput = {
   paymentId?: string | null;
 };
 
-async function notifyAdminOfPendingLppPayment(
-  lipaPolePoleId: string,
-  paymentId?: string | null,
-) {
-  const rows = await prisma.$queryRaw<Array<{
-    paymentId: string;
-    amount: Prisma.Decimal;
-    method: string;
-    paymentReference: string | null;
-    lppReference: string;
-    customerName: string | null;
-  }>>(Prisma.sql`
-    SELECT
-      payment."id" AS "paymentId",
-      payment."amount",
-      payment."method"::text AS "method",
-      payment."reference" AS "paymentReference",
-      lpp."reference" AS "lppReference",
-      customer."name" AS "customerName"
-    FROM "LipaPolePolePayment" payment
-    INNER JOIN "LipaPolePole" lpp ON lpp."id" = payment."lipaPolePoleId"
-    INNER JOIN "User" customer ON customer."id" = lpp."customerId"
-    WHERE payment."lipaPolePoleId" = ${lipaPolePoleId}
-      AND payment."status" = 'PENDING'
-      ${paymentId ? Prisma.sql`AND payment."id" = ${paymentId}` : Prisma.empty}
-    ORDER BY payment."createdAt" DESC
-    LIMIT 1
-  `);
-  const payment = rows[0];
-  if (!payment) return;
-
-  await notifyAdminCriticalSms({
-    eventType: "LPP_PAYMENT_PENDING",
-    entityId: payment.paymentId,
-    title: "Lipa Pole Pole payment pending approval",
-    details: [
-      `Account: ${payment.lppReference}`,
-      `Customer: ${payment.customerName || "Customer"}`,
-      `Amount: KSh ${Number(payment.amount).toLocaleString("en-KE")}`,
-      `Method: ${payment.method}`,
-      `Reference: ${payment.paymentReference || "Not provided"}`,
-    ],
-    actionPath: `/admin/lipa-pole-pole?id=${encodeURIComponent(lipaPolePoleId)}`,
-    payload: {
-      lipaPolePoleId,
-      paymentId: payment.paymentId,
-      reference: payment.lppReference,
-    },
-  });
-}
-
 async function dispatchLppLifecycleNotifications(
   input: LppLifecycleDispatchInput,
 ) {
+  // Pending entries and a newly created plan do not prove that payment was
+  // received. They remain visible in BetechOps, but must not notify customers
+  // or agents as a confirmed booking.
+  if (["ACCOUNT_CREATED", "PAYMENT_SUBMITTED"].includes(input.event)) return;
+
   const rows = await prisma.$queryRaw<
     Array<{
       reference: string;
@@ -2296,7 +2238,9 @@ async function dispatchLppLifecycleNotifications(
   };
   const recipients: LppLifecycleRecipient[] = ["CUSTOMER"];
   if (
-    ["ACCOUNT_CREATED", "PAYMENT_SUBMITTED"].includes(input.event) &&
+    ["PAYMENT_RECEIVED", "PAYMENT_VERIFIED", "PLAN_COMPLETED"].includes(
+      input.event,
+    ) &&
     (row.agentPhone || row.agentEmail)
   ) {
     recipients.push("ASSIGNED_AGENT");

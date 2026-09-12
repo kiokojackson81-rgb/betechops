@@ -110,9 +110,13 @@ export function getEligibleCheckoutPaymentOptions(input: {
   if (deliveryMethod === "SHOP_PICKUP") return ["PAY_ON_PICKUP", "PAY_IN_FULL"];
   if (zone === "ZONE_1" && deliveryMethod === "LOCAL_DELIVERY") return ["PAY_ON_DELIVERY", "PAY_IN_FULL"];
   if (deliveryMethod === "COUNTRYWIDE_COURIER") {
+    // Ordinary-product courier orders are never installation bookings. The
+    // charge due now is the configured transport/commitment charge, not the
+    // installation deposit rule. A zero-payment courier reservation is not
+    // offered when Betech must prepare transport.
     return [
-      "PAY_30_PERCENT_DEPOSIT",
-      ...(supportsCourierPayOnDelivery && deliveryFee > 0 ? ["PAY_TRANSPORT_FEE_FIRST" as const] : []),
+      ...(deliveryFee > 0 ? ["PAY_TRANSPORT_FEE_FIRST" as const] : []),
+      ...(supportsCourierPayOnDelivery && deliveryFee <= 0 ? ["PAY_ON_DELIVERY" as const] : []),
       "PAY_IN_FULL",
     ];
   }
@@ -141,17 +145,17 @@ export function calculateCheckoutPaymentPlan(input: {
     description = "No advance product payment is required. Pay when you collect from the Betech shop.";
   } else if (input.option === "PAY_10_PERCENT_COMMITMENT") {
     label = "Pay 10% Commitment Fee";
-    description = "Warehouse and order-on-request items require a 10% commitment payment before we reserve or transfer them.";
+    description = "The commitment payment allows Betech to reserve and prepare your items for collection or dispatch.";
     paymentPercentage = 10;
     amountDueNow = commitmentFee;
   } else if (input.option === "PAY_30_PERCENT_DEPOSIT") {
     label = "Pay 30% Deposit";
-    description = "Pay 30% of the product value now; the transport charge and remaining product balance are due later under the applicable delivery terms.";
+    description = "Legacy checkout option. New product orders use the applicable commitment or transport charge instead.";
     paymentPercentage = 30;
     amountDueNow = Math.round(productSubtotal * 0.3);
   } else if (input.option === "PAY_TRANSPORT_FEE_FIRST") {
     label = "Pay Transport Fee First";
-    description = "Pay the transport fee now and pay for the products on delivery, where this courier service supports it.";
+    description = "Pay the delivery or transport charge now; the remaining product balance is payable on delivery.";
     amountDueNow = deliveryFee;
   } else {
     label = "Pay in Full";

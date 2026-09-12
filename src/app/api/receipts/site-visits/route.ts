@@ -127,7 +127,17 @@ export async function POST(request: NextRequest) {
     );
     if (!visit) return NextResponse.json({ ok: false, error: "Unable to create site visit." }, { status: 500 });
 
-    void dispatchSiteVisitCreated(visit, visit.assignedStaffName || requestedOwner?.name || requestedOwner?.email || actor.name || actor.email || "Admin");
+    if (visit.paymentStatus === "PAID") {
+      void dispatchSiteVisitCreated(
+        visit,
+        visit.assignedStaffName ||
+          requestedOwner?.name ||
+          requestedOwner?.email ||
+          actor.name ||
+          actor.email ||
+          "Admin",
+      );
+    }
 
     return NextResponse.json({ ok: true, visit }, { status: 201 });
   } catch (error) {
