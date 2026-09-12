@@ -444,6 +444,7 @@ export default function SiteAssessmentPublicClient({
   const [skippedSteps, setSkippedSteps] = useState<Record<number, boolean>>({});
   const [activeLoadId, setActiveLoadId] = useState<number | null>(null);
   const [loadEditorSnapshot, setLoadEditorSnapshot] = useState<Load | null>(null);
+  const [expandedLoadKinds, setExpandedLoadKinds] = useState<Record<string, boolean>>({});
   const [evidenceNames, setEvidenceNames] = useState<Record<string, string>>({});
   useEffect(() => {
     try {
@@ -463,6 +464,7 @@ export default function SiteAssessmentPublicClient({
           completedSteps: Record<number, boolean>;
           skippedSteps: Record<number, boolean>;
           evidenceNames: Record<string, string>;
+          expandedLoadKinds: Record<string, boolean>;
         }>;
         if (parsed.loads) setLoads(parsed.loads);
         if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
@@ -476,6 +478,8 @@ export default function SiteAssessmentPublicClient({
         if (parsed.completedSteps) setCompletedSteps(parsed.completedSteps);
         if (parsed.skippedSteps) setSkippedSteps(parsed.skippedSteps);
         if (parsed.evidenceNames) setEvidenceNames(parsed.evidenceNames);
+        if (parsed.expandedLoadKinds)
+          setExpandedLoadKinds(parsed.expandedLoadKinds);
       }
     } catch {
       localStorage.removeItem(storageKey);
@@ -497,6 +501,7 @@ export default function SiteAssessmentPublicClient({
           completedSteps,
           skippedSteps,
           evidenceNames,
+          expandedLoadKinds,
         }),
       );
   }, [
@@ -510,6 +515,7 @@ export default function SiteAssessmentPublicClient({
     siteDetails,
     skippedSteps,
     evidenceNames,
+    expandedLoadKinds,
     storageKey,
   ]);
   const clearDraft = () => {
@@ -524,12 +530,21 @@ export default function SiteAssessmentPublicClient({
     setSkippedSteps({});
     setActiveLoadId(null);
     setLoadEditorSnapshot(null);
+    setExpandedLoadKinds({});
     setEvidenceNames({});
     localStorage.removeItem(storageKey);
   };
   const openLoad = (load: Load) => {
     setLoadEditorSnapshot(structuredClone(load));
     setActiveLoadId(load.id);
+    setActiveStep(1);
+    setExpandedLoadKinds((current) => ({ ...current, [load.kind]: true }));
+    window.setTimeout(() => {
+      document.getElementById(`assessment-load-${load.id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
   };
   const finishLoad = () => {
     setActiveLoadId(null);
@@ -573,6 +588,7 @@ export default function SiteAssessmentPublicClient({
     ]);
     setLoadEditorSnapshot(null);
     setActiveLoadId(id);
+    setExpandedLoadKinds((current) => ({ ...current, [preset.key]: true }));
   };
   const addUnknown = () => {
     const id = Date.now();
@@ -599,6 +615,7 @@ export default function SiteAssessmentPublicClient({
     ]);
     setLoadEditorSnapshot(null);
     setActiveLoadId(id);
+    setExpandedLoadKinds((current) => ({ ...current, unknown: true }));
   };
   const edit = (id: number, patch: Partial<Load>) =>
     setLoads((current) =>
@@ -767,6 +784,17 @@ export default function SiteAssessmentPublicClient({
       items: presets.filter((preset) => preset.group === group),
     }),
   );
+  const loadGroups = Array.from(new Set(loads.map((load) => load.kind))).map(
+    (kind) => ({
+      kind,
+      name: presets.find((preset) => preset.key === kind)?.name ||
+        loads.find((load) => load.kind === kind)?.name ||
+        "Unknown equipment",
+      loads: loads
+        .map((load, index) => ({ load, index }))
+        .filter(({ load }) => load.kind === kind),
+    }),
+  );
   const changeStep = (nextStep: number, state?: "complete" | "skip") => {
     if (state === "complete") {
       setCompletedSteps((current) => ({ ...current, [activeStep]: true }));
@@ -800,6 +828,7 @@ export default function SiteAssessmentPublicClient({
     setLoads((current) => [...current, copy]);
     setLoadEditorSnapshot(null);
     setActiveLoadId(id);
+    setExpandedLoadKinds((current) => ({ ...current, [load.kind]: true }));
   };
   return (
     <main
@@ -820,6 +849,7 @@ export default function SiteAssessmentPublicClient({
           activeStep={activeStep}
           completedSteps={completedSteps}
           skippedSteps={skippedSteps}
+          onStepSelect={(index) => changeStep(index)}
         />
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm text-cyan-100">
           <span>
@@ -919,18 +949,48 @@ export default function SiteAssessmentPublicClient({
             + Unknown equipment
           </button>
           <div className="mt-5 grid gap-3">
-            {loads.map((load, index) => (
-              <LoadSummaryCard
-                key={load.id}
-                load={load}
-                index={index}
-                dailyWh={loadWh(load)}
-                onEdit={() => openLoad(load)}
-                onDuplicate={() => duplicateLoad(load)}
-                onRemove={() =>
-                  setLoads((current) => current.filter((item) => item.id !== load.id))
-                }
-              />
+            {loadGroups.map((group) => (
+              <section key={group.kind} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/45">
+                <button
+                  type="button"
+                  onClick={() => setExpandedLoadKinds((current) => ({
+                    ...current,
+                    [group.kind]: !current[group.kind],
+                  }))}
+                  className="flex w-full items-center justify-between gap-3 p-4 text-left"
+                  aria-expanded={Boolean(expandedLoadKinds[group.kind])}
+                >
+                  <span className="font-black text-cyan-100">{expandedLoadKinds[group.kind] ? "⌄" : "›"} {group.name} <span className="text-sm text-slate-400">({group.loads.length})</span></span>
+                  <span className="text-xs font-bold text-slate-400">{expandedLoadKinds[group.kind] ? "Hide" : "View loads"}</span>
+                </button>
+                <div hidden={!expandedLoadKinds[group.kind]} className="border-t border-white/10 p-3">
+                  <div className="grid gap-3">
+                    {group.loads.map(({ load, index }) => (
+                      <div key={load.id}>
+                        <LoadSummaryCard
+                          load={load}
+                          index={index}
+                          dailyWh={loadWh(load)}
+                          onEdit={() => openLoad(load)}
+                          onDuplicate={() => duplicateLoad(load)}
+                          onRemove={() =>
+                            setLoads((current) => current.filter((item) => item.id !== load.id))
+                          }
+                        />
+                        <LoadCard
+                          load={load}
+                          index={index}
+                          isOpen={activeLoadId === load.id}
+                          edit={edit}
+                          detail={detail}
+                          onCancel={cancelLoad}
+                          onSave={finishLoad}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
             ))}
           </div>
           <div className="mt-5 rounded-2xl border border-cyan-400/30 bg-cyan-400/5 p-4">
@@ -939,18 +999,6 @@ export default function SiteAssessmentPublicClient({
               {loads.length} loads | {(connected / 1000).toFixed(2)} kW connected | {(daily / 1000).toFixed(2)} kWh/day | {unknown} unknown ratings
             </p>
           </div>
-          {loads.map((load, index) => (
-            <LoadCard
-              key={`editor-${load.id}`}
-              load={load}
-              index={index}
-              isOpen={activeLoadId === load.id}
-              edit={edit}
-              detail={detail}
-              onCancel={cancelLoad}
-              onSave={finishLoad}
-            />
-          ))}
         </section>
         </div>
         <div hidden={activeStep !== 2}>
@@ -1454,10 +1502,12 @@ function WizardProgress({
   activeStep,
   completedSteps,
   skippedSteps,
+  onStepSelect,
 }: {
   activeStep: number;
   completedSteps: Record<number, boolean>;
   skippedSteps: Record<number, boolean>;
+  onStepSelect: (index: number) => void;
 }) {
   return (
     <section className="rounded-2xl border border-cyan-400/25 bg-slate-900/90 p-4">
@@ -1474,12 +1524,21 @@ function WizardProgress({
                 ? "●"
                 : "○";
           return (
-            <span
+            <button
+              type="button"
               key={step}
-              className={index === activeStep ? "text-cyan-200" : skippedSteps[index] ? "text-amber-200" : "text-slate-400"}
+              onClick={() => onStepSelect(index)}
+              aria-current={index === activeStep ? "step" : undefined}
+              className={`rounded px-1 py-0.5 text-left transition hover:bg-white/10 hover:text-cyan-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 ${
+                index === activeStep
+                  ? "text-cyan-200"
+                  : skippedSteps[index]
+                    ? "text-amber-200"
+                    : "text-slate-400"
+              }`}
             >
               {marker} {step}
-            </span>
+            </button>
           );
         })}
       </div>
