@@ -472,6 +472,11 @@ export default function SiteAssessmentPublicClient({
   const [isSearchingCatalog, setIsSearchingCatalog] = useState(false);
   const [catalogError, setCatalogError] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
+  const [reportShared, setReportShared] = useState(Boolean(visit.assessmentReport));
+  const [isRevisingReport, setIsRevisingReport] = useState(false);
+  const [isSendingReport, setIsSendingReport] = useState(false);
+  const [deliveryMessage, setDeliveryMessage] = useState("");
+  const [deliveryError, setDeliveryError] = useState("");
   const [publishMessage, setPublishMessage] = useState(() =>
     visit.assessmentReport
       ? "This site assessment report has already been published. Open the Site Visit workspace to review the final report."
@@ -830,6 +835,7 @@ export default function SiteAssessmentPublicClient({
     home,
     electrical,
     siteDetails,
+    evidenceNames,
     calculation: {
       connectedKw: connected / 1000,
       dailyKwh: daily / 1000,
@@ -940,6 +946,68 @@ export default function SiteAssessmentPublicClient({
     customerAcceptedReport &&
     technicianSignatureName.trim().length >= 2 &&
     technicianAcceptedReport;
+  const beginReportRevision = () => {
+    const published = visit.assessmentReport;
+    if (!published || !window.confirm("Open this assessment for revision? The existing report will be replaced only when you generate the revised report.")) return;
+    const saved = published.assessment as {
+      loads?: Load[];
+      home?: typeof emptyHome;
+      electrical?: typeof emptyElectrical;
+      siteDetails?: typeof emptySiteDetails;
+    };
+    if (Array.isArray(saved.loads)) setLoads(saved.loads);
+    if (saved.home) setHome({ ...emptyHome, ...saved.home });
+    if (saved.electrical) setElectrical({ ...emptyElectrical, ...saved.electrical });
+    if (saved.siteDetails) setSiteDetails({ ...emptySiteDetails, ...saved.siteDetails });
+    setRecommendationType(published.recommendation.type);
+    setSelectedProduct(
+      published.recommendation.type === "CATALOG_PRODUCT" &&
+        published.recommendation.productName &&
+        published.recommendation.productUrl
+        ? {
+            productName: published.recommendation.productName,
+            productUrl: published.recommendation.productUrl,
+            price: published.recommendation.productPrice || 0,
+            productCategory: published.recommendation.productCategory || "Betech system",
+            shortDescription: null,
+            availability: "Previously selected Betech system",
+          }
+        : null,
+    );
+    setRecommendationNotes(published.recommendation.notes || "");
+    setTiktokUrl(published.recommendation.tiktokUrl || "");
+    setCustomerSignatureName(published.signatures?.customerName || visit.customerName || "");
+    setCustomerAcceptedReport(Boolean(published.signatures?.customerAccepted));
+    setTechnicianSignatureName(visit.assignedTechnicianName || published.signatures?.technicianName || "");
+    setTechnicianAcceptedReport(Boolean(published.signatures?.technicianAccepted));
+    setIsRevisingReport(true);
+    setPublishMessage("");
+    setPublishError("");
+    setDeliveryMessage("");
+    setDeliveryError("");
+    setActiveStep(8);
+    window.requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
+  };
+  const sendPublishedReport = async () => {
+    if (isSendingReport || !reportShared || isRevisingReport) return;
+    setIsSendingReport(true);
+    setDeliveryError("");
+    setDeliveryMessage("");
+    try {
+      const response = await fetch("/api/site-assessment/send-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: assessmentToken }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "The report could not be sent to the customer.");
+      setDeliveryMessage("The current report has been sent to the customer by SMS and, where available, email.");
+    } catch (error) {
+      setDeliveryError(error instanceof Error ? error.message : "The report could not be sent to the customer.");
+    } finally {
+      setIsSendingReport(false);
+    }
+  };
   const publishReport = async () => {
     if (isPublishing || !loads.length) return;
     if (recommendationType === "CATALOG_PRODUCT" && !selectedProduct) {
@@ -958,6 +1026,7 @@ export default function SiteAssessmentPublicClient({
     try {
       const form = new FormData();
       form.set("token", assessmentToken);
+      form.set("revision", String(isRevisingReport));
       form.set("report", JSON.stringify({
         assessment: assessmentPayload(),
         aiReview,
@@ -994,7 +1063,9 @@ export default function SiteAssessmentPublicClient({
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error || "Could not publish the site assessment report.");
       localStorage.removeItem(storageKey);
-      setPublishMessage("Report published. The customer has been notified by SMS and, when an email address is available, by email with the PDF attached.");
+      setReportShared(true);
+      setIsRevisingReport(false);
+      setPublishMessage("Report shared. The customer has been notified by SMS and, when an email address is available, by email with the PDF attached.");
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : "Could not publish the site assessment report.");
     } finally {
@@ -1871,6 +1942,11 @@ export default function SiteAssessmentPublicClient({
               </label>
             </div>
           </div>
+          {isRevisingReport ? (
+            <p className="mt-4 rounded-xl border border-amber-300/40 bg-amber-400/10 p-3 text-sm font-bold text-amber-100">
+              OUTDATED — REGENERATE REQUIRED. The previous report is not available to send while this revised assessment is being prepared.
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={() => void publishReport()}
@@ -1878,10 +1954,12 @@ export default function SiteAssessmentPublicClient({
             className="mt-5 w-full rounded-xl bg-emerald-400 py-4 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isPublishing
-              ? "Generating report..."
+              ? isRevisingReport ? "Regenerating report..." : "Generating report..."
               : publishMessage
                 ? "Report shared"
-                : "Generate report & share proposal"}
+                : isRevisingReport
+                  ? "Regenerate report & share proposal"
+                  : "Generate report & share proposal"}
           </button>
           {!signaturesComplete && !publishMessage ? (
             <p className="mt-3 text-sm text-amber-100">
@@ -1890,6 +1968,37 @@ export default function SiteAssessmentPublicClient({
           ) : null}
           {publishError ? <p className="mt-3 text-sm font-semibold text-rose-200">{publishError}</p> : null}
           {publishMessage ? <p className="mt-3 text-sm font-semibold text-emerald-200">{publishMessage}</p> : null}
+          {reportShared && !isRevisingReport ? (
+            <div className="mt-5 rounded-2xl border border-cyan-300/30 bg-slate-950/60 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Published report actions</p>
+              <p className="mt-1 text-sm text-slate-300">Download the professional customer PDF, send the current version again, or open a controlled revision. A revision replaces the earlier report only after it is regenerated.</p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <a
+                  href={`/api/site-assessment/report/pdf?token=${encodeURIComponent(assessmentToken)}`}
+                  className="rounded-xl bg-cyan-400 px-4 py-3 text-sm font-black text-slate-950"
+                >
+                  Download professional PDF
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void sendPublishedReport()}
+                  disabled={isSendingReport}
+                  className="rounded-xl border border-emerald-300/50 px-4 py-3 text-sm font-black text-emerald-100 disabled:opacity-40"
+                >
+                  {isSendingReport ? "Sending report..." : "Send to customer"}
+                </button>
+                <button
+                  type="button"
+                  onClick={beginReportRevision}
+                  className="rounded-xl border border-amber-300/50 px-4 py-3 text-sm font-black text-amber-100"
+                >
+                  Edit & regenerate report
+                </button>
+              </div>
+              {deliveryMessage ? <p className="mt-3 text-sm font-semibold text-emerald-200">{deliveryMessage}</p> : null}
+              {deliveryError ? <p className="mt-3 text-sm font-semibold text-rose-200">{deliveryError}</p> : null}
+            </div>
+          ) : null}
         </section>
         </div>
         <WizardNavigation

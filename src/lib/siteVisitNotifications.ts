@@ -15,7 +15,7 @@ import {
 
 type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; paymentStatus: string; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
 type RecipientType = "CUSTOMER" | "TECHNICIAN";
-type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS";
+type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS";
 
 const customerUrl = (id: string) => `https://www.betech.co.ke/account/site-visits/${id}`;
 const customerReportUrl = (id: string) => `https://www.betech.co.ke/account/site-visits/${id}/report`;
@@ -70,16 +70,17 @@ export async function dispatchSiteVisitTechnicianAssignment(visit: Visit, previo
 export async function dispatchSiteAssessmentReportPublished(
   visit: Visit,
   report: SiteAssessmentReport,
+  options: { resend?: boolean; deliveryVersion?: string } = {},
 ) {
   const reportUrl = customerReportUrl(visit.id);
   const recommendation = reportRecommendationLabel(report);
   const sms = sendOnce({
     visitId: visit.id,
-    type: "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS",
+    type: options.resend ? "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS" : "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS",
     recipient: visit.customerPhone,
     recipientType: "CUSTOMER",
-    message: `Betech Solar: Your site assessment report for ${visit.visitRef} is ready. Recommendation: ${recommendation}. View it securely in your account: ${reportUrl}`,
-    version: report.submittedAt,
+    message: `Betech Solar: Your site assessment report for ${visit.visitRef} is ${options.resend ? "available again" : "ready"}. Recommendation: ${recommendation}. View it securely in your account: ${reportUrl}`,
+    version: options.deliveryVersion || report.submittedAt,
   });
   const email = String(visit.customerEmail || "").trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -94,8 +95,8 @@ export async function dispatchSiteAssessmentReportPublished(
     });
     await sendGeneralCustomerNotificationEmail({
       to: email,
-      subject: `Your Betech site assessment report — ${visit.visitRef}`,
-      title: "Your site assessment report is ready",
+      subject: `${options.resend ? "Your Betech site assessment report — resent" : "Your Betech site assessment report"} — ${visit.visitRef}`,
+      title: options.resend ? "Your site assessment report has been sent again" : "Your site assessment report is ready",
       intro: `Hello ${visit.customerName},`,
       bodyHtml: `<p>Our field assessment for <strong>${escapeHtml(visit.visitRef)}</strong> is complete.</p><p><strong>Recommendation:</strong> ${escapeHtml(recommendation)}</p>${report.recommendation.notes ? `<p>${escapeHtml(report.recommendation.notes)}</p>` : ""}<p>Your report is attached as a PDF and is also available securely in your Betech account.</p>`,
       bodyText: `Our field assessment for ${visit.visitRef} is complete. Recommendation: ${recommendation}.${report.recommendation.notes ? ` ${report.recommendation.notes}` : ""} View your report securely: ${reportUrl}`,

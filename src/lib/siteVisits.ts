@@ -1257,6 +1257,7 @@ export async function publishSiteAssessmentReport(
   visitId: string,
   report: SiteAssessmentReport,
   actor: { id: string; name: string | null; email: string | null },
+  options: { allowRevision?: boolean } = {},
 ) {
   await ensureSiteVisitsSchema();
   const publishedRows = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
@@ -1274,7 +1275,7 @@ export async function publishSiteAssessmentReport(
       "status" = CASE WHEN "status" IN ('PENDING', 'SCHEDULED') THEN 'VISITED' ELSE "status" END,
       "completedAt" = CASE WHEN "status" IN ('PENDING', 'SCHEDULED') THEN CURRENT_TIMESTAMP ELSE "completedAt" END,
       "updatedAt" = CURRENT_TIMESTAMP
-    WHERE "id" = ${visitId} AND "assessmentReport" IS NULL
+    WHERE "id" = ${visitId} AND ("assessmentReport" IS NULL OR ${Boolean(options.allowRevision)})
     RETURNING ${SITE_VISIT_SELECT_SQL}
   `);
   const visit = publishedRows[0] ? serializeSiteVisit(publishedRows[0]) : null;
@@ -1282,15 +1283,16 @@ export async function publishSiteAssessmentReport(
 
   await recordSiteVisitEvent({
     siteVisitId: visit.id,
-    eventType: "SITE_ASSESSMENT_REPORT_PUBLISHED",
-    eventLabel: "Site assessment report published",
-    eventDetail: reportRecommendationLabel(report),
+    eventType: options.allowRevision ? "SITE_ASSESSMENT_REPORT_REGENERATED" : "SITE_ASSESSMENT_REPORT_PUBLISHED",
+    eventLabel: options.allowRevision ? "Site assessment report regenerated" : "Site assessment report published",
+    eventDetail: `${reportRecommendationLabel(report)} · Version ${report.version}`,
     actorUserId: actor.id,
     actorName: actor.name ?? actor.email ?? "Betech Technician",
     metadata: {
       recommendationType: report.recommendation.type,
       productName: report.recommendation.productName || null,
       tiktokUrl: report.recommendation.tiktokUrl || null,
+      version: report.version,
     },
   });
   return visit;

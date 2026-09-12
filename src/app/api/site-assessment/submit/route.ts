@@ -19,7 +19,8 @@ export async function POST(request: Request) {
   if (!visit || visit.assignedTechnicianId !== tokenPayload.technicianId) {
     return NextResponse.json({ ok: false, error: "This assessment is no longer assigned to this link." }, { status: 403 });
   }
-  if (visit.assessmentReport) {
+  const revision = String(form.get("revision") || "") === "true";
+  if (visit.assessmentReport && !revision) {
     return NextResponse.json({ ok: false, error: "This site assessment report has already been published." }, { status: 409 });
   }
 
@@ -55,11 +56,13 @@ export async function POST(request: Request) {
       // verified Betech identity rather than trusting a browser-entered name.
       technicianName: actor.name,
     },
-    version: 1,
+    version: revision && visit.assessmentReport ? visit.assessmentReport.version + 1 : 1,
     submittedAt: new Date().toISOString(),
     submittedByName: actor.name,
   };
-  const published = await publishSiteAssessmentReport(visit.id, report, actor);
+  const published = await publishSiteAssessmentReport(visit.id, report, actor, {
+    allowRevision: revision,
+  });
   if (!published) {
     return NextResponse.json({ ok: false, error: "This site assessment report has already been published." }, { status: 409 });
   }
