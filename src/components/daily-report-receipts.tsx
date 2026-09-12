@@ -116,6 +116,13 @@ const formatProjectStageLabel = (value?: string | null) => {
   }
 };
 
+const isCancelledReceipt = (receipt: DailyReportReceiptRow) => {
+  const cancelledStates = ["CANCELED", "CANCELLED"];
+  return [receipt.status, receipt.projectStage, receipt.podDeliveryStatus].some((value) =>
+    cancelledStates.includes(String(value ?? "").trim().toUpperCase()),
+  );
+};
+
 function buildCustomerProfileHref(receipt: Pick<DailyReportReceiptRow, "customerName" | "customerPhone" | "customerEmail">) {
   return buildAdminCustomerProfileHref({
     phone: receipt.customerPhone,
@@ -316,29 +323,28 @@ export default function DailyReportReceiptsPanel({
         if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
         if (!cancelled) {
           const arr = Array.isArray(data?.receipts) ? data.receipts : [];
+          const activeArr = arr.filter((receipt) => !isCancelledReceipt(receipt));
           setReceipts(arr);
           setLastFetchCount(arr.length);
           const totalSales =
             typeof data?.summary?.totalSales === "number"
               ? Number(data.summary.totalSales)
-              : arr.reduce((s: number, r: DailyReportReceiptRow) => s + Number(r.total ?? 0), 0);
+              : activeArr.reduce((s: number, r: DailyReportReceiptRow) => s + Number(r.total ?? 0), 0);
           const count =
             typeof data?.summary?.totalCount === "number"
               ? Number(data.summary.totalCount)
-              : typeof data?.paging?.totalCount === "number"
-                ? Number(data.paging.totalCount)
-                : arr.length;
+                : activeArr.length;
           onSummaryRef.current?.({
             totalSales,
             count,
-            podReceipts: Number(data?.summary?.podReceipts ?? arr.filter((receipt) => receipt.isPodDelivery).length),
+            podReceipts: Number(data?.summary?.podReceipts ?? activeArr.filter((receipt) => receipt.isPodDelivery).length),
             pendingProjectReceipts: Number(
               data?.summary?.pendingProjectReceipts ??
-                arr.filter((receipt) => receipt.isProjectReceipt && receipt.projectStage !== "COMPLETED_POSTED").length,
+                activeArr.filter((receipt) => receipt.isProjectReceipt && receipt.projectStage !== "COMPLETED_POSTED").length,
             ),
             completedProjectReceipts: Number(
               data?.summary?.completedProjectReceipts ??
-                arr.filter((receipt) => receipt.isProjectReceipt && receipt.projectStage === "COMPLETED_POSTED").length,
+                activeArr.filter((receipt) => receipt.isProjectReceipt && receipt.projectStage === "COMPLETED_POSTED").length,
             ),
           });
         }
@@ -381,8 +387,9 @@ export default function DailyReportReceiptsPanel({
   }, [attendantId, sessionAttendantId]);
 
   const summary = useMemo(() => {
-    const totalSales = receipts.reduce((sum, receipt) => sum + Number(receipt.total ?? 0), 0);
-    return { totalSales, count: receipts.length };
+    const activeReceipts = receipts.filter((receipt) => !isCancelledReceipt(receipt));
+    const totalSales = activeReceipts.reduce((sum, receipt) => sum + Number(receipt.total ?? 0), 0);
+    return { totalSales, count: activeReceipts.length };
   }, [receipts]);
 
   const openPodAction = (receipt: DailyReportReceiptRow) => {
@@ -646,6 +653,7 @@ export default function DailyReportReceiptsPanel({
           <div className="space-y-2">
             {receipts.map((receipt) => {
               const customerProfileHref = buildCustomerProfileHref(receipt);
+              const cancelled = isCancelledReceipt(receipt);
               const projectStageLabel = receipt.isProjectReceipt ? formatProjectStageLabel(receipt.projectStage) : null;
               const projectPaymentLabel = receipt.isProjectReceipt
                 ? String(receipt.projectPaymentStatus ?? "").replace(/_/g, " ").trim()
@@ -653,7 +661,11 @@ export default function DailyReportReceiptsPanel({
               return (
               <div
                 key={receipt.id}
-                className="rounded-[18px] border border-white/10 bg-white/[0.03] p-3 sm:rounded-[22px] sm:p-4"
+                className={`rounded-[18px] border p-3 sm:rounded-[22px] sm:p-4 ${
+                  cancelled
+                    ? "border-rose-400/30 bg-rose-500/[0.05]"
+                    : "border-white/10 bg-white/[0.03]"
+                }`}
               >
                 <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start xl:grid-cols-[72px_minmax(0,1.35fr)_minmax(0,.7fr)_minmax(0,.8fr)_minmax(0,.9fr)_minmax(0,1.05fr)] xl:items-center">
                   <div>
@@ -679,7 +691,7 @@ export default function DailyReportReceiptsPanel({
                     <div className="mt-1 text-xs text-slate-500">{receipt.attendantName ?? "Attendant unknown"}</div>
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold text-emerald-300">{formatKES(receipt.total)}</div>
+                    <div className={cancelled ? "font-semibold text-rose-200" : "font-semibold text-emerald-300"}>{formatKES(receipt.total)}</div>
                     {receipt.isPodDelivery && receipt.podDeliveryFee != null ? (
                       <div className="mt-1 text-xs text-emerald-200">Fee {formatKES(receipt.podDeliveryFee)}</div>
                     ) : (
@@ -689,15 +701,24 @@ export default function DailyReportReceiptsPanel({
                   <div className="min-w-0">
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
-                        projectStageLabel
+                        cancelled
+                          ? "border border-rose-400/40 bg-rose-500/15 text-rose-100"
+                          : projectStageLabel
                           ? "border border-amber-400/30 bg-amber-500/10 text-amber-100"
                           : "border border-white/10 bg-white/[0.03] text-slate-200"
                       }`}
                     >
-                      {receipt.isPodDelivery
+                      {cancelled
+                        ? "Cancelled"
+                        : receipt.isPodDelivery
                         ? `POD ${String(receipt.podDeliveryStatus ?? "pending").replace(/_/g, " ")}`
                         : projectStageLabel ?? String(receipt.paymentStatus ?? receipt.status ?? "open").replace(/_/g, " ")}
                     </span>
+                    {cancelled ? (
+                      <div className="mt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-rose-200/80">
+                        Excluded from sales and commission totals
+                      </div>
+                    ) : null}
                     {projectStageLabel && projectPaymentLabel ? (
                       <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-slate-500">
                         Payment {projectPaymentLabel}
@@ -706,7 +727,7 @@ export default function DailyReportReceiptsPanel({
                     <div className="mt-2 text-xs text-slate-500">{formatDateTime(receipt.createdAt)}</div>
                   </div>
                   <div className="grid min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:col-span-2 xl:col-span-1 xl:grid-cols-1 2xl:grid-cols-2">
-                    {receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
+                    {!cancelled && receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
                       <button
                         type="button"
                         onClick={() => openPodAction(receipt)}
@@ -715,7 +736,7 @@ export default function DailyReportReceiptsPanel({
                         Mark POD delivered
                       </button>
                     ) : null}
-                    {receipt.isPodDelivery && receipt.source === "pos" ? (
+                    {!cancelled && receipt.isPodDelivery && receipt.source === "pos" ? (
                       <button
                         type="button"
                         onClick={() => openFeeAction(receipt)}
