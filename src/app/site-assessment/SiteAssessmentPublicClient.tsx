@@ -150,7 +150,30 @@ const readNumber = (value: NumericField | null) =>
   typeof value === "number" ? value : 0;
 const numberOrBlank = (value: string): NumericField =>
   value === "" ? "" : Number(value);
-const draftStorageKey = "betech-site-assessment-draft-v1";
+const legacyDraftStorageKey = "betech-site-assessment-draft-v1";
+const draftStorageKey = (visitId: string) =>
+  `betech-site-assessment-draft-v2:${visitId}`;
+const assessmentSteps = [
+  "Project",
+  "Loads",
+  "Electrical",
+  "Goal",
+  "Roof",
+  "Equipment",
+  "Evidence",
+  "Review",
+  "Analysis",
+] as const;
+const evidenceCategories = [
+  "Meter box",
+  "Open main DB",
+  "Earthing point",
+  "Roof wide",
+  "Roof material",
+  "Roof horizons",
+  "Inverter/battery wall",
+  "Cable route",
+] as const;
 const emptyHome = {
   bedrooms: "",
   type: "House",
@@ -168,6 +191,11 @@ const emptyElectrical = {
   systemGoal: "Backup during outages",
   backupHours: "8",
   budget: "",
+};
+const emptySiteDetails: Record<string, string> = {
+  supplyType: "Single phase", mainBreakerRating: "", solarBreakerSlots: "", earthingCondition: "Visually confirmed", earthWireNotes: "",
+  roofType: "Corrugated iron", roofCondition: "Good", roofWidth: "", roofLength: "", roofPitch: "", shading: "None", roofAccess: "Standard ladder", roofObstructions: "",
+  inverterLocation: "Indoor", batteryArea: "Dry and ventilated", arrayToInverter: "", inverterToDb: "", inverterToBattery: "", cableRoute: "Easy",
 };
 const lightAreas = [
   "Living area",
@@ -402,56 +430,122 @@ export default function SiteAssessmentPublicClient({
   assessmentToken: string;
 }) {
   const assessmentRootRef = useRef<HTMLElement | null>(null);
+  const storageKey = draftStorageKey(visit.id);
   const [loads, setLoads] = useState<Load[]>([]);
   const [home, setHome] = useState(emptyHome);
   const [electrical, setElectrical] = useState(emptyElectrical);
+  const [siteDetails, setSiteDetails] = useState(emptySiteDetails);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [aiReview, setAiReview] = useState<AssessmentAiReview | null>(null);
   const [isAnalysing, setIsAnalysing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
+  const [activeStep, setActiveStep] = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({});
+  const [skippedSteps, setSkippedSteps] = useState<Record<number, boolean>>({});
+  const [activeLoadId, setActiveLoadId] = useState<number | null>(null);
+  const [loadEditorSnapshot, setLoadEditorSnapshot] = useState<Load | null>(null);
+  const [evidenceNames, setEvidenceNames] = useState<Record<string, string>>({});
   useEffect(() => {
     try {
-      const draft = localStorage.getItem(draftStorageKey);
+      // Scope drafts to a visit. A field device can safely hold several
+      // assessments without one technician's work replacing another's.
+      const draft =
+        localStorage.getItem(storageKey) ||
+        localStorage.getItem(legacyDraftStorageKey);
       if (draft) {
         const parsed = JSON.parse(draft) as Partial<{
           loads: Load[];
           home: typeof emptyHome;
           electrical: typeof emptyElectrical;
+          siteDetails: typeof emptySiteDetails;
           aiReview: AssessmentAiReview;
+          activeStep: number;
+          completedSteps: Record<number, boolean>;
+          skippedSteps: Record<number, boolean>;
+          evidenceNames: Record<string, string>;
         }>;
         if (parsed.loads) setLoads(parsed.loads);
         if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
         if (parsed.electrical)
           setElectrical({ ...emptyElectrical, ...parsed.electrical });
+        if (parsed.siteDetails)
+          setSiteDetails({ ...emptySiteDetails, ...parsed.siteDetails });
         if (parsed.aiReview) setAiReview(parsed.aiReview);
+        if (typeof parsed.activeStep === "number")
+          setActiveStep(Math.min(assessmentSteps.length - 1, Math.max(0, parsed.activeStep)));
+        if (parsed.completedSteps) setCompletedSteps(parsed.completedSteps);
+        if (parsed.skippedSteps) setSkippedSteps(parsed.skippedSteps);
+        if (parsed.evidenceNames) setEvidenceNames(parsed.evidenceNames);
       }
     } catch {
-      localStorage.removeItem(draftStorageKey);
+      localStorage.removeItem(storageKey);
     } finally {
       setDraftLoaded(true);
     }
-  }, []);
+  }, [storageKey]);
   useEffect(() => {
     if (draftLoaded)
       localStorage.setItem(
-        draftStorageKey,
-        JSON.stringify({ loads, home, electrical, aiReview }),
+        storageKey,
+        JSON.stringify({
+          loads,
+          home,
+          electrical,
+          siteDetails,
+          aiReview,
+          activeStep,
+          completedSteps,
+          skippedSteps,
+          evidenceNames,
+        }),
       );
-  }, [aiReview, draftLoaded, electrical, home, loads]);
+  }, [
+    activeStep,
+    aiReview,
+    completedSteps,
+    draftLoaded,
+    electrical,
+    home,
+    loads,
+    siteDetails,
+    skippedSteps,
+    evidenceNames,
+    storageKey,
+  ]);
   const clearDraft = () => {
+    if (!window.confirm("Clear the saved site-assessment draft from this device? This cannot be undone.")) return;
     setLoads([]);
     setHome(emptyHome);
     setElectrical(emptyElectrical);
+    setSiteDetails(emptySiteDetails);
     setAiReview(null);
-    localStorage.removeItem(draftStorageKey);
+    setActiveStep(0);
+    setCompletedSteps({});
+    setSkippedSteps({});
+    setActiveLoadId(null);
+    setLoadEditorSnapshot(null);
+    setEvidenceNames({});
+    localStorage.removeItem(storageKey);
   };
-  const focusLoad = (id: number) => {
-    window.setTimeout(() => {
-      document.getElementById(`assessment-load-${id}`)?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
+  const openLoad = (load: Load) => {
+    setLoadEditorSnapshot(structuredClone(load));
+    setActiveLoadId(load.id);
+  };
+  const finishLoad = () => {
+    setActiveLoadId(null);
+    setLoadEditorSnapshot(null);
+  };
+  const cancelLoad = () => {
+    if (loadEditorSnapshot) {
+      setLoads((current) =>
+        current.map((load) =>
+          load.id === loadEditorSnapshot.id ? loadEditorSnapshot : load,
+        ),
+      );
+    } else if (activeLoadId !== null) {
+      setLoads((current) => current.filter((load) => load.id !== activeLoadId));
+    }
+    finishLoad();
   };
   const add = (preset: LoadPreset) => {
     const id = Date.now();
@@ -477,7 +571,8 @@ export default function SiteAssessmentPublicClient({
         details: profile.details || {},
       },
     ]);
-    focusLoad(id);
+    setLoadEditorSnapshot(null);
+    setActiveLoadId(id);
   };
   const addUnknown = () => {
     const id = Date.now();
@@ -502,7 +597,8 @@ export default function SiteAssessmentPublicClient({
         details: {},
       },
     ]);
-    focusLoad(id);
+    setLoadEditorSnapshot(null);
+    setActiveLoadId(id);
   };
   const edit = (id: number, patch: Partial<Load>) =>
     setLoads((current) =>
@@ -510,6 +606,8 @@ export default function SiteAssessmentPublicClient({
     );
   const detail = (load: Load, key: string, value: string) =>
     edit(load.id, { details: { ...load.details, [key]: value } });
+  const setSiteDetail = (key: string, value: string) =>
+    setSiteDetails((current) => ({ ...current, [key]: value }));
   const loadWh = (load: Load) =>
     !readNumber(load.watts)
       ? 0
@@ -621,6 +719,7 @@ export default function SiteAssessmentPublicClient({
           loads,
           home,
           electrical,
+          siteDetails,
           calculation: {
             connectedKw: connected / 1000,
             dailyKwh: daily / 1000,
@@ -668,6 +767,40 @@ export default function SiteAssessmentPublicClient({
       items: presets.filter((preset) => preset.group === group),
     }),
   );
+  const changeStep = (nextStep: number, state?: "complete" | "skip") => {
+    if (state === "complete") {
+      setCompletedSteps((current) => ({ ...current, [activeStep]: true }));
+      setSkippedSteps((current) => {
+        const next = { ...current };
+        delete next[activeStep];
+        return next;
+      });
+    }
+    if (state === "skip") {
+      setSkippedSteps((current) => ({ ...current, [activeStep]: true }));
+      setCompletedSteps((current) => {
+        const next = { ...current };
+        delete next[activeStep];
+        return next;
+      });
+    }
+    setActiveLoadId(null);
+    setActiveStep(Math.min(assessmentSteps.length - 1, Math.max(0, nextStep)));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const stepStatus = (index: number) =>
+    skippedSteps[index]
+      ? "NOT ASSESSED"
+      : completedSteps[index]
+        ? "COMPLETE"
+        : "IN PROGRESS";
+  const duplicateLoad = (load: Load) => {
+    const id = Date.now();
+    const copy = { ...structuredClone(load), id };
+    setLoads((current) => [...current, copy]);
+    setLoadEditorSnapshot(null);
+    setActiveLoadId(id);
+  };
   return (
     <main
       ref={assessmentRootRef}
@@ -683,6 +816,11 @@ export default function SiteAssessmentPublicClient({
             {visit.visitRef} · {visit.customerName}
           </p>
         </header>
+        <WizardProgress
+          activeStep={activeStep}
+          completedSteps={completedSteps}
+          skippedSteps={skippedSteps}
+        />
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm text-cyan-100">
           <span>
             {draftLoaded
@@ -697,6 +835,7 @@ export default function SiteAssessmentPublicClient({
             Clear saved draft
           </button>
         </div>
+        <div hidden={activeStep !== 0}>
         <section className="rounded-3xl bg-slate-900 p-5">
           <h2 className="text-xl font-bold">Home and project details</h2>
           <p className="mt-1 text-sm text-slate-400">
@@ -743,11 +882,13 @@ export default function SiteAssessmentPublicClient({
             </Field>
           </div>
         </section>
+        </div>
+        <div hidden={activeStep !== 1}>
         <section className="rounded-3xl bg-slate-900 p-5">
           <h2 className="text-xl font-bold">Add customer loads</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Select each load type once. Use “Add another” on its card for
-            another TV, room of lights, or machine.
+            Add each appliance, then save its technical details into a compact
+            load card. Only the load you are editing is expanded.
           </p>
           {groups.map(({ group, items }) => (
             <div key={group} className="mt-5">
@@ -756,16 +897,14 @@ export default function SiteAssessmentPublicClient({
               </h3>
               <div className="mt-2 flex flex-wrap gap-2">
                 {items.map((preset) => {
-                  const exists = loads.some((load) => load.kind === preset.key);
                   return (
                     <button
                       type="button"
                       key={preset.key}
-                      disabled={exists}
                       onClick={() => add(preset)}
-                      className="rounded-full border border-cyan-400/40 px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-500"
+                      className="rounded-full border border-cyan-400/40 px-3 py-2 text-sm font-bold"
                     >
-                      {exists ? `${preset.name} added` : `+ ${preset.name}`}
+                      + {preset.name}
                     </button>
                   );
                 })}
@@ -779,26 +918,42 @@ export default function SiteAssessmentPublicClient({
           >
             + Unknown equipment
           </button>
+          <div className="mt-5 grid gap-3">
+            {loads.map((load, index) => (
+              <LoadSummaryCard
+                key={load.id}
+                load={load}
+                index={index}
+                dailyWh={loadWh(load)}
+                onEdit={() => openLoad(load)}
+                onDuplicate={() => duplicateLoad(load)}
+                onRemove={() =>
+                  setLoads((current) => current.filter((item) => item.id !== load.id))
+                }
+              />
+            ))}
+          </div>
+          <div className="mt-5 rounded-2xl border border-cyan-400/30 bg-cyan-400/5 p-4">
+            <b className="text-cyan-100">Load summary</b>
+            <p className="mt-2 text-sm text-slate-200">
+              {loads.length} loads | {(connected / 1000).toFixed(2)} kW connected | {(daily / 1000).toFixed(2)} kWh/day | {unknown} unknown ratings
+            </p>
+          </div>
           {loads.map((load, index) => (
             <LoadCard
-              key={load.id}
+              key={`editor-${load.id}`}
               load={load}
               index={index}
-              addAnother={() => {
-                const preset = presets.find((item) => item.key === load.kind);
-                if (preset) add(preset);
-                else addUnknown();
-              }}
+              isOpen={activeLoadId === load.id}
               edit={edit}
               detail={detail}
-              remove={() =>
-                setLoads((current) =>
-                  current.filter((item) => item.id !== load.id),
-                )
-              }
+              onCancel={cancelLoad}
+              onSave={finishLoad}
             />
           ))}
         </section>
+        </div>
+        <div hidden={activeStep !== 2}>
         <Section title="Electrical supply and safety">
           <Field label="Meter and billing">
             <select
@@ -842,27 +997,27 @@ export default function SiteAssessmentPublicClient({
             </select>
           </Field>
           <Field label="Supply type">
-            <select className={input}>
+            <select className={input} value={siteDetails.supplyType} onChange={(event) => setSiteDetail("supplyType", event.target.value)}>
               <option>Single phase</option>
               <option>Three phase</option>
               <option>Unknown</option>
             </select>
           </Field>
           <Field label="Main breaker rating (A)">
-            <input className={input} type="number" />
+            <input className={input} type="number" value={siteDetails.mainBreakerRating} onChange={(event) => setSiteDetail("mainBreakerRating", event.target.value)} />
           </Field>
           <Field label="Available solar breaker slots">
-            <input className={input} type="number" />
+            <input className={input} type="number" value={siteDetails.solarBreakerSlots} onChange={(event) => setSiteDetail("solarBreakerSlots", event.target.value)} />
           </Field>
           <Field label="Earthing condition">
-            <select className={input}>
+            <select className={input} value={siteDetails.earthingCondition} onChange={(event) => setSiteDetail("earthingCondition", event.target.value)}>
               <option>Visually confirmed</option>
               <option>Needs verification</option>
               <option>Not visible</option>
             </select>
           </Field>
           <Field label="Earth wire gauge / notes">
-            <input className={input} />
+            <input className={input} value={siteDetails.earthWireNotes} onChange={(event) => setSiteDetail("earthWireNotes", event.target.value)} />
           </Field>
           {electrical.grid === "Connected to grid" && (
             <>
@@ -936,6 +1091,8 @@ export default function SiteAssessmentPublicClient({
             </>
           )}
         </Section>
+        </div>
+        <div hidden={activeStep !== 3}>
         <Section title="Customer energy goal and budget">
           <Field label="What does the customer want the solar system to do?">
             <select
@@ -981,9 +1138,11 @@ export default function SiteAssessmentPublicClient({
             />
           </Field>
         </Section>
+        </div>
+        <div hidden={activeStep !== 4}>
         <Section title="Roof, mounting and access">
           <Field label="Roof type">
-            <select className={input}>
+            <select className={input} value={siteDetails.roofType} onChange={(event) => setSiteDetail("roofType", event.target.value)}>
               <option>Corrugated iron</option>
               <option>Decra</option>
               <option>Tile</option>
@@ -992,23 +1151,23 @@ export default function SiteAssessmentPublicClient({
             </select>
           </Field>
           <Field label="Roof condition">
-            <select className={input}>
+            <select className={input} value={siteDetails.roofCondition} onChange={(event) => setSiteDetail("roofCondition", event.target.value)}>
               <option>Good</option>
               <option>Fair</option>
               <option>Rust, leaks or sagging</option>
             </select>
           </Field>
           <Field label="Usable width (m)">
-            <input className={input} type="number" />
+            <input className={input} type="number" value={siteDetails.roofWidth} onChange={(event) => setSiteDetail("roofWidth", event.target.value)} />
           </Field>
           <Field label="Usable length (m)">
-            <input className={input} type="number" />
+            <input className={input} type="number" value={siteDetails.roofLength} onChange={(event) => setSiteDetail("roofLength", event.target.value)} />
           </Field>
           <Field label="Roof pitch (degrees)">
-            <input className={input} type="number" />
+            <input className={input} type="number" value={siteDetails.roofPitch} onChange={(event) => setSiteDetail("roofPitch", event.target.value)} />
           </Field>
           <Field label="Shading">
-            <select className={input}>
+            <select className={input} value={siteDetails.shading} onChange={(event) => setSiteDetail("shading", event.target.value)}>
               <option>None</option>
               <option>Morning shade</option>
               <option>Afternoon shade</option>
@@ -1016,19 +1175,21 @@ export default function SiteAssessmentPublicClient({
             </select>
           </Field>
           <Field label="Access method">
-            <select className={input}>
+            <select className={input} value={siteDetails.roofAccess} onChange={(event) => setSiteDetail("roofAccess", event.target.value)}>
               <option>Standard ladder</option>
               <option>Scaffolding needed</option>
               <option>Harness / high-risk access</option>
             </select>
           </Field>
           <Field label="Obstructions">
-            <input className={input} placeholder="Trees, vents, HVAC" />
+            <input className={input} placeholder="Trees, vents, HVAC" value={siteDetails.roofObstructions} onChange={(event) => setSiteDetail("roofObstructions", event.target.value)} />
           </Field>
         </Section>
+        </div>
+        <div hidden={activeStep !== 5}>
         <Section title="Equipment room and cable route">
           <Field label="Inverter location">
-            <select className={input}>
+            <select className={input} value={siteDetails.inverterLocation} onChange={(event) => setSiteDetail("inverterLocation", event.target.value)}>
               <option>Indoor</option>
               <option>Utility room</option>
               <option>Garage</option>
@@ -1036,60 +1197,72 @@ export default function SiteAssessmentPublicClient({
             </select>
           </Field>
           <Field label="Battery area">
-            <select className={input}>
+            <select className={input} value={siteDetails.batteryArea} onChange={(event) => setSiteDetail("batteryArea", event.target.value)}>
               <option>Dry and ventilated</option>
               <option>Ventilation needed</option>
               <option>Unsuitable location</option>
             </select>
           </Field>
           <Field label="Array to inverter (m)">
-            <input className={input} type="number" />
+            <input className={input} type="number" value={siteDetails.arrayToInverter} onChange={(event) => setSiteDetail("arrayToInverter", event.target.value)} />
           </Field>
           <Field label="Inverter to main DB (m)">
-            <input className={input} type="number" />
+            <input className={input} type="number" value={siteDetails.inverterToDb} onChange={(event) => setSiteDetail("inverterToDb", event.target.value)} />
           </Field>
           <Field label="Inverter to battery (m)">
-            <input className={input} type="number" />
+            <input className={input} type="number" value={siteDetails.inverterToBattery} onChange={(event) => setSiteDetail("inverterToBattery", event.target.value)} />
           </Field>
           <Field label="Cable route">
-            <select className={input}>
+            <select className={input} value={siteDetails.cableRoute} onChange={(event) => setSiteDetail("cableRoute", event.target.value)}>
               <option>Easy</option>
               <option>Conduit / trunking</option>
               <option>Underground / multi-storey</option>
             </select>
           </Field>
         </Section>
+        </div>
+        <div hidden={activeStep !== 6}>
         <section className="rounded-3xl bg-slate-900 p-5">
           <h2 className="text-xl font-bold">Required evidence</h2>
           <p className="mt-1 text-sm text-slate-400">
             Capture objective evidence before analysis.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {[
-              "Meter box",
-              "Open main DB",
-              "Earthing point",
-              "Roof wide",
-              "Roof material",
-              "Roof horizons",
-              "Inverter/battery wall",
-              "Cable route",
-            ].map((label) => (
-              <label
-                key={label}
-                className="rounded-xl border border-white/10 p-3 font-bold"
-              >
-                {label}
-                <input
-                  className="mt-2 block w-full text-xs"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                />
-              </label>
-            ))}
+            {evidenceCategories.map((label) => {
+              const fileName = evidenceNames[label];
+              return (
+                <label
+                  key={label}
+                  className="rounded-xl border border-white/10 p-4 font-bold"
+                >
+                  <span className="block">{label}</span>
+                  <span className={`mt-2 block text-sm ${fileName ? "text-emerald-300" : "text-amber-200"}`}>
+                    {fileName ? `✓ Photo captured — ${fileName}` : "⚠ Not captured"}
+                  </span>
+                  <span className="mt-3 inline-block rounded-lg border border-cyan-400/40 px-3 py-2 text-xs text-cyan-100">
+                    {fileName ? "Replace photo" : "Take / upload photo"}
+                  </span>
+                  <input
+                    className="sr-only"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file)
+                        setEvidenceNames((current) => ({
+                          ...current,
+                          [label]: file.name || "Photo captured",
+                        }));
+                    }}
+                  />
+                </label>
+              );
+            })}
           </div>
         </section>
+        </div>
+        <div hidden={activeStep !== 7}>
         <section className="rounded-3xl bg-slate-900 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold">
@@ -1113,6 +1286,30 @@ export default function SiteAssessmentPublicClient({
             placeholder="What must work during an outage? Budget, expansion, concerns, or special requests."
           />
         </section>
+        <section className="mt-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
+          <h2 className="text-xl font-bold">Assessment review</h2>
+          <div className="mt-4 grid gap-3">
+            {assessmentSteps.slice(0, 7).map((name, index) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setActiveStep(index)}
+                className="flex items-center justify-between rounded-xl border border-white/10 p-3 text-left hover:border-cyan-300/60"
+              >
+                <span className="font-bold">{stepStatus(index) === "COMPLETE" ? "✓" : stepStatus(index) === "NOT ASSESSED" ? "⚠" : "○"} {name}</span>
+                <span className="text-xs text-slate-400">{stepStatus(index)} · Edit</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-4 rounded-xl bg-amber-400/10 p-3 text-sm text-amber-100">
+            Incomplete electrical, roof, or evidence sections are not treated as satisfactory. Analysis may continue, but its warnings must be resolved before quotation.
+          </p>
+          <p className="mt-3 text-sm text-slate-300">
+            Evidence: {Object.keys(evidenceNames).length}/{evidenceCategories.length} captured.
+          </p>
+        </section>
+        </div>
+        <div hidden={activeStep !== 8}>
         <section className="rounded-3xl bg-amber-400/10 p-5">
           <b>Analyse Assessment with AI</b>
           <p className="mt-2 text-sm">
@@ -1128,7 +1325,9 @@ export default function SiteAssessmentPublicClient({
           >
             {isAnalysing
               ? "Analysing assessment..."
-              : "Save draft and analyse assessment"}
+              : aiReview
+                ? "Re-analyse assessment"
+                : "Analyse assessment with AI"}
           </button>
           {analysisError ? (
             <p className="mt-3 text-sm font-semibold text-rose-200">
@@ -1157,7 +1356,7 @@ export default function SiteAssessmentPublicClient({
             </div>
           ) : null}
         </section>
-        <section className="rounded-3xl border border-cyan-400/30 bg-cyan-400/10 p-5">
+        <section className="mt-5 rounded-3xl border border-cyan-400/30 bg-cyan-400/10 p-5">
           <h2 className="text-xl font-bold">Known-load summary</h2>
           <div className="mt-3 grid gap-3 text-lg font-bold sm:grid-cols-3">
             <span>{(connected / 1000).toFixed(2)} kW connected</span>
@@ -1165,7 +1364,7 @@ export default function SiteAssessmentPublicClient({
             <span>{unknown} unknown ratings</span>
           </div>
         </section>
-        <section className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5">
+        <section className="mt-5 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold">Preliminary system proposal</h2>
@@ -1234,8 +1433,155 @@ export default function SiteAssessmentPublicClient({
             </>
           )}
         </section>
+        </div>
+        <WizardNavigation
+          activeStep={activeStep}
+          onBack={() => changeStep(activeStep - 1)}
+          onSkip={() => changeStep(activeStep + 1, "skip")}
+          onContinue={() => changeStep(activeStep + 1, "complete")}
+          onAnalyse={() => {
+            changeStep(8, "complete");
+            void analyseAssessment();
+          }}
+          canAnalyse={loads.length > 0}
+        />
       </div>
     </main>
+  );
+}
+
+function WizardProgress({
+  activeStep,
+  completedSteps,
+  skippedSteps,
+}: {
+  activeStep: number;
+  completedSteps: Record<number, boolean>;
+  skippedSteps: Record<number, boolean>;
+}) {
+  return (
+    <section className="rounded-2xl border border-cyan-400/25 bg-slate-900/90 p-4">
+      <p className="text-sm font-black text-cyan-100">
+        Step {activeStep + 1} of {assessmentSteps.length} — {assessmentSteps[activeStep]}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-x-2 gap-y-2 text-xs font-bold">
+        {assessmentSteps.map((step, index) => {
+          const marker = completedSteps[index]
+            ? "✓"
+            : skippedSteps[index]
+              ? "⚠"
+              : index === activeStep
+                ? "●"
+                : "○";
+          return (
+            <span
+              key={step}
+              className={index === activeStep ? "text-cyan-200" : skippedSteps[index] ? "text-amber-200" : "text-slate-400"}
+            >
+              {marker} {step}
+            </span>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function WizardNavigation({
+  activeStep,
+  onBack,
+  onSkip,
+  onContinue,
+  onAnalyse,
+  canAnalyse,
+}: {
+  activeStep: number;
+  onBack: () => void;
+  onSkip: () => void;
+  onContinue: () => void;
+  onAnalyse: () => void;
+  canAnalyse: boolean;
+}) {
+  if (activeStep === 8) {
+    return (
+      <nav className="flex justify-start">
+        <button type="button" onClick={onBack} className="rounded-xl border border-white/20 px-4 py-3 font-bold">
+          ← Back to assessment
+        </button>
+      </nav>
+    );
+  }
+  if (activeStep === 7) {
+    return (
+      <nav className="flex flex-wrap items-center justify-between gap-3">
+        <button type="button" onClick={onBack} className="rounded-xl border border-white/20 px-4 py-3 font-bold">
+          ← Back
+        </button>
+        <button type="button" onClick={onAnalyse} disabled={!canAnalyse} className="rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950 disabled:opacity-40">
+          Analyse Assessment with AI →
+        </button>
+      </nav>
+    );
+  }
+  return (
+    <nav className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={activeStep === 0}
+          className="rounded-xl border border-white/20 px-4 py-3 font-bold disabled:opacity-40"
+        >
+          ← Back
+        </button>
+        <button type="button" onClick={onSkip} className="rounded-xl border border-amber-300/40 px-4 py-3 font-bold text-amber-100">
+          {activeStep === 4 ? "Skip — assess later" : "Skip section"}
+        </button>
+      </div>
+      <button type="button" onClick={onContinue} className="rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950">
+        Save & Continue →
+      </button>
+    </nav>
+  );
+}
+
+function LoadSummaryCard({
+  load,
+  index,
+  dailyWh,
+  onEdit,
+  onDuplicate,
+  onRemove,
+}: {
+  load: Load;
+  index: number;
+  dailyWh: number;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+}) {
+  const usage = load.usageMode === "ALWAYS_ON"
+    ? "Continuous 24h"
+    : `${(dailyWh / 1000).toFixed(2)} kWh/day`;
+  const rating = load.ratingKnown
+    ? `${readNumber(load.qty)} × ${readNumber(load.watts)}W`
+    : "Rating unknown";
+  return (
+    <article className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <b>{load.name} {index + 1}</b>
+          <p className="mt-1 text-sm text-slate-300">
+            {rating} · {load.details.area || load.period} · {usage}{load.essential ? " · Essential" : ""}
+          </p>
+        </div>
+        <div className="flex gap-3 text-sm font-bold">
+          <button type="button" onClick={onEdit} className="text-cyan-200">Edit</button>
+          <button type="button" onClick={onDuplicate} className="text-cyan-200">Duplicate</button>
+          <button type="button" onClick={onRemove} className="text-rose-300">Remove</button>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -1286,17 +1632,19 @@ function AiReviewList({ title, items }: { title: string; items: string[] }) {
 function LoadCard({
   load,
   index,
-  addAnother,
+  isOpen,
   edit,
   detail,
-  remove,
+  onCancel,
+  onSave,
 }: {
   load: Load;
   index: number;
-  addAnother: () => void;
+  isOpen: boolean;
   edit: (id: number, patch: Partial<Load>) => void;
   detail: (load: Load, key: string, value: string) => void;
-  remove: () => void;
+  onCancel: () => void;
+  onSave: () => void;
 }) {
   const special = (key: string, label: string, children: React.ReactNode) => (
     <Field label={label} key={key}>
@@ -1318,14 +1666,15 @@ function LoadCard({
   return (
     <article
       id={`assessment-load-${load.id}`}
-      className="mt-5 scroll-mt-5 rounded-2xl bg-slate-950 p-4"
+      hidden={!isOpen}
+      className="mt-5 scroll-mt-5 rounded-2xl border border-cyan-400/30 bg-slate-950 p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <b>
           {load.name} {index + 1}
         </b>
-        <button type="button" onClick={remove} className="text-rose-300">
-          Remove
+        <button type="button" onClick={onCancel} className="text-slate-300">
+          Cancel
         </button>
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1714,13 +2063,14 @@ function LoadCard({
           </select>
         </Field>
       </div>
-      <button
-        type="button"
-        onClick={addAnother}
-        className="mt-5 w-full rounded-xl border border-cyan-400/40 px-4 py-3 font-bold text-cyan-300"
-      >
-        + Add another {load.name}
-      </button>
+      <div className="mt-5 flex justify-end gap-3 border-t border-white/10 pt-4">
+        <button type="button" onClick={onCancel} className="rounded-xl border border-white/20 px-4 py-3 font-bold">
+          Cancel
+        </button>
+        <button type="button" onClick={onSave} className="rounded-xl bg-cyan-400 px-4 py-3 font-black text-slate-950">
+          Save {load.name}
+        </button>
+      </div>
     </article>
   );
 }
