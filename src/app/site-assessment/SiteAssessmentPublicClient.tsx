@@ -458,6 +458,7 @@ export default function SiteAssessmentPublicClient({
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogResults, setCatalogResults] = useState<CatalogProduct[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
+  const catalogInputRef = useRef<HTMLInputElement>(null);
   const [recommendationNotes, setRecommendationNotes] = useState("");
   const [tiktokUrl, setTiktokUrl] = useState("");
   const [isSearchingCatalog, setIsSearchingCatalog] = useState(false);
@@ -850,7 +851,11 @@ export default function SiteAssessmentPublicClient({
   };
   useEffect(() => {
     const query = catalogQuery.trim();
-    if (query.length < 2 || recommendationType !== "CATALOG_PRODUCT") {
+    if (
+      selectedProduct ||
+      query.length < 2 ||
+      recommendationType !== "CATALOG_PRODUCT"
+    ) {
       setCatalogResults([]);
       setCatalogError("");
       setIsSearchingCatalog(false);
@@ -884,7 +889,20 @@ export default function SiteAssessmentPublicClient({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [assessmentToken, catalogQuery, recommendationType]);
+  }, [assessmentToken, catalogQuery, recommendationType, selectedProduct]);
+  const selectCatalogProduct = (product: CatalogProduct) => {
+    setSelectedProduct(product);
+    setCatalogQuery("");
+    setCatalogResults([]);
+    setCatalogError("");
+  };
+  const changeCatalogProduct = () => {
+    setSelectedProduct(null);
+    setCatalogQuery("");
+    setCatalogResults([]);
+    setCatalogError("");
+    window.requestAnimationFrame(() => catalogInputRef.current?.focus());
+  };
   const publishReport = async () => {
     if (isPublishing || !loads.length) return;
     if (recommendationType === "CATALOG_PRODUCT" && !selectedProduct) {
@@ -1591,24 +1609,66 @@ export default function SiteAssessmentPublicClient({
                   Search live Betech products
                   <div className="relative mt-1">
                     <input
+                      ref={catalogInputRef}
                       className={input}
                       value={catalogQuery}
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                      placeholder="Start typing, e.g. SRNE 5kW lithium solar kit"
+                      onChange={(event) => {
+                        setCatalogQuery(event.target.value);
+                        if (selectedProduct) setSelectedProduct(null);
+                      }}
+                      placeholder={
+                        selectedProduct
+                          ? "Search for a different Betech system"
+                          : "Start typing, e.g. SRNE 5kW lithium solar kit"
+                      }
                       autoComplete="off"
                     />
                     {isSearchingCatalog ? <span className="absolute right-4 top-4 text-xs font-bold text-cyan-200">Searching…</span> : null}
                   </div>
                 </label>
+                {selectedProduct ? (
+                  <div className="mt-3 rounded-xl border border-emerald-300/50 bg-emerald-400/10 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-black uppercase tracking-widest text-emerald-200">
+                          Selected website system
+                        </span>
+                        <p className="mt-1 font-bold text-white">
+                          {selectedProduct.productName}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-300">
+                          KES {selectedProduct.price.toLocaleString("en-KE")} · {selectedProduct.availability} · {selectedProduct.productCategory}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <a
+                          href={selectedProduct.productUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-white/20 px-3 py-2 text-sm font-bold text-cyan-100 hover:bg-white/5"
+                        >
+                          View product
+                        </a>
+                        <button
+                          type="button"
+                          onClick={changeCatalogProduct}
+                          className="rounded-lg border border-emerald-300/60 px-3 py-2 text-sm font-bold text-emerald-100 hover:bg-emerald-400/10"
+                        >
+                          Change selection
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 {catalogError ? <p className="mt-2 text-sm text-amber-200">{catalogError}</p> : null}
-                {catalogResults.length ? (
+                {catalogResults.length && !selectedProduct ? (
                   <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-cyan-400/30 bg-slate-950 p-2 shadow-2xl">
                     {catalogResults.map((product) => (
                       <button
                         type="button"
                         key={product.productUrl}
-                        onClick={() => setSelectedProduct(product)}
-                        className={`mb-2 w-full rounded-xl border p-3 text-left last:mb-0 ${selectedProduct?.productUrl === product.productUrl ? "border-emerald-300 bg-emerald-400/10" : "border-white/10 hover:bg-white/5"}`}
+                        onClick={() => selectCatalogProduct(product)}
+                        className="mb-2 w-full rounded-xl border border-white/10 p-3 text-left last:mb-0 hover:border-emerald-300/60 hover:bg-emerald-400/10"
                       >
                         <span className="block font-bold text-white">{product.productName}</span>
                         <span className="mt-1 block text-sm text-slate-300">KES {product.price.toLocaleString("en-KE")} · {product.availability} · {product.productCategory}</span>
