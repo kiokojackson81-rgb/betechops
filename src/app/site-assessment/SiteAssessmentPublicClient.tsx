@@ -845,27 +845,43 @@ export default function SiteAssessmentPublicClient({
       setIsAnalysing(false);
     }
   };
-  const searchCatalog = async () => {
+  useEffect(() => {
     const query = catalogQuery.trim();
-    if (query.length < 2 || isSearchingCatalog) return;
-    setIsSearchingCatalog(true);
-    setCatalogError("");
-    try {
-      const response = await fetch("/api/site-assessment/catalog-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: assessmentToken, query }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || "Could not search the Betech catalog.");
-      setCatalogResults((data?.products || []) as CatalogProduct[]);
-      if (!(data?.products || []).length) setCatalogError("No suitable live catalog product was found. Choose Custom quotation instead.");
-    } catch (error) {
-      setCatalogError(error instanceof Error ? error.message : "Could not search the Betech catalog.");
-    } finally {
+    if (query.length < 2 || recommendationType !== "CATALOG_PRODUCT") {
+      setCatalogResults([]);
+      setCatalogError("");
       setIsSearchingCatalog(false);
+      return;
     }
-  };
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIsSearchingCatalog(true);
+      setCatalogError("");
+      try {
+        const response = await fetch("/api/site-assessment/catalog-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: assessmentToken, query }),
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.error || "Could not search the Betech catalog.");
+        const products = (data?.products || []) as CatalogProduct[];
+        setCatalogResults(products);
+        if (!products.length) setCatalogError("No suitable live catalog product was found. Choose Custom quotation instead.");
+      } catch (error) {
+        if ((error as { name?: string })?.name !== "AbortError") {
+          setCatalogError(error instanceof Error ? error.message : "Could not search the Betech catalog.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsSearchingCatalog(false);
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [assessmentToken, catalogQuery, recommendationType]);
   const publishReport = async () => {
     if (isPublishing || !loads.length) return;
     if (recommendationType === "CATALOG_PRODUCT" && !selectedProduct) {
@@ -1570,36 +1586,29 @@ export default function SiteAssessmentPublicClient({
               <div className="mt-4">
                 <label className="text-sm font-bold text-slate-200">
                   Search live Betech products
-                  <div className="mt-1 flex gap-2">
+                  <div className="relative mt-1">
                     <input
                       className={input}
                       value={catalogQuery}
                       onChange={(event) => setCatalogQuery(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void searchCatalog();
-                        }
-                      }}
-                      placeholder="Example: 5kW lithium solar kit"
+                      placeholder="Start typing, e.g. SRNE 5kW lithium solar kit"
+                      autoComplete="off"
                     />
-                    <button type="button" onClick={() => void searchCatalog()} disabled={isSearchingCatalog || catalogQuery.trim().length < 2} className="mt-1 rounded-xl bg-cyan-400 px-4 font-black text-slate-950 disabled:opacity-40">
-                      {isSearchingCatalog ? "Searching..." : "Search"}
-                    </button>
+                    {isSearchingCatalog ? <span className="absolute right-4 top-4 text-xs font-bold text-cyan-200">Searching…</span> : null}
                   </div>
                 </label>
                 {catalogError ? <p className="mt-2 text-sm text-amber-200">{catalogError}</p> : null}
                 {catalogResults.length ? (
-                  <div className="mt-3 grid gap-2">
+                  <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-cyan-400/30 bg-slate-950 p-2 shadow-2xl">
                     {catalogResults.map((product) => (
                       <button
                         type="button"
                         key={product.productUrl}
                         onClick={() => setSelectedProduct(product)}
-                        className={`rounded-xl border p-3 text-left ${selectedProduct?.productUrl === product.productUrl ? "border-emerald-300 bg-emerald-400/10" : "border-white/10 hover:bg-white/5"}`}
+                        className={`mb-2 w-full rounded-xl border p-3 text-left last:mb-0 ${selectedProduct?.productUrl === product.productUrl ? "border-emerald-300 bg-emerald-400/10" : "border-white/10 hover:bg-white/5"}`}
                       >
                         <span className="block font-bold text-white">{product.productName}</span>
-                        <span className="mt-1 block text-sm text-slate-300">KES {product.price.toLocaleString("en-KE")} · {product.availability}</span>
+                        <span className="mt-1 block text-sm text-slate-300">KES {product.price.toLocaleString("en-KE")} · {product.availability} · {product.productCategory}</span>
                       </button>
                     ))}
                   </div>
