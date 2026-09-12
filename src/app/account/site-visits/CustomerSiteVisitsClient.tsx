@@ -33,6 +33,7 @@ type FormState = {
   accessInstructions: string;
   preferredDate: string;
   preferredTimeLabel: "MORNING" | "AFTERNOON";
+  paymentPreference: "MPESA_NOW" | "PAY_ON_SITE";
 };
 type InitialBooking = Partial<FormState> & { preferredProduct?: string };
 
@@ -49,6 +50,7 @@ const emptyForm = (profile: Profile): FormState => ({
   accessInstructions: "",
   preferredDate: "",
   preferredTimeLabel: "MORNING",
+  paymentPreference: "MPESA_NOW",
 });
 const prefilledForm = (profile: Profile, initialBooking?: InitialBooking): FormState => {
   const base = emptyForm(profile);
@@ -100,6 +102,7 @@ export default function CustomerSiteVisitsClient({
   const [form, setForm] = useState<FormState>(() => prefilledForm(profile, initialBooking));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [pendingPaymentVisit, setPendingPaymentVisit] = useState<CustomerSiteVisit | null>(null);
   const availableTowns = useMemo(
     () => getTownsForCounty(form.county),
     [form.county],
@@ -116,6 +119,7 @@ export default function CustomerSiteVisitsClient({
 
   function closeBooking() {
     setOpen(false);
+    setPendingPaymentVisit(null);
     if (initialOpenBooking) {
       router.replace("/account/site-visits", { scroll: false });
     }
@@ -134,12 +138,15 @@ export default function CustomerSiteVisitsClient({
     if (!response.ok || !payload.visit)
       return setMessage(payload.error || "Unable to request the visit.");
     setVisits((current) => [payload.visit, ...current]);
+    if (form.paymentPreference === "MPESA_NOW") {
+      setPendingPaymentVisit(payload.visit);
+      setMessage("");
+      return;
+    }
     setOpen(false);
     setStep(1);
     setForm(emptyForm(profile));
-    setMessage(
-      `${payload.visit.visitRef} is reserved and awaiting M-Pesa payment. It is not confirmed for scheduling until Safaricom confirms the payment.`,
-    );
+    setMessage(`${payload.visit.visitRef} has been requested. The site visit fee will be collected on site.`);
     router.replace("/account/site-visits", { scroll: false });
   }
 
@@ -348,9 +355,9 @@ export default function CustomerSiteVisitsClient({
             <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
               <div>
                 <div className="text-xs font-black uppercase tracking-[.2em] text-[#8f0000]">
-                  Step {step} of 4
+                  {pendingPaymentVisit ? "Secure M-Pesa payment" : `Step ${step} of 4`}
                 </div>
-                <h2 className="text-xl font-black">Request a site visit</h2>
+                <h2 className="text-xl font-black">{pendingPaymentVisit ? "Complete your site visit payment" : "Request a site visit"}</h2>
               </div>
               <button
                 onClick={closeBooking}
@@ -369,6 +376,32 @@ export default function CustomerSiteVisitsClient({
                   {message}
                 </div>
               ) : null}
+              {pendingPaymentVisit ? (
+                <div className="space-y-5">
+                  <div className="rounded-[22px] border border-[#7a0000]/10 bg-amber-50 p-5 text-sm text-slate-700">
+                    <b className="text-slate-950">{pendingPaymentVisit.visitRef} is reserved.</b> Complete the secure M-Pesa prompt below to confirm it for scheduling. Your amount is verified by Betech before Safaricom receives the request.
+                  </div>
+                  <MpesaStkPaymentPanel
+                    resourceType="SITE_VISIT"
+                    reference={pendingPaymentVisit.visitRef}
+                    amountDue={pendingPaymentVisit.totalPayable}
+                    initialPhone={profile.phone}
+                    actionLabel={`Pay ${money(pendingPaymentVisit.totalPayable)} with M-Pesa`}
+                    onSuccess={() => {
+                      void refreshVisits();
+                      setOpen(false);
+                      setPendingPaymentVisit(null);
+                      setStep(1);
+                      setForm(emptyForm(profile));
+                      setMessage(`${pendingPaymentVisit.visitRef} payment is confirmed. Betech will now schedule your site visit.`);
+                      router.replace("/account/site-visits", { scroll: false });
+                    }}
+                  />
+                  <button type="button" onClick={closeBooking} className="text-sm font-bold text-slate-600 underline">
+                    I will complete payment later
+                  </button>
+                </div>
+              ) : <>
               {step === 1 ? (
                 <div className="grid gap-4">
                   <Field label="Project type">
@@ -575,6 +608,24 @@ export default function CustomerSiteVisitsClient({
                       </div>
                     </div>
                   </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => update("paymentPreference", "MPESA_NOW")}
+                      className={`rounded-2xl border p-4 text-left ${form.paymentPreference === "MPESA_NOW" ? "border-[#8f0000] bg-[#fff4e7]" : "border-[#7a0000]/15 bg-white"}`}
+                    >
+                      <span className="block font-black text-slate-950">Pay securely with M-Pesa now</span>
+                      <span className="mt-1 block text-sm text-slate-600">Receive a Safaricom prompt and confirm the booking after successful payment.</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update("paymentPreference", "PAY_ON_SITE")}
+                      className={`rounded-2xl border p-4 text-left ${form.paymentPreference === "PAY_ON_SITE" ? "border-[#8f0000] bg-[#fff4e7]" : "border-[#7a0000]/15 bg-white"}`}
+                    >
+                      <span className="block font-black text-slate-950">Pay site visit fee on site</span>
+                      <span className="mt-1 block text-sm text-slate-600">Reserve the visit and pay the fee in person to the Betech team.</span>
+                    </button>
+                  </div>
                   <p className="text-sm text-slate-600">
                     The fee is determined by the selected service zone: Zone 1
                     is KES 2,000, Zone 2 is KES 5,000, and Zone 3 is KES 10,000.
@@ -610,10 +661,15 @@ export default function CustomerSiteVisitsClient({
                     onClick={createVisit}
                     className="rounded-full bg-[#8f0000] px-6 py-3 font-black text-white disabled:opacity-50"
                   >
-                    {busy ? "Submitting..." : "Submit request"}
+                    {busy
+                      ? "Creating booking..."
+                      : form.paymentPreference === "MPESA_NOW"
+                        ? "Continue to secure M-Pesa payment"
+                        : "Book and pay on site"}
                   </button>
                 )}
               </div>
+              </>}
             </div>
             <style jsx>{`
               .field {
