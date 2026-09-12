@@ -11,6 +11,7 @@ import {
   isReceiptProjectRecognizedForSales,
   readReceiptProjectFlow,
 } from "@/lib/receiptProjects";
+import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -369,6 +370,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   //   the separate POD `paidAt` marker has not been set yet.
   const filteredReceipts = receipts
     .filter((r: any) => {
+      if (isReceiptCancelledForSales(r)) return false;
       if (!isCompletedProjectReceiptForSales(r)) return false;
       if (period.paymentScope === "all") return true;
       if (isPodReceipt(r)) {

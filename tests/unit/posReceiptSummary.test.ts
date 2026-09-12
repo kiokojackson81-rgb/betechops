@@ -68,4 +68,41 @@ describe("summarizePosReceiptsForPeriod", () => {
     expect(summary.totalReceipts).toBe(1);
     expect(summary.totalItems).toBe(1);
   });
+
+  test("does not count a cancelled receipt even when it was previously paid", async () => {
+    prisma.receipt.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "cancelled-receipt",
+          createdAt: new Date("2026-09-12T09:00:00.000Z"),
+          generatedAt: new Date("2026-09-12T09:00:00.000Z"),
+          receiptNumber: "R-CANCELLED",
+          totals: { total: 730000 },
+          data: { paymentMethod: "MPESA", cancellation: { cancelledAt: "2026-09-12T10:00:00.000Z" } },
+          order: {
+            orderNumber: "R-CANCELLED",
+            totalAmount: 730000,
+            paymentStatus: "PAID",
+            status: "CANCELED",
+            items: [{ quantity: 210 }],
+          },
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const summary = await summarizePosReceiptsForPeriod({
+      start: new Date("2026-09-12T00:00:00.000Z"),
+      end: new Date("2026-09-12T23:59:59.999Z"),
+    });
+
+    expect(summary.totalSales).toBe(0);
+    expect(summary.totalReceipts).toBe(0);
+    expect(summary.totalItems).toBe(0);
+    expect(summary.paymentStats).toEqual({
+      totalSalesMpesa: 0,
+      totalSalesCash: 0,
+      countMpesaReceipts: 0,
+      countCashReceipts: 0,
+    });
+  });
 });

@@ -1,5 +1,7 @@
 import { jest } from '@jest/globals';
 
+jest.mock('server-only', () => ({}), { virtual: true });
+
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     marketingReceipt: { findMany: jest.fn() },
@@ -89,6 +91,35 @@ describe('admin receipts summary', () => {
     expect(body.totalSales).toBe(5000);
     expect(body.totalProfit).toBe(2500);
     expect(body.receiptsCount).toBe(1);
+  });
+
+  it('excludes cancelled POS receipts from sales, profit, items, and payment totals', async () => {
+    const start = new Date('2026-09-12T00:00:00+03:00');
+    const end = new Date('2026-09-12T23:59:59.999+03:00');
+    (prisma as any).receipt.findMany.mockResolvedValue([
+      {
+        id: 'cancelled-1',
+        generatedAt: start,
+        totals: { total: 730000 },
+        data: { paymentMethod: 'MPESA', cancellation: { cancelledAt: start.toISOString() } },
+        order: {
+          orderNumber: 'BT-CANCELLED',
+          totalAmount: 730000,
+          paymentStatus: 'UNPAID',
+          status: 'CANCELED',
+          items: [],
+        },
+      },
+    ]);
+    (prisma as any).supportReceipt.findMany.mockResolvedValue([]);
+
+    const summary = await computeAdminReceiptSummary({ start, end, onlyPos: true, scope: 'global' });
+
+    expect(summary.totalSales).toBe(0);
+    expect(summary.totalProfit).toBe(0);
+    expect(summary.receiptsCount).toBe(0);
+    expect(summary.itemsCount).toBe(0);
+    expect(summary.paymentTotals.mpesa).toEqual({ totalSales: 0, count: 0 });
   });
 
   it('returns POS profit contributors for receipts created before the pricing date', async () => {

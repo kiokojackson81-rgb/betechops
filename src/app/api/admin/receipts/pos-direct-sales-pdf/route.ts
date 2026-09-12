@@ -13,6 +13,7 @@ import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 import { calculateAggregateReceiptProfit, readReceiptAggregatePricing } from "@/lib/receiptAggregatePricing";
 import { isReceiptProjectRecognizedForSales, readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { getPodDeliveryFee } from "@/lib/podDeliveryFee";
+import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -238,6 +239,7 @@ export async function GET(req: Request) {
   };
   const shouldIncludeForSales = (r: any) => {
     // Mirror the admin summary logic: only include paid receipts by default.
+    if (isReceiptCancelledForSales(r)) return false;
     if (isPodReceipt(r)) return isPodSettledForSales(r);
     return isPosPaid(r);
   };

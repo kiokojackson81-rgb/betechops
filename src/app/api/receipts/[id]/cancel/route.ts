@@ -11,6 +11,7 @@ import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { buildReceiptProjectFlow, readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -164,6 +165,11 @@ export async function POST(request: NextRequest, context: ParamsContext) {
       period: getTradingPeriodFor(new Date()),
     }).catch(() => undefined);
   }
+  publishSummaryUpdate({
+    attendantId: receipt.order.attendantId ?? null,
+    receiptId: receipt.id,
+    timestamp: new Date().toISOString(),
+  });
   await syncPosReceiptToCustomerAccount(id).catch(() => undefined);
   return NextResponse.json({ ok: true, status: "CANCELED" });
 }

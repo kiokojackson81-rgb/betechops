@@ -10,6 +10,7 @@ import {
   isReceiptProjectRecognizedForSales,
   readReceiptProjectFlow,
 } from "@/lib/receiptProjects";
+import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
 
 type PaymentBucket = { totalSales: number; count: number };
 
@@ -355,14 +356,14 @@ async function computePosOnlyReceiptSummary({
     const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
 
     if (normalizedCustomerType === "pod") {
-      const onlyPods = mergedReceipts.filter(isPodReceipt);
+      const onlyPods = mergedReceipts.filter((receipt) => !isReceiptCancelledForSales(receipt)).filter(isPodReceipt);
       if (normalizedPodStatus) {
         return onlyPods.filter((r) => podStatusOf(r) === normalizedPodStatus);
       }
       return onlyPods;
     }
 
-    return mergedReceipts;
+    return mergedReceipts.filter((receipt) => !isReceiptCancelledForSales(receipt));
   })();
 
   const productCostMap = new Map<string, number>();
@@ -933,8 +934,9 @@ export async function computeAdminReceiptSummary({
   let excludedTotalSales = 0;
 
   const applySalesOnly = (rows: any[]) => {
-    if (!salesOnly) return rows;
-    return rows.filter((r) => {
+    const activeRows = rows.filter((receipt) => !isReceiptCancelledForSales(receipt));
+    if (!salesOnly) return activeRows;
+    return activeRows.filter((r) => {
       const sale = Number((r?.totals as any)?.total ?? r?.order?.totalAmount ?? 0);
       if (!isCompletedProjectReceiptForSales(r)) {
         excludedUnpaidPos += 1;

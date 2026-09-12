@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,7 +110,9 @@ export async function GET(req: NextRequest) {
     include: { order: { include: { items: true } } },
   });
 
-  const summary = receipts.reduce(
+  const activeReceipts = receipts.filter((receipt) => !isReceiptCancelledForSales(receipt));
+
+  const summary = activeReceipts.reduce(
     (acc, receipt) => {
       const podDelivery = typeof receipt.data === "object" && receipt.data ? (receipt.data as Record<string, any>).podDelivery : null;
       const status = (podDelivery?.status ?? "pending").toString().toLowerCase();
@@ -142,7 +145,7 @@ export async function GET(req: NextRequest) {
     }
   );
 
-  const totals = computeTotals(receipts);
+  const totals = computeTotals(activeReceipts);
 
   return NextResponse.json({
     range: label,

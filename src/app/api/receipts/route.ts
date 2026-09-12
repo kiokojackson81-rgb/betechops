@@ -34,6 +34,7 @@ import {
   isReceiptProjectRecognizedForSales,
   readReceiptProjectFlow,
 } from "@/lib/receiptProjects";
+import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
 import { publishProjectNotification } from "@/services/project-notifications/project-notification.service";
 import {
   hasProjectAssignedHandler,
@@ -1084,7 +1085,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const summaryRows = filteredByEffectiveDate;
+  // Keep cancelled receipts in the read-only audit list, but exclude them from
+  // every calculated value returned with that list.
+  const summaryRows = filteredByEffectiveDate.filter((row) => !isReceiptCancelledForSales(row));
 
   filteredByEffectiveDate.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = summaryRows.length;

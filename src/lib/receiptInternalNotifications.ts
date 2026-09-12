@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { isReceiptCancelledForSales } from '@/lib/receiptSalesEligibility';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractItemsShort, extractReceiptTotalKES } from '@/lib/receiptExtract';
@@ -204,6 +205,7 @@ export async function notifyInternalReceipt(
       include: { order: { select: { totalAmount: true } } },
     });
     for (const r of receiptsToday) {
+      if (isReceiptCancelledForSales(r)) continue;
       const t = typeof r.totals === 'object' && r.totals ? (r.totals as any).total : undefined;
       let val = NaN;
       if (typeof t === 'number') val = t;

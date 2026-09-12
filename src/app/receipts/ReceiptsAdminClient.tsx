@@ -183,11 +183,17 @@ const PAGE_SIZE = 50;
 
 const randomId = () => Math.random().toString(36).slice(2, 9);
 
+const isCancelledReceiptRow = (row: ReceiptRow) =>
+  ["CANCELED", "CANCELLED"].includes(String(row.status ?? "").trim().toUpperCase()) ||
+  ["CANCELED", "CANCELLED"].includes(String(row.podDeliveryStatus ?? "").trim().toUpperCase()) ||
+  ["CANCELED", "CANCELLED"].includes(String(row.projectStage ?? "").trim().toUpperCase());
+
 const computeSummary = (rows: ReceiptRow[]): ReceiptSummary => {
-  const totalValue = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
-  const totalCount = rows.length;
+  const activeRows = rows.filter((row) => !isCancelledReceiptRow(row));
+  const totalValue = activeRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const totalCount = activeRows.length;
   const averageValue = totalCount ? totalValue / totalCount : 0;
-  const head = rows[0];
+  const head = activeRows[0];
   const lastReceipt = head
     ? {
         id: head.id,
@@ -2134,7 +2140,9 @@ export default function ReceiptsAdminClient({
   }, [rows]);
   const derivedSummary = useMemo(() => {
     const filtered = rows.filter(
-      (row) => (row.podDeliveryStatus ?? "").toLowerCase() !== "pending",
+      (row) =>
+        (row.podDeliveryStatus ?? "").toLowerCase() !== "pending" &&
+        !isCancelledReceiptRow(row),
     );
     const paymentTotals = filtered.reduce(
       (acc, row) => {
