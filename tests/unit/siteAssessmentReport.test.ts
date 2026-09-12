@@ -50,6 +50,12 @@ describe("site assessment report sign-off", () => {
   it("generates a branded PDF from structured assessment data", async () => {
     const report = parseSiteAssessmentReport({
       ...reportInput,
+      recommendation: {
+        type: "CATALOG_PRODUCT",
+        productName: "SRNE 1.5 kW / 2.56 kWh / 2 × 600W Kit",
+        productUrl: "https://www.betech.co.ke/srne-test-kit",
+        productShortDescription: "1.5kW hybrid inverter, 2.56kWh lithium battery, 2 x 600W panels",
+      },
       assessment: {
         loads: [{ name: "Lights", qty: 10, watts: 10, usageMode: "DAILY_HOURS", hours: 5, period: "Night", essential: true }],
         home: { type: "House", bedrooms: "3", units: "1" },

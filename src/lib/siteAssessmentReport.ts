@@ -292,15 +292,19 @@ export async function generateSiteAssessmentReportPdf(input: {
     page.drawText(title.toUpperCase(), { x: MARGIN + 25, y: y - 14, font: bold, size: 8.5, color: rgb(1, 1, 1) });
     y -= 33;
   };
-  const card = (x: number, width: number, title: string, lines: Array<[string, string]>, tone: "plain" | "red" | "amber" = "plain") => {
+  const cardHeight = (width: number, lines: Array<[string, string]>) => {
     const visible = lines.filter(([, value]) => hasValue(value));
-    const height = Math.max(
+    return Math.max(
       64,
       32 + visible.reduce(
         (total, [, value]) => total + 21 + Math.max(0, splitLines(value, regular, 8.3, width - 28).length - 1) * 10,
         0,
       ),
     );
+  };
+  const card = (x: number, width: number, title: string, lines: Array<[string, string]>, tone: "plain" | "red" | "amber" = "plain", fixedHeight?: number) => {
+    const visible = lines.filter(([, value]) => hasValue(value));
+    const height = fixedHeight || cardHeight(width, lines);
     const fill = tone === "red" ? RED : tone === "amber" ? rgb(1, 0.975, 0.91) : rgb(1, 1, 1);
     const stroke = tone === "red" ? RED : tone === "amber" ? rgb(0.94, 0.78, 0.37) : BORDER;
     drawRoundedBox(page, { x, y: y - height, width, height, color: fill, borderColor: stroke, borderWidth: 0.7, borderRadius: 8 });
@@ -354,16 +358,20 @@ export async function generateSiteAssessmentReportPdf(input: {
   });
   y -= 63;
   const cardWidth = (A4[0] - MARGIN * 2 - 20) / 3;
-  const customerHeight = card(MARGIN, cardWidth, "Customer / project", [
+  const customerLines: Array<[string, string]> = [
     ["Customer", input.customerName], ["Location", input.location], ["Property", clean(home.type)], ["Bedrooms / units", [clean(home.bedrooms), clean(home.units) && `${clean(home.units)} unit(s)`].filter(Boolean).join(" · ")],
-  ]);
-  const teamHeight = card(MARGIN + cardWidth + 10, cardWidth, "Assessment team", [
+  ];
+  const teamLines: Array<[string, string]> = [
     ["Site assessor", input.report.submittedByName], ["Assessment date", issueDateTime], ["Technical support", "0705 663 175"],
-  ]);
-  const objectiveHeight = card(MARGIN + (cardWidth + 10) * 2, cardWidth, "Project objective", [
+  ];
+  const objectiveLines: Array<[string, string]> = [
     ["Customer goal", clean(electrical.systemGoal)], ["Backup requirement", backupHours ? `${formatNumber(backupHours, 1)} hours` : ""], ["Grid", clean(electrical.grid)], ["Supply", clean(site.supplyType)],
-  ]);
-  y -= Math.max(customerHeight, teamHeight, objectiveHeight) + 17;
+  ];
+  const executiveCardHeight = Math.max(cardHeight(cardWidth, customerLines), cardHeight(cardWidth, teamLines), cardHeight(cardWidth, objectiveLines));
+  card(MARGIN, cardWidth, "Customer / project", customerLines, "plain", executiveCardHeight);
+  card(MARGIN + cardWidth + 10, cardWidth, "Assessment team", teamLines, "plain", executiveCardHeight);
+  card(MARGIN + (cardWidth + 10) * 2, cardWidth, "Project objective", objectiveLines, "plain", executiveCardHeight);
+  y -= executiveCardHeight + 17;
   section("Energy assessment at a glance");
   const metrics = [
     ["Connected load", `${formatNumber(connectedKw)} kW`, "Total rating of recorded appliances."],
@@ -436,20 +444,28 @@ export async function generateSiteAssessmentReportPdf(input: {
   page.drawText("Design basis is derived from the field assessment and remains subject to final installation engineering.", { x: MARGIN, y, font: regular, size: 8.5, color: MUTED });
   y -= 18;
   const designWidth = (A4[0] - MARGIN * 2 - 18) / 4;
-  const inverterHeight = card(MARGIN, designWidth, "Hybrid inverter", [["Recorded simultaneous peak", `${formatNumber(simultaneousPeakKw)} kW`], ["Design headroom", "25% operating reserve plus motor-start allowance where recorded"], ["Recommended standard size", `${formatNumber(inverterKw, 1)} kW hybrid inverter`], ["Status", inverterKw >= analysis.inverterRequiredKw ? "SUITABLE" : "TECHNICAL REVIEW REQUIRED"]], inverterKw >= analysis.inverterRequiredKw ? "plain" : "amber");
-  const batteryHeight = card(MARGIN + designWidth + 6, designWidth, "Battery storage", [["Backup energy", `${formatNumber(analysis.rawBackupEnergyKwh)} kWh`], ["Calculated nominal", `${formatNumber(analysis.calculatedBatteryKwh)} kWh`], ["Recommended storage", batteryKwh ? `${formatNumber(batteryKwh)} kWh lithium` : "CONFIRM LOADS"], ["Expected backup", analysis.expectedBackupHours ? `${formatNumber(analysis.expectedBackupHours, 1)} hours` : ""]], batteryKwh && backupHours ? "plain" : "amber");
-  const pvHeight = card(MARGIN + (designWidth + 6) * 2, designWidth, "Solar PV array", [["Daily energy", `${formatNumber(dailyKwh)} kWh/day`], ["Calculated PV", `${formatNumber(pvKw)} kWp`], ["Practical array", `${formatNumber(practicalPvKw)} kWp`], ["Panels", `${panelCount} × 600W`], ["Expected production", `${formatNumber(analysis.expectedSolarProductionKwh)} kWh/day`]]);
-  const configurationHeight = card(MARGIN + (designWidth + 6) * 3, designWidth, "System configuration", [["Configuration", clean(electrical.grid).toLowerCase().includes("off") ? "Solar + battery" : "Hybrid — grid + solar + battery"], ["Objective", clean(electrical.systemGoal)], ["Design focus", essentialKw ? "Essential loads during outages" : "Confirm backup loads"], ["Status", analysis.technicalReviewRequired ? "TECHNICAL REVIEW REQUIRED" : "PRELIMINARY RECOMMENDATION"]], "red");
-  y -= Math.max(inverterHeight, batteryHeight, pvHeight, configurationHeight) + 13;
+  const inverterLines: Array<[string, string]> = [["Recorded simultaneous peak", `${formatNumber(simultaneousPeakKw)} kW`], ["Design headroom", "25% operating reserve plus motor-start allowance where recorded"], ["Recommended standard size", `${formatNumber(inverterKw, 1)} kW hybrid inverter`], ["Status", inverterKw >= analysis.inverterRequiredKw ? "SUITABLE" : "TECHNICAL REVIEW REQUIRED"]];
+  const batteryLines: Array<[string, string]> = [["Backup energy", `${formatNumber(analysis.rawBackupEnergyKwh)} kWh`], ["Calculated nominal", `${formatNumber(analysis.calculatedBatteryKwh)} kWh`], ["Recommended storage", batteryKwh ? `${formatNumber(batteryKwh)} kWh lithium` : "CONFIRM LOADS"], ["Expected backup", analysis.expectedBackupHours ? `${formatNumber(analysis.expectedBackupHours, 1)} hours` : ""]];
+  const pvLines: Array<[string, string]> = [["Daily energy", `${formatNumber(dailyKwh)} kWh/day`], ["Calculated PV", `${formatNumber(pvKw)} kWp`], ["Practical array", `${formatNumber(practicalPvKw)} kWp`], ["Panels", `${panelCount} × 600W`], ["Expected production", `${formatNumber(analysis.expectedSolarProductionKwh)} kWh/day`]];
+  const configurationLines: Array<[string, string]> = [["Configuration", clean(electrical.grid).toLowerCase().includes("off") ? "Solar + battery" : "Hybrid — grid + solar + battery"], ["Objective", clean(electrical.systemGoal)], ["Design focus", essentialKw ? "Essential loads during outages" : "Confirm backup loads"], ["Status", analysis.technicalReviewRequired ? "TECHNICAL REVIEW REQUIRED" : "PRELIMINARY RECOMMENDATION"]];
+  const systemCardHeight = Math.max(cardHeight(designWidth, inverterLines), cardHeight(designWidth, batteryLines), cardHeight(designWidth, pvLines), cardHeight(designWidth, configurationLines));
+  card(MARGIN, designWidth, "Hybrid inverter", inverterLines, inverterKw >= analysis.inverterRequiredKw ? "plain" : "amber", systemCardHeight);
+  card(MARGIN + designWidth + 6, designWidth, "Battery storage", batteryLines, batteryKwh && backupHours ? "plain" : "amber", systemCardHeight);
+  card(MARGIN + (designWidth + 6) * 2, designWidth, "Solar PV array", pvLines, "plain", systemCardHeight);
+  card(MARGIN + (designWidth + 6) * 3, designWidth, "System configuration", configurationLines, analysis.technicalReviewRequired ? "amber" : "plain", systemCardHeight);
+  y -= systemCardHeight + 13;
   section("Design basis");
   const basisWidth = (A4[0] - MARGIN * 2 - 18) / 4;
-  const basisHeights = [
-    card(MARGIN, basisWidth, "Peak sun hours", [["Design input", `${ASSESSMENT_DESIGN_ASSUMPTIONS.peakSunHours} h/day`]]),
-    card(MARGIN + basisWidth + 6, basisWidth, "PV performance", [["Design input", `${ASSESSMENT_DESIGN_ASSUMPTIONS.pvPerformanceFactor * 100}% factor`]]),
-    card(MARGIN + (basisWidth + 6) * 2, basisWidth, "Battery design", [["Efficiency", "92% inverter"], ["Usable DoD", "90%"], ["Reserve", "10%"]]),
-    card(MARGIN + (basisWidth + 6) * 3, basisWidth, "Backup target", [["Recorded target", backupHours ? `${formatNumber(backupHours, 1)} hours` : "To be confirmed"]]),
-  ];
-  y -= Math.max(...basisHeights) + 9;
+  const peakSunLines: Array<[string, string]> = [["Design input", `${ASSESSMENT_DESIGN_ASSUMPTIONS.peakSunHours} h/day`], ["Purpose", "Solar resource assumption"]];
+  const pvPerformanceLines: Array<[string, string]> = [["Design input", `${ASSESSMENT_DESIGN_ASSUMPTIONS.pvPerformanceFactor * 100}% factor`], ["Purpose", "Overall design factor"]];
+  const batteryDesignLines: Array<[string, string]> = [["Efficiency", "92% inverter"], ["Usable DoD", "90%"], ["Reserve", "10%"]];
+  const backupTargetLines: Array<[string, string]> = [["Recorded target", backupHours ? `${formatNumber(backupHours, 1)} hours` : "To be confirmed"], ["Purpose", "Customer backup requirement"]];
+  const basisCardHeight = Math.max(cardHeight(basisWidth, peakSunLines), cardHeight(basisWidth, pvPerformanceLines), cardHeight(basisWidth, batteryDesignLines), cardHeight(basisWidth, backupTargetLines));
+  card(MARGIN, basisWidth, "Peak sun hours", peakSunLines, "plain", basisCardHeight);
+  card(MARGIN + basisWidth + 6, basisWidth, "PV performance", pvPerformanceLines, "plain", basisCardHeight);
+  card(MARGIN + (basisWidth + 6) * 2, basisWidth, "Battery design", batteryDesignLines, "plain", basisCardHeight);
+  card(MARGIN + (basisWidth + 6) * 3, basisWidth, "Backup target", backupTargetLines, "plain", basisCardHeight);
+  y -= basisCardHeight + 9;
   labeledText("Engineering explanation", "System sizing is based on recorded simultaneous demand, essential-load backup requirements and average daily energy consumption. Battery capacity includes allowances for inverter losses, usable depth of discharge and reserve capacity. PV sizing is calculated independently and rounded upward to a practical panel configuration.");
   section("Betech technical recommendation");
   const recommendation = reportRecommendationLabel(input.report);
@@ -462,19 +478,28 @@ export async function generateSiteAssessmentReportPdf(input: {
     : "The selected Betech system has been checked against the recorded preliminary design requirement.";
   const recommendationHeight = Math.max(62, 33 + splitLines(recommendationIntro, regular, 8, A4[0] - MARGIN * 2 - 30).length * 10);
   ensure(recommendationHeight + 120, "System design & technical recommendation");
-  drawRoundedBox(page, { x: MARGIN, y: y - recommendationHeight, width: A4[0] - MARGIN * 2, height: recommendationHeight, color: RED, borderRadius: 9 });
-  page.drawText(recommendationText, { x: MARGIN + 15, y: y - 18, font: bold, size: 9.2, color: rgb(1, 1, 1), maxWidth: A4[0] - MARGIN * 2 - 30 });
-  drawParagraph(page, recommendationIntro, MARGIN + 15, y - 33, A4[0] - MARGIN * 2 - 30, regular, 8, rgb(1, 0.94, 0.94), 10);
+  drawRoundedBox(page, { x: MARGIN, y: y - recommendationHeight, width: A4[0] - MARGIN * 2, height: recommendationHeight, color: rgb(1, 1, 1), borderColor: rgb(0.82, 0.28, 0.28), borderWidth: 0.8, borderRadius: 9 });
+  page.drawText(recommendationText, { x: MARGIN + 15, y: y - 18, font: bold, size: 9.2, color: RED, maxWidth: A4[0] - MARGIN * 2 - 30 });
+  drawParagraph(page, recommendationIntro, MARGIN + 15, y - 33, A4[0] - MARGIN * 2 - 30, regular, 8, INK, 10);
   y -= recommendationHeight + 8;
   const specificationWidth = (A4[0] - MARGIN * 2 - 18) / 4;
-  const specificationHeights = [
-    card(MARGIN, specificationWidth, "Inverter", [["Required", `${formatNumber(inverterKw, 1)} kW hybrid`]]),
-    card(MARGIN + specificationWidth + 6, specificationWidth, "Battery", [["Required", `${formatNumber(batteryKwh)} kWh lithium`]]),
-    card(MARGIN + (specificationWidth + 6) * 2, specificationWidth, "Solar array", [["Practical", `${formatNumber(practicalPvKw)} kWp`]]),
-    card(MARGIN + (specificationWidth + 6) * 3, specificationWidth, "Panels", [["Indicative", `${panelCount} × 600W`]]),
-  ];
-  y -= Math.max(...specificationHeights) + 8;
-  labeledText("Final equipment note", "Final equipment models, protection devices and cable sizing are confirmed in the official quotation.");
+  const inverterSpecification: Array<[string, string]> = [["Required", `${formatNumber(inverterKw, 1)} kW hybrid`]];
+  const batterySpecification: Array<[string, string]> = [["Required", `${formatNumber(batteryKwh)} kWh lithium`]];
+  const solarArraySpecification: Array<[string, string]> = [["Practical", `${formatNumber(practicalPvKw)} kWp`]];
+  const panelSpecification: Array<[string, string]> = [["Indicative", `${panelCount} × 600W`]];
+  const specificationCardHeight = Math.max(
+    cardHeight(specificationWidth, inverterSpecification),
+    cardHeight(specificationWidth, batterySpecification),
+    cardHeight(specificationWidth, solarArraySpecification),
+    cardHeight(specificationWidth, panelSpecification),
+  );
+  card(MARGIN, specificationWidth, "Inverter", inverterSpecification, "plain", specificationCardHeight);
+  card(MARGIN + specificationWidth + 6, specificationWidth, "Battery", batterySpecification, "plain", specificationCardHeight);
+  card(MARGIN + (specificationWidth + 6) * 2, specificationWidth, "Solar array", solarArraySpecification, "plain", specificationCardHeight);
+  card(MARGIN + (specificationWidth + 6) * 3, specificationWidth, "Panels", panelSpecification, "plain", specificationCardHeight);
+  y -= specificationCardHeight + 8;
+  page.drawText("FINAL EQUIPMENT NOTE: Final models, protection devices and cable sizing are confirmed in the official quotation.", { x: MARGIN, y: y - 8, font: regular, size: 6.7, color: MUTED, maxWidth: A4[0] - MARGIN * 2 });
+  y -= 18;
   if (input.report.recommendation.productUrl) {
     const selectedShortName = recommendation.length > 72 ? `${recommendation.slice(0, 69)}...` : recommendation;
     const comparison = [
@@ -482,34 +507,43 @@ export async function generateSiteAssessmentReportPdf(input: {
       ["Battery", `${formatNumber(batteryKwh)} kWh`, analysis.productMatch.capabilities.batteryKwh ? `${formatNumber(analysis.productMatch.capabilities.batteryKwh)} kWh` : "Not specified"],
       ["PV array", `${formatNumber(practicalPvKw)} kWp`, analysis.productMatch.capabilities.pvKw ? `${formatNumber(analysis.productMatch.capabilities.pvKw)} kWp` : "Not specified"],
     ];
-    const validationHeight = 89;
+    const validationHeight = 70;
     ensure(validationHeight + 7, "System design & technical recommendation");
     drawRoundedBox(page, { x: MARGIN, y: y - validationHeight, width: A4[0] - MARGIN * 2, height: validationHeight, color: rgb(1, 0.975, 0.91), borderColor: rgb(0.94, 0.78, 0.37), borderWidth: 0.7, borderRadius: 8 });
     page.drawText("CATALOGUE PRODUCT CHECK", { x: MARGIN + 13, y: y - 16, font: bold, size: 7.5, color: AMBER });
     page.drawText(`STATUS: ${analysis.productMatch.status === "PASS" ? "SUITABLE" : "NOT SUITABLE"}`, { x: MARGIN + 268, y: y - 16, font: bold, size: 7.5, color: analysis.productMatch.status === "PASS" ? GREEN : RED });
-    page.drawText(`Selected product: ${selectedShortName}`, { x: MARGIN + 13, y: y - 29, font: regular, size: 6.9, color: INK, maxWidth: A4[0] - MARGIN * 2 - 26 });
-    [["COMPONENT", MARGIN + 13], ["REQUIRED", MARGIN + 185], ["SELECTED", MARGIN + 295], ["STATUS", MARGIN + 425]].forEach(([label, x]) => page.drawText(String(label), { x: Number(x), y: y - 43, font: bold, size: 6.1, color: MUTED }));
+    page.drawText(`Selected: ${selectedShortName}`, { x: MARGIN + 13, y: y - 28, font: regular, size: 6.5, color: INK, maxWidth: A4[0] - MARGIN * 2 - 26 });
+    [["COMPONENT", MARGIN + 13], ["REQUIRED", MARGIN + 185], ["SELECTED", MARGIN + 295], ["STATUS", MARGIN + 425]].forEach(([label, x]) => page.drawText(String(label), { x: Number(x), y: y - 39, font: bold, size: 5.7, color: MUTED }));
     comparison.forEach(([component, required, selected], index) => {
-      const rowY = y - 55 - index * 10;
-      page.drawText(component, { x: MARGIN + 13, y: rowY, font: regular, size: 6.7, color: INK });
-      page.drawText(required, { x: MARGIN + 185, y: rowY, font: regular, size: 6.7, color: INK });
-      page.drawText(selected, { x: MARGIN + 295, y: rowY, font: regular, size: 6.7, color: INK });
-      page.drawText(analysis.productMatch.status === "PASS" ? "PASS" : "FAIL", { x: MARGIN + 425, y: rowY, font: bold, size: 6.7, color: analysis.productMatch.status === "PASS" ? GREEN : RED });
+      const rowY = y - 49 - index * 7;
+      page.drawText(component, { x: MARGIN + 13, y: rowY, font: regular, size: 5.9, color: INK });
+      page.drawText(required, { x: MARGIN + 185, y: rowY, font: regular, size: 5.9, color: INK });
+      page.drawText(selected, { x: MARGIN + 295, y: rowY, font: regular, size: 5.9, color: INK });
+      page.drawText(analysis.productMatch.status === "PASS" ? "PASS" : "FAIL", { x: MARGIN + 425, y: rowY, font: bold, size: 5.9, color: analysis.productMatch.status === "PASS" ? GREEN : RED });
     });
     y -= validationHeight + 8;
   }
   if (input.report.recommendation.tiktokUrl) labeledText("Similar Betech project", `A comparable Betech project can be viewed at ${input.report.recommendation.tiktokUrl}`);
 
   addPage("Site conditions, safety & readiness");
-  const electricalHeight = card(MARGIN, cardWidth, "Electrical supply", [["Meter", clean(electrical.billing)], ["Grid status", clean(electrical.grid)], ["Supply type", clean(site.supplyType)], ["Main breaker", clean(site.mainBreakerRating)], ["Solar breaker space", clean(site.solarBreakerSlots)]]);
-  const dbHeight = card(MARGIN + cardWidth + 10, cardWidth, "Earthing & DB", [["Existing wiring", clean(electrical.wiring)], ["Earthing", clean(site.earthingCondition)], ["Earthing notes", clean(site.earthWireNotes)], ["Status", clean(site.earthingCondition).toLowerCase().includes("confirm") ? "VERIFICATION REQUIRED" : "SUITABLE FOR REVIEW"]], clean(site.earthingCondition).toLowerCase().includes("confirm") ? "amber" : "plain");
-  const roofHeight = card(MARGIN + (cardWidth + 10) * 2, cardWidth, "Roof & mounting", [["Roof type", clean(site.roofType)], ["Condition", clean(site.roofCondition)], ["Shading", clean(site.shading)], ["Access", clean(site.roofAccess)], ["Mounting", "Standard roof mounting"]]);
-  y -= Math.max(electricalHeight, dbHeight, roofHeight) + 14;
-  const equipmentHeight = card(MARGIN, (A4[0] - MARGIN * 2 - 10) / 2, "Equipment placement", [["Inverter location", clean(site.inverterLocation)], ["Battery location", clean(site.batteryArea)], ["PV to inverter", clean(site.arrayToInverter) && `${clean(site.arrayToInverter)} m`], ["Inverter to DB", clean(site.inverterToDb) && `${clean(site.inverterToDb)} m`], ["Cable route", clean(site.cableRoute)]]);
-  const safetyHeight = card(MARGIN + (A4[0] - MARGIN * 2 - 10) / 2 + 10, (A4[0] - MARGIN * 2 - 10) / 2, "Electrical protection", [["PV DC isolation", "Required"], ["DC surge protection", "Required"], ["AC input/output protection", "Required"], ["Battery protection", batteryKwh ? "Required" : "Subject to final design"], ["Protective earthing", "Required"]]);
-  y -= Math.max(equipmentHeight, safetyHeight) + 14;
+  const electricalLines: Array<[string, string]> = [["Meter", clean(electrical.billing)], ["Grid status", clean(electrical.grid)], ["Supply type", clean(site.supplyType)], ["Main breaker", clean(site.mainBreakerRating)], ["Solar breaker space", clean(site.solarBreakerSlots)]];
+  const dbLines: Array<[string, string]> = [["Existing wiring", clean(electrical.wiring)], ["Earthing", clean(site.earthingCondition)], ["Earthing notes", clean(site.earthWireNotes)], ["Status", clean(site.earthingCondition).toLowerCase().includes("confirm") ? "VERIFICATION REQUIRED" : "SUITABLE FOR REVIEW"]];
+  const roofLines: Array<[string, string]> = [["Roof type", clean(site.roofType)], ["Condition", clean(site.roofCondition)], ["Shading", clean(site.shading)], ["Access", clean(site.roofAccess)], ["Mounting", "Standard roof mounting"]];
+  const siteRowHeight = Math.max(cardHeight(cardWidth, electricalLines), cardHeight(cardWidth, dbLines), cardHeight(cardWidth, roofLines));
+  card(MARGIN, cardWidth, "Electrical supply", electricalLines, "plain", siteRowHeight);
+  card(MARGIN + cardWidth + 10, cardWidth, "Earthing & DB", dbLines, clean(site.earthingCondition).toLowerCase().includes("confirm") ? "amber" : "plain", siteRowHeight);
+  card(MARGIN + (cardWidth + 10) * 2, cardWidth, "Roof & mounting", roofLines, "plain", siteRowHeight);
+  y -= siteRowHeight + 10;
+  const secondRowWidth = cardWidth;
   const evidenceLabels = analysis.evidenceLabels;
-  labeledText("Site evidence", analysis.missingCriticalEvidence.length ? `STATUS: INCOMPLETE. Critical evidence still required: ${analysis.missingCriticalEvidence.join(" · ")}.` : `STATUS: RECORDED. ${evidenceLabels.length} evidence item(s) are linked to the secure site-visit workspace.`, analysis.missingCriticalEvidence.length ? "amber" : "green");
+  const equipmentLines: Array<[string, string]> = [["Inverter location", clean(site.inverterLocation)], ["Battery location", clean(site.batteryArea)], ["Cable route", clean(site.cableRoute)], ["PV to inverter", clean(site.arrayToInverter) && `${clean(site.arrayToInverter)} m`]];
+  const protectionLines: Array<[string, string]> = [["Required", "PV DC isolation"], ["Required", "DC surge protection"], ["Required", "AC input/output protection"], ["Required", "Battery protection"], ["Required", "Protective earthing"]];
+  const evidenceLines: Array<[string, string]> = [["Captured", `${evidenceLabels.length} / 8`], ["Status", analysis.missingCriticalEvidence.length ? "INCOMPLETE" : "COMPLETE"], ["Required", analysis.missingCriticalEvidence.length ? analysis.missingCriticalEvidence.join(" · ") : "Critical evidence recorded"]];
+  const secondRowHeight = Math.max(cardHeight(secondRowWidth, equipmentLines), cardHeight(secondRowWidth, protectionLines), cardHeight(secondRowWidth, evidenceLines));
+  card(MARGIN, secondRowWidth, "Equipment placement", equipmentLines, "plain", secondRowHeight);
+  card(MARGIN + secondRowWidth + 10, secondRowWidth, "Electrical protection", protectionLines, "plain", secondRowHeight);
+  card(MARGIN + (secondRowWidth + 10) * 2, secondRowWidth, "Site evidence", evidenceLines, analysis.missingCriticalEvidence.length ? "amber" : "plain", secondRowHeight);
+  y -= secondRowHeight + 10;
   const findings = input.report.aiReview?.observations.length
     ? input.report.aiReview.observations
     : [
@@ -526,8 +560,9 @@ export async function generateSiteAssessmentReportPdf(input: {
     ["03", "INVERTER DESIGN", `${formatNumber(inverterKw, 1)} kW hybrid recommended`],
     ["04", "PV DESIGN", `${formatNumber(practicalPvKw)} kWp practical array · ${formatNumber(analysis.expectedSolarProductionKwh)} kWh/day expected`],
   ];
-  const findingHeights = compactFindings.map(([number, title, detail], index) => card(MARGIN + index * (findingWidth + 6), findingWidth, `${number} ${title}`, [["Finding", detail]]));
-  y -= Math.max(...findingHeights) + 8;
+  const findingCardHeight = Math.max(...compactFindings.map(([, , detail]) => cardHeight(findingWidth, [["Finding", detail]])));
+  compactFindings.forEach(([number, title, detail], index) => card(MARGIN + index * (findingWidth + 6), findingWidth, `${number} ${title}`, [["Finding", detail]], "plain", findingCardHeight));
+  y -= findingCardHeight + 8;
   const outstanding = [...(input.report.aiReview?.risks || []), ...(input.report.aiReview?.dataGaps || [])];
   if (outstanding.length) {
     section("Items to confirm before quotation");
@@ -536,8 +571,9 @@ export async function generateSiteAssessmentReportPdf(input: {
   section("Engineering advice");
   const relevantAdvice = analysis.loadAdvice.filter((item) => /high-heat|motor|air-conditioning|security\/connectivity|material energy/i.test(item.advice)).slice(0, 2);
   const adviceCardWidth = (A4[0] - MARGIN * 2 - 8) / 2;
-  const engineeringAdviceHeights = relevantAdvice.map((item, index) => card(MARGIN + (index % 2) * (adviceCardWidth + 8), adviceCardWidth, item.name, [["Guidance", item.advice]], /motor|air-conditioning/.test(item.advice) ? "amber" : "plain"));
-  if (engineeringAdviceHeights.length) y -= Math.max(...engineeringAdviceHeights.slice(0, 2)) + 8;
+  const engineeringAdviceHeight = relevantAdvice.length ? Math.max(...relevantAdvice.map((item) => cardHeight(adviceCardWidth, [["Guidance", item.advice]]))) : 0;
+  relevantAdvice.forEach((item, index) => card(MARGIN + (index % 2) * (adviceCardWidth + 8), adviceCardWidth, item.name, [["Guidance", item.advice]], /motor|air-conditioning/.test(item.advice) ? "amber" : "plain", engineeringAdviceHeight));
+  if (engineeringAdviceHeight) y -= engineeringAdviceHeight + 8;
   const objectiveAdvice = clean(electrical.systemGoal).toLowerCase().includes("off-grid")
     ? "Off-grid operation requires a seasonal energy review, demand control and a contingency plan before final approval. This preliminary design is not an off-grid guarantee."
     : clean(electrical.systemGoal).toLowerCase().includes("backup")
@@ -546,9 +582,15 @@ export async function generateSiteAssessmentReportPdf(input: {
   labeledText("Design readiness", `${analysis.technicalReviewRequired ? `TECHNICAL REVIEW REQUIRED — ${analysis.technicalReviewReasons.join(" ")}` : "DESIGN READINESS — Loads, preliminary sizing and site evidence are ready for final quotation and installation design."} ${objectiveAdvice}`, analysis.technicalReviewRequired ? "amber" : "green");
   addPage("Approval & next steps");
   const technicianSigned = Boolean(input.report.signatures?.technicianAccepted);
-  const signatureHeight = card(MARGIN, (A4[0] - MARGIN * 2 - 10) / 2, "Technician declaration", [["Status", technicianSigned ? "DIGITALLY SIGNED" : "SIGNATURE PENDING"], ["Site assessor", input.report.signatures?.technicianName || input.report.submittedByName], ["Assessment", input.visitRef], [technicianSigned ? "Signed" : "Submitted", issueDateTime]], technicianSigned ? "plain" : "amber");
-  const customerSignatureHeight = card(MARGIN + (A4[0] - MARGIN * 2 - 10) / 2 + 10, (A4[0] - MARGIN * 2 - 10) / 2, "Customer acknowledgement", input.report.signatures ? [["Status", "DIGITALLY ACKNOWLEDGED"], ["Customer", input.report.signatures.customerName], ["Acknowledged", issueDateTime]] : [["Status", "SIGNATURE PENDING"], ["Submitted", issueDateTime]], input.report.signatures ? "plain" : "amber");
-  y -= Math.max(signatureHeight, customerSignatureHeight) + 13;
+  const approvalWidth = (A4[0] - MARGIN * 2 - 20) / 3;
+  const technicianLines: Array<[string, string]> = [["Status", technicianSigned ? "DIGITALLY SIGNED" : "SIGNATURE PENDING"], ["Site assessor", input.report.signatures?.technicianName || input.report.submittedByName], ["Assessment", input.visitRef], [technicianSigned ? "Signed" : "Submitted", issueDateTime]];
+  const customerApprovalLines: Array<[string, string]> = input.report.signatures ? [["Status", "DIGITALLY ACKNOWLEDGED"], ["Customer", input.report.signatures.customerName], ["Acknowledged", issueDateTime]] : [["Status", "AWAITING CUSTOMER ACKNOWLEDGEMENT"], ["Action", "Digital acknowledgement required"]];
+  const reviewLines: Array<[string, string]> = [["Status", analysis.technicalReviewRequired ? "REQUIRED" : "NOT REQUIRED"], ["Reason", analysis.technicalReviewRequired ? analysis.technicalReviewReasons[0] || "Verification required" : "Preliminary technical review complete"], ["Next action", analysis.technicalReviewRequired ? "Technical review before final quotation approval" : "Proceed with final quotation review"]];
+  const approvalHeight = Math.max(cardHeight(approvalWidth, technicianLines), cardHeight(approvalWidth, customerApprovalLines), cardHeight(approvalWidth, reviewLines));
+  card(MARGIN, approvalWidth, "Technician declaration", technicianLines, technicianSigned ? "plain" : "amber", approvalHeight);
+  card(MARGIN + approvalWidth + 10, approvalWidth, "Customer acknowledgement", customerApprovalLines, input.report.signatures ? "plain" : "amber", approvalHeight);
+  card(MARGIN + (approvalWidth + 10) * 2, approvalWidth, "Technical review", reviewLines, analysis.technicalReviewRequired ? "amber" : "plain", approvalHeight);
+  y -= approvalHeight + 10;
   const nextSteps = [["1", "REVIEW", "Confirm assessment details and outstanding verification."], ["2", "QUOTATION", "Prepare the final or custom quotation from the assessed requirement."], ["3", "APPROVAL", "Approve the quotation, schedule installation and complete commissioning."]];
   nextSteps.forEach(([number, title, detail], index) => {
     const x = MARGIN + index * 174;
@@ -559,18 +601,41 @@ export async function generateSiteAssessmentReportPdf(input: {
     drawParagraph(page, detail, x + 12, y - 34, 140, regular, 6.7, INK, 8);
   });
   y -= 78;
-  labeledText("Customer notes", "This assessment is based on appliances, usage patterns and site conditions recorded during the visit. Actual energy consumption may vary with customer behaviour, weather, appliance changes and operating hours.");
+  labeledText("Customer note", "Actual consumption and solar production may vary with usage patterns, weather, appliance changes and site conditions.");
+  section("Recent Betech solar installations");
+  const projectsHeight = 92;
+  ensure(projectsHeight + 8, "Approval & next steps");
+  drawRoundedBox(page, { x: MARGIN, y: y - projectsHeight, width: A4[0] - MARGIN * 2, height: projectsHeight, color: PALE, borderColor: BORDER, borderWidth: 0.7, borderRadius: 8 });
+  page.drawCircle({ x: MARGIN + 23, y: y - 27, size: 12, color: RED });
+  page.drawText("T", { x: MARGIN + 20.5, y: y - 30, font: bold, size: 8, color: rgb(1, 1, 1) });
+  page.drawText("VIEW OUR RECENT SOLAR PROJECTS", { x: MARGIN + 43, y: y - 22, font: bold, size: 8, color: RED });
+  drawParagraph(page, "See real solar installations completed by Betech Solar Solutions across Kenya.", MARGIN + 43, y - 36, 285, regular, 7.5, INK, 10);
+  page.drawText("@betechsolarprojects", { x: MARGIN + 43, y: y - 62, font: bold, size: 7.4, color: INK });
+  page.drawText("https://www.tiktok.com/@betechsolarprojects", { x: MARGIN + 43, y: y - 74, font: regular, size: 6.8, color: RED });
+  const projectsQrBytes = await QRCode.toBuffer("https://www.tiktok.com/@betechsolarprojects", { margin: 1, width: 100 }).catch(() => null);
+  if (projectsQrBytes) {
+    const projectsQr = await document.embedPng(projectsQrBytes);
+    page.drawImage(projectsQr, { x: A4[0] - MARGIN - 72, y: y - 76, width: 58, height: 58 });
+    page.drawText("SCAN TO VIEW PROJECTS", { x: A4[0] - MARGIN - 103, y: y - 87, font: bold, size: 5.6, color: MUTED });
+  }
+  y -= projectsHeight + 8;
   section("Terms and contact");
   const termsQr = await QRCode.toBuffer("https://www.betech.co.ke/p/terms", { margin: 1, width: 110 }).catch(() => null);
   if (termsQr) {
     const qr = await document.embedPng(termsQr);
-    page.drawImage(qr, { x: MARGIN, y: y - 72, width: 60, height: 60 });
+    page.drawImage(qr, { x: MARGIN, y: y - 66, width: 54, height: 54 });
   }
-  drawParagraph(page, "This report is a technical site assessment and preliminary system recommendation. Final equipment selection, protection ratings, cable sizing and installation scope are confirmed through the official quotation and final installation design.", MARGIN + 74, y - 14, 315, regular, 7.3, INK, 10);
-  page.drawText("FULL TERMS & CONDITIONS", { x: MARGIN + 74, y: y - 50, font: bold, size: 7.2, color: RED });
-  page.drawText("www.betech.co.ke/p/terms", { x: MARGIN + 74, y: y - 62, font: regular, size: 7.2, color: MUTED });
-  page.drawText("Technical Support 0705 663 175  ·  Sales Desk 0722 151 083  ·  info@betech.co.ke", { x: MARGIN, y: y - 86, font: regular, size: 6.4, color: MUTED });
-  page.drawText("Pramukh Plaza, 3rd Floor, Shop No. 3, Nairobi CBD  ·  www.betech.co.ke", { x: MARGIN, y: y - 97, font: regular, size: 6.4, color: MUTED });
+  page.drawText("SCAN TO VIEW FULL TERMS", { x: MARGIN, y: y - 76, font: bold, size: 5.8, color: MUTED });
+  page.drawText("www.betech.co.ke/p/terms", { x: MARGIN, y: y - 87, font: regular, size: 6.5, color: RED });
+  page.drawText("TECHNICAL SUPPORT", { x: MARGIN + 175, y: y - 15, font: bold, size: 6.7, color: RED });
+  page.drawText("0705 663 175", { x: MARGIN + 175, y: y - 26, font: regular, size: 7.2, color: INK });
+  page.drawText("SALES DESK", { x: MARGIN + 285, y: y - 15, font: bold, size: 6.7, color: RED });
+  page.drawText("0722 151 083", { x: MARGIN + 285, y: y - 26, font: regular, size: 7.2, color: INK });
+  page.drawText("EMAIL", { x: MARGIN + 175, y: y - 43, font: bold, size: 6.7, color: RED });
+  page.drawText("info@betech.co.ke", { x: MARGIN + 175, y: y - 54, font: regular, size: 7.2, color: INK });
+  page.drawText("WEBSITE", { x: MARGIN + 285, y: y - 43, font: bold, size: 6.7, color: RED });
+  page.drawText("www.betech.co.ke", { x: MARGIN + 285, y: y - 54, font: regular, size: 7.2, color: INK });
+  page.drawText("OFFICE  Pramukh Plaza, 3rd Floor, Shop No. 3, Nairobi CBD", { x: MARGIN + 175, y: y - 73, font: regular, size: 6.4, color: MUTED });
 
   pages.forEach((item, index) => {
     item.drawLine({ start: { x: MARGIN, y: 38 }, end: { x: A4[0] - MARGIN, y: 38 }, color: BORDER, thickness: 0.7 });
