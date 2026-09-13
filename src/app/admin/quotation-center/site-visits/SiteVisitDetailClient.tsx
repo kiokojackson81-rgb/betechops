@@ -248,7 +248,8 @@ export default function SiteVisitDetailClient({
   const [tab, setTab] = useState<Tab>("overview");
   const [draft, setDraft] = useState({
     ...initialVisit,
-    scheduledAt: initialVisit.scheduledAt?.slice(0, 16) || "",
+    scheduledAt: initialVisit.scheduledAt?.slice(0, 10) || "",
+    estimatedDurationMinutes: initialVisit.estimatedDurationMinutes ?? 30,
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -272,25 +273,50 @@ export default function SiteVisitDetailClient({
     setVisit(data.visit);
     setDraft({
       ...data.visit,
-      scheduledAt: data.visit.scheduledAt?.slice(0, 16) || "",
+      scheduledAt: data.visit.scheduledAt?.slice(0, 10) || "",
+      estimatedDurationMinutes: data.visit.estimatedDurationMinutes ?? 30,
     });
     setEvents(data.events || []);
     setAttachments(data.attachments || []);
   }
-  async function save(patch: Record<string, unknown> = {}) {
+  function overviewPayload() {
+    return {
+      customerName: draft.customerName,
+      customerPhone: draft.customerPhone,
+      customerEmail: draft.customerEmail || "",
+      companyName: draft.companyName || "",
+      county: draft.county || "",
+      town: draft.town || "",
+      location: draft.location || "",
+      landmark: draft.landmark || "",
+      mapUrl: draft.mapUrl || "",
+      accessInstructions: draft.accessInstructions || "",
+      scheduledAt: draft.scheduledAt || "",
+      estimatedDurationMinutes: draft.estimatedDurationMinutes ?? 30,
+      assignedStaffId: draft.assignedStaffId || "",
+      assignedTechnicianId: draft.assignedTechnicianId || "",
+      visitFee: draft.visitFee,
+      paymentStatus: draft.paymentStatus,
+      paymentMethod: draft.paymentMethod || "",
+      paymentReference: draft.paymentReference || "",
+      feeOverrideReason: draft.feeOverrideReason || "",
+      waiverReason: draft.waiverReason || "",
+      dataLoggerStatus: draft.dataLoggerStatus,
+      internalNotes: draft.internalNotes || "",
+      closedReason: draft.closedReason || "",
+    };
+  }
+
+  async function save(patch?: Record<string, unknown>, successMessage = "Site visit changes saved.") {
     setSaving(true);
     setError(null);
     setMessage(null);
     try {
-      const candidate = {
-        ...draft,
-        ...patch,
-        scheduledAt: (patch.scheduledAt ?? draft.scheduledAt) || undefined,
-      };
-      // The serialized visit includes nullable read-only fields. The update
-      // schema accepts omitted optional values, but not null for those fields.
+      // Never send serialized lifecycle fields back from a form edit. Sending
+      // the previous PENDING status prevented automatic technician assignment.
+      const candidate = patch ?? overviewPayload();
       const body = Object.fromEntries(
-        Object.entries(candidate).filter(([, value]) => value !== null),
+        Object.entries(candidate).filter(([, value]) => value !== undefined),
       );
       if (!body.dataLoggerRequested) {
         delete body.dataLoggerDays;
@@ -307,7 +333,7 @@ export default function SiteVisitDetailClient({
       if (!response.ok)
         throw new Error(data.error || "Unable to save changes.");
       await refresh();
-      setMessage("Site visit changes saved.");
+      setMessage(successMessage);
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -637,20 +663,33 @@ export default function SiteVisitDetailClient({
                   />
                 </Field>
                 <Field name="Confirmed schedule">
-                  <input
-                    type="datetime-local"
-                    className={input}
-                    value={String(draft.scheduledAt || "")}
-                    onChange={(e) =>
-                      patchDraft({ scheduledAt: e.target.value })
-                    }
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      className={`${input} min-w-0 flex-1`}
+                      value={String(draft.scheduledAt || "")}
+                      onChange={(e) =>
+                        patchDraft({ scheduledAt: e.target.value })
+                      }
+                    />
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void save(
+                        { scheduledAt: draft.scheduledAt || "", estimatedDurationMinutes: draft.estimatedDurationMinutes ?? 30 },
+                        draft.assignedTechnicianId ? "Schedule saved and customer notified." : "Schedule saved.",
+                      )}
+                      className="rounded-xl border border-cyan-400/35 px-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-400/10 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                  </div>
                 </Field>
                 <Field name="Expected duration (minutes)">
                   <input
                     type="number"
                     className={input}
-                    value={draft.estimatedDurationMinutes || 0}
+                    value={draft.estimatedDurationMinutes ?? 30}
                     onChange={(e) =>
                       patchDraft({
                         estimatedDurationMinutes: Number(e.target.value),
@@ -659,45 +698,65 @@ export default function SiteVisitDetailClient({
                   />
                 </Field>
                 <Field name="Assigned staff">
-                  <select
-                    disabled={!canAssignTechnicians}
-                    className={input}
-                    value={draft.assignedStaffId || ""}
-                    onChange={(e) =>
-                      patchDraft({ assignedStaffId: e.target.value })
-                    }
-                  >
-                    <option value="">Unassigned</option>
-                    {staffOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name || item.email}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field name="Assigned technician">
-                  <select
-                    disabled={!canAssignTechnicians}
-                    className={input}
-                    value={draft.assignedTechnicianId || ""}
-                    onChange={(e) =>
-                      patchDraft({ assignedTechnicianId: e.target.value })
-                    }
-                  >
-                    <option value="">Unassigned</option>
-                    {staffOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name || item.email}
-                      </option>
-                    ))}
-                    <optgroup label="External technicians">
-                      {externalTechnicians.map((item) => (
-                        <option key={item.id} value={`external:${item.id}`}>
-                          {item.name} · {item.whatsappNumber}
+                  <div className="flex gap-2">
+                    <select
+                      disabled={!canAssignTechnicians}
+                      className={`${input} min-w-0 flex-1`}
+                      value={draft.assignedStaffId || ""}
+                      onChange={(e) =>
+                        patchDraft({ assignedStaffId: e.target.value })
+                      }
+                    >
+                      <option value="">Unassigned</option>
+                      {staffOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name || item.email}
                         </option>
                       ))}
-                    </optgroup>
-                  </select>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={saving || !canAssignTechnicians}
+                      onClick={() => void save({ assignedStaffId: draft.assignedStaffId || "" }, "Assigned staff saved.")}
+                      className="rounded-xl border border-cyan-400/35 px-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-400/10 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </Field>
+                <Field name="Assigned technician">
+                  <div className="flex gap-2">
+                    <select
+                      disabled={!canAssignTechnicians}
+                      className={`${input} min-w-0 flex-1`}
+                      value={draft.assignedTechnicianId || ""}
+                      onChange={(e) =>
+                        patchDraft({ assignedTechnicianId: e.target.value })
+                      }
+                    >
+                      <option value="">Unassigned</option>
+                      {staffOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name || item.email}
+                        </option>
+                      ))}
+                      <optgroup label="External technicians">
+                        {externalTechnicians.map((item) => (
+                          <option key={item.id} value={`external:${item.id}`}>
+                            {item.name} · {item.whatsappNumber}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={saving || !canAssignTechnicians || !draft.assignedTechnicianId}
+                      onClick={() => void save({ assignedTechnicianId: draft.assignedTechnicianId }, "Technician assigned and customer notified.")}
+                      className="rounded-xl border border-violet-400/35 px-3 text-xs font-bold text-violet-100 transition hover:bg-violet-400/10 disabled:opacity-50"
+                    >
+                      Assign
+                    </button>
+                  </div>
                 </Field>
               </div>
             </div>
@@ -792,6 +851,26 @@ export default function SiteVisitDetailClient({
                   </Field>
                 ) : null}
               </div>
+              {canManageCommercials ? (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void save({
+                      visitFee: draft.visitFee,
+                      paymentStatus: draft.paymentStatus,
+                      paymentMethod: draft.paymentMethod || "",
+                      paymentReference: draft.paymentReference || "",
+                      feeOverrideReason: draft.feeOverrideReason || "",
+                      waiverReason: draft.waiverReason || "",
+                      dataLoggerStatus: draft.dataLoggerStatus,
+                    }, "Visit fee and payment details saved.")}
+                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/35 bg-emerald-400/[.08] px-4 py-2.5 text-sm font-bold text-emerald-100 transition hover:bg-emerald-400/[.14] disabled:opacity-50"
+                  >
+                    <Save className="h-4 w-4" /> Save fee & payment
+                  </button>
+                </div>
+              ) : null}
             </div>
             <SiteVisitWorkflowActions
               visit={visit}

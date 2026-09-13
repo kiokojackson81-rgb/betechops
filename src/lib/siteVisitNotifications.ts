@@ -15,15 +15,20 @@ import {
   type SiteAssessmentReport,
 } from "@/lib/siteAssessmentReport";
 
-type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; projectType?: QuoteProjectType | null; visitReason?: SiteVisitReason | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; paymentStatus: string; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
+type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; projectType?: QuoteProjectType | null; visitReason?: SiteVisitReason | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; estimatedDurationMinutes?: number | null; paymentStatus: string; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
 type RecipientType = "CUSTOMER" | "TECHNICIAN";
-type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS";
+type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_VISIT_SCHEDULED_CUSTOMER_SMS" | "SITE_VISIT_SCHEDULED_TECHNICIAN_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS";
 
-const customerUrl = (id: string) => `https://www.betech.co.ke/account/site-visits/${id}`;
-const customerReportUrl = (id: string) => `https://www.betech.co.ke/account/site-visits/${id}/report`;
+// The apex domain is the registered customer site. The www alias has not
+// consistently served customer-account routes, so SMS links must use this URL.
+const customerUrl = (id: string) => `https://betech.co.ke/account/site-visits/${id}`;
+const customerReportUrl = (id: string) => `https://betech.co.ke/account/site-visits/${id}/report`;
 const location = (visit: Visit) => [visit.location, visit.landmark, visit.town, visit.county].filter(Boolean).join(", ") || "Location pending";
 const providerMessageId = (result: unknown) => (result as { SMSMessageData?: { Recipients?: Array<{ messageId?: string }> } })?.SMSMessageData?.Recipients?.[0]?.messageId ?? null;
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] || character);
+const scheduleLabel = (scheduledAt: string | null | undefined) => scheduledAt
+  ? new Date(scheduledAt).toLocaleDateString("en-KE", { dateStyle: "medium" })
+  : null;
 
 async function sendOnce(input: { visitId: string; type: NotificationType; recipient: string; recipientType: RecipientType; message: string; version: string }) {
   const phone = normalizeKenyanPhone(input.recipient);
@@ -54,7 +59,7 @@ async function technicianPhone(visit: Visit) {
 
 export async function dispatchSiteVisitCreated(visit: Visit, requestedBy?: string | null) {
   await notifyAdminCriticalSms({ eventType: "SITE_VISIT_REQUESTED", entityId: visit.id, title: `New Site Visit Booking ${visit.visitRef}`, details: [`Customer: ${visit.customerName}`, `Phone: ${visit.customerPhone}`, `Location: ${location(visit)}`, `Requested by: ${requestedBy || "Customer"}`, "Technician: Pending Assignment", "Site Visit Fee: KSh 2,000", `Payment: ${visit.paymentStatus === "PAID" ? "Paid" : "Collect on Site"}`, visit.dataLoggerRequested ? `Data Logger: ${visit.dataLoggerDays} day(s)` : "Data Logger: None"], actionPath: `/admin/quotation-center/site-visits/${visit.id}`, payload: { visitRef: visit.visitRef, notificationType: "SITE_VISIT_CREATED_ADMIN_SMS" } });
-  const message = `Betech Solar: Your site visit ${visit.visitRef} has been booked and is pending technician assignment. A KSh 2,000 site visit fee will be required and deducted from your final quotation if you proceed with Betech. Once assigned, our technician will contact you. Track: ${customerUrl(visit.id)}`;
+  const message = `Your site visit ${visit.visitRef} is booked and pending technician assignment. A KSh ${visit.visitFee.toLocaleString("en-KE")} site visit fee will be required and may be credited to your final quotation if you proceed. Once assigned, the technician will contact you. Track: ${customerUrl(visit.id)}`;
   return sendOnce({ visitId: visit.id, type: "SITE_VISIT_CREATED_CUSTOMER_SMS", recipient: visit.customerPhone, recipientType: "CUSTOMER", message, version: "created" });
 }
 
@@ -62,11 +67,31 @@ export async function dispatchSiteVisitTechnicianAssignment(visit: Visit, previo
   if (!visit.assignedTechnicianId || !visit.assignedTechnicianName) return;
   const reassigned = Boolean(previousTechnicianId);
   const version = `${visit.assignedTechnicianId}:${visit.scheduledAt || "unscheduled"}`;
-  const schedule = visit.scheduledAt ? new Date(visit.scheduledAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" }) : null;
-  const customerMessage = reassigned ? `Betech Solar: Your assigned technician for site visit ${visit.visitRef} has changed. Your new technician is ${visit.assignedTechnicianName} and will contact you to arrange the visit. Track: ${customerUrl(visit.id)}` : schedule ? `Betech Solar: Your site visit ${visit.visitRef} is confirmed for ${schedule}. Technician: ${visit.assignedTechnicianName}. The technician will contact you before travelling to site. Track: ${customerUrl(visit.id)}` : `Betech Solar: A technician has been assigned to your site visit ${visit.visitRef}. Technician: ${visit.assignedTechnicianName}. The technician will contact you to arrange the visit. ${visit.paymentStatus === "PAID" ? "Site visit fee already paid." : "KSh 2,000 is payable after the site visit and is deductible from your final quotation if you proceed with Betech."} Track: ${customerUrl(visit.id)}`;
-  const technicianMessage = `[BETECH FIELD] Site Visit Assigned: ${visit.visitRef}\nCustomer: ${visit.customerName}\nTel: ${visit.customerPhone}\nLocation: ${location(visit)}\nContact the customer to arrange and conduct the site visit. ${visit.paymentStatus === "PAID" ? "Site visit fee already paid - do not collect payment." : "Collect KSh 2,000 at the end of the site visit."} Submit the site assessment report for quotation preparation.${visit.dataLoggerRequested ? ` Data Logger: ${visit.dataLoggerDays} day(s) - install/collect as specified.` : ""}\nOpen: https://ops.betech.co.ke/technical/site-visits/${visit.id}`;
+  const schedule = scheduleLabel(visit.scheduledAt);
   const phone = await technicianPhone(visit);
+  const technicianContact = phone ? ` (${phone})` : "";
+  const customerMessage = reassigned
+    ? `Your assigned technician for site visit ${visit.visitRef} has changed. Your new technician is ${visit.assignedTechnicianName}${technicianContact} and will contact you to arrange the visit. Track: ${customerUrl(visit.id)}`
+    : schedule
+      ? `Your site visit ${visit.visitRef} is confirmed for ${schedule}. Technician: ${visit.assignedTechnicianName}${technicianContact}. The technician will contact you before travelling to site. Track: ${customerUrl(visit.id)}`
+      : `A technician has been assigned to your site visit ${visit.visitRef}. Technician: ${visit.assignedTechnicianName}${technicianContact}. The technician will contact you to arrange the visit. ${visit.paymentStatus === "PAID" ? "Site visit fee already paid." : `KSh ${visit.visitFee.toLocaleString("en-KE")} is payable after the site visit and may be credited to your final quotation if you proceed.`} Track: ${customerUrl(visit.id)}`;
+  const technicianMessage = `[BETECH FIELD] Site Visit Assigned: ${visit.visitRef}\nCustomer: ${visit.customerName}\nTel: ${visit.customerPhone}\nLocation: ${location(visit)}\nContact the customer to arrange and conduct the site visit. ${visit.paymentStatus === "PAID" ? "Site visit fee already paid - do not collect payment." : `Collect KSh ${visit.visitFee.toLocaleString("en-KE")} at the end of the site visit.`} Submit the site assessment report for quotation preparation.${visit.dataLoggerRequested ? ` Data Logger: ${visit.dataLoggerDays} day(s) - install/collect as specified.` : ""}\nOpen: https://ops.betech.co.ke/technical/site-visits/${visit.id}`;
   await Promise.allSettled([sendOnce({ visitId: visit.id, type: reassigned ? "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" : "TECHNICIAN_ASSIGNED_CUSTOMER_SMS", recipient: visit.customerPhone, recipientType: "CUSTOMER", message: customerMessage, version }), phone ? sendOnce({ visitId: visit.id, type: reassigned ? "TECHNICIAN_REASSIGNED_SMS" : "TECHNICIAN_ASSIGNED_SMS", recipient: phone, recipientType: "TECHNICIAN", message: technicianMessage, version }) : Promise.resolve({ status: "SKIPPED" })]);
+}
+
+export async function dispatchSiteVisitScheduleConfirmation(visit: Visit) {
+  if (!visit.assignedTechnicianId || !visit.assignedTechnicianName || !visit.scheduledAt) return;
+  const schedule = scheduleLabel(visit.scheduledAt);
+  if (!schedule) return;
+  const phone = await technicianPhone(visit);
+  const duration = visit.estimatedDurationMinutes ? ` Expected duration: ${visit.estimatedDurationMinutes} minutes.` : "";
+  const customerMessage = `Your site visit ${visit.visitRef} is confirmed for ${schedule}. Technician: ${visit.assignedTechnicianName}${phone ? ` (${phone})` : ""}. The technician will contact you before travelling to site.${duration} Track: ${customerUrl(visit.id)}`;
+  const technicianMessage = `[BETECH FIELD] Site Visit Schedule Confirmed: ${visit.visitRef}\nCustomer: ${visit.customerName}\nTel: ${visit.customerPhone}\nDate: ${schedule}${duration}\nLocation: ${location(visit)}\nOpen: https://ops.betech.co.ke/technical/site-visits/${visit.id}`;
+  const version = `${visit.assignedTechnicianId}:${visit.scheduledAt}`;
+  await Promise.allSettled([
+    sendOnce({ visitId: visit.id, type: "SITE_VISIT_SCHEDULED_CUSTOMER_SMS", recipient: visit.customerPhone, recipientType: "CUSTOMER", message: customerMessage, version }),
+    phone ? sendOnce({ visitId: visit.id, type: "SITE_VISIT_SCHEDULED_TECHNICIAN_SMS", recipient: phone, recipientType: "TECHNICIAN", message: technicianMessage, version }) : Promise.resolve({ status: "SKIPPED" }),
+  ]);
 }
 
 export async function dispatchSiteAssessmentReportPublished(
@@ -81,7 +106,7 @@ export async function dispatchSiteAssessmentReportPublished(
     type: options.resend ? "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS" : "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS",
     recipient: visit.customerPhone,
     recipientType: "CUSTOMER",
-    message: `Betech Solar: Your site assessment report for ${visit.visitRef} is ${options.resend ? "available again" : "ready"}. Recommendation: ${recommendation}. View it securely in your account: ${reportUrl}`,
+    message: `Your site assessment report for ${visit.visitRef} is ${options.resend ? "available again" : "ready"}. Recommendation: ${recommendation}. View it securely in your account: ${reportUrl}`,
     version: options.deliveryVersion || report.submittedAt,
   });
   const email = String(visit.customerEmail || "").trim();
@@ -116,5 +141,5 @@ export async function dispatchSiteAssessmentReportPublished(
 }
 
 export async function notifySiteVisitCustomer(input: { event: string; customerName: string; phone?: string | null; email?: string | null; visitRef: string; detail?: string | null }) {
-  if (input.phone) await sendTransactionalSms(input.phone, `Betech Solar: Site visit ${input.visitRef} ${input.event.replace(/_/g, " ").toLowerCase()}.${input.detail ? ` ${input.detail}` : ""}`).catch(() => undefined);
+  if (input.phone) await sendTransactionalSms(input.phone, `Site visit ${input.visitRef} ${input.event.replace(/_/g, " ").toLowerCase()}.${input.detail ? ` ${input.detail}` : ""}`).catch(() => undefined);
 }

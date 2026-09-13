@@ -11,6 +11,7 @@ import {
 } from "@/lib/siteVisits";
 import {
   dispatchSiteVisitCreated,
+  dispatchSiteVisitScheduleConfirmation,
   dispatchSiteVisitTechnicianAssignment,
 } from "@/lib/siteVisitNotifications";
 
@@ -102,6 +103,10 @@ export async function PATCH(
   }
   const technicianChanged = existing.assignedTechnicianId !== visit.assignedTechnicianId;
   if (technicianChanged && visit.assignedTechnicianId) void dispatchSiteVisitTechnicianAssignment(visit, existing.assignedTechnicianId);
+  const scheduleChanged = existing.scheduledAt !== visit.scheduledAt;
+  if (scheduleChanged && !technicianChanged && visit.assignedTechnicianId && visit.scheduledAt) {
+    void dispatchSiteVisitScheduleConfirmation(visit);
+  }
 
   return NextResponse.json({ ok: true, visit });
 }
