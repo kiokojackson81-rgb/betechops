@@ -209,6 +209,7 @@ const emptyElectrical = {
   monthlyBill: "",
   tariff: "",
   billDate: "",
+  billingDays: "",
   systemGoal: "Backup during outages",
   backupHours: "8",
   budget: "Not discussed",
@@ -700,7 +701,7 @@ export default function SiteAssessmentPublicClient({
         essential: profile.essential,
         design: profile.design,
         photo: false,
-        details: profile.details || {},
+        details: { ...(profile.details || {}), ratingSource: "Default appliance profile" },
       },
     ]);
     setLoadEditorSnapshot(null);
@@ -733,7 +734,7 @@ export default function SiteAssessmentPublicClient({
         essential: false,
         design: "Yes",
         photo: false,
-        details: {},
+        details: { ratingSource: "Unknown / needs nameplate" },
       },
     ]);
     setLoadEditorSnapshot(null);
@@ -805,17 +806,25 @@ export default function SiteAssessmentPublicClient({
       details: projectDetails,
     },
     evidenceNames,
+    sizingAssumptions: analysis.assumptions,
+    sizingValidation: {
+      confidence: analysis.sizingConfidence,
+      confidenceScore: analysis.confidenceScore,
+      result: analysis.assessmentResult,
+      criticalReadinessIssues: analysis.criticalReadinessIssues,
+    },
     calculation: {
       connectedKw: connected / 1000,
       dailyKwh: daily / 1000,
       continuousKw: analysis.continuousKw,
       simultaneousPeakKw: analysis.simultaneousPeakKw,
+      surgeRequirementKw: analysis.surgeRequirementKw,
       inverterKw,
       batteryRecommendation,
       batteryKwh: analysis.batteryKwh,
       pvKw,
       panelCount,
-      panelWatts: 600,
+      panelWatts: analysis.panelWatts,
     },
   });
   const evidenceFiles = () =>
@@ -1454,6 +1463,7 @@ export default function SiteAssessmentPublicClient({
                 />
               </Field>
               <Field label="Bill date (optional)"><input className={input} type="date" value={electrical.billDate} onChange={(event) => setElectrical({ ...electrical, billDate: event.target.value })} /></Field>
+              <Field label="Billing period days (optional)"><input className={input} type="number" min="1" max="90" value={electrical.billingDays || ""} onChange={(event) => setElectrical({ ...electrical, billingDays: event.target.value })} placeholder="Defaults to 30 days" /></Field>
               <Field label={`📷 Take photo / upload latest ${electrical.billing === "Prepaid" ? "token or SMS" : "KPLC bill"}`}>
                 <input
                   className={input}
@@ -1731,6 +1741,12 @@ export default function SiteAssessmentPublicClient({
             {aiStatus === "analysing" ? "AI analysing…" : aiStatus === "updated" ? "AI recommendation ready" : aiStatus === "unavailable" ? "AI recommendation temporarily unavailable — field assessment has been saved." : "AI analysis pending"}
             {aiStatus === "unavailable" ? <button type="button" onClick={() => void analyseAssessment()} className="ml-3 underline">Retry</button> : null}
           </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <ProposalMetric label="Sizing confidence" value={`${analysis.sizingConfidence} · ${analysis.confidenceScore}%`} detail="Deterministic score based on evidence, major-load confidence, KPLC alignment, roof and electrical checks." />
+            <ProposalMetric label="Assessment result" value={analysis.assessmentResult} detail={analysis.recommendationOutcome} />
+            <ProposalMetric label="Surge requirement" value={`${analysis.surgeRequirementKw.toFixed(2)} kW`} detail="Short-duration motor/compressor start requirement, separate from normal running load." />
+          </div>
+          {analysis.criticalReadinessIssues.length ? <div className="mt-4 rounded-xl border border-rose-300/35 bg-rose-400/10 p-4 text-sm text-rose-100"><b>Outstanding technical actions</b><ul className="mt-2 list-disc space-y-1 pl-5">{analysis.criticalReadinessIssues.map((issue) => <li key={issue}>🔴 Required before quotation — {issue}</li>)}</ul></div> : <p className="mt-4 rounded-xl border border-emerald-300/35 bg-emerald-400/10 p-4 text-sm font-bold text-emerald-100">✓ Sizing is ready for technical quotation, subject to the listed report confirmations.</p>}
           {analysisError ? (
             <p className="mt-3 text-sm font-semibold text-rose-200">
               {analysisError}
@@ -1918,7 +1934,7 @@ export default function SiteAssessmentPublicClient({
             </p>
           ) : (
             <>
-              <div className="mt-5 rounded-2xl border border-emerald-300/30 bg-slate-950/40 p-4"><h3 className="font-black text-emerald-100">Recommended solar system</h3><p className="mt-2 text-lg font-bold">{inverterKw.toFixed(1)} kW Hybrid Inverter · {recommendedBatteryKwh.toFixed(2)} kWh Lithium Battery · {panelCount} × 600 W Solar Panels</p><p className="mt-2 text-sm text-slate-300">Supports the selected essential appliances, targets {backupHours} hours of backup and can be expanded as future loads are added.</p></div>
+              <div className="mt-5 rounded-2xl border border-emerald-300/30 bg-slate-950/40 p-4"><h3 className="font-black text-emerald-100">Recommended solar system</h3><p className="mt-2 text-lg font-bold">{inverterKw.toFixed(1)} kW Hybrid Inverter · {recommendedBatteryKwh.toFixed(2)} kWh Lithium Battery · {panelCount} × {analysis.panelWatts} W Solar Panels</p><p className="mt-2 text-sm text-slate-300">Supports the selected essential appliances, targets {backupHours} hours of backup and can be expanded as future loads are added.</p></div>
               <details className="mt-5"><summary className="cursor-pointer font-bold text-cyan-100">View technical calculations</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <ProposalMetric
                   label="Continuous solar load"
@@ -1947,7 +1963,7 @@ export default function SiteAssessmentPublicClient({
                 <ProposalMetric
                   label="PV requirement / practical array"
                   value={`${pvKw.toFixed(2)} / ${analysis.pvPracticalKwp.toFixed(2)} kWp`}
-                  detail={`Calculated PV requirement, then rounded up to ${panelCount} x 600 W panels. Expected average production: ${analysis.expectedSolarProductionKwh.toFixed(2)} kWh/day.`}
+                  detail={`Daily design energy ${analysis.pvDesignEnergyKwh.toFixed(2)} kWh ÷ (${analysis.assumptions.peakSunHours} PSH × ${(analysis.assumptions.pvPerformanceFactor * 100).toFixed(0)}%) then rounded up to ${panelCount} × ${analysis.panelWatts} W. Expected average production: ${analysis.expectedSolarProductionKwh.toFixed(2)} kWh/day.`}
                 />
                 <ProposalMetric
                   label="Essential backup energy"
@@ -2596,6 +2612,22 @@ function LoadCard({
             )}
           </label>
         )}
+        <Field label="Rating source / confidence">
+          <select className={input} value={load.details.ratingSource || (load.ratingKnown ? "Technician-entered rating" : "Unknown / needs nameplate")} onChange={(event) => detail(load, "ratingSource", event.target.value)}>
+            <option>Default appliance profile</option><option>Technician-entered rating</option><option>Nameplate photo confirmed</option><option>Customer-provided estimate</option><option>Unknown / needs nameplate</option>
+          </select>
+        </Field>
+        <Field label="Load type">
+          <select className={input} value={load.details.loadType || (/[Pp]ump|[Ff]ridge|[Ff]reezer|[Aa]ir conditioner|[Gg]ate/.test(`${load.kind} ${load.name}`) ? "Motor/compressor" : "Electronic")} onChange={(event) => detail(load, "loadType", event.target.value)}>
+            <option>Resistive</option><option>Electronic</option><option>Motor/compressor</option><option>Unknown</option>
+          </select>
+        </Field>
+        {(load.details.loadType === "Motor/compressor" || /pump|fridge|freezer|air conditioner|\bac\b|gate/i.test(`${load.kind} ${load.name}`)) ? <>
+          <Field label="Motor / compressor surge multiplier"><input className={input} type="number" min="1" step="0.1" value={load.details.surgeMultiplier || ""} onChange={(event) => detail(load, "surgeMultiplier", event.target.value)} placeholder="Defaults to 3× until confirmed" /></Field>
+          <Field label="Rated HP (optional)"><input className={input} type="number" min="0" step="0.1" value={load.details.horsepower || ""} onChange={(event) => detail(load, "horsepower", event.target.value)} /></Field>
+          <Field label="Duty cycle (%)"><input className={input} type="number" min="1" max="100" value={load.details.dutyCycle ? String(Number(load.details.dutyCycle) * 100) : ""} onChange={(event) => detail(load, "dutyCycle", event.target.value ? String(Number(event.target.value) / 100) : "")} placeholder="Use for fridge/freezer/AC if known" /></Field>
+          <label className="rounded-xl border border-amber-300/30 p-3 text-sm font-semibold text-amber-100">📷 Nameplate photo {load.photo ? "✓ captured" : "recommended for this major load"}<input className="mt-2 block w-full text-xs" type="file" accept="image/*" capture="environment" onChange={() => { edit(load.id, { photo: true }); detail(load, "ratingSource", "Nameplate photo confirmed"); }} /></label>
+        </> : null}
         <Field label="How is it used?">
           <select
             className={input}
@@ -2693,6 +2725,7 @@ function LoadCard({
             <option>No</option>
           </select>
         </Field>
+        {load.essential ? <Field label="Expected runtime during outage (hours)"><input className={input} type="number" min="0" step="0.25" value={load.details.outageRuntimeHours || ""} onChange={(event) => detail(load, "outageRuntimeHours", event.target.value)} placeholder="Defaults to the relevant recorded usage / backup target" /></Field> : null}
         <Field label="Include in solar design?">
           <select
             className={input}

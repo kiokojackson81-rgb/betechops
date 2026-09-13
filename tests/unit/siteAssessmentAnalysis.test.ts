@@ -40,4 +40,28 @@ describe("deterministic site-assessment engineering analysis", () => {
     });
     expect(result.productMatch.status).toBe("FAIL");
   });
+
+  it("uses duty cycle, separate motor surge and outage runtime for defensible sizing", () => {
+    const result = analyseSiteAssessment({
+      ...base,
+      loads: [
+        { id: 1, kind: "freezer", name: "Freezer", qty: 1, watts: 200, ratingKnown: true, usageMode: "ALWAYS_ON", period: "Both", essential: true, simultaneous: 1, details: { dutyCycle: "0.4", outageRuntimeHours: "8", surgeMultiplier: "3", ratingSource: "Nameplate photo confirmed" } },
+        { id: 2, kind: "lights", name: "Lights", qty: 5, watts: 10, ratingKnown: true, usageMode: "DAILY_HOURS", hours: 5, period: "Night", essential: true, simultaneous: 5, details: { outageRuntimeHours: "5", ratingSource: "Technician-entered rating" } },
+      ],
+    });
+    expect(result.dailyKwh).toBeCloseTo(2.17);
+    expect(result.rawBackupEnergyKwh).toBeCloseTo(0.89);
+    expect(result.surgeRequirementKw).toBeGreaterThan(result.simultaneousPeakKw);
+  });
+
+  it("marks major unverified loads and significant KPLC variance for review", () => {
+    const result = analyseSiteAssessment({
+      ...base,
+      electrical: { ...base.electrical, monthlyKwh: "30" },
+      loads: [{ id: 1, kind: "water-pump", name: "Water pump", qty: 1, watts: 1500, ratingKnown: false, usageMode: "DAILY_HOURS", hours: 4, period: "Day", essential: true, simultaneous: 1, details: { ratingSource: "Default appliance profile" } }],
+    });
+    expect(result.kplcAlignment).toBe("SIGNIFICANT_DISCREPANCY");
+    expect(result.highImpactLowConfidenceLoads).toHaveLength(1);
+    expect(result.assessmentResult).toBe("SIZING REVIEW REQUIRED");
+  });
 });

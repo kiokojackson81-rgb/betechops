@@ -17,6 +17,8 @@ export type AssessmentLoadInput = {
   essential?: boolean;
   design?: string;
   details?: Record<string, string>;
+  ratingKnown?: boolean;
+  photo?: boolean;
 };
 
 export type AssessmentProductInput = {
@@ -32,17 +34,25 @@ export type AssessmentAnalysisInput = {
   siteDetails?: Record<string, unknown>;
   evidenceNames?: Record<string, unknown>;
   selectedProduct?: AssessmentProductInput | null;
+  sizingConfig?: Record<string, unknown>;
 };
 
 export const ASSESSMENT_DESIGN_ASSUMPTIONS = {
+  version: "2026-09-residential-v2",
   peakSunHours: 4.5,
   pvPerformanceFactor: 0.78,
+  pvRechargeMargin: 1.1,
   inverterOperatingReserve: 0.25,
   batteryInverterEfficiency: 0.92,
   batteryDepthOfDischarge: 0.9,
   batteryReserve: 0.1,
   batteryOperatingMargin: 0.95,
   panelWatts: 600,
+  defaultMotorSurgeMultiplier: 3,
+  defaultCompressorDutyCycle: 0.35,
+  defaultAcDutyCycle: 0.6,
+  kplcAlignedVariancePercent: 20,
+  kplcReviewVariancePercent: 50,
   dayShareForBoth: 0.5,
   nightShareForBoth: 0.5,
 } as const;
@@ -50,6 +60,7 @@ export const ASSESSMENT_DESIGN_ASSUMPTIONS = {
 const INVERTER_SIZES_KW = [1.5, 3, 5, 6, 8, 10, 12, 16, 20];
 const BATTERY_SIZES_KWH = [2.56, 5.12, 7.68, 10, 15, 16];
 const MOTOR_KINDS = new Set(["fridge", "freezer", "water-pump", "borehole-pump", "electric-gate", "ac"]);
+const MAJOR_LOAD_KINDS = new Set(["water-pump", "borehole-pump", "fridge", "freezer", "ac", "cooker", "washing", "electric-gate"]);
 const CRITICAL_EVIDENCE = ["Meter box", "Open main DB", "Earthing point", "Roof wide"];
 
 const number = (value: unknown) => {
@@ -92,20 +103,83 @@ function productCapabilities(product: AssessmentProductInput | null | undefined)
   };
 }
 
+type SizingConfig = {
+  version: string;
+  peakSunHours: number;
+  pvPerformanceFactor: number;
+  pvRechargeMargin: number;
+  inverterOperatingReserve: number;
+  batteryInverterEfficiency: number;
+  batteryDepthOfDischarge: number;
+  batteryReserve: number;
+  batteryOperatingMargin: number;
+  panelWatts: number;
+  defaultMotorSurgeMultiplier: number;
+  defaultCompressorDutyCycle: number;
+  defaultAcDutyCycle: number;
+  kplcAlignedVariancePercent: number;
+  kplcReviewVariancePercent: number;
+  dayShareForBoth: number;
+  nightShareForBoth: number;
+};
+const configuredNumber = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+function resolveSizingConfig(raw: Record<string, unknown> | undefined): SizingConfig {
+  return {
+    ...ASSESSMENT_DESIGN_ASSUMPTIONS,
+    peakSunHours: configuredNumber(raw?.peakSunHours, ASSESSMENT_DESIGN_ASSUMPTIONS.peakSunHours),
+    pvPerformanceFactor: configuredNumber(raw?.pvPerformanceFactor, ASSESSMENT_DESIGN_ASSUMPTIONS.pvPerformanceFactor),
+    pvRechargeMargin: configuredNumber(raw?.pvRechargeMargin, ASSESSMENT_DESIGN_ASSUMPTIONS.pvRechargeMargin),
+    inverterOperatingReserve: configuredNumber(raw?.inverterOperatingReserve, ASSESSMENT_DESIGN_ASSUMPTIONS.inverterOperatingReserve),
+    batteryInverterEfficiency: configuredNumber(raw?.batteryInverterEfficiency, ASSESSMENT_DESIGN_ASSUMPTIONS.batteryInverterEfficiency),
+    batteryDepthOfDischarge: configuredNumber(raw?.batteryDepthOfDischarge, ASSESSMENT_DESIGN_ASSUMPTIONS.batteryDepthOfDischarge),
+    batteryReserve: configuredNumber(raw?.batteryReserve, ASSESSMENT_DESIGN_ASSUMPTIONS.batteryReserve),
+    batteryOperatingMargin: configuredNumber(raw?.batteryOperatingMargin, ASSESSMENT_DESIGN_ASSUMPTIONS.batteryOperatingMargin),
+    panelWatts: configuredNumber(raw?.panelWatts, ASSESSMENT_DESIGN_ASSUMPTIONS.panelWatts),
+    defaultMotorSurgeMultiplier: configuredNumber(raw?.defaultMotorSurgeMultiplier, ASSESSMENT_DESIGN_ASSUMPTIONS.defaultMotorSurgeMultiplier),
+    defaultCompressorDutyCycle: configuredNumber(raw?.defaultCompressorDutyCycle, ASSESSMENT_DESIGN_ASSUMPTIONS.defaultCompressorDutyCycle),
+    defaultAcDutyCycle: configuredNumber(raw?.defaultAcDutyCycle, ASSESSMENT_DESIGN_ASSUMPTIONS.defaultAcDutyCycle),
+    kplcAlignedVariancePercent: configuredNumber(raw?.kplcAlignedVariancePercent, ASSESSMENT_DESIGN_ASSUMPTIONS.kplcAlignedVariancePercent),
+    kplcReviewVariancePercent: configuredNumber(raw?.kplcReviewVariancePercent, ASSESSMENT_DESIGN_ASSUMPTIONS.kplcReviewVariancePercent),
+  };
+}
+
+function loadType(load: AssessmentLoadInput) {
+  const recorded = normalized(load.details?.loadType);
+  if (recorded === "motor/compressor") return "MOTOR_COMPRESSOR";
+  if (recorded === "resistive") return "RESISTIVE";
+  if (recorded === "electronic") return "ELECTRONIC";
+  return MOTOR_KINDS.has(load.kind || "") || /(pump|fridge|freezer|air conditioner|compressor|gate)/i.test(load.name || "")
+    ? "MOTOR_COMPRESSOR"
+    : "UNKNOWN";
+}
+
 export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
+  const assumptions = resolveSizingConfig(input.sizingConfig);
   const loads = (input.loads || []).map((load) => {
     const watts = number(load.watts);
     const qty = number(load.qty);
     const connectedKw = watts * qty / 1000;
     const hours = usageHoursPerDay(load);
-    const energyKwh = connectedKw * hours;
+    const type = loadType(load);
+    const recordedDutyCycle = number(load.details?.dutyCycle);
+    const dutyCycle = recordedDutyCycle || (type === "MOTOR_COMPRESSOR" && /air conditioner|\bac\b/i.test(load.name || "") ? assumptions.defaultAcDutyCycle : type === "MOTOR_COMPRESSOR" && /(fridge|freezer)/i.test(load.name || "") ? assumptions.defaultCompressorDutyCycle : 1);
+    const dutyCycleEstimated = !recordedDutyCycle && dutyCycle !== 1;
+    const energyKwh = connectedKw * hours * dutyCycle;
     const period = normalized(load.period);
     const dayShare = period === "night" ? 0 : period === "both" || load.usageMode === "ALWAYS_ON" ? ASSESSMENT_DESIGN_ASSUMPTIONS.dayShareForBoth : 1;
     const nightShare = period === "day" ? 0 : period === "both" || load.usageMode === "ALWAYS_ON" ? ASSESSMENT_DESIGN_ASSUMPTIONS.nightShareForBoth : 1;
     const requestedBackupHours = number(input.electrical?.backupHours) || 8;
-    const outageRuntimeHours = Math.min(hours, requestedBackupHours);
+    const recordedOutageRuntime = number(load.details?.outageRuntimeHours);
+    const outageRuntimeHours = recordedOutageRuntime || Math.min(hours, requestedBackupHours);
     const essential = Boolean(load.essential) && !normalized(load.design).includes("leave on grid");
-    return { ...load, watts, qty, connectedKw, hours, energyKwh, dayKwh: energyKwh * dayShare, nightKwh: energyKwh * nightShare, essential, outageRuntimeHours };
+    const surgeMultiplier = type === "MOTOR_COMPRESSOR" ? number(load.details?.surgeMultiplier) || assumptions.defaultMotorSurgeMultiplier : 1;
+    const surgeEstimated = type === "MOTOR_COMPRESSOR" && !number(load.details?.surgeMultiplier);
+    const source = clean(load.details?.ratingSource) || (load.ratingKnown ? "Technician-entered rating" : "Default / unknown rating");
+    const confidence = load.photo ? "HIGH" : /default|unknown|estimate/i.test(source) || !load.ratingKnown ? "LOW" : "MEDIUM";
+    return { ...load, watts, qty, connectedKw, hours, dutyCycle, dutyCycleEstimated, energyKwh, dayKwh: energyKwh * dayShare, nightKwh: energyKwh * nightShare, essential, outageRuntimeHours, outageEnergyKwh: connectedKw * Math.min(outageRuntimeHours, requestedBackupHours) * dutyCycle, loadType: type, surgeMultiplier, surgeEstimated, surgeKw: connectedKw * surgeMultiplier, source, confidence };
   });
   const included = loads.filter((load) => !normalized(load.design).includes("leave on grid"));
   const connectedKw = loads.reduce((total, load) => total + load.connectedKw, 0);
@@ -114,40 +188,65 @@ export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
   const nightKwh = loads.reduce((total, load) => total + load.nightKwh, 0);
   const continuousKw = included.filter((load) => load.usageMode === "ALWAYS_ON").reduce((total, load) => total + load.connectedKw, 0);
   const simultaneousPeakKw = included.reduce((total, load) => total + number(load.watts) * Math.min(number(load.qty), number(load.simultaneous) || number(load.qty)) / 1000, 0);
-  const largestMotorKw = included.filter((load) => MOTOR_KINDS.has(load.kind || "") || /(pump|fridge|freezer|air conditioner)/i.test(load.name || "")).reduce((largest, load) => Math.max(largest, load.connectedKw), 0);
-  const inverterRequiredKw = Math.max(simultaneousPeakKw * (1 + ASSESSMENT_DESIGN_ASSUMPTIONS.inverterOperatingReserve), continuousKw * (1 + ASSESSMENT_DESIGN_ASSUMPTIONS.inverterOperatingReserve), simultaneousPeakKw + largestMotorKw * 2);
+  const motorLoads = included.filter((load) => load.loadType === "MOTOR_COMPRESSOR");
+  const maximumMotorStartIncrementKw = motorLoads.reduce((largest, load) => Math.max(largest, load.connectedKw * Math.max(0, load.surgeMultiplier - 1)), 0);
+  const surgeRequirementKw = simultaneousPeakKw + maximumMotorStartIncrementKw;
+  const inverterRequiredKw = Math.max(simultaneousPeakKw * (1 + assumptions.inverterOperatingReserve), continuousKw * (1 + assumptions.inverterOperatingReserve), surgeRequirementKw);
   const inverterKw = roundUp(Math.max(1.5, inverterRequiredKw), INVERTER_SIZES_KW);
   const essentialLoads = included.filter((load) => load.essential);
-  const rawBackupEnergyKwh = essentialLoads.reduce((total, load) => total + load.connectedKw * load.outageRuntimeHours, 0);
-  const batteryDenominator = ASSESSMENT_DESIGN_ASSUMPTIONS.batteryInverterEfficiency * ASSESSMENT_DESIGN_ASSUMPTIONS.batteryDepthOfDischarge * (1 - ASSESSMENT_DESIGN_ASSUMPTIONS.batteryReserve) * ASSESSMENT_DESIGN_ASSUMPTIONS.batteryOperatingMargin;
+  const rawBackupEnergyKwh = essentialLoads.reduce((total, load) => total + load.outageEnergyKwh, 0);
+  const batteryDenominator = assumptions.batteryInverterEfficiency * assumptions.batteryDepthOfDischarge * (1 - assumptions.batteryReserve) * assumptions.batteryOperatingMargin;
   const calculatedBatteryKwh = rawBackupEnergyKwh ? rawBackupEnergyKwh / batteryDenominator : 0;
   const batteryKwh = calculatedBatteryKwh ? roundUp(Math.max(2.56, calculatedBatteryKwh), BATTERY_SIZES_KWH) : 0;
-  const usableBatteryKwh = batteryKwh * ASSESSMENT_DESIGN_ASSUMPTIONS.batteryDepthOfDischarge * ASSESSMENT_DESIGN_ASSUMPTIONS.batteryInverterEfficiency * ASSESSMENT_DESIGN_ASSUMPTIONS.batteryOperatingMargin;
+  const usableBatteryKwh = batteryKwh * assumptions.batteryDepthOfDischarge * assumptions.batteryInverterEfficiency * assumptions.batteryOperatingMargin;
   const essentialAverageKw = rawBackupEnergyKwh && (number(input.electrical?.backupHours) || 8) ? rawBackupEnergyKwh / (number(input.electrical?.backupHours) || 8) : 0;
   const expectedBackupHours = essentialAverageKw ? usableBatteryKwh / essentialAverageKw : 0;
-  const pvCalculatedKwp = dailyKwh / (ASSESSMENT_DESIGN_ASSUMPTIONS.peakSunHours * ASSESSMENT_DESIGN_ASSUMPTIONS.pvPerformanceFactor);
-  const panelCount = pvCalculatedKwp ? Math.max(1, Math.ceil(pvCalculatedKwp * 1000 / ASSESSMENT_DESIGN_ASSUMPTIONS.panelWatts)) : 0;
-  const pvPracticalKwp = panelCount * ASSESSMENT_DESIGN_ASSUMPTIONS.panelWatts / 1000;
-  const expectedSolarProductionKwh = pvPracticalKwp * ASSESSMENT_DESIGN_ASSUMPTIONS.peakSunHours * ASSESSMENT_DESIGN_ASSUMPTIONS.pvPerformanceFactor;
+  const objective = normalized(input.electrical?.systemGoal);
+  const pvDesignEnergyKwh = objective.includes("off-grid") ? dailyKwh * assumptions.pvRechargeMargin : objective.includes("backup") ? Math.max(dayKwh, rawBackupEnergyKwh * assumptions.pvRechargeMargin) : dailyKwh;
+  const pvCalculatedKwp = pvDesignEnergyKwh / (assumptions.peakSunHours * assumptions.pvPerformanceFactor);
+  const productPanelWatts = productCapabilities(input.selectedProduct).pvKw && input.selectedProduct ? Number(`${input.selectedProduct.productName} ${input.selectedProduct.shortDescription || ""}`.match(/(?:×|x)\s*(\d+)\s*w/i)?.[1]) : 0;
+  const panelWatts = productPanelWatts || configuredNumber(input.electrical?.panelWatts, assumptions.panelWatts);
+  const panelCount = pvCalculatedKwp ? Math.max(1, Math.ceil(pvCalculatedKwp * 1000 / panelWatts)) : 0;
+  const pvPracticalKwp = panelCount * panelWatts / 1000;
+  const expectedSolarProductionKwh = pvPracticalKwp * assumptions.peakSunHours * assumptions.pvPerformanceFactor;
   const solarCoveragePercent = dailyKwh ? expectedSolarProductionKwh / dailyKwh * 100 : 0;
   const evidenceLabels = Object.entries(input.evidenceNames || {}).filter(([, value]) => Boolean(clean(value))).map(([label]) => label);
   const missingCriticalEvidence = CRITICAL_EVIDENCE.filter((label) => !evidenceLabels.includes(label));
   const supply = normalized(input.siteDetails?.supplyType);
-  const goal = normalized(input.electrical?.systemGoal);
   const kplcMonthlyKwh = number(input.electrical?.monthlyKwh);
-  const kplcDailyKwh = kplcMonthlyKwh / 30;
+  const billingDays = number(input.electrical?.billingDays) || 30;
+  const kplcDailyKwh = kplcMonthlyKwh / billingDays;
+  const kplcVariancePercent = kplcDailyKwh && dailyKwh ? Math.abs(dailyKwh - kplcDailyKwh) / kplcDailyKwh * 100 : null;
   const kplcAlignment = !kplcDailyKwh || !dailyKwh
     ? "NOT_CONFIRMED"
-    : Math.abs(dailyKwh - kplcDailyKwh) / Math.max(dailyKwh, kplcDailyKwh) < 0.35
+    : (kplcVariancePercent || 0) <= assumptions.kplcAlignedVariancePercent
       ? "ALIGNED"
-      : "REVIEW_REQUIRED";
-  const hasMotor = largestMotorKw > 0;
+      : (kplcVariancePercent || 0) <= assumptions.kplcReviewVariancePercent
+        ? "REVIEW_RECOMMENDED"
+        : "SIGNIFICANT_DISCREPANCY";
+  const unusualLoads = loads.flatMap((load) => {
+    const notices: string[] = [];
+    const name = `${load.kind || ""} ${load.name || ""}`.toLowerCase();
+    if (/(cooker|oven)/.test(name) && load.hours > 5) notices.push(`${load.name}: cooker/oven usage above 5 hours/day is unusual — confirm.`);
+    if (/microwave/.test(name) && load.hours > 1) notices.push(`${load.name}: microwave hours are unusually high — confirm cycles.`);
+    if (/freezer|fridge/.test(name) && load.usageMode === "ALWAYS_ON" && load.dutyCycle >= 1) notices.push(`${load.name}: continuous 100% compressor duty must be verified.`);
+    if (/pump/.test(name) && load.watts > 0 && load.watts < 250) notices.push(`${load.name}: recorded pump wattage is unusually low — confirm nameplate or HP.`);
+    if (/\btv\b/.test(name) && load.watts > 1000) notices.push(`${load.name}: TV rating is unusually high — confirm nameplate.`);
+    if (number(load.simultaneous) > number(load.qty)) notices.push(`${load.name}: simultaneous quantity cannot exceed installed quantity.`);
+    return notices;
+  });
+  const highImpactLowConfidenceLoads = loads.filter((load) => load.confidence === "LOW" && (MAJOR_LOAD_KINDS.has(load.kind || "") || load.connectedKw >= 0.5));
+  const roofReady = clean(input.siteDetails?.panelSpace) !== "No" && !normalized(input.siteDetails?.panelSpace).includes("unsure");
+  const heavyShading = normalized(input.siteDetails?.shading).includes("heavy");
+  const electricalReady = !normalized(input.siteDetails?.supplyType).includes("not confirmed") && !normalized(input.siteDetails?.mainBreakerRating).includes("not confirmed") && !normalized(input.siteDetails?.solarBreakerSlots).includes("not confirmed") && normalized(input.siteDetails?.earthingAvailable) !== "no";
   const technicalReviewReasons = [
     ...(missingCriticalEvidence.length ? [`Missing critical site evidence: ${missingCriticalEvidence.join(", ")}.`] : []),
     ...(supply.includes("three") ? ["Three-phase supply requires phase and protection review."] : []),
-    ...(hasMotor ? ["Motor loads require surge/start-current confirmation."] : []),
-    ...(goal.includes("off-grid") ? ["Off-grid operation requires seasonal autonomy and generator/grid contingency review."] : []),
-    ...(kplcAlignment === "REVIEW_REQUIRED" ? ["Appliance load assessment and historical KPLC consumption differ significantly; confirm usage hours, seasonal loads and unrecorded appliances."] : []),
+    ...(motorLoads.some((load) => load.surgeEstimated) ? ["Motor/compressor surge estimated — technical verification recommended."] : []),
+    ...(objective.includes("off-grid") ? ["Off-grid operation requires seasonal autonomy and generator/grid contingency review."] : []),
+    ...(kplcAlignment === "SIGNIFICANT_DISCREPANCY" ? ["Appliance load assessment and historical KPLC consumption differ significantly; confirm high-energy loads, seasonal use and unrecorded appliances."] : []),
+    ...(heavyShading ? ["Heavy shading invalidates the standard PV production assumption until a shading review is completed."] : []),
+    ...unusualLoads,
   ];
   const capabilities = productCapabilities(input.selectedProduct);
   const phaseMismatch = capabilities.phase === "SINGLE_PHASE" && supply.includes("three");
@@ -160,14 +259,38 @@ export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
     ...(capabilities.pvKw !== null ? [`PV ${capabilities.pvKw} kWp vs practical requirement ${pvPracticalKwp} kWp.`] : ["PV specification is not structured in the catalog record."]),
     ...(phaseMismatch ? ["Selected product is single-phase while the recorded supply is three-phase."] : []),
   ];
+  const confidenceDeductions = [
+    highImpactLowConfidenceLoads.length * 15,
+    missingCriticalEvidence.length * 8,
+    kplcAlignment === "SIGNIFICANT_DISCREPANCY" ? 20 : kplcAlignment === "NOT_CONFIRMED" ? 8 : kplcAlignment === "REVIEW_RECOMMENDED" ? 10 : 0,
+    motorLoads.some((load) => load.surgeEstimated) ? 12 : 0,
+    heavyShading ? 25 : normalized(input.siteDetails?.shading).includes("moderate") ? 12 : 0,
+    !roofReady ? 20 : clean(input.siteDetails?.roofWidth) || clean(input.siteDetails?.roofLength) ? 0 : 5,
+    !electricalReady ? 15 : 0,
+  ].reduce((total, deduction) => total + deduction, 0);
+  const confidenceScore = Math.max(0, 100 - confidenceDeductions);
+  const sizingConfidence = confidenceScore >= 85 ? "HIGH CONFIDENCE" : confidenceScore >= 65 ? "MEDIUM CONFIDENCE" : "LOW CONFIDENCE — TECHNICAL REVIEW REQUIRED";
+  const criticalReadinessIssues = [
+    ...(!loads.length ? ["No appliance loads have been recorded."] : []),
+    ...(heavyShading ? ["Heavy shading must be modelled before quotation."] : []),
+    ...(!roofReady ? ["Panel installation space is not confirmed."] : []),
+    ...(normalized(input.siteDetails?.supplyType).includes("not confirmed") ? ["Electrical supply phase is not confirmed."] : []),
+    ...(highImpactLowConfidenceLoads.length ? [`High-impact load ratings need confirmation: ${highImpactLowConfidenceLoads.map((load) => load.name).join(", ")}.`] : []),
+    ...(kplcAlignment === "SIGNIFICANT_DISCREPANCY" ? ["KPLC and appliance estimates require confirmation."] : []),
+  ];
+  const assessmentResult = !loads.length ? "NOT READY" : criticalReadinessIssues.length ? "SIZING REVIEW REQUIRED" : technicalReviewReasons.length ? "PRELIMINARY SIZING" : "READY FOR TECHNICAL QUOTATION";
+  const recommendationOutcome = productStatus === "PASS" ? "STANDARD BETECH PACKAGE" : productStatus === "PARTIAL" ? "BETECH PACKAGE — ADJUSTED CONFIGURATION" : "CUSTOM ENGINEERING QUOTATION REQUIRED";
+  const largestEnergyConsumers = [...loads].sort((a, b) => b.energyKwh - a.energyKwh).slice(0, 5).map((load) => ({ name: load.name || "Recorded appliance", energyKwh: load.energyKwh, percent: dailyKwh ? load.energyKwh / dailyKwh * 100 : 0 }));
+  const largestPeakContributors = [...included].sort((a, b) => b.surgeKw - a.surgeKw).slice(0, 5).map((load) => ({ name: load.name || "Recorded appliance", peakKw: load.connectedKw, surgeKw: load.surgeKw }));
   return {
-    loads,
-    connectedKw, dailyKwh, dayKwh, nightKwh, continuousKw, simultaneousPeakKw, inverterRequiredKw, inverterKw,
+    assumptions, loads, connectedKw, dailyKwh, dayKwh, nightKwh, continuousKw, simultaneousPeakKw, surgeRequirementKw, inverterRequiredKw, inverterKw,
     rawBackupEnergyKwh, calculatedBatteryKwh, batteryKwh, usableBatteryKwh, expectedBackupHours,
-    pvCalculatedKwp, pvPracticalKwp, panelCount, expectedSolarProductionKwh, solarCoveragePercent,
-    kplcMonthlyKwh, kplcDailyKwh, kplcAlignment,
-    evidenceLabels, missingCriticalEvidence, technicalReviewRequired: technicalReviewReasons.length > 0,
-    technicalReviewReasons, status: missingCriticalEvidence.length ? "ASSESSMENT COMPLETE — VERIFICATION REQUIRED" : "TECHNICALLY ASSESSED",
+    pvDesignEnergyKwh, pvCalculatedKwp, pvPracticalKwp, panelWatts, panelCount, expectedSolarProductionKwh, solarCoveragePercent,
+    kplcMonthlyKwh, billingDays, kplcDailyKwh, kplcVariancePercent, kplcAlignment,
+    evidenceLabels, missingCriticalEvidence, highImpactLowConfidenceLoads, unusualLoads, largestEnergyConsumers, largestPeakContributors,
+    sizingConfidence, confidenceScore, criticalReadinessIssues, assessmentResult, recommendationOutcome,
+    technicalReviewRequired: technicalReviewReasons.length > 0,
+    technicalReviewReasons, status: assessmentResult,
     productMatch: { status: productStatus, capabilities, reasons: productReasons },
     loadAdvice: loads.filter((load) => load.energyKwh > 0).map((load) => ({ name: load.name || "Recorded appliance", energyKwh: load.energyKwh, advice: loadAdvice(load, load.energyKwh) })),
   } as const;

@@ -3,7 +3,7 @@ import path from "path";
 import QRCode from "qrcode";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
 import { z } from "zod";
-import { analyseSiteAssessment, ASSESSMENT_DESIGN_ASSUMPTIONS, type AssessmentLoadInput } from "@/lib/siteAssessmentAnalysis";
+import { analyseSiteAssessment, type AssessmentLoadInput } from "@/lib/siteAssessmentAnalysis";
 import { formatSiteVisitProjectType, formatSiteVisitReason, getSiteVisitProjectProfile } from "@/lib/siteVisitProjectProfiles";
 import type { QuoteProjectType } from "@/lib/quoteRequests";
 import type { SiteVisitReason } from "@/lib/siteVisitShared";
@@ -246,6 +246,7 @@ export async function generateSiteAssessmentReportPdf(input: {
     electrical,
     siteDetails: site,
     evidenceNames: evidence,
+    sizingConfig: asRecord(assessment.sizingAssumptions),
     selectedProduct: input.report.recommendation.type === "CATALOG_PRODUCT"
       ? { productName: input.report.recommendation.productName, productCategory: input.report.recommendation.productCategory, shortDescription: input.report.recommendation.productShortDescription, productUrl: input.report.recommendation.productUrl }
       : null,
@@ -408,7 +409,8 @@ export async function generateSiteAssessmentReportPdf(input: {
     ["Daily consumption", `${formatNumber(dailyKwh)} kWh/day`, "Based on recorded usage patterns."],
     ["Monthly estimate", `${formatNumber(monthlyKwh, 0)} kWh`, "Indicative 30-day energy use."],
     ["Recommended inverter", `${formatNumber(inverterKw, 1)} kW`, "Includes operating reserve."],
-    ["PV required", `${formatNumber(pvKw)} kWp`, `Calculated; practical selection ${formatNumber(practicalPvKw)} kWp (${panelCount || "Indicative"} × 600W).`],
+    ["Sizing confidence", analysis.sizingConfidence, `${analysis.assessmentResult} · deterministic validation score ${analysis.confidenceScore}%.`],
+    ["PV required", `${formatNumber(pvKw)} kWp`, `Calculated; practical selection ${formatNumber(practicalPvKw)} kWp (${panelCount || "Indicative"} × ${analysis.panelWatts}W).`],
   ] : (projectMetrics.length ? projectMetrics : [
     ["Project type", projectTypeLabel, "Recorded site-visit category."],
     ["Visit reason", visitReasonLabel, "Requested technical service."],
@@ -418,9 +420,10 @@ export async function generateSiteAssessmentReportPdf(input: {
     metric(MARGIN + (index % 3) * 174, String(title), String(value), String(detail));
     if (index % 3 === 2) y -= 76;
   });
+  if (metrics.length % 3 !== 0) y -= 76;
   section("Assessment conclusion");
   const conclusion = input.report.aiReview?.summary || (projectProfile.usesLoadSizing
-    ? `The property has an estimated connected electrical load of ${formatNumber(connectedKw)} kW and a practical simultaneous demand of approximately ${formatNumber(simultaneousPeakKw)} kW. Recorded appliance usage indicates approximately ${formatNumber(dailyKwh)} kWh per day. The engineering calculation requires ${formatNumber(pvKw)} kWp of PV; the practical array selection is ${formatNumber(practicalPvKw)} kWp (${panelCount} × 600W panels). Battery storage is derived from recorded essential appliance runtime during the stated outage period, with conversion, depth-of-discharge and reserve allowances.`
+    ? `The property has an estimated connected electrical load of ${formatNumber(connectedKw)} kW, practical simultaneous demand of approximately ${formatNumber(simultaneousPeakKw)} kW, and motor-start requirement of ${formatNumber(analysis.surgeRequirementKw)} kW. Recorded appliance usage indicates approximately ${formatNumber(dailyKwh)} kWh per day. The engineering calculation requires ${formatNumber(pvKw)} kWp of PV; the practical array selection is ${formatNumber(practicalPvKw)} kWp (${panelCount} × ${analysis.panelWatts}W panels). Battery storage is derived from the recorded outage runtime for each essential appliance, with efficiency, usable depth-of-discharge and reserve allowances.`
     : `This ${projectTypeLabel.toLowerCase()} assessment records the site requirements for ${visitReasonLabel.toLowerCase()}. Betech will use the recorded site observations, evidence and project-specific details to prepare the appropriate technical recommendation or quotation.`);
   const conclusionHeight = Math.max(78, splitLines(conclusion, regular, 9, A4[0] - MARGIN * 2 - 28).length * 13 + 30);
   drawRoundedBox(page, { x: MARGIN, y: y - conclusionHeight, width: A4[0] - MARGIN * 2, height: conclusionHeight, color: PALE, borderColor: BORDER, borderWidth: 0.7, borderRadius: 8 });
@@ -552,10 +555,10 @@ export async function generateSiteAssessmentReportPdf(input: {
   page.drawText("Design basis is derived from the field assessment and remains subject to final installation engineering.", { x: MARGIN, y, font: regular, size: 8.5, color: MUTED });
   y -= 18;
   const designWidth = (A4[0] - MARGIN * 2 - 18) / 4;
-  const inverterLines: Array<[string, string]> = [["Recorded simultaneous peak", `${formatNumber(simultaneousPeakKw)} kW`], ["Design headroom", "25% operating reserve plus motor-start allowance where recorded"], ["Recommended standard size", `${formatNumber(inverterKw, 1)} kW hybrid inverter`], ["Status", inverterKw >= analysis.inverterRequiredKw ? "SUITABLE" : "TECHNICAL REVIEW REQUIRED"]];
+  const inverterLines: Array<[string, string]> = [["Recorded simultaneous peak", `${formatNumber(simultaneousPeakKw)} kW`], ["Motor-start requirement", `${formatNumber(analysis.surgeRequirementKw)} kW`], ["Design headroom", `${formatNumber(analysis.assumptions.inverterOperatingReserve * 100, 0)}% operating reserve plus motor-start allowance`], ["Recommended standard size", `${formatNumber(inverterKw, 1)} kW hybrid inverter`], ["Status", analysis.assessmentResult]];
   const batteryLines: Array<[string, string]> = [["Backup energy", `${formatNumber(analysis.rawBackupEnergyKwh)} kWh`], ["Calculated nominal", `${formatNumber(analysis.calculatedBatteryKwh)} kWh`], ["Recommended storage", batteryKwh ? `${formatNumber(batteryKwh)} kWh lithium` : "CONFIRM LOADS"], ["Expected backup", analysis.expectedBackupHours ? `${formatNumber(analysis.expectedBackupHours, 1)} hours` : ""]];
-  const pvLines: Array<[string, string]> = [["Daily energy", `${formatNumber(dailyKwh)} kWh/day`], ["Calculated PV", `${formatNumber(pvKw)} kWp`], ["Practical array", `${formatNumber(practicalPvKw)} kWp`], ["Panels", `${panelCount} × 600W`], ["Expected production", `${formatNumber(analysis.expectedSolarProductionKwh)} kWh/day`]];
-  const configurationLines: Array<[string, string]> = [["Configuration", clean(electrical.grid).toLowerCase().includes("off") ? "Solar + battery" : "Hybrid — grid + solar + battery"], ["Objective", clean(electrical.systemGoal)], ["Design focus", essentialKw ? "Essential loads during outages" : "Confirm backup loads"], ["Status", analysis.technicalReviewRequired ? "TECHNICAL REVIEW REQUIRED" : "PRELIMINARY RECOMMENDATION"]];
+  const pvLines: Array<[string, string]> = [["Daily design energy", `${formatNumber(analysis.pvDesignEnergyKwh)} kWh/day`], ["Calculated PV", `${formatNumber(pvKw)} kWp`], ["Practical array", `${formatNumber(practicalPvKw)} kWp`], ["Panels", `${panelCount} × ${analysis.panelWatts}W`], ["Expected production", `${formatNumber(analysis.expectedSolarProductionKwh)} kWh/day`]];
+  const configurationLines: Array<[string, string]> = [["Configuration", clean(electrical.grid).toLowerCase().includes("off") ? "Solar + battery" : "Hybrid — grid + solar + battery"], ["Objective", clean(electrical.systemGoal)], ["Design focus", essentialKw ? "Essential loads during outages" : "Confirm backup loads"], ["Sizing confidence", analysis.sizingConfidence], ["Status", analysis.assessmentResult]];
   const systemCardHeight = Math.max(cardHeight(designWidth, inverterLines), cardHeight(designWidth, batteryLines), cardHeight(designWidth, pvLines), cardHeight(designWidth, configurationLines));
   card(MARGIN, designWidth, "Hybrid inverter", inverterLines, inverterKw >= analysis.inverterRequiredKw ? "plain" : "amber", systemCardHeight);
   card(MARGIN + designWidth + 6, designWidth, "Battery storage", batteryLines, batteryKwh && backupHours ? "plain" : "amber", systemCardHeight);
@@ -564,9 +567,9 @@ export async function generateSiteAssessmentReportPdf(input: {
   y -= systemCardHeight + 13;
   section("Design basis");
   const basisWidth = (A4[0] - MARGIN * 2 - 18) / 4;
-  const peakSunLines: Array<[string, string]> = [["Design input", `${ASSESSMENT_DESIGN_ASSUMPTIONS.peakSunHours} h/day`], ["Purpose", "Solar resource assumption"]];
-  const pvPerformanceLines: Array<[string, string]> = [["Design input", `${ASSESSMENT_DESIGN_ASSUMPTIONS.pvPerformanceFactor * 100}% factor`], ["Purpose", "Overall design factor"]];
-  const batteryDesignLines: Array<[string, string]> = [["Efficiency", "92% inverter"], ["Usable DoD", "90%"], ["Reserve", "10%"]];
+  const peakSunLines: Array<[string, string]> = [["Design input", `${analysis.assumptions.peakSunHours} h/day`], ["Purpose", "Solar resource assumption"], ["Version", analysis.assumptions.version]];
+  const pvPerformanceLines: Array<[string, string]> = [["Design input", `${analysis.assumptions.pvPerformanceFactor * 100}% factor`], ["Recharge margin", `${formatNumber((analysis.assumptions.pvRechargeMargin - 1) * 100, 0)}%`], ["Purpose", "Overall design factor"]];
+  const batteryDesignLines: Array<[string, string]> = [["Efficiency", `${analysis.assumptions.batteryInverterEfficiency * 100}% inverter`], ["Usable DoD", `${analysis.assumptions.batteryDepthOfDischarge * 100}%`], ["Reserve", `${analysis.assumptions.batteryReserve * 100}%`]];
   const backupTargetLines: Array<[string, string]> = [["Recorded target", backupHours ? `${formatNumber(backupHours, 1)} hours` : "To be confirmed"], ["Purpose", "Customer backup requirement"]];
   const basisCardHeight = Math.max(cardHeight(basisWidth, peakSunLines), cardHeight(basisWidth, pvPerformanceLines), cardHeight(basisWidth, batteryDesignLines), cardHeight(basisWidth, backupTargetLines));
   card(MARGIN, basisWidth, "Peak sun hours", peakSunLines, "plain", basisCardHeight);
@@ -671,9 +674,9 @@ export async function generateSiteAssessmentReportPdf(input: {
   const findingCardHeight = Math.max(...compactFindings.map(([, , detail]) => cardHeight(findingWidth, [["Finding", detail]])));
   compactFindings.forEach(([number, title, detail], index) => card(MARGIN + index * (findingWidth + 6), findingWidth, `${number} ${title}`, [["Finding", detail]], "plain", findingCardHeight));
   y -= findingCardHeight + 8;
-  const outstanding = [...(input.report.aiReview?.risks || []), ...(input.report.aiReview?.dataGaps || [])];
+  const outstanding = [...analysis.criticalReadinessIssues, ...(input.report.aiReview?.risks || []), ...(input.report.aiReview?.dataGaps || [])];
   if (outstanding.length) {
-    section("Items to confirm before quotation");
+    section("Outstanding technical actions");
     outstanding.slice(0, 6).forEach((item) => labeledText("Technical confirmation required", item, "amber"));
   }
   section("Engineering advice");
