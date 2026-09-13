@@ -23,6 +23,7 @@ type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED
 // consistently served customer-account routes, so SMS links must use this URL.
 const customerUrl = (id: string) => `https://betech.co.ke/account/site-visits/${id}`;
 const customerReportUrl = (id: string) => `https://betech.co.ke/account/site-visits/${id}/report`;
+const siteVisitRequestUrl = "https://www.betech.co.ke/site-visit";
 const location = (visit: Visit) => [visit.location, visit.landmark, visit.town, visit.county].filter(Boolean).join(", ") || "Location pending";
 const providerMessageId = (result: unknown) => (result as { SMSMessageData?: { Recipients?: Array<{ messageId?: string }> } })?.SMSMessageData?.Recipients?.[0]?.messageId ?? null;
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] || character);
@@ -101,7 +102,7 @@ export async function dispatchSiteVisitCancellation(visit: Visit) {
     type: "SITE_VISIT_CANCELLED_CUSTOMER_SMS",
     recipient: visit.customerPhone,
     recipientType: "CUSTOMER",
-    message: `Your site visit ${visit.visitRef} has been cancelled. Reason: ${reason}. You can request a new site visit when ready: ${customerUrl(visit.id)}`,
+    message: `Your site visit ${visit.visitRef} has been cancelled. Reason: ${reason}. You can request a new site visit when ready: ${siteVisitRequestUrl}`,
     version: `cancelled:${reason}`,
   });
 }
