@@ -218,72 +218,61 @@ export default function CustomerSiteVisitsClient({
           {message}
         </div>
       ) : null}
-      <div className="mt-7 grid gap-5 xl:grid-cols-2">
+      <div className="mt-7 space-y-5">
         {visits.length ? (
           visits.map((visit) => (
             <article
               key={visit.id}
-              className="rounded-[24px] border border-[#7a0000]/10 bg-[#fcfaf7] p-5"
+              className="rounded-[28px] border border-[#7a0000]/10 bg-[#fcfaf7] p-5 shadow-[0_14px_35px_rgba(57,18,0,.04)] sm:p-7"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="font-black">{visit.visitRef}</div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    {label(visit.projectType, "Solar project")} · requested{" "}
-                    {displayDate(visit.createdAt)}
-                  </div>
-                </div>
-                <span className="rounded-full bg-[#fff0cf] px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#7a0000]">
-                  {visit.paymentStatus === "UNPAID" ? "Awaiting payment" : label(visit.status)}
-                </span>
-              </div>
-              {visit.originProductName ? (
-                <div className="mt-4 rounded-2xl border border-[#7a0000]/10 bg-white p-4">
-                  <div className="text-[10px] font-black uppercase tracking-[.18em] text-[#7a0000]">
-                    Selected product
-                  </div>
-                  <div className="mt-1 font-black text-slate-950">
-                    {visit.originProductName}
-                  </div>
-                  {visit.originProductPrice ? (
-                    <div className="mt-1 text-sm font-bold text-slate-600">
-                      {money(visit.originProductPrice)}
-                    </div>
+              <header className="flex flex-col gap-4 border-b border-[#7a0000]/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="break-words text-xl font-black text-slate-950 sm:text-2xl">{visit.visitRef}</h2>
+                  <p className="mt-1 text-sm text-slate-500 sm:text-base">
+                    {label(visit.projectType, "Solar project")} · Requested {displayDate(visit.createdAt)}
+                  </p>
+                  {visit.visitReason ? (
+                    <p className="mt-1 text-sm font-semibold text-[#7a0000]">{label(visit.visitReason)}</p>
                   ) : null}
                 </div>
+                <div className="shrink-0 text-left sm:text-right">
+                  <span className={`inline-flex rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wider ${visit.status === "CLOSED" ? "bg-slate-200 text-slate-700" : visit.status === "QUOTED" || visit.status === "ASSESSED" ? "bg-emerald-100 text-emerald-800" : "bg-[#fff0cf] text-[#7a0000]"}`}>
+                    {label(visit.status)}
+                  </span>
+                  <p className="mt-3 text-xs font-bold uppercase tracking-[.15em] text-slate-400">Visit fee</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">{money(visit.totalPayable)}</p>
+                </div>
+              </header>
+              {visit.originProductName ? (
+                <div className="mt-5 rounded-2xl border border-[#7a0000]/8 bg-white p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.18em] text-[#7a0000]">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-[#fff0cf] text-sm">◈</span>
+                        Selected product
+                      </div>
+                      <div className="mt-2 font-black leading-6 text-slate-950 sm:text-lg">
+                        {visit.originProductName}
+                      </div>
+                    </div>
+                    {visit.originProductPrice ? (
+                      <div className="shrink-0 text-base font-black text-slate-950">
+                        {money(visit.originProductPrice)}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               ) : null}
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl bg-white p-3">
-                  <div className="text-xs text-slate-500">Site Visit fee</div>
-                  <b>{money(visit.visitFee)}</b>
-                </div>
-                <div className="rounded-2xl bg-white p-3">
-                  <div className="text-xs text-slate-500">Data Logger</div>
-                  <b>
-                    {visit.dataLoggerRequested
-                      ? `${visit.dataLoggerDays} day(s) · ${money(visit.dataLoggerFee)}`
-                      : "Not requested"}
-                  </b>
-                </div>
-                <div className="rounded-2xl bg-white p-3">
-                  <div className="text-xs text-slate-500">Payment status</div>
-                  <b>{label(visit.paymentVerificationStatus === "PENDING" ? "VERIFYING" : visit.paymentStatus)}</b>
-                </div>
-                <div className="rounded-2xl bg-white p-3">
-                  <div className="text-xs text-slate-500">Paid / balance</div>
-                  <b>{money(visit.paymentAmount || 0)} / {money(Math.max(0, visit.totalPayable - (visit.paymentAmount || 0)))}</b>
-                </div>
-                <div className="rounded-2xl bg-white p-3">
-                  <div className="text-xs text-slate-500">M-PESA receipt</div>
-                  <b>{visit.paymentReference || "-"}</b>
-                </div>
-                <div className="rounded-2xl bg-white p-3">
-                  <div className="text-xs text-slate-500">Schedule</div>
-                  <b>{displayDate(visit.scheduledAt || visit.preferredDate)}</b>
-                </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <VisitDetail label="Payment" value={label(visit.paymentVerificationStatus === "PENDING" ? "VERIFYING" : visit.paymentStatus)} emphasis={visit.paymentStatus === "PAID" ? "success" : visit.paymentStatus === "UNPAID" ? "warning" : "default"} />
+                <VisitDetail label="Paid / balance" value={`${money(visit.paymentAmount || 0)} / ${money(Math.max(0, visit.totalPayable - (visit.paymentAmount || 0)))}`} />
+                <VisitDetail label="Confirmed schedule" value={displayDate(visit.scheduledAt || visit.preferredDate)} />
+                <VisitDetail label="Assigned technician" value={visit.assignedTechnicianName || "Awaiting assignment"} />
+                <VisitDetail label="M-Pesa receipt" value={visit.paymentReference || "Not available"} />
+                <VisitDetail label="Data Logger" value={visit.dataLoggerRequested ? `${visit.dataLoggerDays} day(s) · ${money(visit.dataLoggerFee)}` : "Not requested"} />
               </div>
-              {visit.paymentPaidAt ? <div className="mt-3 text-xs text-slate-500">Payment received: {displayDate(visit.paymentPaidAt)}{visit.paymentMethod ? ` · ${visit.paymentMethod}` : ""}</div> : null}
-              <div className="mt-4 flex gap-2 text-sm text-slate-600">
+              {visit.paymentPaidAt ? <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">Payment received {displayDate(visit.paymentPaidAt)}{visit.paymentMethod ? ` · ${visit.paymentMethod}` : ""}</div> : null}
+              <div className="mt-5 flex gap-2 border-t border-[#7a0000]/10 pt-5 text-sm text-slate-600">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#7a0000]" />
                 <span>
                   {[visit.location, visit.town, visit.county]
@@ -298,11 +287,11 @@ export default function CustomerSiteVisitsClient({
                   {label(visit.quotationCreditStatus)}
                 </div>
               ) : null}
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-5 flex flex-wrap gap-3">
                 {visit.assessmentReportPublishedAt ? (
                   <Link
                     href={`/account/site-visits/${visit.id}/report`}
-                    className="rounded-full bg-[#087f5b] px-4 py-2 text-sm font-bold text-white"
+                    className="rounded-full bg-[#087f5b] px-5 py-3 text-sm font-black text-white"
                   >
                     View assessment report
                   </Link>
@@ -310,7 +299,7 @@ export default function CustomerSiteVisitsClient({
                 <button
                   disabled={busy || visit.status === "CLOSED"}
                   onClick={() => requestReschedule(visit)}
-                  className="rounded-full border border-[#7a0000]/15 bg-white px-4 py-2 text-sm font-bold"
+                  className="rounded-full border border-[#7a0000]/15 bg-white px-5 py-3 text-sm font-bold"
                 >
                   Request reschedule
                 </button>
@@ -327,21 +316,21 @@ export default function CustomerSiteVisitsClient({
                           reason: reason.trim(),
                         });
                     }}
-                    className="rounded-full border border-red-200 px-4 py-2 text-sm font-bold text-red-700"
+                    className="rounded-full border border-red-200 bg-white px-5 py-3 text-sm font-bold text-red-700"
                   >
                     Request cancellation
                   </button>
                 ) : null}
               </div>
               {visit.paymentStatus === "UNPAID" ? (
-                <div className="mt-5">
+                <div className="mt-6 border-t border-[#7a0000]/10 pt-5">
                   <MpesaStkPaymentPanel resourceType="SITE_VISIT" reference={visit.visitRef} amountDue={visit.totalPayable} initialPhone={profile.phone} onSuccess={() => void refreshVisits()} />
                 </div>
               ) : null}
             </article>
           ))
         ) : (
-          <div className="rounded-[22px] border border-dashed border-[#7a0000]/15 p-9 text-sm text-slate-500 xl:col-span-2">
+          <div className="rounded-[22px] border border-dashed border-[#7a0000]/15 p-9 text-sm text-slate-500">
             No site visits yet. Request an assessment and choose your preferred
             date.
           </div>
@@ -714,5 +703,27 @@ function Field({
       {fieldLabel}
       {children}
     </label>
+  );
+}
+
+function VisitDetail({
+  label: detailLabel,
+  value,
+  emphasis = "default",
+}: {
+  label: string;
+  value: string;
+  emphasis?: "default" | "success" | "warning";
+}) {
+  const valueClass = emphasis === "success"
+    ? "text-emerald-700"
+    : emphasis === "warning"
+      ? "text-[#8f0000]"
+      : "text-slate-950";
+  return (
+    <div className="min-w-0 rounded-2xl border border-[#7a0000]/8 bg-white px-4 py-3.5">
+      <p className="text-xs font-medium text-slate-500">{detailLabel}</p>
+      <p className={`mt-1 break-words font-black leading-5 ${valueClass}`}>{value}</p>
+    </div>
   );
 }
