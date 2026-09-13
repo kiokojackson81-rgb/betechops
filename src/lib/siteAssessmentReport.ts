@@ -654,7 +654,7 @@ export async function generateSiteAssessmentReportPdf(input: {
   const outstanding = analysis.customerOutstandingActions;
   if (outstanding.length) {
     section("Outstanding technical actions");
-    outstanding.slice(0, 6).forEach((item) => labeledText(item.category, item.message, item.category === "ADVISORY" ? "plain" : "amber"));
+    outstanding.slice(0, 6).forEach((item) => labeledText(item.category, item.message, item.category === "ADVISORY" ? "green" : "amber"));
   }
   section("Engineering advice");
   const relevantAdvice = analysis.loadAdvice.filter((item) => /high-heat|motor|air-conditioning|security\/connectivity|material energy/i.test(item.advice)).slice(0, 2);
