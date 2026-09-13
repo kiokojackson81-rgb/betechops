@@ -68,7 +68,30 @@ function Field({
 
 function PublishedAssessmentReport({ visit }: { visit: SerializedSiteVisit }) {
   const report = visit.assessmentReport;
-  if (!report) return null;
+  if (!report) {
+    return (
+      <section className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-5">
+        <p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-200">
+          Submitted site assessment report
+        </p>
+        <h2 className="mt-2 text-xl font-black text-white">
+          Report published and locked
+        </h2>
+        <p className="mt-2 text-sm text-slate-300">
+          The technician has submitted the final assessment. The published
+          report replaces the editable structured-assessment fields.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
+          <a
+            href={`/api/admin/site-visits/${visit.id}/report/pdf`}
+            className="rounded-full border border-emerald-300/40 px-4 py-2 text-emerald-100"
+          >
+            Download site visit report
+          </a>
+        </div>
+      </section>
+    );
+  }
   const recommendation = report.recommendation.type === "CUSTOM_QUOTATION"
     ? "Custom quotation required"
     : report.recommendation.productName || "Betech catalog product";
@@ -76,9 +99,9 @@ function PublishedAssessmentReport({ visit }: { visit: SerializedSiteVisit }) {
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-5">
-        <p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-200">Published customer report</p>
+        <p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-200">Submitted site assessment report</p>
         <h2 className="mt-2 text-xl font-black text-white">{recommendation}</h2>
-        <p className="mt-2 text-sm text-slate-300">Submitted by {report.submittedByName} on {new Date(report.submittedAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}</p>
+        <p className="mt-2 text-sm text-slate-300">Version {report.version} · Submitted by {report.submittedByName} on {new Date(report.submittedAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}</p>
         <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
           <a href={`/api/admin/site-visits/${visit.id}/report/pdf`} className="rounded-full border border-emerald-300/40 px-4 py-2 text-emerald-100">Download site visit report</a>
           {report.recommendation.productUrl ? <a href={report.recommendation.productUrl} target="_blank" rel="noreferrer" className="rounded-full border border-cyan-300/40 px-4 py-2 text-cyan-100">Open recommended product</a> : null}
@@ -307,6 +330,22 @@ export default function SiteVisitDetailClient({
     });
     setEvents(data.events || []);
     setAttachments(data.attachments || []);
+  }
+
+  function selectTab(nextTab: Tab) {
+    setTab(nextTab);
+    // A technician publishes the report from a separate secure page. Reload
+    // the two evidence-facing tabs when an administrator opens them so the
+    // published report and its uploaded photos appear without a page reload.
+    if (nextTab === "assessment" || nextTab === "attachments") {
+      void refresh().catch((refreshError) => {
+        setError(
+          refreshError instanceof Error
+            ? refreshError.message
+            : "Unable to refresh site visit details.",
+        );
+      });
+    }
   }
   function overviewPayload() {
     return {
@@ -585,7 +624,7 @@ export default function SiteVisitDetailClient({
         {tabs.map((item) => (
           <button
             key={item}
-            onClick={() => setTab(item)}
+            onClick={() => selectTab(item)}
             className={`shrink-0 rounded-xl px-4 py-3 text-sm font-bold ${tab === item ? "bg-cyan-400 text-slate-950" : "text-slate-300"}`}
           >
             {label(item)}
@@ -928,7 +967,7 @@ export default function SiteVisitDetailClient({
         ) : null}
         {tab === "assessment" ? (
           <div>
-            {visit.assessmentReport ? (
+            {visit.assessmentReport || visit.assessmentReportPublishedAt ? (
               <PublishedAssessmentReport visit={visit} />
             ) : (
               <>
