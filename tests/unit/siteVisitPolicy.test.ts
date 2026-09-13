@@ -19,6 +19,9 @@ describe("site visit policy", () => {
 
   it("prevents invalid lifecycle jumps and incomplete closure", () => {
     expect(validateSiteVisitLifecycle({ previousStatus: "PENDING", status: "VISITED", outcome: null, closedReason: null })).toMatch(/cannot move/i);
+    expect(validateSiteVisitLifecycle({ previousStatus: "PENDING", status: "TECHNICIAN_ASSIGNED", outcome: null, closedReason: null })).toBeNull();
+    expect(validateSiteVisitLifecycle({ previousStatus: "TECHNICIAN_ASSIGNED", status: "ASSESSED", outcome: null, closedReason: null })).toBeNull();
+    expect(validateSiteVisitLifecycle({ previousStatus: "ASSESSED", status: "QUOTED", outcome: "QUOTATION_CREATED", closedReason: null })).toBeNull();
     expect(validateSiteVisitLifecycle({ previousStatus: "VISITED", status: "CLOSED", outcome: null, closedReason: "" })).toMatch(/outcome/i);
     expect(validateSiteVisitLifecycle({ previousStatus: "SCHEDULED", status: "VISITED", outcome: null, closedReason: null })).toBeNull();
   });

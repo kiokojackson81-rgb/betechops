@@ -1,7 +1,9 @@
 import type { QuoteProjectType } from "@/lib/quoteRequests";
 import type { SiteAssessmentReport } from "@/lib/siteAssessmentReport";
 
-export const SITE_VISIT_STATUSES = ["PAYMENT_PENDING", "PAYMENT_FAILED", "PENDING", "SCHEDULED", "VISITED", "CLOSED"] as const;
+// Operational stages are intentionally separate from fee/payment status. Older
+// SCHEDULED and VISITED values remain supported for existing visits.
+export const SITE_VISIT_STATUSES = ["PAYMENT_PENDING", "PAYMENT_FAILED", "PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED", "SCHEDULED", "VISITED", "CLOSED"] as const;
 export type SiteVisitStatus = (typeof SITE_VISIT_STATUSES)[number];
 
 export const SITE_VISIT_OUTCOMES = [

@@ -12,7 +12,8 @@ type StaffOption = { id: string; name: string | null; email: string | null };
 type ExternalTechnicianOption = { id: string; name: string; whatsappNumber: string | null };
 type Props = { staffOptions: StaffOption[]; externalTechnicians?: ExternalTechnicianOption[]; canAssignTechnicians?: boolean; canDeleteVisits?: boolean; initialQuoteRef?: string | null; basePath?: string };
 
-const statuses: Array<SiteVisitStatus | "ALL"> = ["ALL", "PENDING", "SCHEDULED", "VISITED", "CLOSED"];
+const workflowStatuses = ["PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED"] as const satisfies ReadonlyArray<SiteVisitStatus>;
+const statuses: Array<SiteVisitStatus | "ALL"> = ["ALL", ...workflowStatuses, "CLOSED", "SCHEDULED", "VISITED"];
 const projectTypes: QuoteProjectType[] = ["SOLAR_HOME_SYSTEM", "SOLAR_WATER_PUMP", "SOLAR_WATER_HEATER", "BOREHOLE_SOLAR_SYSTEM", "COMMERCIAL_SOLAR_SYSTEM", "CCTV_PLUS_SOLAR", "STREET_LIGHTS", "OTHER"];
 const reasons = ["LOAD_ASSESSMENT", "ROOF_INSPECTION", "PUMP_ASSESSMENT", "INSTALLATION_PLANNING", "FAULT_DIAGNOSIS", "FINAL_MEASUREMENTS", "QUOTATION_VERIFICATION", "MAINTENANCE_VISIT", "CUSTOMER_CONSULTATION", "OTHER"];
 const label = (value: string) => value.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -82,9 +83,9 @@ export default function SiteVisitsWorkspaceClient({ staffOptions, externalTechni
 
   const stats = useMemo(() => ({
     PENDING: visits.filter((visit) => visit.status === "PENDING").length,
-    SCHEDULED: visits.filter((visit) => visit.status === "SCHEDULED").length,
-    VISITED: visits.filter((visit) => visit.status === "VISITED").length,
-    CLOSED: visits.filter((visit) => visit.status === "CLOSED").length,
+    TECHNICIAN_ASSIGNED: visits.filter((visit) => visit.status === "TECHNICIAN_ASSIGNED").length,
+    ASSESSED: visits.filter((visit) => visit.status === "ASSESSED").length,
+    QUOTED: visits.filter((visit) => visit.status === "QUOTED").length,
   }), [visits]);
 
   async function createVisit(event: React.FormEvent) {
@@ -117,7 +118,7 @@ export default function SiteVisitsWorkspaceClient({ staffOptions, externalTechni
   return <div className="min-w-0 space-y-5 overflow-x-hidden">
     <header className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,.15),transparent_35%),linear-gradient(145deg,#111d2d,#07111f)] p-5 sm:p-7">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><div className="text-xs font-bold uppercase tracking-[0.3em] text-cyan-300">Field service control</div><h1 className="mt-2 text-3xl font-semibold text-white sm:text-4xl">Site Visits</h1><p className="mt-2 text-sm text-slate-300">Schedule visits, manage field assessments and convert findings into quotations.</p></div><button onClick={() => setShowCreate(true)} className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-400 px-5 py-3 font-bold text-slate-950"><Plus className="h-4 w-4" /> New Site Visit</button></div>
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">{statuses.slice(1).map((item) => <button key={item} onClick={() => setStatus(item)} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left"><div className="text-xs uppercase tracking-wider text-slate-400">{item === "VISITED" ? "Visited / completed" : label(item)}</div><div className="mt-2 text-3xl font-semibold text-white">{stats[item]}</div></button>)}</div>
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">{workflowStatuses.map((item) => <button key={item} onClick={() => setStatus(item)} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left"><div className="text-xs uppercase tracking-wider text-slate-400">{label(item)}</div><div className="mt-2 text-3xl font-semibold text-white">{stats[item]}</div></button>)}</div>
     </header>
 
     <section className="rounded-[28px] border border-white/10 bg-slate-950/80 p-4 sm:p-6">

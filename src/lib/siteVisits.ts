@@ -945,7 +945,7 @@ export async function createSiteVisit(
   });
 
   const visitRef = await buildVisitRef();
-  const status: SiteVisitStatus = input.status || (input.scheduledAt ? "SCHEDULED" : "PENDING");
+  const status: SiteVisitStatus = input.status || (input.assignedTechnicianId ? "TECHNICIAN_ASSIGNED" : "PENDING");
   const scheduledAt = input.scheduledAt?.trim() ? new Date(input.scheduledAt) : null;
   const preferredDate = input.preferredDate?.trim() ? new Date(`${input.preferredDate.trim()}T00:00:00.000`) : null;
   const effectiveCounty = input.county?.trim() || linkedQuote?.county || null;
@@ -1272,8 +1272,8 @@ export async function publishSiteAssessmentReport(
       "recommendedSystem" = ${reportRecommendationLabel(report)},
       "recommendedItems" = ${report.recommendation.type === "CATALOG_PRODUCT" ? report.recommendation.productName || null : "Custom quotation required"},
       "nextAction" = ${report.aiReview?.recommendations[0] || "Prepare the customer quotation."},
-      "status" = CASE WHEN "status" IN ('PENDING', 'SCHEDULED') THEN 'VISITED' ELSE "status" END,
-      "completedAt" = CASE WHEN "status" IN ('PENDING', 'SCHEDULED') THEN CURRENT_TIMESTAMP ELSE "completedAt" END,
+      "status" = CASE WHEN "status" IN ('PENDING', 'TECHNICIAN_ASSIGNED', 'SCHEDULED', 'VISITED') THEN 'ASSESSED' ELSE "status" END,
+      "completedAt" = CASE WHEN "status" IN ('PENDING', 'TECHNICIAN_ASSIGNED', 'SCHEDULED', 'VISITED') THEN CURRENT_TIMESTAMP ELSE "completedAt" END,
       "updatedAt" = CURRENT_TIMESTAMP
     WHERE "id" = ${visitId} AND ("assessmentReport" IS NULL OR ${Boolean(options.allowRevision)})
     RETURNING ${SITE_VISIT_SELECT_SQL}
@@ -1319,7 +1319,13 @@ export async function updateSiteVisit(
     assignedTechnicianId: nextAssignedTechnicianId,
   });
 
-  const nextStatus = input.status || existing.status;
+  const nextStatus: SiteVisitStatus = input.status || (
+    existing.status === "PENDING" && nextAssignedTechnicianId
+      ? "TECHNICIAN_ASSIGNED"
+      : existing.status === "TECHNICIAN_ASSIGNED" && !nextAssignedTechnicianId
+        ? "PENDING"
+        : existing.status
+  );
   const nextOutcome = input.outcome === null ? null : input.outcome ?? existing.outcome;
   const lifecycleError = validateSiteVisitLifecycle({
     previousStatus: existing.status,
@@ -1341,7 +1347,7 @@ export async function updateSiteVisit(
     ? toValidDate(input.preferredDate?.trim() ? `${input.preferredDate.trim()}T00:00:00.000` : null)
     : toValidDate(existing.preferredDate);
   const completedAt =
-    nextStatus === "VISITED" || nextStatus === "CLOSED"
+    nextStatus === "VISITED" || nextStatus === "ASSESSED" || nextStatus === "QUOTED" || nextStatus === "CLOSED"
       ? (toValidDate(existing.completedAt) || new Date())
       : null;
   const closedAt = nextStatus === "CLOSED" ? (toValidDate(existing.closedAt) || new Date()) : null;
@@ -1703,7 +1709,7 @@ export async function createQuotationDraftFromSiteVisit(
   actor: { id: string; name: string | null; email: string | null },
 ) {
   if (visit.quoteRequestId) return getQuoteRequestByRef(visit.quoteRef || "");
-  if (visit.status !== "VISITED" && visit.status !== "CLOSED") {
+  if (!["ASSESSED", "VISITED", "CLOSED"].includes(visit.status)) {
     throw new Error("Complete the site visit assessment before creating a quotation draft.");
   }
   const quote = await createQuoteRequest({
@@ -1731,7 +1737,7 @@ export async function createQuotationDraftFromSiteVisit(
     metadata: { sourceLabel: "SITE_VISIT", siteVisitId: visit.id, siteVisitRef: visit.visitRef, siteVisitCreditAvailable: visit.quotationCreditStatus === "AVAILABLE" ? visit.visitFee : 0 },
   });
   if (!quote) throw new Error("Unable to create quotation draft.");
-  await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "quoteRequestId" = ${quote.id}, "quoteRef" = ${quote.quoteRef}, "outcome" = 'QUOTATION_CREATED', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${visit.id}`);
+  await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "quoteRequestId" = ${quote.id}, "quoteRef" = ${quote.quoteRef}, "outcome" = 'QUOTATION_CREATED', "status" = 'QUOTED', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${visit.id}`);
   await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "QUOTATION_DRAFT_CREATED", eventLabel: "Quotation draft created", eventDetail: quote.quoteRef, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Betech Staff", metadata: { quoteRequestId: quote.id, quoteRef: quote.quoteRef } });
   await recordQuotationEvent({ quoteRequestId: quote.id, eventType: "SITE_VISIT_LINKED", eventLabel: "Site visit assessment linked", eventDetail: visit.visitRef, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Betech Staff", metadata: { siteVisitId: visit.id, siteVisitRef: visit.visitRef } });
   return quote;

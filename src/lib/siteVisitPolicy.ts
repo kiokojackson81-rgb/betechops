@@ -27,9 +27,14 @@ export function getStandardSiteVisitFee(county: string | null | undefined, town?
 const VALID_TRANSITIONS: Record<SiteVisitStatus, readonly SiteVisitStatus[]> = {
   PAYMENT_PENDING: ["PAYMENT_PENDING", "PAYMENT_FAILED", "PENDING", "CLOSED"],
   PAYMENT_FAILED: ["PAYMENT_FAILED", "PAYMENT_PENDING", "CLOSED"],
-  PENDING: ["PENDING", "SCHEDULED", "CLOSED"],
-  SCHEDULED: ["SCHEDULED", "PENDING", "VISITED", "CLOSED"],
-  VISITED: ["VISITED", "SCHEDULED", "CLOSED"],
+  PENDING: ["PENDING", "TECHNICIAN_ASSIGNED", "CLOSED"],
+  TECHNICIAN_ASSIGNED: ["TECHNICIAN_ASSIGNED", "PENDING", "ASSESSED", "CLOSED"],
+  ASSESSED: ["ASSESSED", "TECHNICIAN_ASSIGNED", "QUOTED", "CLOSED"],
+  QUOTED: ["QUOTED", "ASSESSED", "CLOSED"],
+  // Legacy values are retained so historic visits can still be corrected and
+  // completed without a data migration.
+  SCHEDULED: ["SCHEDULED", "PENDING", "TECHNICIAN_ASSIGNED", "VISITED", "ASSESSED", "CLOSED"],
+  VISITED: ["VISITED", "SCHEDULED", "ASSESSED", "QUOTED", "CLOSED"],
   CLOSED: ["CLOSED"],
 };
 
@@ -42,7 +47,7 @@ export function validateSiteVisitLifecycle(input: {
   if (!VALID_TRANSITIONS[input.previousStatus].includes(input.status)) {
     return `Site visit cannot move from ${input.previousStatus} to ${input.status}.`;
   }
-  if ((input.status === "PENDING" || input.status === "SCHEDULED") && input.outcome) {
+  if ((input.status === "PENDING" || input.status === "TECHNICIAN_ASSIGNED" || input.status === "SCHEDULED") && input.outcome) {
     return `${input.status} site visits cannot have a completed outcome.`;
   }
   if (input.status === "CLOSED" && !input.outcome && !String(input.closedReason || "").trim()) {

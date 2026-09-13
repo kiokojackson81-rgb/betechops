@@ -121,24 +121,35 @@ function SiteVisitWorkflowActions({
   attachmentsCount,
   saving,
   canManageCommercials,
+  canAssignTechnicians,
+  selectedTechnicianId,
   onOpenAssessment,
   onOpenAssessmentTab,
   onOpenAttachments,
   onCreateQuotation,
   onApplyCredit,
-  onAdvance,
+  onAssignTechnician,
 }: {
   visit: SerializedSiteVisit;
   attachmentsCount: number;
   saving: boolean;
   canManageCommercials: boolean;
+  canAssignTechnicians: boolean;
+  selectedTechnicianId: string;
   onOpenAssessment: () => void;
   onOpenAssessmentTab: () => void;
   onOpenAttachments: () => void;
   onCreateQuotation: () => void;
   onApplyCredit: () => void;
-  onAdvance: () => void;
+  onAssignTechnician: () => void;
 }) {
+  const stages = ["PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED"] as const;
+  const stageIndex = visit.status === "SCHEDULED"
+    ? 1
+    : visit.status === "VISITED"
+      ? 2
+      : Math.max(0, stages.indexOf(visit.status as (typeof stages)[number]));
+  const canCreateQuotation = visit.status === "ASSESSED" || visit.status === "VISITED" || visit.status === "CLOSED";
   return (
     <section className="border-t border-white/10 pt-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -149,11 +160,18 @@ function SiteVisitWorkflowActions({
         </div>
         <span className="w-fit rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-100">{label(visit.status)}</span>
       </div>
+      <ol className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Site visit progress">
+        {stages.map((stage, index) => (
+          <li key={stage} className={`rounded-xl border px-3 py-2 text-xs font-bold ${index < stageIndex ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100" : index === stageIndex ? "border-cyan-400/45 bg-cyan-400/10 text-cyan-100" : "border-white/10 bg-slate-950/50 text-slate-500"}`}>
+            <span className="mr-1.5">{index < stageIndex ? "✓" : index + 1}</span>{label(stage)}
+          </li>
+        ))}
+      </ol>
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <button type="button" onClick={onOpenAssessment} className="min-h-28 rounded-2xl border border-cyan-400/35 bg-cyan-400/[.08] p-4 text-left transition hover:bg-cyan-400/[.14]">
+        <button type="button" disabled={!visit.assignedTechnicianId} onClick={onOpenAssessment} className="min-h-28 rounded-2xl border border-cyan-400/35 bg-cyan-400/[.08] p-4 text-left transition hover:bg-cyan-400/[.14] disabled:cursor-not-allowed disabled:opacity-45">
           <ClipboardCheck className="h-5 w-5 text-cyan-200" />
           <span className="mt-3 block font-bold text-cyan-50">Open technician assessment</span>
-          <span className="mt-1 block text-xs leading-5 text-cyan-100/75">Create a secure assessment link for the assigned technician.</span>
+          <span className="mt-1 block text-xs leading-5 text-cyan-100/75">{visit.assignedTechnicianId ? "Create a secure assessment link for the assigned technician." : "Assign a technician in the Overview form first."}</span>
         </button>
         {visit.assessmentReport ? (
           <a href={`/api/admin/site-visits/${visit.id}/report/pdf`} className="min-h-28 rounded-2xl border border-emerald-400/30 bg-emerald-400/[.07] p-4 transition hover:bg-emerald-400/[.12]">
@@ -175,10 +193,10 @@ function SiteVisitWorkflowActions({
             <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Review the quotation linked to this site visit.</span>
           </Link>
         ) : (
-          <button disabled={saving} onClick={onCreateQuotation} className="min-h-28 rounded-2xl border border-emerald-400/25 bg-emerald-400/[.06] p-4 text-left transition hover:bg-emerald-400/[.12] disabled:opacity-50">
+          <button disabled={saving || !canCreateQuotation} onClick={onCreateQuotation} className="min-h-28 rounded-2xl border border-emerald-400/25 bg-emerald-400/[.06] p-4 text-left transition hover:bg-emerald-400/[.12] disabled:cursor-not-allowed disabled:opacity-50">
             <FileText className="h-5 w-5 text-emerald-200" />
             <span className="mt-3 block font-bold text-emerald-50">Create quotation draft</span>
-            <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Start the controlled quotation workflow from this visit.</span>
+            <span className="mt-1 block text-xs leading-5 text-emerald-100/75">{canCreateQuotation ? "Create the controlled quotation from this completed assessment." : "Available after the technician publishes the assessment report."}</span>
           </button>
         )}
         <button type="button" onClick={onOpenAttachments} className="min-h-28 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-left transition hover:border-cyan-400/30">
@@ -193,11 +211,11 @@ function SiteVisitWorkflowActions({
             <span className="mt-1 block text-xs leading-5 text-amber-100/75">Apply the verified visit fee once to the linked quotation.</span>
           </button>
         ) : null}
-        {visit.status === "PENDING" || visit.status === "SCHEDULED" ? (
-          <button disabled={saving} onClick={onAdvance} className="min-h-28 rounded-2xl border border-violet-400/30 bg-violet-400/[.08] p-4 text-left transition hover:bg-violet-400/[.14] disabled:opacity-50">
+        {visit.status === "PENDING" && canAssignTechnicians ? (
+          <button disabled={saving || !selectedTechnicianId} onClick={onAssignTechnician} className="min-h-28 rounded-2xl border border-violet-400/30 bg-violet-400/[.08] p-4 text-left transition hover:bg-violet-400/[.14] disabled:cursor-not-allowed disabled:opacity-50">
             <CalendarCheck2 className="h-5 w-5 text-violet-200" />
-            <span className="mt-3 block font-bold text-violet-50">{visit.status === "PENDING" ? "Schedule site visit" : "Mark visit completed"}</span>
-            <span className="mt-1 block text-xs leading-5 text-violet-100/75">{visit.status === "PENDING" ? "Confirm a time after payment and technician assignment." : "Record completion before selecting the visit outcome."}</span>
+            <span className="mt-3 block font-bold text-violet-50">Assign & notify technician</span>
+            <span className="mt-1 block text-xs leading-5 text-violet-100/75">{selectedTechnicianId ? "Save the selected technician, advance the workflow and send the assignment notification." : "Select a technician in the Overview form above, then assign in one click."}</span>
           </button>
         ) : null}
       </div>
@@ -780,12 +798,14 @@ export default function SiteVisitDetailClient({
               attachmentsCount={attachments.length}
               saving={saving}
               canManageCommercials={canManageCommercials}
+              canAssignTechnicians={canAssignTechnicians}
+              selectedTechnicianId={draft.assignedTechnicianId || ""}
               onOpenAssessment={() => void openPublicAssessment()}
               onOpenAssessmentTab={() => setTab("assessment")}
               onOpenAttachments={() => setTab("attachments")}
               onCreateQuotation={() => void createQuotation()}
               onApplyCredit={() => void applyCredit()}
-              onAdvance={() => void save(visit.status === "PENDING" ? { status: "SCHEDULED", outcome: null } : { status: "VISITED", outcome: null })}
+              onAssignTechnician={() => void save({ assignedTechnicianId: draft.assignedTechnicianId, outcome: null })}
             />
           </div>
         ) : null}
@@ -822,24 +842,14 @@ export default function SiteVisitDetailClient({
               </>
             )}
             <div className="mt-6 flex flex-wrap gap-2">
-              {visit.status === "PENDING" ? (
-                <button
-                  onClick={() =>
-                    void save({ status: "SCHEDULED", outcome: null })
-                  }
-                  className="rounded-full border border-cyan-400/40 px-4 py-2 text-sm font-bold text-cyan-200"
-                >
-                  Schedule visit
-                </button>
-              ) : null}
               {visit.status === "SCHEDULED" ? (
                 <button
                   onClick={() =>
-                    void save({ status: "VISITED", outcome: null })
+                    void save({ status: "ASSESSED", outcome: null })
                   }
                   className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950"
                 >
-                  Mark visit completed
+                  Mark legacy visit assessed
                 </button>
               ) : null}
               {visit.status === "VISITED" ? (
