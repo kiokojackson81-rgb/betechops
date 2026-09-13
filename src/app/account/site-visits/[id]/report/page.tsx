@@ -33,7 +33,7 @@ export default async function CustomerSiteVisitReportPage({ params }: { params: 
         </div>
         <div className="flex gap-2">
           <Link href="/account/site-visits" className="rounded-full border border-[#7a0000]/15 bg-white px-4 py-2 font-bold">My site visits</Link>
-          <a href={`/api/account/site-visits/${visit.id}/report/pdf`} className="rounded-full bg-[#7a0000] px-4 py-2 font-bold text-white">Download PDF</a>
+          <a href={`/api/account/site-visits/${visit.id}/report/pdf`} className="rounded-full bg-[#7a0000] px-4 py-2 font-bold text-white">Download site visit report</a>
         </div>
       </div>
       <section className="mt-7 rounded-3xl bg-[#7a0000] p-6 text-white">

@@ -4,8 +4,14 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   ArrowLeft,
+  CalendarCheck2,
+  ClipboardCheck,
+  CreditCard,
   ExternalLink,
+  FileDown,
+  FileText,
   FileUp,
+  Images,
   MapPin,
   Phone,
   Save,
@@ -34,6 +40,11 @@ const label = (value: string | null | undefined) =>
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 const money = (value: number) => `KES ${value.toLocaleString("en-KE")}`;
+const isImageAttachment = (file: SerializedSiteVisitAttachment) =>
+  Boolean(
+    file.contentType?.startsWith("image/") ||
+      /\.(?:avif|gif|jpe?g|png|webp)$/i.test(file.fileName),
+  );
 
 function Field({
   name,
@@ -68,7 +79,7 @@ function PublishedAssessmentReport({ visit }: { visit: SerializedSiteVisit }) {
         <h2 className="mt-2 text-xl font-black text-white">{recommendation}</h2>
         <p className="mt-2 text-sm text-slate-300">Submitted by {report.submittedByName} on {new Date(report.submittedAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}</p>
         <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
-          <a href={`/api/admin/site-visits/${visit.id}/report/pdf`} className="rounded-full border border-emerald-300/40 px-4 py-2 text-emerald-100">Download customer PDF</a>
+          <a href={`/api/admin/site-visits/${visit.id}/report/pdf`} className="rounded-full border border-emerald-300/40 px-4 py-2 text-emerald-100">Download site visit report</a>
           {report.recommendation.productUrl ? <a href={report.recommendation.productUrl} target="_blank" rel="noreferrer" className="rounded-full border border-cyan-300/40 px-4 py-2 text-cyan-100">Open recommended product</a> : null}
           {report.recommendation.tiktokUrl ? <a href={report.recommendation.tiktokUrl} target="_blank" rel="noreferrer" className="rounded-full border border-cyan-300/40 px-4 py-2 text-cyan-100">Open similar TikTok project</a> : null}
         </div>
@@ -344,40 +355,6 @@ export default function SiteVisitDetailClient({
                 <MapPin className="h-4 w-4" /> Open maps
               </a>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void openPublicAssessment()}
-              className="inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-100"
-            >
-              <ExternalLink className="h-4 w-4" /> Open technician assessment
-            </button>
-            {visit.quoteRequestId ? (
-              <Link
-                href={`/admin/quotation-center?quoteId=${visit.quoteRequestId}`}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm"
-              >
-                <ExternalLink className="h-4 w-4" /> View quotation
-              </Link>
-            ) : (
-              <button
-                disabled={saving}
-                onClick={() => void createQuotation()}
-                className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50"
-              >
-                Create quotation draft
-              </button>
-            )}
-            {canManageCommercials &&
-            visit.quoteRequestId &&
-            visit.quotationCreditStatus === "AVAILABLE" ? (
-              <button
-                disabled={saving}
-                onClick={() => void applyCredit()}
-                className="rounded-full bg-amber-300 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50"
-              >
-                Apply Site Visit Fee Credit
-              </button>
-            ) : null}
           </div>
         </div>
         {inconsistency ? (
@@ -442,6 +419,100 @@ export default function SiteVisitDetailClient({
           </div>
         </section>
       ) : null}
+      <section className="rounded-[28px] border border-white/10 bg-[#0b1524] p-5 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[.2em] text-slate-400">Quick actions</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">Site visit workflow</h2>
+            <p className="mt-1 text-sm text-slate-400">Coordinate the assessment, report, quotation and visit status from one place.</p>
+          </div>
+          <span className="w-fit rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-100">
+            {label(visit.status)}
+          </span>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => void openPublicAssessment()}
+            className="group min-h-28 rounded-2xl border border-cyan-400/35 bg-cyan-400/[.08] p-4 text-left transition hover:bg-cyan-400/[.14]"
+          >
+            <ClipboardCheck className="h-5 w-5 text-cyan-200" />
+            <span className="mt-3 block font-bold text-cyan-50">Open technician assessment</span>
+            <span className="mt-1 block text-xs leading-5 text-cyan-100/75">Create a secure assessment link for the assigned technician.</span>
+          </button>
+          {visit.assessmentReport ? (
+            <a
+              href={`/api/admin/site-visits/${visit.id}/report/pdf`}
+              className="group min-h-28 rounded-2xl border border-emerald-400/30 bg-emerald-400/[.07] p-4 transition hover:bg-emerald-400/[.12]"
+            >
+              <FileDown className="h-5 w-5 text-emerald-200" />
+              <span className="mt-3 block font-bold text-emerald-50">Download site visit report</span>
+              <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Download the published customer report and technical assessment.</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTab("assessment")}
+              className="min-h-28 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-left transition hover:border-cyan-400/30"
+            >
+              <FileText className="h-5 w-5 text-slate-300" />
+              <span className="mt-3 block font-bold text-white">Assessment report</span>
+              <span className="mt-1 block text-xs leading-5 text-slate-400">Complete and publish the technician assessment before a report is available.</span>
+            </button>
+          )}
+          {visit.quoteRequestId ? (
+            <Link
+              href={`/admin/quotation-center?quoteId=${visit.quoteRequestId}`}
+              className="min-h-28 rounded-2xl border border-emerald-400/25 bg-emerald-400/[.06] p-4 transition hover:bg-emerald-400/[.12]"
+            >
+              <ExternalLink className="h-5 w-5 text-emerald-200" />
+              <span className="mt-3 block font-bold text-emerald-50">Open quotation</span>
+              <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Review the quotation linked to this site visit.</span>
+            </Link>
+          ) : (
+            <button
+              disabled={saving}
+              onClick={() => void createQuotation()}
+              className="min-h-28 rounded-2xl border border-emerald-400/25 bg-emerald-400/[.06] p-4 text-left transition hover:bg-emerald-400/[.12] disabled:opacity-50"
+            >
+              <FileText className="h-5 w-5 text-emerald-200" />
+              <span className="mt-3 block font-bold text-emerald-50">Create quotation draft</span>
+              <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Start the controlled quotation workflow from this visit.</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setTab("attachments")}
+            className="min-h-28 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-left transition hover:border-cyan-400/30"
+          >
+            <Images className="h-5 w-5 text-cyan-200" />
+            <span className="mt-3 block font-bold text-white">View attachments</span>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">{attachments.length} photo{attachments.length === 1 ? "" : "s"} or document{attachments.length === 1 ? "" : "s"} attached to this visit.</span>
+          </button>
+          {canManageCommercials && visit.quoteRequestId && visit.quotationCreditStatus === "AVAILABLE" ? (
+            <button
+              disabled={saving}
+              onClick={() => void applyCredit()}
+              className="min-h-28 rounded-2xl border border-amber-300/35 bg-amber-300/[.08] p-4 text-left transition hover:bg-amber-300/[.14] disabled:opacity-50"
+            >
+              <CreditCard className="h-5 w-5 text-amber-200" />
+              <span className="mt-3 block font-bold text-amber-50">Apply site visit fee credit</span>
+              <span className="mt-1 block text-xs leading-5 text-amber-100/75">Apply the verified visit fee once to the linked quotation.</span>
+            </button>
+          ) : null}
+          {visit.status === "PENDING" || visit.status === "SCHEDULED" ? (
+            <button
+              disabled={saving}
+              onClick={() => void save(visit.status === "PENDING" ? { status: "SCHEDULED", outcome: null } : { status: "VISITED", outcome: null })}
+              className="min-h-28 rounded-2xl border border-violet-400/30 bg-violet-400/[.08] p-4 text-left transition hover:bg-violet-400/[.14] disabled:opacity-50"
+            >
+              <CalendarCheck2 className="h-5 w-5 text-violet-200" />
+              <span className="mt-3 block font-bold text-violet-50">{visit.status === "PENDING" ? "Schedule site visit" : "Mark visit completed"}</span>
+              <span className="mt-1 block text-xs leading-5 text-violet-100/75">{visit.status === "PENDING" ? "Confirm a time after payment and technician assignment." : "Record completion before selecting the visit outcome."}</span>
+            </button>
+          ) : null}
+        </div>
+      </section>
       <nav className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/80 p-2">
         {tabs.map((item) => (
           <button
@@ -815,29 +886,54 @@ export default function SiteVisitDetailClient({
                 onChange={(e) => void upload(e.target.files?.[0] || null)}
               />
             </label>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {attachments.map((file) => (
-                <a
-                  key={file.id}
-                  href={file.fileUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-2xl border border-white/10 p-4"
-                >
-                  <div className="truncate font-bold">{file.fileName}</div>
-                  <div className="mt-2 text-xs text-slate-400">
-                    {file.contentType} ·{" "}
-                    {file.fileSizeBytes
-                      ? `${(file.fileSizeBytes / 1024 / 1024).toFixed(2)} MB`
-                      : "Size unavailable"}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {file.uploadedByName} ·{" "}
-                    {new Date(file.createdAt).toLocaleString("en-KE")}
-                  </div>
-                </a>
-              ))}
-            </div>
+            {!attachments.length ? (
+              <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-slate-950/50 p-8 text-center text-sm text-slate-400">
+                No photos or documents have been attached to this site visit yet.
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {attachments.map((file) => {
+                  const isImage = isImageAttachment(file);
+                  return (
+                    <a
+                      key={file.id}
+                      href={file.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60 transition hover:border-cyan-400/50"
+                    >
+                      {isImage ? (
+                        <div className="aspect-[4/3] overflow-hidden bg-slate-900">
+                          {/* Blob URLs are public but not a fixed Next image host; use an ordinary image so every uploaded photo can be previewed. */}
+                          <img
+                            src={file.fileUrl}
+                            alt={file.fileName}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950">
+                          <FileText className="h-10 w-10 text-cyan-200" />
+                        </div>
+                      )}
+                      <div className="p-4">
+                        <div className="truncate font-bold text-white">{file.fileName}</div>
+                        <div className="mt-2 text-xs text-slate-400">
+                          {isImage ? "Photo" : file.contentType || "Document"} · {file.fileSizeBytes
+                            ? `${(file.fileSizeBytes / 1024 / 1024).toFixed(2)} MB`
+                            : "Size unavailable"}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {file.uploadedByName || "Betech staff"} · {new Date(file.createdAt).toLocaleString("en-KE")}
+                        </div>
+                        <span className="mt-3 inline-flex text-xs font-bold text-cyan-200">Open full size →</span>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : null}
         {tab === "timeline" ? (
