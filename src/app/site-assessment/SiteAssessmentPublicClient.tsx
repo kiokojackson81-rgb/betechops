@@ -789,7 +789,7 @@ export default function SiteAssessmentPublicClient({
   const inverterKw = analysis.inverterKw;
   const recommendedBatteryKwh = analysis.batteryKwh;
   const batteryRecommendation = `${analysis.batteryKwh.toFixed(2)} kWh`;
-  const pvKw = analysis.pvCalculatedKwp;
+  const pvKw = analysis.finalSizing.pvRequired;
   const panelCount = analysis.panelCount;
   const assessmentPayload = () => ({
     loads,
@@ -813,6 +813,7 @@ export default function SiteAssessmentPublicClient({
       result: analysis.assessmentResult,
       criticalReadinessIssues: analysis.criticalReadinessIssues,
     },
+    finalSizing: analysis.finalSizing,
     calculation: {
       connectedKw: connected / 1000,
       dailyKwh: daily / 1000,
@@ -822,7 +823,7 @@ export default function SiteAssessmentPublicClient({
       inverterKw,
       batteryRecommendation,
       batteryKwh: analysis.batteryKwh,
-      pvKw,
+      pvKw: analysis.finalSizing.pvRequired,
       panelCount,
       panelWatts: analysis.panelWatts,
     },
@@ -1961,9 +1962,9 @@ export default function SiteAssessmentPublicClient({
                   detail={`Calculated from ${analysis.rawBackupEnergyKwh.toFixed(2)} kWh of recorded essential-load backup energy, then adjusted for 92% efficiency, 90% usable DoD and reserve.`}
                 />
                 <ProposalMetric
-                  label="PV requirement / practical array"
-                  value={`${pvKw.toFixed(2)} / ${analysis.pvPracticalKwp.toFixed(2)} kWp`}
-                  detail={`Daily design energy ${analysis.pvDesignEnergyKwh.toFixed(2)} kWh ÷ (${analysis.assumptions.peakSunHours} PSH × ${(analysis.assumptions.pvPerformanceFactor * 100).toFixed(0)}%) then rounded up to ${panelCount} × ${analysis.panelWatts} W. Expected average production: ${analysis.expectedSolarProductionKwh.toFixed(2)} kWh/day.`}
+                  label="PV sizing / practical array"
+                  value={`${pvKw.toFixed(2)} / ${analysis.finalSizing.installedPV.toFixed(2)} kWp`}
+                  detail={`Energy minimum ${analysis.finalSizing.pvDailyEnergyRequirement.toFixed(2)} kWp; battery recharge ${analysis.finalSizing.pvRechargeRequirement.toFixed(2)} kWp within ${analysis.finalSizing.rechargeWindowHours} sunny hours; objective ${analysis.finalSizing.pvObjectiveRequirement.toFixed(2)} kWp. Rounded to ${panelCount} × ${analysis.finalSizing.panelWattage} W. Expected average production: ${analysis.finalSizing.expectedProduction.toFixed(2)} kWh/day.`}
                 />
                 <ProposalMetric
                   label="Essential backup energy"

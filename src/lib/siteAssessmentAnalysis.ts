@@ -35,6 +35,7 @@ export type AssessmentAnalysisInput = {
   evidenceNames?: Record<string, unknown>;
   selectedProduct?: AssessmentProductInput | null;
   sizingConfig?: Record<string, unknown>;
+  assessmentCompleted?: boolean;
 };
 
 export const ASSESSMENT_DESIGN_ASSUMPTIONS = {
@@ -42,6 +43,9 @@ export const ASSESSMENT_DESIGN_ASSUMPTIONS = {
   peakSunHours: 4.5,
   pvPerformanceFactor: 0.78,
   pvRechargeMargin: 1.1,
+  pvRechargeWindowHours: 5,
+  pvPracticalReserve: 1.05,
+  moderateShadingAdjustment: 1.15,
   inverterOperatingReserve: 0.25,
   batteryInverterEfficiency: 0.92,
   batteryDepthOfDischarge: 0.9,
@@ -108,6 +112,9 @@ type SizingConfig = {
   peakSunHours: number;
   pvPerformanceFactor: number;
   pvRechargeMargin: number;
+  pvRechargeWindowHours: number;
+  pvPracticalReserve: number;
+  moderateShadingAdjustment: number;
   inverterOperatingReserve: number;
   batteryInverterEfficiency: number;
   batteryDepthOfDischarge: number;
@@ -132,6 +139,9 @@ function resolveSizingConfig(raw: Record<string, unknown> | undefined): SizingCo
     peakSunHours: configuredNumber(raw?.peakSunHours, ASSESSMENT_DESIGN_ASSUMPTIONS.peakSunHours),
     pvPerformanceFactor: configuredNumber(raw?.pvPerformanceFactor, ASSESSMENT_DESIGN_ASSUMPTIONS.pvPerformanceFactor),
     pvRechargeMargin: configuredNumber(raw?.pvRechargeMargin, ASSESSMENT_DESIGN_ASSUMPTIONS.pvRechargeMargin),
+    pvRechargeWindowHours: configuredNumber(raw?.pvRechargeWindowHours, ASSESSMENT_DESIGN_ASSUMPTIONS.pvRechargeWindowHours),
+    pvPracticalReserve: configuredNumber(raw?.pvPracticalReserve, ASSESSMENT_DESIGN_ASSUMPTIONS.pvPracticalReserve),
+    moderateShadingAdjustment: configuredNumber(raw?.moderateShadingAdjustment, ASSESSMENT_DESIGN_ASSUMPTIONS.moderateShadingAdjustment),
     inverterOperatingReserve: configuredNumber(raw?.inverterOperatingReserve, ASSESSMENT_DESIGN_ASSUMPTIONS.inverterOperatingReserve),
     batteryInverterEfficiency: configuredNumber(raw?.batteryInverterEfficiency, ASSESSMENT_DESIGN_ASSUMPTIONS.batteryInverterEfficiency),
     batteryDepthOfDischarge: configuredNumber(raw?.batteryDepthOfDischarge, ASSESSMENT_DESIGN_ASSUMPTIONS.batteryDepthOfDischarge),
@@ -202,11 +212,31 @@ export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
   const essentialAverageKw = rawBackupEnergyKwh && (number(input.electrical?.backupHours) || 8) ? rawBackupEnergyKwh / (number(input.electrical?.backupHours) || 8) : 0;
   const expectedBackupHours = essentialAverageKw ? usableBatteryKwh / essentialAverageKw : 0;
   const objective = normalized(input.electrical?.systemGoal);
-  const pvDesignEnergyKwh = objective.includes("off-grid") ? dailyKwh * assumptions.pvRechargeMargin : objective.includes("backup") ? Math.max(dayKwh, rawBackupEnergyKwh * assumptions.pvRechargeMargin) : dailyKwh;
-  const pvCalculatedKwp = pvDesignEnergyKwh / (assumptions.peakSunHours * assumptions.pvPerformanceFactor);
-  const productPanelWatts = productCapabilities(input.selectedProduct).pvKw && input.selectedProduct ? Number(`${input.selectedProduct.productName} ${input.selectedProduct.shortDescription || ""}`.match(/(?:×|x)\s*(\d+)\s*w/i)?.[1]) : 0;
+  const rechargeWindowHours = assumptions.pvRechargeWindowHours;
+  const batteryEnergyToRestoreKwh = rawBackupEnergyKwh / assumptions.batteryInverterEfficiency;
+  // Daytime demand is apportioned to the selected effective recharge window. This
+  // prevents a small array from being recommended just because average daily load
+  // is low while a battery still has to be restored after an outage.
+  const daytimeEnergyDuringRechargeKwh = dayKwh * Math.min(1, rechargeWindowHours / 12);
+  const pvDailyEnergyRequirementKwp = dailyKwh / (assumptions.peakSunHours * assumptions.pvPerformanceFactor);
+  const pvRechargeRequirementKwp = rawBackupEnergyKwh
+    ? (batteryEnergyToRestoreKwh + daytimeEnergyDuringRechargeKwh) * assumptions.pvRechargeMargin / (rechargeWindowHours * assumptions.pvPerformanceFactor)
+    : 0;
+  const explicitObjectiveKwp = number(input.electrical?.pvObjectiveKwp);
+  const targetSolarOffset = Math.min(1, number(input.electrical?.targetSolarOffsetPercent) / 100);
+  const pvObjectiveRequirementKwp = explicitObjectiveKwp || (objective.includes("off-grid")
+    ? dailyKwh * assumptions.pvRechargeMargin / (assumptions.peakSunHours * assumptions.pvPerformanceFactor)
+    : targetSolarOffset
+      ? dailyKwh * targetSolarOffset / (assumptions.peakSunHours * assumptions.pvPerformanceFactor)
+      : 0);
+  const pvRequiredKwp = Math.max(pvDailyEnergyRequirementKwp, pvRechargeRequirementKwp, pvObjectiveRequirementKwp);
+  const shadingAdjustment = normalized(input.siteDetails?.shading).includes("moderate") ? assumptions.moderateShadingAdjustment : 1;
+  const pvCalculatedKwp = pvRequiredKwp;
+  const pvDesignEnergyKwh = dailyKwh;
+  const productPanelWatts = input.selectedProduct ? Number(`${input.selectedProduct.productName} ${input.selectedProduct.shortDescription || ""}`.match(/(?:×|x)\s*(\d+)\s*w/i)?.[1]) : 0;
   const panelWatts = productPanelWatts || configuredNumber(input.electrical?.panelWatts, assumptions.panelWatts);
-  const panelCount = pvCalculatedKwp ? Math.max(1, Math.ceil(pvCalculatedKwp * 1000 / panelWatts)) : 0;
+  const practicalPvTargetKwp = pvRequiredKwp * assumptions.pvPracticalReserve * shadingAdjustment;
+  const panelCount = pvRequiredKwp ? Math.max(1, Math.ceil(practicalPvTargetKwp * 1000 / panelWatts)) : 0;
   const pvPracticalKwp = panelCount * panelWatts / 1000;
   const expectedSolarProductionKwh = pvPracticalKwp * assumptions.peakSunHours * assumptions.pvPerformanceFactor;
   const solarCoveragePercent = dailyKwh ? expectedSolarProductionKwh / dailyKwh * 100 : 0;
@@ -238,6 +268,12 @@ export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
   const highImpactLowConfidenceLoads = loads.filter((load) => load.confidence === "LOW" && (MAJOR_LOAD_KINDS.has(load.kind || "") || load.connectedKw >= 0.5));
   const roofReady = clean(input.siteDetails?.panelSpace) !== "No" && !normalized(input.siteDetails?.panelSpace).includes("unsure");
   const heavyShading = normalized(input.siteDetails?.shading).includes("heavy");
+  const roofPanelCapacity = number(input.siteDetails?.maxPanelCount) || number(input.siteDetails?.panelCapacity);
+  const mpptPvLimitKwp = number(input.electrical?.mpptMaxPvKw);
+  const roofCapacityExceeded = roofPanelCapacity > 0 && panelCount > roofPanelCapacity;
+  const mpptLimitExceeded = mpptPvLimitKwp > 0 && pvPracticalKwp > mpptPvLimitKwp;
+  const siteAccessPending = /pending|not.?accessed/.test(normalized(input.siteDetails?.siteAccess) || normalized(input.electrical?.siteAccess));
+  const siteAccessContradiction = Boolean(input.assessmentCompleted) && siteAccessPending;
   const electricalReady = !normalized(input.siteDetails?.supplyType).includes("not confirmed") && !normalized(input.siteDetails?.mainBreakerRating).includes("not confirmed") && !normalized(input.siteDetails?.solarBreakerSlots).includes("not confirmed") && normalized(input.siteDetails?.earthingAvailable) !== "no";
   const technicalReviewReasons = [
     ...(missingCriticalEvidence.length ? [`Missing critical site evidence: ${missingCriticalEvidence.join(", ")}.`] : []),
@@ -246,13 +282,17 @@ export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
     ...(objective.includes("off-grid") ? ["Off-grid operation requires seasonal autonomy and generator/grid contingency review."] : []),
     ...(kplcAlignment === "SIGNIFICANT_DISCREPANCY" ? ["Appliance load assessment and historical KPLC consumption differ significantly; confirm high-energy loads, seasonal use and unrecorded appliances."] : []),
     ...(heavyShading ? ["Heavy shading invalidates the standard PV production assumption until a shading review is completed."] : []),
+    ...(roofCapacityExceeded ? [`The recorded roof capacity (${roofPanelCapacity} panels) is below the required ${panelCount}-panel array.`] : []),
+    ...(mpptLimitExceeded ? [`The recorded inverter MPPT PV limit (${mpptPvLimitKwp} kWp) is below the required ${pvPracticalKwp} kWp array.`] : []),
     ...unusualLoads,
   ];
   const capabilities = productCapabilities(input.selectedProduct);
   const phaseMismatch = capabilities.phase === "SINGLE_PHASE" && supply.includes("three");
-  const knownUndersized = (capabilities.inverterKw !== null && capabilities.inverterKw < inverterKw) || (capabilities.batteryKwh !== null && capabilities.batteryKwh < batteryKwh) || (capabilities.pvKw !== null && capabilities.pvKw < pvPracticalKwp) || phaseMismatch;
+  const inverterUndersized = capabilities.inverterKw !== null && capabilities.inverterKw < inverterKw;
+  const storageOrPvAdjustment = (capabilities.batteryKwh !== null && capabilities.batteryKwh < batteryKwh) || (capabilities.pvKw !== null && capabilities.pvKw < pvPracticalKwp);
+  const knownUndersized = inverterUndersized || phaseMismatch;
   const allSpecificationsAvailable = Boolean(input.selectedProduct) && capabilities.inverterKw !== null && capabilities.batteryKwh !== null && capabilities.pvKw !== null && (!supply.includes("three") || capabilities.phase === "THREE_PHASE");
-  const productStatus = !input.selectedProduct ? "CUSTOM" : knownUndersized ? "FAIL" : allSpecificationsAvailable ? "PASS" : "PARTIAL";
+  const productStatus = !input.selectedProduct ? "CUSTOM" : knownUndersized ? "FAIL" : storageOrPvAdjustment ? "ADJUSTED" : allSpecificationsAvailable ? "PASS" : "PARTIAL";
   const productReasons = [
     ...(capabilities.inverterKw !== null ? [`Inverter ${capabilities.inverterKw} kW vs required ${inverterKw} kW.`] : ["Inverter specification is not structured in the catalog record."]),
     ...(capabilities.batteryKwh !== null ? [`Battery ${capabilities.batteryKwh} kWh vs required ${batteryKwh} kWh nominal.`] : ["Battery specification is not structured in the catalog record."]),
@@ -277,18 +317,68 @@ export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
     ...(normalized(input.siteDetails?.supplyType).includes("not confirmed") ? ["Electrical supply phase is not confirmed."] : []),
     ...(highImpactLowConfidenceLoads.length ? [`High-impact load ratings need confirmation: ${highImpactLowConfidenceLoads.map((load) => load.name).join(", ")}.`] : []),
     ...(kplcAlignment === "SIGNIFICANT_DISCREPANCY" ? ["KPLC and appliance estimates require confirmation."] : []),
+    ...(roofCapacityExceeded ? ["The recorded roof capacity cannot fit the required panel array."] : []),
+    ...(mpptLimitExceeded ? ["The recorded inverter MPPT limit cannot accept the required PV array."] : []),
   ];
   const assessmentResult = !loads.length ? "NOT READY" : criticalReadinessIssues.length ? "SIZING REVIEW REQUIRED" : technicalReviewReasons.length ? "PRELIMINARY SIZING" : "READY FOR TECHNICAL QUOTATION";
-  const recommendationOutcome = productStatus === "PASS" ? "STANDARD BETECH PACKAGE" : productStatus === "PARTIAL" ? "BETECH PACKAGE — ADJUSTED CONFIGURATION" : "CUSTOM ENGINEERING QUOTATION REQUIRED";
+  const customerAssessmentResult = !loads.length
+    ? "NOT READY FOR QUOTATION"
+    : criticalReadinessIssues.length
+      ? "ADDITIONAL TECHNICAL REVIEW REQUIRED"
+      : technicalReviewReasons.length
+        ? "TECHNICALLY FEASIBLE — SUBJECT TO FINAL VERIFICATION"
+        : "READY FOR QUOTATION";
+  const recommendationOutcome = productStatus === "PASS"
+    ? "STANDARD BETECH PACKAGE"
+    : productStatus === "ADJUSTED" || productStatus === "PARTIAL"
+      ? "BETECH PACKAGE — ADJUSTED CONFIGURATION"
+      : "CUSTOM ENGINEERING QUOTATION REQUIRED";
+  const customerOutstandingActions = [
+    ...(!loads.length ? [{ category: "REQUIRED BEFORE QUOTATION", message: "Record the appliance loads required for the proposed system." }] : []),
+    ...(heavyShading ? [{ category: "REQUIRED BEFORE QUOTATION", message: "Complete a shading review before confirming the final PV layout." }] : []),
+    ...(!roofReady ? [{ category: "REQUIRED BEFORE INSTALLATION", message: "Confirm the available panel installation area before installation planning." }] : []),
+    ...(missingCriticalEvidence.length ? [{ category: "REQUIRED BEFORE INSTALLATION", message: `Capture or confirm the required site evidence: ${missingCriticalEvidence.join(", ")}.` }] : []),
+    ...(normalized(input.siteDetails?.solarBreakerSlots).includes("not confirmed") ? [{ category: "REQUIRED BEFORE INSTALLATION", message: "Confirm solar breaker space and protection design at the main distribution board." }] : []),
+    ...(normalized(input.siteDetails?.earthingAvailable) === "no" ? [{ category: "REQUIRED BEFORE INSTALLATION", message: "Provide or improve protective earthing before installation." }] : []),
+    ...(highImpactLowConfidenceLoads.length ? [{ category: "REQUIRED BEFORE QUOTATION", message: `Confirm the rating of: ${highImpactLowConfidenceLoads.map((load) => load.name || "recorded major load").join(", ")}.` }] : []),
+    ...(kplcAlignment === "NOT_CONFIRMED" ? [{ category: "ADVISORY", message: "Historical KPLC usage has not been independently validated; confirm a bill or token before making energy-offset claims." }] : []),
+    ...(kplcAlignment === "SIGNIFICANT_DISCREPANCY" ? [{ category: "REQUIRED BEFORE QUOTATION", message: "Reconcile the appliance assessment with historical KPLC usage before making energy-offset claims." }] : []),
+    ...(roofCapacityExceeded ? [{ category: "REQUIRED BEFORE QUOTATION", message: "Revise the panel layout or system configuration because the recorded roof capacity is below the recommended array." }] : []),
+    ...(mpptLimitExceeded ? [{ category: "REQUIRED BEFORE QUOTATION", message: "Confirm a compatible inverter MPPT configuration for the recommended PV array." }] : []),
+  ];
+  const finalSizing = {
+    connectedLoad: connectedKw,
+    simultaneousPeak: simultaneousPeakKw,
+    surgeRequirement: surgeRequirementKw,
+    dailyEnergy: dailyKwh,
+    essentialBackupEnergy: rawBackupEnergyKwh,
+    inverterMinimum: inverterRequiredKw,
+    inverterSelected: inverterKw,
+    batteryCalculated: calculatedBatteryKwh,
+    batterySelected: batteryKwh,
+    pvDailyEnergyRequirement: pvDailyEnergyRequirementKwp,
+    pvRechargeRequirement: pvRechargeRequirementKwp,
+    pvObjectiveRequirement: pvObjectiveRequirementKwp,
+    pvRequired: pvRequiredKwp,
+    panelWattage: panelWatts,
+    panelCount,
+    installedPV: pvPracticalKwp,
+    expectedProduction: expectedSolarProductionKwh,
+    estimatedBackup: expectedBackupHours,
+    rechargeWindowHours,
+    batteryEnergyToRestoreKwh,
+    daytimeEnergyDuringRechargeKwh,
+  } as const;
   const largestEnergyConsumers = [...loads].sort((a, b) => b.energyKwh - a.energyKwh).slice(0, 5).map((load) => ({ name: load.name || "Recorded appliance", energyKwh: load.energyKwh, percent: dailyKwh ? load.energyKwh / dailyKwh * 100 : 0 }));
   const largestPeakContributors = [...included].sort((a, b) => b.surgeKw - a.surgeKw).slice(0, 5).map((load) => ({ name: load.name || "Recorded appliance", peakKw: load.connectedKw, surgeKw: load.surgeKw }));
   return {
     assumptions, loads, connectedKw, dailyKwh, dayKwh, nightKwh, continuousKw, simultaneousPeakKw, surgeRequirementKw, inverterRequiredKw, inverterKw,
     rawBackupEnergyKwh, calculatedBatteryKwh, batteryKwh, usableBatteryKwh, expectedBackupHours,
     pvDesignEnergyKwh, pvCalculatedKwp, pvPracticalKwp, panelWatts, panelCount, expectedSolarProductionKwh, solarCoveragePercent,
+    pvDailyEnergyRequirementKwp, pvRechargeRequirementKwp, pvObjectiveRequirementKwp, pvRequiredKwp, practicalPvTargetKwp, rechargeWindowHours, batteryEnergyToRestoreKwh, daytimeEnergyDuringRechargeKwh, roofPanelCapacity, mpptPvLimitKwp, roofCapacityExceeded, mpptLimitExceeded, siteAccessContradiction, finalSizing,
     kplcMonthlyKwh, billingDays, kplcDailyKwh, kplcVariancePercent, kplcAlignment,
     evidenceLabels, missingCriticalEvidence, highImpactLowConfidenceLoads, unusualLoads, largestEnergyConsumers, largestPeakContributors,
-    sizingConfidence, confidenceScore, criticalReadinessIssues, assessmentResult, recommendationOutcome,
+    sizingConfidence, confidenceScore, criticalReadinessIssues, assessmentResult, customerAssessmentResult, customerOutstandingActions, recommendationOutcome,
     technicalReviewRequired: technicalReviewReasons.length > 0,
     technicalReviewReasons, status: assessmentResult,
     productMatch: { status: productStatus, capabilities, reasons: productReasons },

@@ -64,4 +64,28 @@ describe("deterministic site-assessment engineering analysis", () => {
     expect(result.highImpactLowConfidenceLoads).toHaveLength(1);
     expect(result.assessmentResult).toBe("SIZING REVIEW REQUIRED");
   });
+
+  it("uses battery restoration as a PV sizing guardrail and rounds to the selected panel wattage", () => {
+    const result = analyseSiteAssessment({
+      ...base,
+      electrical: { ...base.electrical, panelWatts: "625" },
+      loads: [
+        { id: 1, kind: "water-pump", name: "Essential pump", qty: 1, watts: 500, ratingKnown: true, photo: true, usageMode: "DAILY_HOURS", hours: 8, period: "Night", essential: true, simultaneous: 1, details: { outageRuntimeHours: "8", surgeMultiplier: "3", ratingSource: "Nameplate confirmed" } },
+      ],
+    });
+    expect(result.finalSizing.pvRechargeRequirement).toBeGreaterThan(result.finalSizing.pvDailyEnergyRequirement);
+    expect(result.finalSizing.panelWattage).toBe(625);
+    expect(result.finalSizing.installedPV).toBe(result.finalSizing.panelCount * 0.625);
+    expect(result.finalSizing.pvRequired).toBe(result.pvRequiredKwp);
+  });
+
+  it("classifies an otherwise suitable package as adjusted when only PV or storage must change", () => {
+    const result = analyseSiteAssessment({
+      ...base,
+      loads: [{ id: 1, name: "Essential load", qty: 1, watts: 500, ratingKnown: true, photo: true, usageMode: "DAILY_HOURS", hours: 8, period: "Night", essential: true, simultaneous: 1, details: { outageRuntimeHours: "8", ratingSource: "Nameplate confirmed" } }],
+      selectedProduct: { productName: "3kW Hybrid Inverter, 2.56kWh Lithium Battery, 2 x 600W panels", shortDescription: "Single phase solar system" },
+    });
+    expect(result.productMatch.status).toBe("ADJUSTED");
+    expect(result.recommendationOutcome).toBe("BETECH PACKAGE — ADJUSTED CONFIGURATION");
+  });
 });
