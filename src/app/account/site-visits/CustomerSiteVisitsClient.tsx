@@ -10,6 +10,7 @@ import {
   kenyaCountyOptions,
 } from "@/lib/agents/kenyaMarkets";
 import type { CustomerSiteVisit } from "@/lib/siteVisitShared";
+import { SITE_VISIT_PROJECT_OPTIONS, SITE_VISIT_REASON_OPTIONS } from "@/lib/siteVisitProjectProfiles";
 import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 
 type Profile = {
@@ -30,6 +31,7 @@ type FormState = {
   landmark: string;
   mapUrl: string;
   propertyType: string;
+  alternativePhone: string;
   accessInstructions: string;
   preferredDate: string;
   preferredTimeLabel: "MORNING" | "AFTERNOON";
@@ -47,6 +49,7 @@ const emptyForm = (profile: Profile): FormState => ({
   landmark: "",
   mapUrl: "",
   propertyType: "RESIDENTIAL",
+  alternativePhone: "",
   accessInstructions: "",
   preferredDate: "",
   preferredTimeLabel: "MORNING",
@@ -410,17 +413,11 @@ export default function CustomerSiteVisitsClient({
                       onChange={(e) => update("projectType", e.target.value)}
                       className="field"
                     >
-                      <option value="SOLAR_HOME_SYSTEM">
-                        Solar home system
-                      </option>
-                      <option value="SOLAR_WATER_PUMP">Solar water pump</option>
-                      <option value="SOLAR_WATER_HEATER">
-                        Solar water heater
-                      </option>
-                      <option value="COMMERCIAL_SOLAR_SYSTEM">
-                        Commercial solar system
-                      </option>
-                      <option value="OTHER">Other</option>
+                      {SITE_VISIT_PROJECT_OPTIONS.map((project) => (
+                        <option key={project.value} value={project.value}>
+                          {project.label}
+                        </option>
+                      ))}
                     </select>
                   </Field>
                   <Field label="Reason for visit">
@@ -429,14 +426,11 @@ export default function CustomerSiteVisitsClient({
                       onChange={(e) => update("visitReason", e.target.value)}
                       className="field"
                     >
-                      <option value="LOAD_ASSESSMENT">Load assessment</option>
-                      <option value="ROOF_INSPECTION">Roof inspection</option>
-                      <option value="PUMP_ASSESSMENT">Pump assessment</option>
-                      <option value="INSTALLATION_PLANNING">
-                        Installation planning
-                      </option>
-                      <option value="FAULT_DIAGNOSIS">Fault diagnosis</option>
-                      <option value="OTHER">Other</option>
+                      {SITE_VISIT_REASON_OPTIONS.map((reason) => (
+                        <option key={reason.value} value={reason.value}>
+                          {reason.label}
+                        </option>
+                      ))}
                     </select>
                   </Field>
                   <Field label="What should our technician assess?">
@@ -529,10 +523,25 @@ export default function CustomerSiteVisitsClient({
                     />
                   </Field>
                   <Field label="Property type">
-                    <input
+                    <select
                       value={form.propertyType}
                       onChange={(e) => update("propertyType", e.target.value)}
                       className="field"
+                    >
+                      <option value="RESIDENTIAL">Residential</option>
+                      <option value="COMMERCIAL">Commercial</option>
+                      <option value="FARM">Farm</option>
+                      <option value="INSTITUTION">Institution</option>
+                      <option value="INDUSTRIAL">Industrial</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </Field>
+                  <Field label="Alternative phone (optional)">
+                    <input
+                      value={form.alternativePhone}
+                      onChange={(e) => update("alternativePhone", e.target.value)}
+                      className="field"
+                      inputMode="tel"
                     />
                   </Field>
                 </div>

@@ -4,6 +4,9 @@ import QRCode from "qrcode";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
 import { z } from "zod";
 import { analyseSiteAssessment, ASSESSMENT_DESIGN_ASSUMPTIONS, type AssessmentLoadInput } from "@/lib/siteAssessmentAnalysis";
+import { formatSiteVisitProjectType, formatSiteVisitReason, getSiteVisitProjectProfile } from "@/lib/siteVisitProjectProfiles";
+import type { QuoteProjectType } from "@/lib/quoteRequests";
+import type { SiteVisitReason } from "@/lib/siteVisitShared";
 
 const text = (max: number) => z.string().trim().max(max);
 
@@ -212,6 +215,8 @@ export async function generateSiteAssessmentReportPdf(input: {
   visitRef: string;
   customerName: string;
   location: string;
+  projectType?: QuoteProjectType | null;
+  visitReason?: SiteVisitReason | null;
   report: SiteAssessmentReport;
 }) {
   const document = await PDFDocument.create();
@@ -222,6 +227,16 @@ export async function generateSiteAssessmentReportPdf(input: {
   const home = asRecord(assessment.home);
   const electrical = asRecord(assessment.electrical);
   const site = asRecord(assessment.siteDetails);
+  const project = asRecord(assessment.project);
+  const projectDetails = asRecord(project.details);
+  // Reports issued before project types were introduced were all home-solar
+  // assessments, so preserve their established five-page solar design report.
+  const projectType = (input.projectType || clean(project.projectType) || "SOLAR_HOME_SYSTEM") as QuoteProjectType;
+  const visitReason = (input.visitReason || clean(project.visitReason) || "OTHER") as SiteVisitReason;
+  const projectProfile = getSiteVisitProjectProfile(projectType);
+  const projectTypeLabel = clean(project.projectTypeLabel) || formatSiteVisitProjectType(projectType);
+  const visitReasonLabel = clean(project.visitReasonLabel) || formatSiteVisitReason(visitReason);
+  const projectRequirement = clean(project.customerRequirements);
   const loads = Array.isArray(assessment.loads)
     ? assessment.loads.map((load) => asRecord(load) as AssessmentLoad)
     : [];
@@ -337,10 +352,20 @@ export async function generateSiteAssessmentReportPdf(input: {
     drawParagraph(page, value, MARGIN + 14, y - 29, A4[0] - MARGIN * 2 - 28, regular, 7.4, INK, lineHeight);
     y -= height + 9;
   };
+  const finishDocument = async () => {
+    pages.forEach((item, index) => {
+      item.drawLine({ start: { x: MARGIN, y: 38 }, end: { x: A4[0] - MARGIN, y: 38 }, color: BORDER, thickness: 0.7 });
+      item.drawText(input.visitRef, { x: MARGIN, y: 25, font: regular, size: 6.5, color: MUTED });
+      item.drawText("Betech Solar Solutions", { x: (A4[0] - regular.widthOfTextAtSize("Betech Solar Solutions", 6.5)) / 2, y: 25, font: regular, size: 6.5, color: MUTED });
+      const label = `Page ${index + 1} of ${pages.length}`;
+      item.drawText(label, { x: A4[0] - MARGIN - bold.widthOfTextAtSize(label, 6.5), y: 25, font: bold, size: 6.5, color: RED });
+    });
+    return Buffer.from(await document.save());
+  };
 
   drawHeader(undefined, true);
   page.drawText("TECHNICAL SITE ASSESSMENT REPORT", { x: (A4[0] - bold.widthOfTextAtSize("TECHNICAL SITE ASSESSMENT REPORT", 7.6)) / 2, y: y - 9, font: bold, size: 7.6, color: RED });
-  page.drawText("SOLAR PV SITE ASSESSMENT", { x: (A4[0] - bold.widthOfTextAtSize("SOLAR PV SITE ASSESSMENT", 18)) / 2, y: y - 33, font: bold, size: 18, color: INK });
+  page.drawText(projectProfile.reportTitle, { x: (A4[0] - bold.widthOfTextAtSize(projectProfile.reportTitle, 18)) / 2, y: y - 33, font: bold, size: 18, color: INK });
   page.drawText("& TECHNICAL RECOMMENDATION", { x: (A4[0] - bold.widthOfTextAtSize("& TECHNICAL RECOMMENDATION", 17)) / 2, y: y - 54, font: bold, size: 17, color: RED });
   y -= 71;
   const status = analysis.missingCriticalEvidence.length
@@ -359,38 +384,121 @@ export async function generateSiteAssessmentReportPdf(input: {
   y -= 63;
   const cardWidth = (A4[0] - MARGIN * 2 - 20) / 3;
   const customerLines: Array<[string, string]> = [
-    ["Customer", input.customerName], ["Location", input.location], ["Property", clean(home.type)], ["Bedrooms / units", [clean(home.bedrooms), clean(home.units) && `${clean(home.units)} unit(s)`].filter(Boolean).join(" · ")],
+    ["Customer", input.customerName], ["Location", input.location], ["Project", projectTypeLabel], ["Property", clean(project.propertyType) || clean(home.type)],
   ];
   const teamLines: Array<[string, string]> = [
     ["Site assessor", input.report.submittedByName], ["Assessment date", issueDateTime], ["Technical support", "0705 663 175"],
   ];
   const objectiveLines: Array<[string, string]> = [
-    ["Customer goal", clean(electrical.systemGoal)], ["Backup requirement", backupHours ? `${formatNumber(backupHours, 1)} hours` : ""], ["Grid", clean(electrical.grid)], ["Supply", clean(site.supplyType)],
+    ["Visit reason", visitReasonLabel], ["Customer request", projectRequirement], ["Project focus", projectProfile.title], ["Grid / supply", [clean(electrical.grid), clean(site.supplyType)].filter(Boolean).join(" · ")],
   ];
   const executiveCardHeight = Math.max(cardHeight(cardWidth, customerLines), cardHeight(cardWidth, teamLines), cardHeight(cardWidth, objectiveLines));
   card(MARGIN, cardWidth, "Customer / project", customerLines, "plain", executiveCardHeight);
   card(MARGIN + cardWidth + 10, cardWidth, "Assessment team", teamLines, "plain", executiveCardHeight);
   card(MARGIN + (cardWidth + 10) * 2, cardWidth, "Project objective", objectiveLines, "plain", executiveCardHeight);
   y -= executiveCardHeight + 17;
-  section("Energy assessment at a glance");
-  const metrics = [
+  section(projectProfile.usesLoadSizing ? "Energy assessment at a glance" : "Project assessment at a glance");
+  const projectMetrics = Object.entries(projectDetails)
+    .filter(([, value]) => hasValue(value))
+    .slice(0, 6)
+    .map(([key, value]) => [key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase()), clean(value), "Recorded during the field assessment."]);
+  const metrics = projectProfile.usesLoadSizing ? [
     ["Connected load", `${formatNumber(connectedKw)} kW`, "Total rating of recorded appliances."],
     ["Simultaneous peak", `${formatNumber(simultaneousPeakKw)} kW`, "Practical maximum expected together."],
     ["Daily consumption", `${formatNumber(dailyKwh)} kWh/day`, "Based on recorded usage patterns."],
     ["Monthly estimate", `${formatNumber(monthlyKwh, 0)} kWh`, "Indicative 30-day energy use."],
     ["Recommended inverter", `${formatNumber(inverterKw, 1)} kW`, "Includes operating reserve."],
     ["PV required", `${formatNumber(pvKw)} kWp`, `Calculated; practical selection ${formatNumber(practicalPvKw)} kWp (${panelCount || "Indicative"} × 600W).`],
-  ];
+  ] : (projectMetrics.length ? projectMetrics : [
+    ["Project type", projectTypeLabel, "Recorded site-visit category."],
+    ["Visit reason", visitReasonLabel, "Requested technical service."],
+    ["Customer request", projectRequirement || "To be confirmed", "Scope recorded at booking."],
+  ]);
   metrics.forEach(([title, value, detail], index) => {
     metric(MARGIN + (index % 3) * 174, String(title), String(value), String(detail));
     if (index % 3 === 2) y -= 76;
   });
   section("Assessment conclusion");
-  const conclusion = input.report.aiReview?.summary || `The property has an estimated connected electrical load of ${formatNumber(connectedKw)} kW and a practical simultaneous demand of approximately ${formatNumber(simultaneousPeakKw)} kW. Recorded appliance usage indicates approximately ${formatNumber(dailyKwh)} kWh per day. The engineering calculation requires ${formatNumber(pvKw)} kWp of PV; the practical array selection is ${formatNumber(practicalPvKw)} kWp (${panelCount} × 600W panels). Battery storage is derived from recorded essential appliance runtime during the stated outage period, with conversion, depth-of-discharge and reserve allowances.`;
+  const conclusion = input.report.aiReview?.summary || (projectProfile.usesLoadSizing
+    ? `The property has an estimated connected electrical load of ${formatNumber(connectedKw)} kW and a practical simultaneous demand of approximately ${formatNumber(simultaneousPeakKw)} kW. Recorded appliance usage indicates approximately ${formatNumber(dailyKwh)} kWh per day. The engineering calculation requires ${formatNumber(pvKw)} kWp of PV; the practical array selection is ${formatNumber(practicalPvKw)} kWp (${panelCount} × 600W panels). Battery storage is derived from recorded essential appliance runtime during the stated outage period, with conversion, depth-of-discharge and reserve allowances.`
+    : `This ${projectTypeLabel.toLowerCase()} assessment records the site requirements for ${visitReasonLabel.toLowerCase()}. Betech will use the recorded site observations, evidence and project-specific details to prepare the appropriate technical recommendation or quotation.`);
   const conclusionHeight = Math.max(78, splitLines(conclusion, regular, 9, A4[0] - MARGIN * 2 - 28).length * 13 + 30);
   drawRoundedBox(page, { x: MARGIN, y: y - conclusionHeight, width: A4[0] - MARGIN * 2, height: conclusionHeight, color: PALE, borderColor: BORDER, borderWidth: 0.7, borderRadius: 8 });
   drawParagraph(page, conclusion, MARGIN + 14, y - 20, A4[0] - MARGIN * 2 - 28, regular, 9, INK, 13);
   y -= conclusionHeight + 10;
+
+  // Water heating, pumping, commercial and diagnostic visits are not PV load-sizing
+  // exercises. Their report records the actual field scope rather than inventing a
+  // zero-kW solar design when appliance loads were not collected.
+  if (!projectProfile.usesLoadSizing) {
+    const detailLines: Array<[string, string]> = Object.entries(projectDetails)
+      .filter(([, value]) => hasValue(value))
+      .map(([key, value]) => [key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase()), clean(value)]);
+    const observedDetails: Array<[string, string]> = detailLines.length
+      ? detailLines
+      : [["Project type", projectTypeLabel], ["Visit reason", visitReasonLabel], ["Customer request", projectRequirement || "To be confirmed on site"]];
+
+    addPage("Project requirements & field observations");
+    page.drawText("Project-specific observations captured for the requested visit.", { x: MARGIN, y, font: regular, size: 9, color: MUTED });
+    y -= 18;
+    section("Recorded project requirements");
+    const requirementWidth = (A4[0] - MARGIN * 2 - 10) / 2;
+    for (let index = 0; index < observedDetails.length; index += 2) {
+      const left = observedDetails[index];
+      const right = observedDetails[index + 1];
+      const leftHeight = cardHeight(requirementWidth, [[left[0], left[1]]]);
+      const rightHeight = right ? cardHeight(requirementWidth, [[right[0], right[1]]]) : 0;
+      const rowHeight = Math.max(leftHeight, rightHeight);
+      card(MARGIN, requirementWidth, left[0], [["Recorded", left[1]]], "plain", rowHeight);
+      if (right) card(MARGIN + requirementWidth + 10, requirementWidth, right[0], [["Recorded", right[1]]], "plain", rowHeight);
+      y -= rowHeight + 9;
+    }
+    section("Scope and recommendation basis");
+    labeledText("Visit purpose", `${visitReasonLabel}. ${projectRequirement || "The technician will confirm the detailed scope during the field visit."}`);
+    labeledText("Technical recommendation", input.report.recommendation.type === "CUSTOM_QUOTATION"
+      ? "A custom Betech quotation will be prepared from the recorded project requirements and verified site observations."
+      : `The preliminary recommendation is ${reportRecommendationLabel(input.report)}. Final suitability remains subject to technical review and site verification.`, "amber");
+
+    addPage("Site conditions, safety & readiness");
+    const genericSiteWidth = (A4[0] - MARGIN * 2 - 20) / 3;
+    const genericSiteCards: Array<[string, Array<[string, string]>]> = [
+      ["Site context", [["Property", clean(project.propertyType) || clean(home.type)], ["Location", input.location], ["Access", clean(site.roofAccess)]]],
+      ["Existing installation", [["Existing system", clean(site.existingSystem)], ["Supply", clean(site.supplyType) || clean(electrical.grid)], ["Equipment area", clean(site.inverterLocation) || clean(site.batteryArea)]]],
+      ["Site evidence", [["Captured", `${analysis.evidenceLabels.length} / 8`], ["Status", analysis.missingCriticalEvidence.length ? "VERIFICATION REQUIRED" : "AVAILABLE FOR REVIEW"], ["To confirm", analysis.missingCriticalEvidence.length ? analysis.missingCriticalEvidence.join(" · ") : "No critical evidence gaps recorded"]]],
+    ];
+    const genericSiteHeight = Math.max(...genericSiteCards.map(([, lines]) => cardHeight(genericSiteWidth, lines)));
+    genericSiteCards.forEach(([title, lines], index) => card(MARGIN + index * (genericSiteWidth + 10), genericSiteWidth, title, lines, index === 2 && analysis.missingCriticalEvidence.length ? "amber" : "plain", genericSiteHeight));
+    y -= genericSiteHeight + 11;
+    section("Technical findings");
+    const genericFindings = input.report.aiReview?.observations.length
+      ? input.report.aiReview.observations
+      : [`${projectTypeLabel} visit requested for ${visitReasonLabel.toLowerCase()}.`, "The final recommendation will use the recorded project requirements, site conditions and evidence."];
+    genericFindings.slice(0, 4).forEach((finding) => labeledText("Field observation", finding));
+    const outstanding = [...(input.report.aiReview?.risks || []), ...(input.report.aiReview?.dataGaps || []), ...analysis.missingCriticalEvidence];
+    if (outstanding.length) {
+      section("Items to confirm before quotation");
+      outstanding.slice(0, 5).forEach((item) => labeledText("Technical confirmation required", item, "amber"));
+    }
+
+    addPage("Approval & next steps");
+    const technicianSigned = Boolean(input.report.signatures?.technicianAccepted);
+    const genericApprovalWidth = (A4[0] - MARGIN * 2 - 20) / 3;
+    const genericApprovalCards: Array<[string, Array<[string, string]>, "plain" | "amber"]> = [
+      ["Technician declaration", [["Status", technicianSigned ? "DIGITALLY SIGNED" : "SIGNATURE PENDING"], ["Site assessor", input.report.signatures?.technicianName || input.report.submittedByName], ["Assessment", input.visitRef]], technicianSigned ? "plain" : "amber"],
+      ["Customer acknowledgement", input.report.signatures ? [["Status", "DIGITALLY ACKNOWLEDGED"], ["Customer", input.report.signatures.customerName], ["Acknowledged", issueDateTime]] : [["Status", "AWAITING CUSTOMER ACKNOWLEDGEMENT"], ["Action", "Digital acknowledgement required"]], input.report.signatures ? "plain" : "amber"],
+      ["Next Betech action", [["Step 1", "Review field observations"], ["Step 2", input.report.recommendation.type === "CUSTOM_QUOTATION" ? "Prepare custom quotation" : "Confirm recommendation"], ["Step 3", "Share final quotation and schedule work"]], "plain"],
+    ];
+    const genericApprovalHeight = Math.max(...genericApprovalCards.map(([, lines]) => cardHeight(genericApprovalWidth, lines)));
+    genericApprovalCards.forEach(([title, lines, tone], index) => card(MARGIN + index * (genericApprovalWidth + 10), genericApprovalWidth, title, lines, tone, genericApprovalHeight));
+    y -= genericApprovalHeight + 11;
+    labeledText("Customer note", "This report records the field assessment and preliminary recommendation. Final scope, equipment selection, price and installation schedule are confirmed in Betech's formal quotation.");
+    section("Terms and contact");
+    page.drawText("TECHNICAL SUPPORT", { x: MARGIN, y: y - 14, font: bold, size: 7, color: RED });
+    page.drawText("0705 663 175  ·  info@betech.co.ke", { x: MARGIN, y: y - 27, font: regular, size: 8, color: INK });
+    page.drawText("BETECH SOLAR SOLUTIONS", { x: MARGIN, y: y - 45, font: bold, size: 7, color: RED });
+    page.drawText("www.betech.co.ke  ·  Pramukh Plaza, Nairobi CBD", { x: MARGIN, y: y - 58, font: regular, size: 8, color: INK });
+    return finishDocument();
+  }
 
   addPage("Detailed load assessment");
   page.drawText("Recorded appliances and consumption profile", { x: MARGIN, y, font: regular, size: 9, color: MUTED });
@@ -637,12 +745,5 @@ export async function generateSiteAssessmentReportPdf(input: {
   page.drawText("www.betech.co.ke", { x: MARGIN + 285, y: y - 54, font: regular, size: 7.2, color: INK });
   page.drawText("OFFICE  Pramukh Plaza, 3rd Floor, Shop No. 3, Nairobi CBD", { x: MARGIN + 175, y: y - 73, font: regular, size: 6.4, color: MUTED });
 
-  pages.forEach((item, index) => {
-    item.drawLine({ start: { x: MARGIN, y: 38 }, end: { x: A4[0] - MARGIN, y: 38 }, color: BORDER, thickness: 0.7 });
-    item.drawText(input.visitRef, { x: MARGIN, y: 25, font: regular, size: 6.5, color: MUTED });
-    item.drawText("Betech Solar Solutions", { x: (A4[0] - regular.widthOfTextAtSize("Betech Solar Solutions", 6.5)) / 2, y: 25, font: regular, size: 6.5, color: MUTED });
-    const label = `Page ${index + 1} of ${pages.length}`;
-    item.drawText(label, { x: A4[0] - MARGIN - bold.widthOfTextAtSize(label, 6.5), y: 25, font: bold, size: 6.5, color: RED });
-  });
-  return Buffer.from(await document.save());
+  return finishDocument();
 }

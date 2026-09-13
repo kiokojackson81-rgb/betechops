@@ -7,13 +7,15 @@ import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import type { QuoteProjectType } from "@/lib/quoteRequests";
+import type { SiteVisitReason } from "@/lib/siteVisitShared";
 import {
   generateSiteAssessmentReportPdf,
   reportRecommendationLabel,
   type SiteAssessmentReport,
 } from "@/lib/siteAssessmentReport";
 
-type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; paymentStatus: string; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
+type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; projectType?: QuoteProjectType | null; visitReason?: SiteVisitReason | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; paymentStatus: string; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
 type RecipientType = "CUSTOMER" | "TECHNICIAN";
 type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS";
 
@@ -91,6 +93,8 @@ export async function dispatchSiteAssessmentReportPublished(
       visitRef: visit.visitRef,
       customerName: visit.customerName,
       location: location(visit),
+      projectType: visit.projectType,
+      visitReason: visit.visitReason,
       report,
     });
     await sendGeneralCustomerNotificationEmail({

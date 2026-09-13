@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { getServiceZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 import { DATA_LOGGER_DAILY_RATE } from "@/lib/siteVisitPolicy";
+import { SITE_VISIT_PROJECT_OPTIONS, SITE_VISIT_REASON_OPTIONS } from "@/lib/siteVisitProjectProfiles";
 
 type StaffOption = {
   id: string;
@@ -23,29 +24,6 @@ type StaffOption = {
 type Props = { staffOptions: StaffOption[]; staffLoading?: boolean; allowUnassigned?: boolean };
 type PaymentStatus = "UNPAID" | "COLLECT_ON_SITE" | "PAID" | "WAIVED";
 
-const projectTypes = [
-  "SOLAR_HOME_SYSTEM",
-  "SOLAR_WATER_PUMP",
-  "SOLAR_WATER_HEATER",
-  "BOREHOLE_SOLAR_SYSTEM",
-  "COMMERCIAL_SOLAR_SYSTEM",
-  "CCTV_PLUS_SOLAR",
-  "STREET_LIGHTS",
-  "OTHER",
-] as const;
-const visitReasons = [
-  "LOAD_ASSESSMENT",
-  "ROOF_INSPECTION",
-  "PUMP_ASSESSMENT",
-  "INSTALLATION_PLANNING",
-  "FAULT_DIAGNOSIS",
-  "FINAL_MEASUREMENTS",
-  "QUOTATION_VERIFICATION",
-  "MAINTENANCE_VISIT",
-  "CUSTOMER_CONSULTATION",
-  "OTHER",
-] as const;
-const label = (value: string) => value.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const money = (value: number) => `KES ${value.toLocaleString("en-KE")}`;
 const inputClass = "mt-1.5 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60";
 
@@ -163,8 +141,8 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
             <Field title="Email (optional)"><input type="email" className={inputClass} value={form.customerEmail} onChange={(event) => setForm({ ...form, customerEmail: event.target.value })} /></Field>
             <Field title="Existing quotation reference (optional)"><input placeholder="QT-..." className={inputClass} value={form.quoteRef} onChange={(event) => setForm({ ...form, quoteRef: event.target.value })} /></Field>
             <Field title={allowUnassigned ? "Sales owner (optional)" : "Staff requesting / customer owner"} wide><select required={!allowUnassigned} disabled={staffLoading} className={inputClass} value={form.assignedStaffId} onChange={(event) => setForm({ ...form, assignedStaffId: event.target.value })}><option value="">{allowUnassigned ? "Unassigned — allocate later" : "Select staff member"}</option>{staffOptions.map((member) => <option key={member.id} value={member.id}>{member.name || member.email || "Staff"}</option>)}</select><span className="mt-1 block text-xs font-normal text-slate-400">{allowUnassigned ? "No sales person is credited until an admin assigns the work." : "This staff member keeps customer and quotation ownership. Only admin assigns the technician."}</span></Field>
-            <Field title="Project type"><select className={inputClass} value={form.projectType} onChange={(event) => setForm({ ...form, projectType: event.target.value })}>{projectTypes.map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></Field>
-            <Field title="Visit purpose"><select className={inputClass} value={form.visitReason} onChange={(event) => setForm({ ...form, visitReason: event.target.value })}>{visitReasons.map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></Field>
+            <Field title="Project type"><select className={inputClass} value={form.projectType} onChange={(event) => setForm({ ...form, projectType: event.target.value })}>{SITE_VISIT_PROJECT_OPTIONS.map((project) => <option key={project.value} value={project.value}>{project.label}</option>)}</select></Field>
+            <Field title="Visit purpose"><select className={inputClass} value={form.visitReason} onChange={(event) => setForm({ ...form, visitReason: event.target.value })}>{SITE_VISIT_REASON_OPTIONS.map((reason) => <option key={reason.value} value={reason.value}>{reason.label}</option>)}</select></Field>
             <Field title="What should the team assess?" wide><textarea required minLength={10} rows={3} className={inputClass} placeholder="Customer requirements, system concern or work to assess" value={form.customerRequirements} onChange={(event) => setForm({ ...form, customerRequirements: event.target.value })} /></Field>
             <Field title="Appliances or equipment to inspect (optional)" wide><textarea rows={2} className={inputClass} value={form.appliancesToInspect} onChange={(event) => setForm({ ...form, appliancesToInspect: event.target.value })} /></Field>
           </div>

@@ -108,4 +108,41 @@ describe("site assessment report sign-off", () => {
     const pdf = await generateSiteAssessmentReportPdf({ visitRef: "SV-2026-000002", customerName: "Carolyn Jepkorir", location: "Nairobi", report: report! });
     expect((await PDFDocument.load(pdf)).getPageCount()).toBe(5);
   });
+
+  it("generates a project-specific report for a solar water-heating visit without a PV load design", async () => {
+    const report = parseSiteAssessmentReport({
+      ...reportInput,
+      assessment: {
+        project: {
+          projectType: "SOLAR_WATER_HEATER",
+          projectTypeLabel: "Solar water heater",
+          visitReason: "PUMP_ASSESSMENT",
+          visitReasonLabel: "Pump assessment",
+          customerRequirements: "Assess hot-water demand for a family home.",
+          propertyType: "Residential",
+          details: {
+            occupants: "6 people",
+            dailyHotWaterUse: "Showers and kitchen",
+            existingHeater: "Electric shower only",
+            roofPlumbingNotes: "Tank position to be confirmed",
+          },
+        },
+        siteDetails: { supplyType: "Single phase", roofType: "Corrugated iron", roofCondition: "Good", roofAccess: "Standard ladder" },
+        evidenceNames: { "Roof wide": "roof.jpg" },
+      },
+      version: 1,
+      submittedAt: "2026-09-12T08:00:00.000Z",
+      submittedByName: "Betech Technician",
+    });
+    const pdf = await generateSiteAssessmentReportPdf({
+      visitRef: "SV-2026-000003",
+      customerName: "Carolyn Jepkorir",
+      location: "Nairobi",
+      projectType: "SOLAR_WATER_HEATER",
+      visitReason: "PUMP_ASSESSMENT",
+      report: report!,
+    });
+    expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
+    expect((await PDFDocument.load(pdf)).getPageCount()).toBeGreaterThanOrEqual(3);
+  });
 });

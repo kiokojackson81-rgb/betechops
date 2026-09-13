@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
 import { analyseSiteAssessment } from "@/lib/siteAssessmentAnalysis";
+import {
+  formatSiteVisitProjectType,
+  formatSiteVisitReason,
+  getSiteVisitProjectProfile,
+} from "@/lib/siteVisitProjectProfiles";
 
 type UsageMode = "DAILY_HOURS" | "EVENTS_DAILY" | "EVENTS_WEEKLY" | "ALWAYS_ON";
 type NumericField = number | "";
@@ -185,7 +190,7 @@ const evidenceCategories = [
 ] as const;
 const emptyHome = {
   bedrooms: "",
-  type: "House",
+  type: "Residential",
   units: "1",
   notes: "",
 };
@@ -440,10 +445,12 @@ export default function SiteAssessmentPublicClient({
 }) {
   const assessmentRootRef = useRef<HTMLElement | null>(null);
   const storageKey = draftStorageKey(visit.id);
+  const initialHome = { ...emptyHome, type: visit.propertyType || emptyHome.type };
   const [loads, setLoads] = useState<Load[]>([]);
-  const [home, setHome] = useState(emptyHome);
+  const [home, setHome] = useState(initialHome);
   const [electrical, setElectrical] = useState(emptyElectrical);
   const [siteDetails, setSiteDetails] = useState(emptySiteDetails);
+  const [projectDetails, setProjectDetails] = useState<Record<string, string>>({});
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [aiReview, setAiReview] = useState<AssessmentAiReview | null>(null);
   const [isAnalysing, setIsAnalysing] = useState(false);
@@ -497,6 +504,7 @@ export default function SiteAssessmentPublicClient({
           home: typeof emptyHome;
           electrical: typeof emptyElectrical;
           siteDetails: typeof emptySiteDetails;
+          projectDetails: Record<string, string>;
           aiReview: AssessmentAiReview;
           activeStep: number;
           completedSteps: Record<number, boolean>;
@@ -519,6 +527,7 @@ export default function SiteAssessmentPublicClient({
             setElectrical({ ...emptyElectrical, ...parsed.electrical });
           if (parsed.siteDetails)
             setSiteDetails({ ...emptySiteDetails, ...parsed.siteDetails });
+          if (parsed.projectDetails) setProjectDetails(parsed.projectDetails);
           if (parsed.aiReview) setAiReview(parsed.aiReview);
           if (typeof parsed.activeStep === "number")
             setActiveStep(Math.min(assessmentSteps.length - 1, Math.max(0, parsed.activeStep)));
@@ -557,6 +566,7 @@ export default function SiteAssessmentPublicClient({
           home,
           electrical,
           siteDetails,
+          projectDetails,
           aiReview,
           activeStep,
           completedSteps,
@@ -582,6 +592,7 @@ export default function SiteAssessmentPublicClient({
     home,
     loads,
     siteDetails,
+    projectDetails,
     skippedSteps,
     evidenceNames,
     expandedLoadKinds,
@@ -599,9 +610,10 @@ export default function SiteAssessmentPublicClient({
   const clearDraft = () => {
     if (!window.confirm("Clear the saved site-assessment draft from this device? This cannot be undone.")) return;
     setLoads([]);
-    setHome(emptyHome);
+    setHome(initialHome);
     setElectrical(emptyElectrical);
     setSiteDetails(emptySiteDetails);
+    setProjectDetails({});
     setAiReview(null);
     setActiveStep(0);
     setCompletedSteps({});
@@ -733,6 +745,9 @@ export default function SiteAssessmentPublicClient({
     edit(load.id, { details: { ...load.details, [key]: value } });
   const setSiteDetail = (key: string, value: string) =>
     setSiteDetails((current) => ({ ...current, [key]: value }));
+  const setProjectDetail = (key: string, value: string) =>
+    setProjectDetails((current) => ({ ...current, [key]: value }));
+  const projectProfile = getSiteVisitProjectProfile(visit.projectType);
   const analysis = analyseSiteAssessment({
     loads,
     electrical,
@@ -763,6 +778,15 @@ export default function SiteAssessmentPublicClient({
     home,
     electrical,
     siteDetails,
+    project: {
+      projectType: visit.projectType,
+      projectTypeLabel: formatSiteVisitProjectType(visit.projectType),
+      visitReason: visit.visitReason,
+      visitReasonLabel: formatSiteVisitReason(visit.visitReason),
+      customerRequirements: visit.customerRequirements,
+      propertyType: visit.propertyType,
+      details: projectDetails,
+    },
     evidenceNames,
     calculation: {
       connectedKw: connected / 1000,
@@ -882,11 +906,13 @@ export default function SiteAssessmentPublicClient({
       home?: typeof emptyHome;
       electrical?: typeof emptyElectrical;
       siteDetails?: typeof emptySiteDetails;
+      projectDetails?: Record<string, string>;
     };
     if (Array.isArray(saved.loads)) setLoads(saved.loads);
     if (saved.home) setHome({ ...emptyHome, ...saved.home });
     if (saved.electrical) setElectrical({ ...emptyElectrical, ...saved.electrical });
     if (saved.siteDetails) setSiteDetails({ ...emptySiteDetails, ...saved.siteDetails });
+    if (saved.projectDetails) setProjectDetails(saved.projectDetails);
     setRecommendationType(published.recommendation.type);
     setSelectedProduct(
       published.recommendation.type === "CATALOG_PRODUCT" &&
@@ -1086,11 +1112,42 @@ export default function SiteAssessmentPublicClient({
         </div>
         <div hidden={activeStep !== 0}>
         <section className="rounded-2xl bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
-          <h2 className="text-xl font-bold">Home and project details</h2>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">{formatSiteVisitProjectType(visit.projectType)} · {formatSiteVisitReason(visit.visitReason)}</p>
+          <h2 className="mt-1 text-xl font-bold">{projectProfile.title}</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Capture the household scale and customer requirements before
-            inspecting loads.
+            {projectProfile.introduction}
           </p>
+          {visit.customerRequirements ? (
+            <div className="mt-4 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm leading-6 text-cyan-100">
+              <b>Customer request:</b> {visit.customerRequirements}
+            </div>
+          ) : null}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {projectProfile.fields.map((field) => (
+              <Field key={field.key} label={field.label}>
+                {field.type === "textarea" ? (
+                  <textarea
+                    className={`${input} min-h-28`}
+                    value={projectDetails[field.key] || ""}
+                    onChange={(event) => setProjectDetail(field.key, event.target.value)}
+                    placeholder={field.placeholder}
+                  />
+                ) : (
+                  <input
+                    className={input}
+                    type={field.type || "text"}
+                    min={field.type === "number" ? "0" : undefined}
+                    value={projectDetails[field.key] || ""}
+                    onChange={(event) => setProjectDetail(field.key, event.target.value)}
+                    placeholder={field.placeholder}
+                  />
+                )}
+              </Field>
+            ))}
+          </div>
+          <div className="mt-6 border-t border-white/10 pt-5">
+          <h3 className="text-base font-bold">Property and site context</h3>
+          <p className="mt-1 text-sm text-slate-400">Record the building or site scale before inspecting equipment and access.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Field label="Property type">
               <select
@@ -1100,14 +1157,15 @@ export default function SiteAssessmentPublicClient({
                   setHome({ ...home, type: event.target.value })
                 }
               >
-                <option>House</option>
-                <option>Apartment</option>
-                <option>Maisonette</option>
-                <option>Rental units</option>
-                <option>Small business at home</option>
+                <option>Residential</option>
+                <option>Commercial</option>
+                <option>Farm</option>
+                <option>Institution</option>
+                <option>Industrial</option>
+                <option>Other</option>
               </select>
             </Field>
-            <Field label="Number of bedrooms">
+            <Field label={visit.projectType === "SOLAR_HOME_SYSTEM" ? "Number of bedrooms" : "Building units / floors / sections"}>
               <input
                 className={input}
                 type="number"
@@ -1129,6 +1187,7 @@ export default function SiteAssessmentPublicClient({
                 }
               />
             </Field>
+          </div>
           </div>
         </section>
         </div>
@@ -1591,23 +1650,23 @@ export default function SiteAssessmentPublicClient({
         </div>
         <div hidden={activeStep !== 8}>
         <section className="rounded-3xl bg-amber-400/10 p-5">
-          <b>Analyse Assessment with AI</b>
+          <b>{projectProfile.usesLoadSizing ? "Analyse assessment with AI" : "Review project assessment with AI"}</b>
           <p className="mt-2 text-sm">
-            Save the assessment inputs and submit all usage patterns, known
-            values and uploaded evidence for review. The live sizing proposal
-            below stays available and updates as staff correct readings.
+            {projectProfile.usesLoadSizing
+              ? "Save the assessment inputs and submit all usage patterns, known values and uploaded evidence for review. The live sizing proposal below stays available and updates as staff correct readings."
+              : "Save the project-specific field notes, site observations and uploaded evidence for review. This visit requires a tailored technical recommendation rather than an automatic PV sizing calculation."}
           </p>
           <button
             type="button"
             onClick={analyseAssessment}
-            disabled={!loads.length || isAnalysing}
+            disabled={(projectProfile.usesLoadSizing && !loads.length) || isAnalysing}
             className="mt-4 w-full rounded-xl bg-cyan-400 py-4 font-black text-slate-950 disabled:opacity-50"
           >
             {isAnalysing
               ? "Analysing assessment..."
               : aiReview
                 ? "Re-analyse assessment"
-                : "Analyse assessment with AI"}
+                : projectProfile.usesLoadSizing ? "Analyse assessment with AI" : "Review project assessment with AI"}
           </button>
           {analysisError ? (
             <p className="mt-3 text-sm font-semibold text-rose-200">
@@ -1748,6 +1807,7 @@ export default function SiteAssessmentPublicClient({
             </div>
           </div>
         </section>
+        {projectProfile.usesLoadSizing ? <>
         <section className="mt-5 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-xl font-bold">Known-load summary</h2>
           <div className="mt-3 grid gap-3 text-lg font-bold sm:grid-cols-3">
@@ -1756,7 +1816,18 @@ export default function SiteAssessmentPublicClient({
             <span>{unknown} unknown ratings</span>
           </div>
         </section>
-        <section className="mt-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 sm:rounded-3xl sm:p-5">
+        </> : (
+          <section className="mt-5 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-4 sm:rounded-3xl sm:p-5">
+            <h2 className="text-xl font-bold">Project assessment summary</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-200">This {formatSiteVisitProjectType(visit.projectType).toLowerCase()} visit is recorded for a tailored Betech technical recommendation. The customer request, project-specific observations, site evidence and final recommendation will be included in the downloadable report.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {projectProfile.fields.map((field) => projectDetails[field.key] ? (
+                <ProposalMetric key={field.key} label={field.label} value={projectDetails[field.key]} detail="Recorded during this site assessment." />
+              ) : null)}
+            </div>
+          </section>
+        )}
+        {projectProfile.usesLoadSizing ? <section className="mt-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 sm:rounded-3xl sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold">Preliminary system proposal</h2>
@@ -1820,7 +1891,7 @@ export default function SiteAssessmentPublicClient({
               </div>
             </>
           )}
-        </section>
+        </section> : null}
         <section className="mt-5 rounded-2xl border border-emerald-300/40 bg-emerald-400/10 p-4 sm:rounded-3xl sm:p-5">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-200">
             Final step
@@ -1942,7 +2013,7 @@ export default function SiteAssessmentPublicClient({
             changeStep(8, "complete");
             void analyseAssessment();
           }}
-          canAnalyse={loads.length > 0}
+          canAnalyse={!projectProfile.usesLoadSizing || loads.length > 0}
         />
       </div>
     </main>

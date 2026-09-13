@@ -18,6 +18,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     visitRef: visit.visitRef,
     customerName: visit.customerName,
     location: [visit.location, visit.landmark, visit.town, visit.county].filter(Boolean).join(", "),
+    projectType: visit.projectType,
+    visitReason: visit.visitReason,
     report: visit.assessmentReport,
   });
   return new NextResponse(pdf, {
