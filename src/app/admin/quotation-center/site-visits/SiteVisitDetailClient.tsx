@@ -116,6 +116,95 @@ function ReportList({ title, items, fallback }: { title: string; items: string[]
   return <section className="rounded-2xl border border-white/10 bg-slate-950 p-4"><h3 className="font-bold text-white">{title}</h3>{items.length ? <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">{items.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-3 text-sm text-slate-400">{fallback}</p>}</section>;
 }
 
+function SiteVisitWorkflowActions({
+  visit,
+  attachmentsCount,
+  saving,
+  canManageCommercials,
+  onOpenAssessment,
+  onOpenAssessmentTab,
+  onOpenAttachments,
+  onCreateQuotation,
+  onApplyCredit,
+  onAdvance,
+}: {
+  visit: SerializedSiteVisit;
+  attachmentsCount: number;
+  saving: boolean;
+  canManageCommercials: boolean;
+  onOpenAssessment: () => void;
+  onOpenAssessmentTab: () => void;
+  onOpenAttachments: () => void;
+  onCreateQuotation: () => void;
+  onApplyCredit: () => void;
+  onAdvance: () => void;
+}) {
+  return (
+    <section className="border-t border-white/10 pt-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[.2em] text-slate-400">Quick actions</p>
+          <h2 className="mt-1 text-xl font-semibold text-white">Site visit workflow</h2>
+          <p className="mt-1 text-sm text-slate-400">Coordinate the assessment, report, quotation and visit status from one place.</p>
+        </div>
+        <span className="w-fit rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-100">{label(visit.status)}</span>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <button type="button" onClick={onOpenAssessment} className="min-h-28 rounded-2xl border border-cyan-400/35 bg-cyan-400/[.08] p-4 text-left transition hover:bg-cyan-400/[.14]">
+          <ClipboardCheck className="h-5 w-5 text-cyan-200" />
+          <span className="mt-3 block font-bold text-cyan-50">Open technician assessment</span>
+          <span className="mt-1 block text-xs leading-5 text-cyan-100/75">Create a secure assessment link for the assigned technician.</span>
+        </button>
+        {visit.assessmentReport ? (
+          <a href={`/api/admin/site-visits/${visit.id}/report/pdf`} className="min-h-28 rounded-2xl border border-emerald-400/30 bg-emerald-400/[.07] p-4 transition hover:bg-emerald-400/[.12]">
+            <FileDown className="h-5 w-5 text-emerald-200" />
+            <span className="mt-3 block font-bold text-emerald-50">Download site visit report</span>
+            <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Download the published customer report and technical assessment.</span>
+          </a>
+        ) : (
+          <button type="button" onClick={onOpenAssessmentTab} className="min-h-28 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-left transition hover:border-cyan-400/30">
+            <FileText className="h-5 w-5 text-slate-300" />
+            <span className="mt-3 block font-bold text-white">Assessment report</span>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">Complete and publish the technician assessment before a report is available.</span>
+          </button>
+        )}
+        {visit.quoteRequestId ? (
+          <Link href={`/admin/quotation-center?quoteId=${visit.quoteRequestId}`} className="min-h-28 rounded-2xl border border-emerald-400/25 bg-emerald-400/[.06] p-4 transition hover:bg-emerald-400/[.12]">
+            <ExternalLink className="h-5 w-5 text-emerald-200" />
+            <span className="mt-3 block font-bold text-emerald-50">Open quotation</span>
+            <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Review the quotation linked to this site visit.</span>
+          </Link>
+        ) : (
+          <button disabled={saving} onClick={onCreateQuotation} className="min-h-28 rounded-2xl border border-emerald-400/25 bg-emerald-400/[.06] p-4 text-left transition hover:bg-emerald-400/[.12] disabled:opacity-50">
+            <FileText className="h-5 w-5 text-emerald-200" />
+            <span className="mt-3 block font-bold text-emerald-50">Create quotation draft</span>
+            <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Start the controlled quotation workflow from this visit.</span>
+          </button>
+        )}
+        <button type="button" onClick={onOpenAttachments} className="min-h-28 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-left transition hover:border-cyan-400/30">
+          <Images className="h-5 w-5 text-cyan-200" />
+          <span className="mt-3 block font-bold text-white">View attachments</span>
+          <span className="mt-1 block text-xs leading-5 text-slate-400">{attachmentsCount} attachment{attachmentsCount === 1 ? "" : "s"} saved to this visit.</span>
+        </button>
+        {canManageCommercials && visit.quoteRequestId && visit.quotationCreditStatus === "AVAILABLE" ? (
+          <button disabled={saving} onClick={onApplyCredit} className="min-h-28 rounded-2xl border border-amber-300/35 bg-amber-300/[.08] p-4 text-left transition hover:bg-amber-300/[.14] disabled:opacity-50">
+            <CreditCard className="h-5 w-5 text-amber-200" />
+            <span className="mt-3 block font-bold text-amber-50">Apply site visit fee credit</span>
+            <span className="mt-1 block text-xs leading-5 text-amber-100/75">Apply the verified visit fee once to the linked quotation.</span>
+          </button>
+        ) : null}
+        {visit.status === "PENDING" || visit.status === "SCHEDULED" ? (
+          <button disabled={saving} onClick={onAdvance} className="min-h-28 rounded-2xl border border-violet-400/30 bg-violet-400/[.08] p-4 text-left transition hover:bg-violet-400/[.14] disabled:opacity-50">
+            <CalendarCheck2 className="h-5 w-5 text-violet-200" />
+            <span className="mt-3 block font-bold text-violet-50">{visit.status === "PENDING" ? "Schedule site visit" : "Mark visit completed"}</span>
+            <span className="mt-1 block text-xs leading-5 text-violet-100/75">{visit.status === "PENDING" ? "Confirm a time after payment and technician assignment." : "Record completion before selecting the visit outcome."}</span>
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export default function SiteVisitDetailClient({
   initialVisit,
   initialEvents,
@@ -419,100 +508,6 @@ export default function SiteVisitDetailClient({
           </div>
         </section>
       ) : null}
-      <section className="rounded-[28px] border border-white/10 bg-[#0b1524] p-5 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[.2em] text-slate-400">Quick actions</p>
-            <h2 className="mt-1 text-xl font-semibold text-white">Site visit workflow</h2>
-            <p className="mt-1 text-sm text-slate-400">Coordinate the assessment, report, quotation and visit status from one place.</p>
-          </div>
-          <span className="w-fit rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-100">
-            {label(visit.status)}
-          </span>
-        </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => void openPublicAssessment()}
-            className="group min-h-28 rounded-2xl border border-cyan-400/35 bg-cyan-400/[.08] p-4 text-left transition hover:bg-cyan-400/[.14]"
-          >
-            <ClipboardCheck className="h-5 w-5 text-cyan-200" />
-            <span className="mt-3 block font-bold text-cyan-50">Open technician assessment</span>
-            <span className="mt-1 block text-xs leading-5 text-cyan-100/75">Create a secure assessment link for the assigned technician.</span>
-          </button>
-          {visit.assessmentReport ? (
-            <a
-              href={`/api/admin/site-visits/${visit.id}/report/pdf`}
-              className="group min-h-28 rounded-2xl border border-emerald-400/30 bg-emerald-400/[.07] p-4 transition hover:bg-emerald-400/[.12]"
-            >
-              <FileDown className="h-5 w-5 text-emerald-200" />
-              <span className="mt-3 block font-bold text-emerald-50">Download site visit report</span>
-              <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Download the published customer report and technical assessment.</span>
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setTab("assessment")}
-              className="min-h-28 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-left transition hover:border-cyan-400/30"
-            >
-              <FileText className="h-5 w-5 text-slate-300" />
-              <span className="mt-3 block font-bold text-white">Assessment report</span>
-              <span className="mt-1 block text-xs leading-5 text-slate-400">Complete and publish the technician assessment before a report is available.</span>
-            </button>
-          )}
-          {visit.quoteRequestId ? (
-            <Link
-              href={`/admin/quotation-center?quoteId=${visit.quoteRequestId}`}
-              className="min-h-28 rounded-2xl border border-emerald-400/25 bg-emerald-400/[.06] p-4 transition hover:bg-emerald-400/[.12]"
-            >
-              <ExternalLink className="h-5 w-5 text-emerald-200" />
-              <span className="mt-3 block font-bold text-emerald-50">Open quotation</span>
-              <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Review the quotation linked to this site visit.</span>
-            </Link>
-          ) : (
-            <button
-              disabled={saving}
-              onClick={() => void createQuotation()}
-              className="min-h-28 rounded-2xl border border-emerald-400/25 bg-emerald-400/[.06] p-4 text-left transition hover:bg-emerald-400/[.12] disabled:opacity-50"
-            >
-              <FileText className="h-5 w-5 text-emerald-200" />
-              <span className="mt-3 block font-bold text-emerald-50">Create quotation draft</span>
-              <span className="mt-1 block text-xs leading-5 text-emerald-100/75">Start the controlled quotation workflow from this visit.</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setTab("attachments")}
-            className="min-h-28 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-left transition hover:border-cyan-400/30"
-          >
-            <Images className="h-5 w-5 text-cyan-200" />
-            <span className="mt-3 block font-bold text-white">View attachments</span>
-            <span className="mt-1 block text-xs leading-5 text-slate-400">{attachments.length} photo{attachments.length === 1 ? "" : "s"} or document{attachments.length === 1 ? "" : "s"} attached to this visit.</span>
-          </button>
-          {canManageCommercials && visit.quoteRequestId && visit.quotationCreditStatus === "AVAILABLE" ? (
-            <button
-              disabled={saving}
-              onClick={() => void applyCredit()}
-              className="min-h-28 rounded-2xl border border-amber-300/35 bg-amber-300/[.08] p-4 text-left transition hover:bg-amber-300/[.14] disabled:opacity-50"
-            >
-              <CreditCard className="h-5 w-5 text-amber-200" />
-              <span className="mt-3 block font-bold text-amber-50">Apply site visit fee credit</span>
-              <span className="mt-1 block text-xs leading-5 text-amber-100/75">Apply the verified visit fee once to the linked quotation.</span>
-            </button>
-          ) : null}
-          {visit.status === "PENDING" || visit.status === "SCHEDULED" ? (
-            <button
-              disabled={saving}
-              onClick={() => void save(visit.status === "PENDING" ? { status: "SCHEDULED", outcome: null } : { status: "VISITED", outcome: null })}
-              className="min-h-28 rounded-2xl border border-violet-400/30 bg-violet-400/[.08] p-4 text-left transition hover:bg-violet-400/[.14] disabled:opacity-50"
-            >
-              <CalendarCheck2 className="h-5 w-5 text-violet-200" />
-              <span className="mt-3 block font-bold text-violet-50">{visit.status === "PENDING" ? "Schedule site visit" : "Mark visit completed"}</span>
-              <span className="mt-1 block text-xs leading-5 text-violet-100/75">{visit.status === "PENDING" ? "Confirm a time after payment and technician assignment." : "Record completion before selecting the visit outcome."}</span>
-            </button>
-          ) : null}
-        </div>
-      </section>
       <nav className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/80 p-2">
         {tabs.map((item) => (
           <button
@@ -780,6 +775,18 @@ export default function SiteVisitDetailClient({
                 ) : null}
               </div>
             </div>
+            <SiteVisitWorkflowActions
+              visit={visit}
+              attachmentsCount={attachments.length}
+              saving={saving}
+              canManageCommercials={canManageCommercials}
+              onOpenAssessment={() => void openPublicAssessment()}
+              onOpenAssessmentTab={() => setTab("assessment")}
+              onOpenAttachments={() => setTab("attachments")}
+              onCreateQuotation={() => void createQuotation()}
+              onApplyCredit={() => void applyCredit()}
+              onAdvance={() => void save(visit.status === "PENDING" ? { status: "SCHEDULED", outcome: null } : { status: "VISITED", outcome: null })}
+            />
           </div>
         ) : null}
         {tab === "assessment" ? (
