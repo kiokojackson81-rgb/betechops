@@ -13,7 +13,7 @@ type ExternalTechnicianOption = { id: string; name: string; whatsappNumber: stri
 type Props = { staffOptions: StaffOption[]; externalTechnicians?: ExternalTechnicianOption[]; canAssignTechnicians?: boolean; canDeleteVisits?: boolean; initialQuoteRef?: string | null; basePath?: string };
 
 const workflowStatuses = ["PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED"] as const satisfies ReadonlyArray<SiteVisitStatus>;
-const statuses: Array<SiteVisitStatus | "ALL"> = ["ALL", ...workflowStatuses, "CLOSED", "SCHEDULED", "VISITED"];
+const statuses: Array<SiteVisitStatus | "ALL"> = ["ALL", ...workflowStatuses, "CLOSED", "CANCELLED", "SCHEDULED", "VISITED"];
 const projectTypes: QuoteProjectType[] = ["SOLAR_HOME_SYSTEM", "SOLAR_WATER_PUMP", "SOLAR_WATER_HEATER", "BOREHOLE_SOLAR_SYSTEM", "COMMERCIAL_SOLAR_SYSTEM", "CCTV_PLUS_SOLAR", "STREET_LIGHTS", "OTHER"];
 const reasons = ["LOAD_ASSESSMENT", "ROOF_INSPECTION", "PUMP_ASSESSMENT", "INSTALLATION_PLANNING", "FAULT_DIAGNOSIS", "FINAL_MEASUREMENTS", "QUOTATION_VERIFICATION", "MAINTENANCE_VISIT", "CUSTOMER_CONSULTATION", "OTHER"];
 const label = (value: string) => value.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());

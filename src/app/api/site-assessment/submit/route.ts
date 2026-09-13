@@ -20,6 +20,9 @@ export async function POST(request: Request) {
   if (!visit || visit.assignedTechnicianId !== tokenPayload.technicianId) {
     return NextResponse.json({ ok: false, error: "This assessment is no longer assigned to this link." }, { status: 403 });
   }
+  if (visit.status === "CANCELLED") {
+    return NextResponse.json({ ok: false, error: "This site visit has been cancelled and cannot be assessed." }, { status: 409 });
+  }
   const revision = String(form.get("revision") || "") === "true";
   if (visit.assessmentReport && !revision) {
     return NextResponse.json({ ok: false, error: "This site assessment report has already been published." }, { status: 409 });

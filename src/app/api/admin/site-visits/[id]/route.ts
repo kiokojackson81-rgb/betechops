@@ -11,6 +11,7 @@ import {
 } from "@/lib/siteVisits";
 import {
   dispatchSiteVisitCreated,
+  dispatchSiteVisitCancellation,
   dispatchSiteVisitScheduleConfirmation,
   dispatchSiteVisitTechnicianAssignment,
 } from "@/lib/siteVisitNotifications";
@@ -107,6 +108,9 @@ export async function PATCH(
   if (assignmentChanged && !actor.canAssignTechnicians) {
     return NextResponse.json({ ok: false, error: "Only an administrator can assign the visit owner or technician." }, { status: 403 });
   }
+  if (parsed.data.status === "CANCELLED" && !actor.canManageCommercials) {
+    return NextResponse.json({ ok: false, error: "Only administrators or supervisors can cancel a site visit." }, { status: 403 });
+  }
   if (parsed.data.assignedTechnicianId?.startsWith("external:")) {
     const externalId = parsed.data.assignedTechnicianId.slice("external:".length);
     const external = await (await import("@/lib/prisma")).prisma.projectExternalAgent.findFirst({ where: { id: externalId, isActive: true }, select: { id: true } });
@@ -136,6 +140,9 @@ export async function PATCH(
   const scheduleChanged = existing.scheduledAt !== visit.scheduledAt;
   if (scheduleChanged && !technicianChanged && visit.assignedTechnicianId && visit.scheduledAt) {
     void dispatchSiteVisitScheduleConfirmation(visit);
+  }
+  if (existing.status !== "CANCELLED" && visit.status === "CANCELLED") {
+    await dispatchSiteVisitCancellation(visit);
   }
 
   return NextResponse.json({ ok: true, visit });

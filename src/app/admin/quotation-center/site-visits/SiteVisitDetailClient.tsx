@@ -24,6 +24,7 @@ import type {
   SiteVisitOutcome,
   SiteVisitPaymentStatus,
 } from "@/lib/siteVisitShared";
+import { SITE_VISIT_CANCELLATION_REASONS } from "@/lib/siteVisitShared";
 
 type StaffOption = { id: string; name: string | null; email: string | null };
 type ExternalTechnicianOption = { id: string; name: string; whatsappNumber: string };
@@ -172,6 +173,8 @@ function SiteVisitWorkflowActions({
     ? 1
     : visit.status === "VISITED"
       ? 2
+      : visit.status === "CANCELLED"
+        ? -1
       : Math.max(0, stages.indexOf(visit.status as (typeof stages)[number]));
   const canCreateQuotation = visit.status === "ASSESSED" || visit.status === "VISITED" || visit.status === "CLOSED";
   return (
@@ -192,10 +195,10 @@ function SiteVisitWorkflowActions({
         ))}
       </ol>
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <button type="button" disabled={!visit.assignedTechnicianId} onClick={onOpenAssessment} className="min-h-28 rounded-2xl border border-cyan-400/35 bg-cyan-400/[.08] p-4 text-left transition hover:bg-cyan-400/[.14] disabled:cursor-not-allowed disabled:opacity-45">
+        <button type="button" disabled={!visit.assignedTechnicianId || visit.status === "CANCELLED"} onClick={onOpenAssessment} className="min-h-28 rounded-2xl border border-cyan-400/35 bg-cyan-400/[.08] p-4 text-left transition hover:bg-cyan-400/[.14] disabled:cursor-not-allowed disabled:opacity-45">
           <ClipboardCheck className="h-5 w-5 text-cyan-200" />
           <span className="mt-3 block font-bold text-cyan-50">Open technician assessment</span>
-          <span className="mt-1 block text-xs leading-5 text-cyan-100/75">{visit.assignedTechnicianId ? "Create a secure assessment link for the assigned technician." : "Assign a technician in the Overview form first."}</span>
+          <span className="mt-1 block text-xs leading-5 text-cyan-100/75">{visit.status === "CANCELLED" ? "Cancelled site visits cannot be assessed." : visit.assignedTechnicianId ? "Create a secure assessment link for the assigned technician." : "Assign a technician in the Overview form first."}</span>
         </button>
         {visit.assessmentReport ? (
           <a href={`/api/admin/site-visits/${visit.id}/report/pdf`} className="min-h-28 rounded-2xl border border-emerald-400/30 bg-emerald-400/[.07] p-4 transition hover:bg-emerald-400/[.12]">
@@ -278,6 +281,8 @@ export default function SiteVisitDetailClient({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [otherCancellationReason, setOtherCancellationReason] = useState("");
   const scheduleInputRef = useRef<HTMLInputElement>(null);
   const input =
     "w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/60 disabled:opacity-60";
@@ -306,6 +311,24 @@ export default function SiteVisitDetailClient({
       draft.assignedTechnicianId
         ? "Schedule saved and customer notified."
         : "Schedule saved.",
+    );
+  }
+
+  function cancelSiteVisit() {
+    const selectedReason = cancellationReason.trim();
+    const explanation = otherCancellationReason.trim();
+    const reason = selectedReason === "Other"
+      ? (explanation ? `Other: ${explanation}` : "")
+      : selectedReason;
+    if (!reason) {
+      setMessage(null);
+      setError(selectedReason === "Other" ? "Enter a written explanation for Other." : "Select a cancellation reason.");
+      return;
+    }
+    if (!window.confirm(`Cancel site visit ${visit.visitRef} and notify ${visit.customerName} by SMS?`)) return;
+    void save(
+      { status: "CANCELLED", cancellationReason: reason, outcome: null },
+      "Site visit cancelled and customer notified by SMS.",
     );
   }
 
@@ -963,6 +986,50 @@ export default function SiteVisitDetailClient({
               onApplyCredit={() => void applyCredit()}
               onAssignTechnician={() => void save({ assignedTechnicianId: draft.assignedTechnicianId, outcome: null })}
             />
+            {canManageCommercials && visit.status !== "CLOSED" && visit.status !== "CANCELLED" ? (
+              <section className="mt-6 rounded-2xl border border-rose-400/25 bg-rose-400/[.05] p-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[.18em] text-rose-200">Cancellation</p>
+                    <h2 className="mt-1 text-xl font-semibold text-white">Cancel site visit</h2>
+                    <p className="mt-1 text-sm text-slate-400">This is final. The selected reason is recorded in the visit timeline and sent to the customer by SMS.</p>
+                  </div>
+                  <span className="w-fit rounded-full border border-rose-300/25 px-3 py-1 text-xs font-bold text-rose-100">Customer notification</span>
+                </div>
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <Field name="Cancellation reason">
+                    <select
+                      className={input}
+                      value={cancellationReason}
+                      onChange={(event) => setCancellationReason(event.target.value)}
+                    >
+                      <option value="">Select a reason</option>
+                      {SITE_VISIT_CANCELLATION_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+                    </select>
+                  </Field>
+                  {cancellationReason === "Other" ? (
+                    <Field name="Other explanation">
+                      <textarea
+                        className={`${input} min-h-24`}
+                        value={otherCancellationReason}
+                        onChange={(event) => setOtherCancellationReason(event.target.value)}
+                        placeholder="Explain why this site visit is being cancelled"
+                      />
+                    </Field>
+                  ) : null}
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={saving || !cancellationReason || (cancellationReason === "Other" && !otherCancellationReason.trim())}
+                    onClick={cancelSiteVisit}
+                    className="rounded-xl border border-rose-400/40 bg-rose-400/10 px-4 py-2.5 text-sm font-bold text-rose-100 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel site visit & notify customer
+                  </button>
+                </div>
+              </section>
+            ) : null}
           </div>
         ) : null}
         {tab === "assessment" ? (

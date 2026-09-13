@@ -15,9 +15,9 @@ import {
   type SiteAssessmentReport,
 } from "@/lib/siteAssessmentReport";
 
-type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; projectType?: QuoteProjectType | null; visitReason?: SiteVisitReason | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; estimatedDurationMinutes?: number | null; paymentStatus: string; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
+type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; projectType?: QuoteProjectType | null; visitReason?: SiteVisitReason | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; estimatedDurationMinutes?: number | null; cancellationReason?: string | null; paymentStatus: string; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
 type RecipientType = "CUSTOMER" | "TECHNICIAN";
-type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_VISIT_SCHEDULED_CUSTOMER_SMS" | "SITE_VISIT_SCHEDULED_TECHNICIAN_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS";
+type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_VISIT_SCHEDULED_CUSTOMER_SMS" | "SITE_VISIT_SCHEDULED_TECHNICIAN_SMS" | "SITE_VISIT_CANCELLED_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS";
 
 // The apex domain is the registered customer site. The www alias has not
 // consistently served customer-account routes, so SMS links must use this URL.
@@ -92,6 +92,18 @@ export async function dispatchSiteVisitScheduleConfirmation(visit: Visit) {
     sendOnce({ visitId: visit.id, type: "SITE_VISIT_SCHEDULED_CUSTOMER_SMS", recipient: visit.customerPhone, recipientType: "CUSTOMER", message: customerMessage, version }),
     phone ? sendOnce({ visitId: visit.id, type: "SITE_VISIT_SCHEDULED_TECHNICIAN_SMS", recipient: phone, recipientType: "TECHNICIAN", message: technicianMessage, version }) : Promise.resolve({ status: "SKIPPED" }),
   ]);
+}
+
+export async function dispatchSiteVisitCancellation(visit: Visit) {
+  const reason = String(visit.cancellationReason || "Cancellation requested").trim();
+  return sendOnce({
+    visitId: visit.id,
+    type: "SITE_VISIT_CANCELLED_CUSTOMER_SMS",
+    recipient: visit.customerPhone,
+    recipientType: "CUSTOMER",
+    message: `Your site visit ${visit.visitRef} has been cancelled. Reason: ${reason}. You can request a new site visit when ready: ${customerUrl(visit.id)}`,
+    version: `cancelled:${reason}`,
+  });
 }
 
 export async function dispatchSiteAssessmentReportPublished(

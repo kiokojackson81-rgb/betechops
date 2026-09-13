@@ -24,6 +24,8 @@ describe("site visit policy", () => {
     expect(validateSiteVisitLifecycle({ previousStatus: "ASSESSED", status: "QUOTED", outcome: "QUOTATION_CREATED", closedReason: null })).toBeNull();
     expect(validateSiteVisitLifecycle({ previousStatus: "VISITED", status: "CLOSED", outcome: null, closedReason: "" })).toMatch(/outcome/i);
     expect(validateSiteVisitLifecycle({ previousStatus: "SCHEDULED", status: "VISITED", outcome: null, closedReason: null })).toBeNull();
+    expect(validateSiteVisitLifecycle({ previousStatus: "PENDING", status: "CANCELLED", outcome: null, closedReason: null })).toBeNull();
+    expect(validateSiteVisitLifecycle({ previousStatus: "CANCELLED", status: "PENDING", outcome: null, closedReason: null })).toMatch(/cannot move/i);
   });
 
   it("makes paid fees available once and preserves applied credit", () => {

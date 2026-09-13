@@ -11,6 +11,7 @@ import {
   recordQuotationEvent,
 } from "@/lib/quoteRequests";
 import {
+  SITE_VISIT_CANCELLATION_REASONS,
   SITE_VISIT_OUTCOMES,
   DATA_LOGGER_STATUSES,
   SITE_VISIT_PAYMENT_STATUSES,
@@ -595,6 +596,7 @@ export const siteVisitUpdateSchema = siteVisitCreateSchema.partial().extend({
   nextAction: z.string().trim().max(4000).optional(),
   outcome: z.enum(SITE_VISIT_OUTCOMES).optional().nullable(),
   closedReason: z.string().trim().max(2000).optional(),
+  cancellationReason: z.string().trim().min(3).max(1000).optional(),
 });
 
 export const customerSiteVisitCreateSchema = z.object({
@@ -1331,6 +1333,7 @@ export async function updateSiteVisit(
         : existing.status
   );
   const nextOutcome = input.outcome === null ? null : input.outcome ?? existing.outcome;
+  const nextCancellationReason = input.cancellationReason?.trim() || existing.cancellationReason;
   const lifecycleError = validateSiteVisitLifecycle({
     previousStatus: existing.status,
     status: nextStatus,
@@ -1338,6 +1341,13 @@ export async function updateSiteVisit(
     closedReason: input.closedReason ?? existing.closedReason,
   });
   if (lifecycleError) throw new Error(lifecycleError);
+  if (nextStatus === "CANCELLED") {
+    if (!nextCancellationReason) throw new Error("Select a cancellation reason before cancelling this site visit.");
+    const isStandardReason = SITE_VISIT_CANCELLATION_REASONS.includes(nextCancellationReason as (typeof SITE_VISIT_CANCELLATION_REASONS)[number]);
+    if (!isStandardReason && !nextCancellationReason.startsWith("Other: ")) {
+      throw new Error("Select a standard cancellation reason, or use Other with a written explanation.");
+    }
+  }
   if (input.paymentStatus === "PAID" && !String(input.paymentReference || existing.paymentReference || "").trim()) {
     throw new Error("A payment reference is required before marking the visit fee paid.");
   }
@@ -1354,7 +1364,7 @@ export async function updateSiteVisit(
     nextStatus === "VISITED" || nextStatus === "ASSESSED" || nextStatus === "QUOTED" || nextStatus === "CLOSED"
       ? (toValidDate(existing.completedAt) || new Date())
       : null;
-  const closedAt = nextStatus === "CLOSED" ? (toValidDate(existing.closedAt) || new Date()) : null;
+  const closedAt = nextStatus === "CLOSED" || nextStatus === "CANCELLED" ? (toValidDate(existing.closedAt) || new Date()) : null;
   const nextPaymentStatus = input.paymentStatus || existing.paymentStatus;
   const nextDataLoggerRequested = input.dataLoggerRequested ?? existing.dataLoggerRequested;
   const nextDataLoggerDays = nextDataLoggerRequested
@@ -1469,6 +1479,8 @@ export async function updateSiteVisit(
       "nextAction" = ${input.nextAction?.trim() || existing.nextAction},
       "outcome" = ${nextOutcome},
       "closedReason" = ${input.closedReason?.trim() || existing.closedReason},
+      "cancellationRequestedAt" = ${nextStatus === "CANCELLED" ? (toValidDate(existing.cancellationRequestedAt) || new Date()) : existing.cancellationRequestedAt ? toValidDate(existing.cancellationRequestedAt) : null},
+      "cancellationReason" = ${nextStatus === "CANCELLED" ? nextCancellationReason : existing.cancellationReason},
       "completedAt" = ${completedAt},
       "closedAt" = ${closedAt},
       "updatedAt" = CURRENT_TIMESTAMP
@@ -1500,6 +1512,7 @@ export async function updateSiteVisit(
   if (updated.visitFee !== existing.visitFee) changes.push(`Visit fee KES ${existing.visitFee.toLocaleString("en-KE")} → KES ${updated.visitFee.toLocaleString("en-KE")}`);
   if (nextPaymentStatus !== existing.paymentStatus) changes.push(`Payment ${nextPaymentStatus}${updated.paymentReference ? ` · Ref ${updated.paymentReference}` : ""}`);
   if (nextOutcome !== existing.outcome && nextOutcome) changes.push(`Outcome ${nextOutcome.replace(/_/g, " ")}`);
+  if (updated.status === "CANCELLED" && updated.cancellationReason) changes.push(`Cancellation reason: ${updated.cancellationReason}`);
   if (updated.assessmentSummary !== existing.assessmentSummary && updated.assessmentSummary) changes.push("Assessment submitted");
   if (!changes.length) changes.push("Visit information updated");
 
@@ -1643,7 +1656,9 @@ export async function recordCustomerSiteVisitAction(
   actor: { id: string; name: string | null; email: string | null },
 ) {
   await ensureSiteVisitsSchema();
-  if (visit.status === "CLOSED") throw new Error("Closed site visits can no longer be changed.");
+  if (visit.status === "CLOSED" || visit.status === "CANCELLED") {
+    throw new Error("Closed or cancelled site visits can no longer be changed.");
+  }
 
   if (input.action === "REQUEST_RESCHEDULE") {
     if (visit.status === "VISITED") throw new Error("A completed visit cannot be rescheduled.");

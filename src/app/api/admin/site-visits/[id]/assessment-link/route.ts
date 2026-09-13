@@ -11,6 +11,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   const { id } = await context.params;
   const visit = await getSiteVisitById(id);
   if (!visit?.assignedTechnicianId) return NextResponse.json({ error: "Assign a technician before opening the assessment form." }, { status: 400 });
+  if (visit.status === "CANCELLED") return NextResponse.json({ error: "Cancelled site visits cannot be assessed." }, { status: 400 });
   const token = createSiteAssessmentToken({ visitId: visit.id, technicianId: visit.assignedTechnicianId });
   return NextResponse.json({ ok: true, url: `/site-assessment/${token}` });
 }

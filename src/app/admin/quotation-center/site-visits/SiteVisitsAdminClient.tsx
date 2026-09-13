@@ -68,7 +68,7 @@ type EditFormState = {
   internalNotes: string;
 };
 
-const statusOptions: Array<SiteVisitStatus | "ALL"> = ["ALL", "PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED", "CLOSED", "SCHEDULED", "VISITED"];
+const statusOptions: Array<SiteVisitStatus | "ALL"> = ["ALL", "PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED", "CLOSED", "CANCELLED", "SCHEDULED", "VISITED"];
 const projectTypeOptions: QuoteProjectType[] = [
   "SOLAR_HOME_SYSTEM",
   "SOLAR_WATER_PUMP",

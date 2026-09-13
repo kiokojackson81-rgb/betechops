@@ -236,7 +236,7 @@ export default function CustomerSiteVisitsClient({
                   ) : null}
                 </div>
                 <div className="shrink-0 text-left sm:text-right">
-                  <span className={`inline-flex rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wider ${visit.status === "CLOSED" ? "bg-slate-200 text-slate-700" : visit.status === "QUOTED" || visit.status === "ASSESSED" ? "bg-emerald-100 text-emerald-800" : "bg-[#fff0cf] text-[#7a0000]"}`}>
+                  <span className={`inline-flex rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wider ${visit.status === "CANCELLED" ? "bg-red-100 text-red-800" : visit.status === "CLOSED" ? "bg-slate-200 text-slate-700" : visit.status === "QUOTED" || visit.status === "ASSESSED" ? "bg-emerald-100 text-emerald-800" : "bg-[#fff0cf] text-[#7a0000]"}`}>
                     {label(visit.status)}
                   </span>
                   <p className="mt-3 text-xs font-bold uppercase tracking-[.15em] text-slate-400">Visit fee</p>
@@ -297,13 +297,13 @@ export default function CustomerSiteVisitsClient({
                   </Link>
                 ) : null}
                 <button
-                  disabled={busy || visit.status === "CLOSED"}
+                  disabled={busy || visit.status === "CLOSED" || visit.status === "CANCELLED"}
                   onClick={() => requestReschedule(visit)}
                   className="rounded-full border border-[#7a0000]/15 bg-white px-5 py-3 text-sm font-bold"
                 >
                   Request reschedule
                 </button>
-                {visit.status !== "CLOSED" && !visit.cancellationRequestedAt ? (
+                {visit.status !== "CLOSED" && visit.status !== "CANCELLED" && !visit.cancellationRequestedAt ? (
                   <button
                     disabled={busy}
                     onClick={() => {
@@ -322,7 +322,7 @@ export default function CustomerSiteVisitsClient({
                   </button>
                 ) : null}
               </div>
-              {visit.paymentStatus === "UNPAID" ? (
+              {visit.status !== "CANCELLED" && visit.paymentStatus === "UNPAID" ? (
                 <div className="mt-6 border-t border-[#7a0000]/10 pt-5">
                   <MpesaStkPaymentPanel resourceType="SITE_VISIT" reference={visit.visitRef} amountDue={visit.totalPayable} initialPhone={profile.phone} onSuccess={() => void refreshVisits()} />
                 </div>

@@ -3,8 +3,30 @@ import type { SiteAssessmentReport } from "@/lib/siteAssessmentReport";
 
 // Operational stages are intentionally separate from fee/payment status. Older
 // SCHEDULED and VISITED values remain supported for existing visits.
-export const SITE_VISIT_STATUSES = ["PAYMENT_PENDING", "PAYMENT_FAILED", "PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED", "SCHEDULED", "VISITED", "CLOSED"] as const;
+export const SITE_VISIT_STATUSES = ["PAYMENT_PENDING", "PAYMENT_FAILED", "PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED", "SCHEDULED", "VISITED", "CLOSED", "CANCELLED"] as const;
 export type SiteVisitStatus = (typeof SITE_VISIT_STATUSES)[number];
+
+export const SITE_VISIT_CANCELLATION_REASONS = [
+  "Customer cancelled",
+  "Customer requested reschedule",
+  "Customer unreachable",
+  "Site visit fee not paid",
+  "Customer declined site visit fee",
+  "Customer no longer interested",
+  "Customer chose another supplier/installer",
+  "Customer purchased without site visit",
+  "Remote assessment completed",
+  "Duplicate booking",
+  "Incorrect/incomplete customer details",
+  "Site inaccessible/not ready",
+  "Technician unavailable",
+  "Transport/logistics issue",
+  "Outside service area / visit not feasible",
+  "Project not technically feasible",
+  "Cancelled by management",
+  "Other",
+] as const;
+export type SiteVisitCancellationReason = (typeof SITE_VISIT_CANCELLATION_REASONS)[number];
 
 export const SITE_VISIT_OUTCOMES = [
   "QUOTATION_CREATED",
