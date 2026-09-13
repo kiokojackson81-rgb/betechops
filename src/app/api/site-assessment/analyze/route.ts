@@ -20,6 +20,13 @@ const assessmentReviewSchema = z.object({
     .max(8)
     .default([]),
   dataGaps: z.array(z.string().trim().min(1).max(500)).max(8).default([]),
+  kplc: z.object({
+    meterId: z.string().trim().max(120).optional(),
+    monthlyKwh: z.string().trim().max(40).optional(),
+    monthlyBill: z.string().trim().max(40).optional(),
+    tariff: z.string().trim().max(160).optional(),
+    billDate: z.string().trim().max(40).optional(),
+  }).optional(),
 });
 
 function getAnalysisErrorResponse(error: unknown) {
@@ -150,7 +157,7 @@ export async function POST(request: Request) {
         {
           role: "system",
           content:
-            "You are a senior solar site-assessment reviewer for Kenya. Review entered appliance usage, electrical data, roof evidence and photos. Do not invent ratings, dimensions, phase, roof condition or KPLC consumption. Treat unknown nameplates as unresolved and list them in dataGaps. Do not override the deterministic inverter, battery and PV calculation: assess its reasonableness and identify practical risks, evidence to collect, and next actions. Return only JSON with summary, observations, risks, recommendations and dataGaps arrays.",
+            "You are a senior solar site-assessment reviewer for Kenya. Review entered appliance usage, electrical data, roof evidence and photos. Do not invent ratings, dimensions, phase, roof condition or KPLC consumption. Treat unknown nameplates as unresolved and list them in dataGaps. Do not override the deterministic inverter, battery and PV calculation: assess its reasonableness and identify practical risks, evidence to collect, and next actions. When a KPLC bill or token screenshot is visible, extract only clearly legible meter/account identifier, monthly kWh, latest amount in KES, tariff and ISO bill date into the optional kplc object; omit unclear values. Return only JSON with summary, observations, risks, recommendations, dataGaps and optional kplc.",
         },
         {
           role: "user",

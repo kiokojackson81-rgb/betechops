@@ -134,12 +134,20 @@ export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
   const missingCriticalEvidence = CRITICAL_EVIDENCE.filter((label) => !evidenceLabels.includes(label));
   const supply = normalized(input.siteDetails?.supplyType);
   const goal = normalized(input.electrical?.systemGoal);
+  const kplcMonthlyKwh = number(input.electrical?.monthlyKwh);
+  const kplcDailyKwh = kplcMonthlyKwh / 30;
+  const kplcAlignment = !kplcDailyKwh || !dailyKwh
+    ? "NOT_CONFIRMED"
+    : Math.abs(dailyKwh - kplcDailyKwh) / Math.max(dailyKwh, kplcDailyKwh) < 0.35
+      ? "ALIGNED"
+      : "REVIEW_REQUIRED";
   const hasMotor = largestMotorKw > 0;
   const technicalReviewReasons = [
     ...(missingCriticalEvidence.length ? [`Missing critical site evidence: ${missingCriticalEvidence.join(", ")}.`] : []),
     ...(supply.includes("three") ? ["Three-phase supply requires phase and protection review."] : []),
     ...(hasMotor ? ["Motor loads require surge/start-current confirmation."] : []),
     ...(goal.includes("off-grid") ? ["Off-grid operation requires seasonal autonomy and generator/grid contingency review."] : []),
+    ...(kplcAlignment === "REVIEW_REQUIRED" ? ["Appliance load assessment and historical KPLC consumption differ significantly; confirm usage hours, seasonal loads and unrecorded appliances."] : []),
   ];
   const capabilities = productCapabilities(input.selectedProduct);
   const phaseMismatch = capabilities.phase === "SINGLE_PHASE" && supply.includes("three");
@@ -157,6 +165,7 @@ export function analyseSiteAssessment(input: AssessmentAnalysisInput) {
     connectedKw, dailyKwh, dayKwh, nightKwh, continuousKw, simultaneousPeakKw, inverterRequiredKw, inverterKw,
     rawBackupEnergyKwh, calculatedBatteryKwh, batteryKwh, usableBatteryKwh, expectedBackupHours,
     pvCalculatedKwp, pvPracticalKwp, panelCount, expectedSolarProductionKwh, solarCoveragePercent,
+    kplcMonthlyKwh, kplcDailyKwh, kplcAlignment,
     evidenceLabels, missingCriticalEvidence, technicalReviewRequired: technicalReviewReasons.length > 0,
     technicalReviewReasons, status: missingCriticalEvidence.length ? "ASSESSMENT COMPLETE — VERIFICATION REQUIRED" : "TECHNICALLY ASSESSED",
     productMatch: { status: productStatus, capabilities, reasons: productReasons },

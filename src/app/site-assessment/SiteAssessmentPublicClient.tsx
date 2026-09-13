@@ -47,6 +47,7 @@ type AssessmentAiReview = {
   risks: string[];
   recommendations: string[];
   dataGaps: string[];
+  kplc?: { meterId?: string; monthlyKwh?: string; monthlyBill?: string; tariff?: string; billDate?: string };
 };
 type CatalogProduct = {
   productName: string;
@@ -176,7 +177,7 @@ const assessmentSteps = [
   "Equipment",
   "Evidence",
   "Review",
-  "Analysis",
+  "Review & Complete",
 ] as const;
 const evidenceCategories = [
   "Meter box",
@@ -187,29 +188,44 @@ const evidenceCategories = [
   "Roof horizons",
   "Inverter/battery wall",
   "Cable route",
+  "KPLC bill / token",
+  "Roof / installation area photos",
+  "Equipment & cable route photos",
 ] as const;
 const emptyHome = {
-  bedrooms: "",
+  bedrooms: "3",
+  bedroomsOther: "",
   type: "Residential",
   units: "1",
   notes: "",
 };
 const emptyElectrical = {
-  billing: "Prepaid meter",
+  kplcAvailable: "Yes",
+  billing: "Postpaid",
   grid: "Connected to grid",
   wiring: "Wiring complete",
   meterId: "",
   monthlyKwh: "",
   monthlyBill: "",
   tariff: "",
+  billDate: "",
   systemGoal: "Backup during outages",
   backupHours: "8",
-  budget: "",
+  budget: "Not discussed",
+  budgetSpecific: "",
+  budgetFlexibility: "Not discussed",
 };
 const emptySiteDetails: Record<string, string> = {
-  supplyType: "Single phase", mainBreakerRating: "", solarBreakerSlots: "", earthingCondition: "Visually confirmed", earthWireNotes: "",
-  roofType: "Corrugated iron", roofCondition: "Good", roofWidth: "", roofLength: "", roofPitch: "", shading: "None", roofAccess: "Standard ladder", roofObstructions: "",
-  inverterLocation: "Indoor", batteryArea: "Dry and ventilated", arrayToInverter: "", inverterToDb: "", inverterToBattery: "", cableRoute: "Easy",
+  supplyType: "Single phase", mainBreakerRating: "63A", mainBreakerOther: "", solarBreakerSlots: "Not confirmed", earthingAvailable: "Yes", earthingCondition: "Good / visually confirmed", earthWireSize: "4mm²", earthWireOther: "", earthWireNotes: "", newEarthingRequired: "No",
+  existingSystem: "No existing system",
+  installationLocation: "Roof", roofType: "Corrugated iron / Mabati", roofTypeOther: "", roofCondition: "Good", roofWidth: "", roofLength: "", roofSlope: "Normal pitched roof", roofPitch: "", shading: "None", roofAccess: "Standard ladder", roofObstructions: "None", roofOrientation: "Not confirmed", panelSpace: "Yes", mountingMethod: "Direct roof mounting",
+  inverterLocation: "Indoor", batteryArea: "Dry and ventilated", equipmentSpace: "Yes", mountingSurface: "Masonry/concrete wall", arrayToInverter: "0–10m", arrayToInverterExact: "", inverterToDb: "0–5m", inverterToDbExact: "", inverterToBattery: "Below 1m", inverterToBatteryExact: "", cableRoute: "Easy", cableRouteIssues: "", cableFloors: "1 / Same floor", equipmentCondition: "Suitable", equipmentConditionNote: "",
+};
+const defaultProjectDetails: Record<string, string> = {
+  siteObjective: "New solar installation / load assessment",
+  futureExpansion: "No",
+  budgetFallback: "Provide multiple options",
+  specialConcerns: "None",
 };
 const lightAreas = [
   "Living area",
@@ -450,10 +466,11 @@ export default function SiteAssessmentPublicClient({
   const [home, setHome] = useState(initialHome);
   const [electrical, setElectrical] = useState(emptyElectrical);
   const [siteDetails, setSiteDetails] = useState(emptySiteDetails);
-  const [projectDetails, setProjectDetails] = useState<Record<string, string>>({});
+  const [projectDetails, setProjectDetails] = useState<Record<string, string>>(defaultProjectDetails);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [aiReview, setAiReview] = useState<AssessmentAiReview | null>(null);
   const [isAnalysing, setIsAnalysing] = useState(false);
+  const [aiStatus, setAiStatus] = useState<"pending" | "analysing" | "updated" | "unavailable">("pending");
   const [analysisError, setAnalysisError] = useState("");
   const [activeStep, setActiveStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({});
@@ -472,11 +489,11 @@ export default function SiteAssessmentPublicClient({
   const [customerSignatureName, setCustomerSignatureName] = useState(
     visit.customerName || "",
   );
-  const [customerAcceptedReport, setCustomerAcceptedReport] = useState(false);
+  const [customerAcceptedReport, setCustomerAcceptedReport] = useState(true);
   const [technicianSignatureName, setTechnicianSignatureName] = useState(
     visit.assignedTechnicianName || "",
   );
-  const [technicianAcceptedReport, setTechnicianAcceptedReport] = useState(false);
+  const [technicianAcceptedReport, setTechnicianAcceptedReport] = useState(true);
   const [isSearchingCatalog, setIsSearchingCatalog] = useState(false);
   const [catalogError, setCatalogError] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
@@ -527,7 +544,7 @@ export default function SiteAssessmentPublicClient({
             setElectrical({ ...emptyElectrical, ...parsed.electrical });
           if (parsed.siteDetails)
             setSiteDetails({ ...emptySiteDetails, ...parsed.siteDetails });
-          if (parsed.projectDetails) setProjectDetails(parsed.projectDetails);
+          if (parsed.projectDetails) setProjectDetails({ ...defaultProjectDetails, ...parsed.projectDetails });
           if (parsed.aiReview) setAiReview(parsed.aiReview);
           if (typeof parsed.activeStep === "number")
             setActiveStep(Math.min(assessmentSteps.length - 1, Math.max(0, parsed.activeStep)));
@@ -613,7 +630,7 @@ export default function SiteAssessmentPublicClient({
     setHome(initialHome);
     setElectrical(emptyElectrical);
     setSiteDetails(emptySiteDetails);
-    setProjectDetails({});
+    setProjectDetails(defaultProjectDetails);
     setAiReview(null);
     setActiveStep(0);
     setCompletedSteps({});
@@ -629,9 +646,9 @@ export default function SiteAssessmentPublicClient({
     setRecommendationNotes("");
     setTiktokUrl("");
     setCustomerSignatureName(visit.customerName || "");
-    setCustomerAcceptedReport(false);
+    setCustomerAcceptedReport(true);
     setTechnicianSignatureName(visit.assignedTechnicianName || "");
-    setTechnicianAcceptedReport(false);
+    setTechnicianAcceptedReport(true);
     localStorage.removeItem(storageKey);
   };
   const openLoad = (load: Load) => {
@@ -813,6 +830,7 @@ export default function SiteAssessmentPublicClient({
   const analyseAssessment = async () => {
     if (!loads.length || isAnalysing) return;
     setIsAnalysing(true);
+    setAiStatus("analysing");
     setAnalysisError("");
     try {
       const form = new FormData();
@@ -828,17 +846,47 @@ export default function SiteAssessmentPublicClient({
         throw new Error(
           data?.error || "Assessment analysis could not be completed.",
         );
-      setAiReview(data.review as AssessmentAiReview);
+      const review = data.review as AssessmentAiReview;
+      setAiReview(review);
+      if (review.kplc) {
+        setElectrical((current) => ({
+          ...current,
+          meterId: current.meterId || review.kplc?.meterId || "",
+          monthlyKwh: current.monthlyKwh || review.kplc?.monthlyKwh || "",
+          monthlyBill: current.monthlyBill || review.kplc?.monthlyBill || "",
+          tariff: current.tariff || review.kplc?.tariff || "",
+          billDate: current.billDate || review.kplc?.billDate || "",
+        }));
+      }
+      setRecommendationNotes((current) => current || [review.summary, ...review.recommendations.slice(0, 2)].join(" "));
+      setAiStatus("updated");
     } catch (error) {
       setAnalysisError(
         error instanceof Error
           ? error.message
           : "Assessment analysis could not be completed.",
       );
+      setAiStatus("unavailable");
     } finally {
       setIsAnalysing(false);
     }
   };
+  useEffect(() => {
+    if (!draftLoaded || !loads.length || reportShared) return;
+    setAiStatus("pending");
+    const timeout = window.setTimeout(() => {
+      void analyseAssessment();
+    }, 1400);
+    return () => window.clearTimeout(timeout);
+    // Assessment changes are intentionally the trigger: save/edit freely while
+    // a single debounced review is prepared in the background.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftLoaded, loads, home, electrical, siteDetails, projectDetails, evidenceNames, selectedProduct, reportShared]);
+  useEffect(() => {
+    if (activeStep === 8 && recommendationType === "CATALOG_PRODUCT" && !selectedProduct && !catalogQuery && projectProfile.usesLoadSizing) {
+      setCatalogQuery(`SRNE ${inverterKw}kW lithium solar kit`);
+    }
+  }, [activeStep, catalogQuery, inverterKw, projectProfile.usesLoadSizing, recommendationType, selectedProduct]);
   useEffect(() => {
     const query = catalogQuery.trim();
     if (
@@ -912,7 +960,7 @@ export default function SiteAssessmentPublicClient({
     if (saved.home) setHome({ ...emptyHome, ...saved.home });
     if (saved.electrical) setElectrical({ ...emptyElectrical, ...saved.electrical });
     if (saved.siteDetails) setSiteDetails({ ...emptySiteDetails, ...saved.siteDetails });
-    if (saved.projectDetails) setProjectDetails(saved.projectDetails);
+    if (saved.projectDetails) setProjectDetails({ ...defaultProjectDetails, ...saved.projectDetails });
     setRecommendationType(published.recommendation.type);
     setSelectedProduct(
       published.recommendation.type === "CATALOG_PRODUCT" &&
@@ -1145,6 +1193,19 @@ export default function SiteAssessmentPublicClient({
               </Field>
             ))}
           </div>
+          {projectProfile.usesLoadSizing ? <div className="mt-6 border-t border-white/10 pt-5">
+            <h3 className="text-base font-bold">Site objective / technician observations</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Field label="Main site objective">
+                <select className={input} value={projectDetails.siteObjective || "New solar installation / load assessment"} onChange={(event) => setProjectDetail("siteObjective", event.target.value)}>
+                  <option>New solar installation / load assessment</option><option>Upgrade existing solar system</option><option>Increase battery backup</option><option>Increase solar generation / add panels</option><option>Replace inverter or battery</option><option>Convert to full off-grid</option><option>Hybrid solar + grid system</option><option>Reduce electricity bill / daytime solar</option><option>Backup for essential loads only</option><option>Investigate poor system performance</option><option>Fault diagnosis / repair</option><option>Relocate or modify existing system</option><option>Assess roof/ground space for panels</option><option>Other</option>
+                </select>
+              </Field>
+              <Field label="Existing solar / backup system"><select className={input} value={siteDetails.existingSystem} onChange={(event) => setSiteDetail("existingSystem", event.target.value)}><option>No existing system</option><option>Yes</option><option>Partially installed</option><option>Unknown</option></select></Field>
+              {projectDetails.siteObjective === "Other" ? <Field label="Other objective details"><input className={input} value={projectDetails.siteObjectiveOther || ""} onChange={(event) => setProjectDetail("siteObjectiveOther", event.target.value)} placeholder="Describe the objective" /></Field> : null}
+              <Field label="Technician observations (optional)"><textarea className={`${input} min-h-24`} value={projectDetails.technicianObservations || ""} onChange={(event) => setProjectDetail("technicianObservations", event.target.value)} placeholder="Record only details that affect the recommendation." /></Field>
+            </div>
+          </div> : null}
           <div className="mt-6 border-t border-white/10 pt-5">
           <h3 className="text-base font-bold">Property and site context</h3>
           <p className="mt-1 text-sm text-slate-400">Record the building or site scale before inspecting equipment and access.</p>
@@ -1166,16 +1227,9 @@ export default function SiteAssessmentPublicClient({
               </select>
             </Field>
             <Field label={visit.projectType === "SOLAR_HOME_SYSTEM" ? "Number of bedrooms" : "Building units / floors / sections"}>
-              <input
-                className={input}
-                type="number"
-                min="0"
-                value={home.bedrooms}
-                onChange={(event) =>
-                  setHome({ ...home, bedrooms: event.target.value })
-                }
-              />
+              {visit.projectType === "SOLAR_HOME_SYSTEM" ? <select className={input} value={home.bedrooms} onChange={(event) => setHome({ ...home, bedrooms: event.target.value })}><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>10</option><option>Other</option></select> : <input className={input} type="number" min="0" value={home.bedrooms} onChange={(event) => setHome({ ...home, bedrooms: event.target.value })} />}
             </Field>
+            {visit.projectType === "SOLAR_HOME_SYSTEM" && home.bedrooms === "Other" ? <Field label="Actual bedroom count"><input className={input} value={home.bedroomsOther || ""} onChange={(event) => setHome({ ...home, bedroomsOther: event.target.value })} /></Field> : null}
             <Field label="Consumer units / distribution boards">
               <input
                 className={input}
@@ -1293,7 +1347,12 @@ export default function SiteAssessmentPublicClient({
         </section>
         </div>
         <div hidden={activeStep !== 2}>
-        <Section title="Electrical supply and safety">
+        <Section title="KPLC supply / electricity bill and electrical safety">
+          <Field label="KPLC supply available?">
+            <select className={input} value={electrical.kplcAvailable} onChange={(event) => setElectrical({ ...electrical, kplcAvailable: event.target.value })}>
+              <option>Yes</option><option>No</option>
+            </select>
+          </Field>
           <Field label="Meter and billing">
             <select
               className={input}
@@ -1302,9 +1361,9 @@ export default function SiteAssessmentPublicClient({
                 setElectrical({ ...electrical, billing: event.target.value })
               }
             >
-              <option>Prepaid meter</option>
-              <option>Postpaid meter</option>
-              <option>Unknown</option>
+              <option>Postpaid</option>
+              <option>Prepaid</option>
+              <option>Not sure</option>
             </select>
           </Field>
           <Field label="Grid connection status">
@@ -1339,30 +1398,35 @@ export default function SiteAssessmentPublicClient({
             <select className={input} value={siteDetails.supplyType} onChange={(event) => setSiteDetail("supplyType", event.target.value)}>
               <option>Single phase</option>
               <option>Three phase</option>
-              <option>Unknown</option>
+              <option>Not confirmed</option>
             </select>
           </Field>
           <Field label="Main breaker rating (A)">
-            <input className={input} type="number" value={siteDetails.mainBreakerRating} onChange={(event) => setSiteDetail("mainBreakerRating", event.target.value)} />
-          </Field>
-          <Field label="Available solar breaker slots">
-            <input className={input} type="number" value={siteDetails.solarBreakerSlots} onChange={(event) => setSiteDetail("solarBreakerSlots", event.target.value)} />
-          </Field>
-          <Field label="Earthing condition">
-            <select className={input} value={siteDetails.earthingCondition} onChange={(event) => setSiteDetail("earthingCondition", event.target.value)}>
-              <option>Visually confirmed</option>
-              <option>Needs verification</option>
-              <option>Not visible</option>
+            <select className={input} value={siteDetails.mainBreakerRating} onChange={(event) => setSiteDetail("mainBreakerRating", event.target.value)}>
+              <option>20A</option><option>32A</option><option>40A</option><option>50A</option><option>63A</option><option>80A</option><option>100A</option><option>125A</option><option>Other</option>
             </select>
           </Field>
-          <Field label="Earth wire gauge / notes">
-            <input className={input} value={siteDetails.earthWireNotes} onChange={(event) => setSiteDetail("earthWireNotes", event.target.value)} />
+          {siteDetails.mainBreakerRating === "Other" ? <Field label="Actual main breaker rating"><input className={input} value={siteDetails.mainBreakerOther} onChange={(event) => setSiteDetail("mainBreakerOther", event.target.value)} /></Field> : null}
+          <Field label="Available solar breaker slots">
+            <select className={input} value={siteDetails.solarBreakerSlots} onChange={(event) => setSiteDetail("solarBreakerSlots", event.target.value)}><option>Not confirmed</option><option>None</option><option>1</option><option>2</option><option>3</option><option>4+</option></select>
           </Field>
-          {electrical.grid === "Connected to grid" && (
+          <Field label="Earthing available?"><select className={input} value={siteDetails.earthingAvailable} onChange={(event) => setSiteDetail("earthingAvailable", event.target.value)}><option>Yes</option><option>No</option><option>Not confirmed</option></select></Field>
+          {siteDetails.earthingAvailable === "No" ? <Field label="New earthing required"><select className={input} value={siteDetails.newEarthingRequired} onChange={(event) => setSiteDetail("newEarthingRequired", event.target.value)}><option>Yes</option><option>No</option></select></Field> : null}
+          <Field label="Earthing condition">
+            <select className={input} value={siteDetails.earthingCondition} onChange={(event) => setSiteDetail("earthingCondition", event.target.value)}>
+              <option>Good / visually confirmed</option><option>Needs improvement</option><option>Poor / damaged</option><option>New earthing required</option><option>Not confirmed</option>
+            </select>
+          </Field>
+          <Field label="Earth wire size">
+            <select className={input} value={siteDetails.earthWireSize} onChange={(event) => setSiteDetail("earthWireSize", event.target.value)}><option>2.5mm²</option><option>4mm²</option><option>6mm²</option><option>10mm²</option><option>16mm²</option><option>Other</option><option>Not confirmed</option></select>
+          </Field>
+          {siteDetails.earthWireSize === "Other" ? <Field label="Actual earth wire size"><input className={input} value={siteDetails.earthWireOther} onChange={(event) => setSiteDetail("earthWireOther", event.target.value)} /></Field> : null}
+          <Field label="Earthing notes (optional)"><input className={input} value={siteDetails.earthWireNotes} onChange={(event) => setSiteDetail("earthWireNotes", event.target.value)} /></Field>
+          {electrical.kplcAvailable === "Yes" && (
             <>
               <Field
                 label={
-                  electrical.billing === "Postpaid meter"
+                  electrical.billing === "Postpaid"
                     ? "KPLC account number or meter number"
                     : "KPLC meter number or account number"
                 }
@@ -1379,7 +1443,7 @@ export default function SiteAssessmentPublicClient({
                   placeholder="Enter the identifier printed on the bill or meter"
                 />
               </Field>
-              <Field label="Tariff category (if shown on bill)">
+              <Field label="Tariff category (optional)">
                 <input
                   className={input}
                   value={electrical.tariff}
@@ -1389,15 +1453,20 @@ export default function SiteAssessmentPublicClient({
                   placeholder="Example: Domestic Ordinary (DC3)"
                 />
               </Field>
-              <Field label="Latest bill / token statement photo">
+              <Field label="Bill date (optional)"><input className={input} type="date" value={electrical.billDate} onChange={(event) => setElectrical({ ...electrical, billDate: event.target.value })} /></Field>
+              <Field label={`📷 Take photo / upload latest ${electrical.billing === "Prepaid" ? "token or SMS" : "KPLC bill"}`}>
                 <input
                   className={input}
                   type="file"
-                  accept="image/*,application/pdf"
+                  accept="image/*"
                   capture="environment"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) setEvidenceNames((current) => ({ ...current, ["KPLC bill / token"]: file.name || "KPLC image captured" }));
+                  }}
                 />
               </Field>
-              <Field label="Last bill consumption (kWh)">
+              <Field label={electrical.billing === "Prepaid" ? "Typical monthly units purchased (kWh), if known" : "Latest monthly consumption (kWh)"}>
                 <input
                   className={input}
                   type="number"
@@ -1412,7 +1481,7 @@ export default function SiteAssessmentPublicClient({
                   placeholder="Example: 111"
                 />
               </Field>
-              <Field label="Last bill or monthly token amount (KES)">
+              <Field label={electrical.billing === "Prepaid" ? "Approx. monthly token spend (KES)" : "Approx. monthly electricity spend (KES)"}>
                 <input
                   className={input}
                   type="number"
@@ -1427,6 +1496,10 @@ export default function SiteAssessmentPublicClient({
                   placeholder="Example: 3141"
                 />
               </Field>
+              <div className="sm:col-span-2">
+                <p className="text-sm font-semibold text-slate-200">Quick monthly spend</p>
+                <div className="mt-2 flex flex-wrap gap-2">{[["KSh 1–3K", "2000"], ["KSh 3–5K", "4000"], ["KSh 5–10K", "7500"], ["KSh 10–20K", "15000"], ["KSh 20K+", "20000"]].map(([label, value]) => <button key={label} type="button" onClick={() => setElectrical({ ...electrical, monthlyBill: value })} className="rounded-full border border-cyan-400/40 px-3 py-2 text-sm font-bold text-cyan-100">{label}</button>)}</div>
+              </div>
             </>
           )}
         </Section>
@@ -1464,65 +1537,57 @@ export default function SiteAssessmentPublicClient({
               placeholder="Example: 8"
             />
           </Field>
-          <Field label="Customer budget (KES), if shared">
-            <input
-              className={input}
-              type="number"
-              min="0"
-              value={electrical.budget}
-              onChange={(event) =>
-                setElectrical({ ...electrical, budget: event.target.value })
-              }
-              placeholder="Leave blank if not discussed"
-            />
+          <Field label="Customer budget">
+            <select className={input} value={electrical.budget} onChange={(event) => setElectrical({ ...electrical, budget: event.target.value })}>
+              <option>Not discussed</option><option>Below KSh 100,000</option><option>KSh 100,000 – 200,000</option><option>KSh 200,001 – 300,000</option><option>KSh 300,001 – 500,000</option><option>KSh 500,001 – 750,000</option><option>KSh 750,001 – 1,000,000</option><option>KSh 1,000,001 – 1,500,000</option><option>Above KSh 1,500,000</option><option>Enter specific budget</option>
+            </select>
           </Field>
+          {electrical.budget === "Enter specific budget" ? <Field label="Specific customer budget (KES)"><input className={input} type="number" min="0" value={electrical.budgetSpecific} onChange={(event) => setElectrical({ ...electrical, budgetSpecific: event.target.value })} placeholder="Example: 350,000" /></Field> : null}
+          <Field label="Budget flexibility"><select className={input} value={electrical.budgetFlexibility} onChange={(event) => setElectrical({ ...electrical, budgetFlexibility: event.target.value })}><option>Not discussed</option><option>Strict budget</option><option>Can increase slightly</option><option>Flexible</option></select></Field>
         </Section>
         </div>
         <div hidden={activeStep !== 4}>
         <Section title="Roof, mounting and access">
+          <Field label="Roof / installation location"><select className={input} value={siteDetails.installationLocation} onChange={(event) => setSiteDetail("installationLocation", event.target.value)}><option>Roof</option><option>Ground mount</option><option>Carport/Canopy</option><option>Fabricated structure</option><option>Other</option></select></Field>
+          {siteDetails.installationLocation === "Roof" ? <>
           <Field label="Roof type">
             <select className={input} value={siteDetails.roofType} onChange={(event) => setSiteDetail("roofType", event.target.value)}>
-              <option>Corrugated iron</option>
-              <option>Decra</option>
-              <option>Tile</option>
-              <option>Concrete flat</option>
-              <option>Ground mount</option>
+              <option>Corrugated iron / Mabati</option><option>Tile</option><option>Concrete/Flat roof</option><option>Stone-coated steel</option><option>Other</option>
             </select>
           </Field>
+          {siteDetails.roofType === "Other" ? <Field label="Other roof type"><input className={input} value={siteDetails.roofTypeOther} onChange={(event) => setSiteDetail("roofTypeOther", event.target.value)} /></Field> : null}
           <Field label="Roof condition">
             <select className={input} value={siteDetails.roofCondition} onChange={(event) => setSiteDetail("roofCondition", event.target.value)}>
               <option>Good</option>
               <option>Fair</option>
-              <option>Rust, leaks or sagging</option>
+              <option>Poor / repair required</option><option>Not confirmed</option>
             </select>
           </Field>
-          <Field label="Usable width (m)">
+          <Field label="Enough space for proposed panels?"><select className={input} value={siteDetails.panelSpace} onChange={(event) => setSiteDetail("panelSpace", event.target.value)}><option>Yes</option><option>No</option><option>Unsure — measurements required</option></select></Field>
+          {siteDetails.panelSpace !== "Yes" ? <><Field label="Usable width (m)">
             <input className={input} type="number" value={siteDetails.roofWidth} onChange={(event) => setSiteDetail("roofWidth", event.target.value)} />
           </Field>
           <Field label="Usable length (m)">
             <input className={input} type="number" value={siteDetails.roofLength} onChange={(event) => setSiteDetail("roofLength", event.target.value)} />
-          </Field>
-          <Field label="Roof pitch (degrees)">
-            <input className={input} type="number" value={siteDetails.roofPitch} onChange={(event) => setSiteDetail("roofPitch", event.target.value)} />
-          </Field>
+          </Field></> : null}
+          <Field label="Roof slope"><select className={input} value={siteDetails.roofSlope} onChange={(event) => setSiteDetail("roofSlope", event.target.value)}><option>Flat</option><option>Low slope</option><option>Normal pitched roof</option><option>Steep</option><option>Not confirmed</option></select></Field>
+          <Field label="Exact roof angle (optional)"><input className={input} type="number" value={siteDetails.roofPitch} onChange={(event) => setSiteDetail("roofPitch", event.target.value)} /></Field>
+          <Field label="Panel-facing direction"><select className={input} value={siteDetails.roofOrientation} onChange={(event) => setSiteDetail("roofOrientation", event.target.value)}><option>Not confirmed</option><option>North</option><option>North-East</option><option>East</option><option>South-East</option><option>South</option><option>South-West</option><option>West</option><option>North-West</option><option>Multiple roof faces</option></select></Field>
+          <Field label="Panel mounting method"><select className={input} value={siteDetails.mountingMethod} onChange={(event) => setSiteDetail("mountingMethod", event.target.value)}><option>Direct roof mounting</option><option>Raised structure</option><option>Flat-roof structure</option><option>Ground structure</option><option>Special fabrication required</option><option>To be determined</option></select></Field>
           <Field label="Shading">
             <select className={input} value={siteDetails.shading} onChange={(event) => setSiteDetail("shading", event.target.value)}>
               <option>None</option>
-              <option>Morning shade</option>
-              <option>Afternoon shade</option>
-              <option>Heavy shade</option>
+              <option>Minor</option><option>Moderate</option><option>Heavy</option>
             </select>
           </Field>
           <Field label="Access method">
             <select className={input} value={siteDetails.roofAccess} onChange={(event) => setSiteDetail("roofAccess", event.target.value)}>
               <option>Standard ladder</option>
-              <option>Scaffolding needed</option>
-              <option>Harness / high-risk access</option>
+              <option>Long/extension ladder</option><option>Internal roof access</option><option>Scaffolding required</option><option>Difficult access</option><option>Special equipment required</option>
             </select>
           </Field>
-          <Field label="Obstructions">
-            <input className={input} placeholder="Trees, vents, HVAC" value={siteDetails.roofObstructions} onChange={(event) => setSiteDetail("roofObstructions", event.target.value)} />
-          </Field>
+          {siteDetails.shading !== "None" ? <Field label="Main shading / obstruction source"><select className={input} value={siteDetails.roofObstructions} onChange={(event) => setSiteDetail("roofObstructions", event.target.value)}><option>None</option><option>Trees</option><option>Nearby buildings</option><option>Water tank</option><option>Chimney/Vents</option><option>Antennas</option><option>Other</option></select></Field> : null}
+          </> : null}
         </Section>
         </div>
         <div hidden={activeStep !== 5}>
@@ -1533,38 +1598,45 @@ export default function SiteAssessmentPublicClient({
               <option>Utility room</option>
               <option>Garage</option>
               <option>Outdoor sheltered</option>
+              <option>Store</option><option>Dedicated equipment room</option><option>Other</option>
             </select>
           </Field>
           <Field label="Battery area">
             <select className={input} value={siteDetails.batteryArea} onChange={(event) => setSiteDetail("batteryArea", event.target.value)}>
               <option>Dry and ventilated</option>
-              <option>Ventilation needed</option>
-              <option>Unsuitable location</option>
+              <option>Suitable indoor area</option><option>Outdoor protected enclosure</option><option>Dedicated battery room</option><option>Area needs preparation</option><option>No suitable location identified</option>
             </select>
           </Field>
-          <Field label="Array to inverter (m)">
-            <input className={input} type="number" value={siteDetails.arrayToInverter} onChange={(event) => setSiteDetail("arrayToInverter", event.target.value)} />
+          <Field label="Enough space for inverter & battery?"><select className={input} value={siteDetails.equipmentSpace} onChange={(event) => setSiteDetail("equipmentSpace", event.target.value)}><option>Yes</option><option>No</option><option>Requires modification</option></select></Field>
+          <Field label="Mounting surface"><select className={input} value={siteDetails.mountingSurface} onChange={(event) => setSiteDetail("mountingSurface", event.target.value)}><option>Masonry/concrete wall</option><option>Stone wall</option><option>Timber</option><option>Metal structure</option><option>Dedicated stand/rack</option><option>Other</option></select></Field>
+          <Field label="Solar array → inverter distance">
+            <select className={input} value={siteDetails.arrayToInverter} onChange={(event) => setSiteDetail("arrayToInverter", event.target.value)}><option>0–10m</option><option>11–20m</option><option>21–30m</option><option>31–50m</option><option>Above 50m</option><option>Enter exact distance</option></select>
           </Field>
-          <Field label="Inverter to main DB (m)">
-            <input className={input} type="number" value={siteDetails.inverterToDb} onChange={(event) => setSiteDetail("inverterToDb", event.target.value)} />
+          {siteDetails.arrayToInverter === "Enter exact distance" ? <Field label="Exact solar array → inverter distance (m)"><input className={input} type="number" value={siteDetails.arrayToInverterExact} onChange={(event) => setSiteDetail("arrayToInverterExact", event.target.value)} /></Field> : null}
+          <Field label="Inverter → main DB distance">
+            <select className={input} value={siteDetails.inverterToDb} onChange={(event) => setSiteDetail("inverterToDb", event.target.value)}><option>0–5m</option><option>6–10m</option><option>11–20m</option><option>21–30m</option><option>Above 30m</option><option>Enter exact distance</option></select>
           </Field>
-          <Field label="Inverter to battery (m)">
-            <input className={input} type="number" value={siteDetails.inverterToBattery} onChange={(event) => setSiteDetail("inverterToBattery", event.target.value)} />
+          {siteDetails.inverterToDb === "Enter exact distance" ? <Field label="Exact inverter → DB distance (m)"><input className={input} type="number" value={siteDetails.inverterToDbExact} onChange={(event) => setSiteDetail("inverterToDbExact", event.target.value)} /></Field> : null}
+          <Field label="Inverter → battery distance">
+            <select className={input} value={siteDetails.inverterToBattery} onChange={(event) => setSiteDetail("inverterToBattery", event.target.value)}><option>Below 1m</option><option>1–2m</option><option>2–3m</option><option>Above 3m</option><option>Enter exact distance</option></select>
           </Field>
+          {siteDetails.inverterToBattery === "Enter exact distance" ? <Field label="Exact inverter → battery distance (m)"><input className={input} type="number" value={siteDetails.inverterToBatteryExact} onChange={(event) => setSiteDetail("inverterToBatteryExact", event.target.value)} /></Field> : null}
           <Field label="Cable route">
             <select className={input} value={siteDetails.cableRoute} onChange={(event) => setSiteDetail("cableRoute", event.target.value)}>
               <option>Easy</option>
-              <option>Conduit / trunking</option>
-              <option>Underground / multi-storey</option>
+              <option>Moderate</option><option>Difficult</option><option>Special work required</option>
             </select>
           </Field>
+          {siteDetails.cableRoute !== "Easy" ? <><Field label="Cable route issues (comma-separated)"><input className={input} value={siteDetails.cableRouteIssues} onChange={(event) => setSiteDetail("cableRouteIssues", event.target.value)} placeholder="Long cable run, conduit, wall drilling…" /></Field><Field label="Number of floors cable will pass through"><select className={input} value={siteDetails.cableFloors} onChange={(event) => setSiteDetail("cableFloors", event.target.value)}><option>1 / Same floor</option><option>2</option><option>3</option><option>4+</option></select></Field></> : null}
+          <Field label="Equipment location condition"><select className={input} value={siteDetails.equipmentCondition} onChange={(event) => setSiteDetail("equipmentCondition", event.target.value)}><option>Suitable</option><option>Heat concern</option><option>Moisture/water concern</option><option>Poor ventilation</option><option>Direct sunlight</option><option>Restricted access</option><option>Other</option></select></Field>
+          {siteDetails.equipmentCondition !== "Suitable" ? <Field label="Equipment condition note"><input className={input} value={siteDetails.equipmentConditionNote} onChange={(event) => setSiteDetail("equipmentConditionNote", event.target.value)} placeholder="Describe the issue and capture a photo." /></Field> : null}
         </Section>
         </div>
         <div hidden={activeStep !== 6}>
         <section className="rounded-2xl bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
-          <h2 className="text-xl font-bold">Required evidence</h2>
+          <h2 className="text-xl font-bold">Site photos & documents</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Capture objective evidence before analysis.
+            Take multiple photos quickly. Roof / installation area and equipment / cable route photos are included in the final assessment report.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {evidenceCategories.map((label) => {
@@ -1605,7 +1677,7 @@ export default function SiteAssessmentPublicClient({
         <section className="rounded-3xl bg-slate-900 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold">
-              Project comments and customer priorities
+              Customer priorities & special requirements
             </h2>
             <button
               type="button"
@@ -1616,14 +1688,17 @@ export default function SiteAssessmentPublicClient({
               Clear comments
             </button>
           </div>
-          <textarea
-            className={`${input} min-h-28`}
-            value={home.notes}
-            onChange={(event) =>
-              setHome({ ...home, notes: event.target.value })
-            }
-            placeholder="What must work during an outage? Budget, expansion, concerns, or special requests."
-          />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <Field label="What is most important to the customer? (comma-separated)"><input className={input} value={projectDetails.customerPriorities || ""} onChange={(event) => setProjectDetail("customerPriorities", event.target.value)} placeholder="Long backup time, lower electricity bill, future expansion…" /></Field>
+            <Field label="Priority appliances during outage (comma-separated)"><input className={input} value={projectDetails.priorityAppliances || ""} onChange={(event) => setProjectDetail("priorityAppliances", event.target.value)} placeholder={loads.length ? loads.map((load) => load.name).join(", ") : "Lighting, fridge/freezer, Wi-Fi…"} /></Field>
+            <Field label="Future expansion expected?"><select className={input} value={projectDetails.futureExpansion || "No"} onChange={(event) => setProjectDetail("futureExpansion", event.target.value)}><option>No</option><option>Yes</option><option>Not sure</option></select></Field>
+            {projectDetails.futureExpansion === "Yes" ? <Field label="Expected future loads"><input className={input} value={projectDetails.futureLoads || ""} onChange={(event) => setProjectDetail("futureLoads", event.target.value)} placeholder="Additional rooms, water pump, AC…" /></Field> : null}
+            <Field label="If budget cannot support all loads"><select className={input} value={projectDetails.budgetFallback || "Provide multiple options"} onChange={(event) => setProjectDetail("budgetFallback", event.target.value)}><option>Prioritize essential loads</option><option>Reduce backup hours</option><option>Start smaller and expand later</option><option>Customer can increase budget</option><option>Provide multiple options</option><option>Not discussed</option></select></Field>
+            <Field label="Special concerns"><select className={input} value={projectDetails.specialConcerns || "None"} onChange={(event) => setProjectDetail("specialConcerns", event.target.value)}><option>None</option><option>Power outages</option><option>High electricity bills</option><option>Battery lifespan</option><option>Warranty</option><option>Roof space</option><option>Shading</option><option>Installation appearance</option><option>Noise</option><option>Security/theft</option><option>Future expansion</option><option>Existing solar problems</option><option>Other</option></select></Field>
+          </div>
+          <Field label="Additional technician comments / customer requests">
+            <textarea className={`${input} min-h-28`} value={home.notes} onChange={(event) => setHome({ ...home, notes: event.target.value })} placeholder="Record only information not already captured above, including special customer requests or important site observations." />
+          </Field>
         </section>
         <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-xl font-bold">Assessment review</h2>
@@ -1650,24 +1725,12 @@ export default function SiteAssessmentPublicClient({
         </div>
         <div hidden={activeStep !== 8}>
         <section className="rounded-3xl bg-amber-400/10 p-5">
-          <b>{projectProfile.usesLoadSizing ? "Analyse assessment with AI" : "Review project assessment with AI"}</b>
-          <p className="mt-2 text-sm">
-            {projectProfile.usesLoadSizing
-              ? "Save the assessment inputs and submit all usage patterns, known values and uploaded evidence for review. The live sizing proposal below stays available and updates as staff correct readings."
-              : "Save the project-specific field notes, site observations and uploaded evidence for review. This visit requires a tailored technical recommendation rather than an automatic PV sizing calculation."}
-          </p>
-          <button
-            type="button"
-            onClick={analyseAssessment}
-            disabled={(projectProfile.usesLoadSizing && !loads.length) || isAnalysing}
-            className="mt-4 w-full rounded-xl bg-cyan-400 py-4 font-black text-slate-950 disabled:opacity-50"
-          >
-            {isAnalysing
-              ? "Analysing assessment..."
-              : aiReview
-                ? "Re-analyse assessment"
-                : projectProfile.usesLoadSizing ? "Analyse assessment with AI" : "Review project assessment with AI"}
-          </button>
+          <b>Review & complete</b>
+          <p className="mt-2 text-sm">Field data saves immediately. AI analysis is prepared automatically in the background and never prevents you from completing the assessment.</p>
+          <div className={`mt-4 rounded-xl border p-3 text-sm font-bold ${aiStatus === "updated" ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-100" : aiStatus === "unavailable" ? "border-amber-300/40 bg-amber-300/10 text-amber-100" : "border-cyan-300/40 bg-cyan-400/10 text-cyan-100"}`}>
+            {aiStatus === "analysing" ? "AI analysing…" : aiStatus === "updated" ? "AI recommendation ready" : aiStatus === "unavailable" ? "AI recommendation temporarily unavailable — field assessment has been saved." : "AI analysis pending"}
+            {aiStatus === "unavailable" ? <button type="button" onClick={() => void analyseAssessment()} className="ml-3 underline">Retry</button> : null}
+          </div>
           {analysisError ? (
             <p className="mt-3 text-sm font-semibold text-rose-200">
               {analysisError}
@@ -1816,6 +1879,14 @@ export default function SiteAssessmentPublicClient({
             <span>{unknown} unknown ratings</span>
           </div>
         </section>
+        <section className="mt-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 sm:rounded-3xl sm:p-5">
+          <h2 className="text-xl font-bold">Energy assessment</h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <ProposalMetric label="Appliance estimate" value={`${(daily / 1000).toFixed(1)} kWh/day`} detail="From recorded appliance usage." />
+            <ProposalMetric label="KPLC historical usage" value={Number(electrical.monthlyKwh) > 0 ? `${(Number(electrical.monthlyKwh) / 30).toFixed(1)} kWh/day` : "Not confirmed"} detail={Number(electrical.monthlyKwh) > 0 ? `${electrical.monthlyKwh} kWh from latest billing period.` : "Capture a bill or token screenshot when available."} />
+            <ProposalMetric label="Assessment" value={Number(electrical.monthlyKwh) > 0 && daily > 0 && Math.abs(daily / 1000 - Number(electrical.monthlyKwh) / 30) / Math.max(daily / 1000, Number(electrical.monthlyKwh) / 30) < 0.35 ? "✓ Reasonably aligned" : "⚠ Review required"} detail="Large differences can indicate seasonal use, missed loads or unusual billing." />
+          </div>
+        </section>
         </> : (
           <section className="mt-5 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-4 sm:rounded-3xl sm:p-5">
             <h2 className="text-xl font-bold">Project assessment summary</h2>
@@ -1847,7 +1918,8 @@ export default function SiteAssessmentPublicClient({
             </p>
           ) : (
             <>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-5 rounded-2xl border border-emerald-300/30 bg-slate-950/40 p-4"><h3 className="font-black text-emerald-100">Recommended solar system</h3><p className="mt-2 text-lg font-bold">{inverterKw.toFixed(1)} kW Hybrid Inverter · {recommendedBatteryKwh.toFixed(2)} kWh Lithium Battery · {panelCount} × 600 W Solar Panels</p><p className="mt-2 text-sm text-slate-300">Supports the selected essential appliances, targets {backupHours} hours of backup and can be expanded as future loads are added.</p></div>
+              <details className="mt-5"><summary className="cursor-pointer font-bold text-cyan-100">View technical calculations</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <ProposalMetric
                   label="Continuous solar load"
                   value={`${(continuous / 1000).toFixed(2)} kW`}
@@ -1882,7 +1954,7 @@ export default function SiteAssessmentPublicClient({
                   value={`${(systemEnergyWh / 1000).toFixed(2)} kWh`}
                   detail={`Uses each essential appliance's expected runtime during the ${backupHours}h outage target; estimated delivery is ${analysis.expectedBackupHours.toFixed(1)}h at the recorded essential-load profile.`}
                 />
-              </div>
+              </div></details>
               <div className="mt-5 rounded-2xl border border-amber-300/30 bg-slate-950/60 p-4 text-sm text-amber-100">
                 <b>Before quotation:</b> Confirm all unknown nameplates,
                 appliance surge data, roof capacity, shading, wiring and actual
@@ -1896,13 +1968,13 @@ export default function SiteAssessmentPublicClient({
           <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-200">
             Final step
           </p>
-          <h2 className="mt-1 text-xl font-black">Customer & technician sign-off</h2>
+          <h2 className="mt-1 text-xl font-black">Customer acknowledgement & completion</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200">
-            Review the assessment, preliminary proposal and recommendation above together. Each person types their full name as an electronic signature before Betech generates the final report and shares the proposal.
+            Review the assessment and recommendation together. The technician identity and completion time are recorded from this assigned link; the customer confirms the information with their name and acknowledgement.
           </p>
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-              <Field label="Customer or authorised representative — electronic signature">
+              <Field label="Customer / authorised representative full name">
                 <input
                   className={input}
                   value={customerSignatureName}
@@ -1918,11 +1990,11 @@ export default function SiteAssessmentPublicClient({
                   onChange={(event) => setCustomerAcceptedReport(event.target.checked)}
                   className="mt-1 h-4 w-4 accent-emerald-400"
                 />
-                <span>I have reviewed this assessment and understand that the recommendation is preliminary and subject to Betech&apos;s final quotation.</span>
+                <span>I confirm that the information recorded during this site assessment has been reviewed with me. I understand that the recommended solar system is preliminary and subject to Betech Solar&apos;s final technical review and quotation. I agree to Betech Solar&apos;s Terms &amp; Conditions.</span>
               </label>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-              <Field label="Betech technician — verified electronic signature">
+              <Field label="Assessment completed by — Betech technician">
                 <input
                   className={input}
                   value={technicianSignatureName}
@@ -1941,7 +2013,7 @@ export default function SiteAssessmentPublicClient({
                   onChange={(event) => setTechnicianAcceptedReport(event.target.checked)}
                   className="mt-1 h-4 w-4 accent-emerald-400"
                 />
-                <span>I confirm that these field inputs and the preliminary proposal were recorded during this site assessment.</span>
+                <span>I confirm that this assessment represents my site observations and information provided by the customer.</span>
               </label>
             </div>
           </div>
@@ -1961,8 +2033,8 @@ export default function SiteAssessmentPublicClient({
               : publishMessage
                 ? "Report shared"
                 : isRevisingReport
-                  ? "Regenerate report & share proposal"
-                  : "Generate report & share proposal"}
+                  ? "Complete revised site assessment"
+                  : "Complete Site Assessment →"}
           </button>
           {!signaturesComplete && !publishMessage ? (
             <p className="mt-3 text-sm text-amber-100">
@@ -2009,11 +2081,6 @@ export default function SiteAssessmentPublicClient({
           onBack={() => changeStep(activeStep - 1)}
           onSkip={() => changeStep(activeStep + 1, "skip")}
           onContinue={() => changeStep(activeStep + 1, "complete")}
-          onAnalyse={() => {
-            changeStep(8, "complete");
-            void analyseAssessment();
-          }}
-          canAnalyse={!projectProfile.usesLoadSizing || loads.length > 0}
         />
       </div>
     </main>
@@ -2075,15 +2142,11 @@ function WizardNavigation({
   onBack,
   onSkip,
   onContinue,
-  onAnalyse,
-  canAnalyse,
 }: {
   activeStep: number;
   onBack: () => void;
   onSkip: () => void;
   onContinue: () => void;
-  onAnalyse: () => void;
-  canAnalyse: boolean;
 }) {
   if (activeStep === 8) {
     return (
@@ -2100,8 +2163,8 @@ function WizardNavigation({
         <button type="button" onClick={onBack} className="min-h-12 rounded-xl border border-white/20 px-4 py-3 font-bold touch-manipulation">
           ← Back
         </button>
-        <button type="button" onClick={onAnalyse} disabled={!canAnalyse} className="min-h-12 rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950 touch-manipulation disabled:opacity-40">
-          Analyse Assessment with AI →
+        <button type="button" onClick={onContinue} className="min-h-12 rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950 touch-manipulation">
+          Review & Complete →
         </button>
       </nav>
     );
