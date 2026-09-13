@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowLeft,
+  CalendarDays,
   CalendarCheck2,
   ClipboardCheck,
   CreditCard,
@@ -254,8 +255,36 @@ export default function SiteVisitDetailClient({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const scheduleInputRef = useRef<HTMLInputElement>(null);
   const input =
     "w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-400/60 disabled:opacity-60";
+
+  function openSchedulePicker() {
+    const dateInput = scheduleInputRef.current;
+    if (!dateInput) return;
+    dateInput.focus();
+    // Chrome and other browsers that implement this open the native calendar
+    // immediately; the focused date input remains usable everywhere else.
+    (dateInput as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
+  }
+
+  function saveSchedule() {
+    if (!draft.scheduledAt) {
+      setMessage(null);
+      setError("Choose a confirmed visit date from the calendar before saving.");
+      openSchedulePicker();
+      return;
+    }
+    void save(
+      {
+        scheduledAt: draft.scheduledAt,
+        estimatedDurationMinutes: draft.estimatedDurationMinutes ?? 30,
+      },
+      draft.assignedTechnicianId
+        ? "Schedule saved and customer notified."
+        : "Schedule saved.",
+    );
+  }
 
   async function responseData(response: Response) {
     const text = await response.text();
@@ -663,8 +692,9 @@ export default function SiteVisitDetailClient({
                   />
                 </Field>
                 <Field name="Confirmed schedule">
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <input
+                      ref={scheduleInputRef}
                       type="date"
                       className={`${input} min-w-0 flex-1`}
                       value={String(draft.scheduledAt || "")}
@@ -674,11 +704,19 @@ export default function SiteVisitDetailClient({
                     />
                     <button
                       type="button"
+                      onClick={openSchedulePicker}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 px-3 text-xs font-bold text-slate-100 transition hover:bg-white/5"
+                      aria-label="Open schedule calendar"
+                      title="Choose date"
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                      <span className="sm:hidden">Date</span>
+                      <span className="hidden sm:inline">Choose date</span>
+                    </button>
+                    <button
+                      type="button"
                       disabled={saving}
-                      onClick={() => void save(
-                        { scheduledAt: draft.scheduledAt || "", estimatedDurationMinutes: draft.estimatedDurationMinutes ?? 30 },
-                        draft.assignedTechnicianId ? "Schedule saved and customer notified." : "Schedule saved.",
-                      )}
+                      onClick={saveSchedule}
                       className="rounded-xl border border-cyan-400/35 px-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-400/10 disabled:opacity-50"
                     >
                       Save

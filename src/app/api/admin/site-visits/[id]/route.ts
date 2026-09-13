@@ -17,6 +17,25 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const SITE_VISIT_FIELD_LABELS: Record<string, string> = {
+  customerName: "Customer name",
+  customerPhone: "Phone number",
+  customerEmail: "Email",
+  mapUrl: "Google Maps URL",
+  scheduledAt: "Confirmed schedule",
+  estimatedDurationMinutes: "Expected duration",
+  assignedStaffId: "Assigned staff",
+  assignedTechnicianId: "Assigned technician",
+  visitFee: "Visit fee",
+  paymentStatus: "Payment status",
+  paymentReference: "Payment reference",
+};
+
+function validationErrorMessage(path: PropertyKey[], message: string) {
+  const field = path.map(String).join(".");
+  return `${SITE_VISIT_FIELD_LABELS[field] || field || "Site visit details"}: ${message}`;
+}
+
 export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -61,7 +80,18 @@ export async function PATCH(
   const body = await request.json().catch(() => null);
   const parsed = siteVisitUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ ok: false, error: "Invalid site visit update payload.", issues: parsed.error.flatten() }, { status: 400 });
+    const firstIssue = parsed.error.issues[0];
+    const validationIssues = parsed.error.issues.map((issue) => ({
+      field: issue.path.map(String).join("."),
+      message: issue.message,
+    }));
+    // Keep the log useful for support without recording the customer's form data.
+    console.warn("[site-visit.update.invalid-payload]", { id, validationIssues });
+    return NextResponse.json({
+      ok: false,
+      error: validationErrorMessage(firstIssue?.path || [], firstIssue?.message || "Invalid value."),
+      issues: parsed.error.flatten(),
+    }, { status: 400 });
   }
   if (!actor.canManageCommercials) {
     const commercialChanged =

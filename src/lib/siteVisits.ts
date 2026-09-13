@@ -581,7 +581,11 @@ export const siteVisitCreateSchema = z.object({
   dataLoggerCompletedAt: z.string().trim().optional(),
 });
 
-export const siteVisitUpdateSchema = siteVisitCreateSchema.extend({
+// Overview actions deliberately save small, independent patches (for example,
+// just a confirmed date or just an assigned technician). Keep create-time
+// customer requirements intact, but allow those update actions to validate
+// only the fields they change.
+export const siteVisitUpdateSchema = siteVisitCreateSchema.partial().extend({
   status: z.enum(SITE_VISIT_STATUSES).optional(),
   findings: z.string().trim().max(8000).optional(),
   assessmentSummary: z.string().trim().max(8000).optional(),
