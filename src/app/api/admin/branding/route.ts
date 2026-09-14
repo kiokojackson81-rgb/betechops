@@ -11,9 +11,17 @@ export async function GET() {
   const branding = await prisma.branding.findUnique({ where: { name: 'default' } });
   return NextResponse.json({
     ok: true,
+    professionalAccounts: await prisma.user.findMany({ where: { isActive: true, OR: [{ technicalProfile: { isNot: null } }, { role: { in: ['ADMIN', 'SUPERVISOR'] } }] }, select: { id: true, name: true, email: true }, orderBy: { name: 'asc' } }),
     companyDocuments: {
       digitalStampUrl: branding?.digitalStampUrl || null,
       digitalStampEnabled: Boolean(branding?.digitalStampEnabled),
+      licensedProfessionalUserId: branding?.licensedProfessionalUserId || null,
+      licensedProfessionalName: branding?.licensedProfessionalName || 'Jonathan Mugiira',
+      licensedProfessionalTitle: branding?.licensedProfessionalTitle || 'Senior Solar PV & Electrical Engineer',
+      licensedProfessionalQualification: branding?.licensedProfessionalQualification || 'EPRA T3 Solar Photovoltaic Technician',
+      licensedProfessionalLicenceNumber: branding?.licensedProfessionalLicenceNumber || 'EPRA/SPVT/001782',
+      licensedProfessionalSignatureUrl: branding?.licensedProfessionalSignatureUrl || null,
+      licensedProfessionalActive: branding?.licensedProfessionalActive ?? true,
     },
   });
 }
@@ -25,7 +33,16 @@ export async function POST(req: Request) {
   const file = form.get('letterhead') as File | null;
   const logo = form.get('logo') as File | null;
   const digitalStamp = form.get('digitalStamp') as File | null;
+  const professionalSignature = form.get('licensedProfessionalSignature') as File | null;
   const brandColor = (form.get('brandColor') as string | null) || undefined;
+  const professionalUserId = form.get('licensedProfessionalUserId');
+  if (typeof professionalUserId === 'string' && professionalUserId && !await prisma.user.findFirst({ where: { id: professionalUserId, isActive: true }, select: { id: true } })) return NextResponse.json({ error: 'Select an active professional account.' }, { status: 400 });
+  const professionalName = (form.get('licensedProfessionalName') as string | null)?.trim();
+  const professionalTitle = (form.get('licensedProfessionalTitle') as string | null)?.trim();
+  const professionalQualification = (form.get('licensedProfessionalQualification') as string | null)?.trim();
+  const professionalLicenceNumber = (form.get('licensedProfessionalLicenceNumber') as string | null)?.trim();
+  const professionalActiveRaw = form.get('licensedProfessionalActive');
+  const licensedProfessionalActive = professionalActiveRaw === null ? undefined : ['1', 'true', 'yes', 'on'].includes(String(professionalActiveRaw).toLowerCase());
   const digitalStampEnabledRaw = form.get('digitalStampEnabled');
   const digitalStampEnabled =
     digitalStampEnabledRaw === null
@@ -33,13 +50,14 @@ export async function POST(req: Request) {
       : ['1', 'true', 'yes', 'on'].includes(String(digitalStampEnabledRaw).toLowerCase());
   const removeDigitalStamp = ['1', 'true', 'yes', 'on'].includes(String(form.get('removeDigitalStamp') || '').toLowerCase());
 
-  if (!file && !logo && !digitalStamp && !brandColor && digitalStampEnabled === undefined && !removeDigitalStamp) {
+  if (!file && !logo && !digitalStamp && !professionalSignature && !brandColor && digitalStampEnabled === undefined && !removeDigitalStamp && professionalName === undefined && professionalTitle === undefined && professionalQualification === undefined && professionalLicenceNumber === undefined && licensedProfessionalActive === undefined) {
     return NextResponse.json({ ok: false, error: 'No updates provided' }, { status: 400 });
   }
 
   let letterheadUrl: string | undefined;
   let logoUrl: string | undefined;
   let digitalStampUrl: string | null | undefined;
+  let professionalSignatureUrl: string | undefined;
 
   if (file) {
     const arrayBuffer = await file.arrayBuffer();
@@ -77,6 +95,19 @@ export async function POST(req: Request) {
     digitalStampUrl = res.url;
   }
 
+  if (professionalSignature) {
+    if (!/^image\/(png|jpeg|jpg)$/i.test(professionalSignature.type) || professionalSignature.size > 8 * 1024 * 1024) {
+      return NextResponse.json({ ok: false, error: 'Upload a PNG or JPG professional signature no larger than 8 MB.' }, { status: 400 });
+    }
+    if (!process.env.BLOB_READ_WRITE_TOKEN) return NextResponse.json({ ok: false, error: 'Signature storage is not configured.' }, { status: 503 });
+    const bytes = await professionalSignature.arrayBuffer();
+    const ext = /png/i.test(professionalSignature.type) ? 'png' : 'jpg';
+    const res = await put(`branding/licensed-professional-signature-${Date.now()}.${ext}`, Buffer.from(bytes), {
+      access: 'public', contentType: professionalSignature.type, token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    professionalSignatureUrl = res.url;
+  }
+
   const existing = await prisma.branding.findUnique({ where: { name: 'default' } });
   if (removeDigitalStamp && existing?.digitalStampUrl && process.env.BLOB_READ_WRITE_TOKEN) {
     await del(existing.digitalStampUrl, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
@@ -93,6 +124,13 @@ export async function POST(req: Request) {
       ...(digitalStampUrl !== undefined ? { digitalStampUrl } : {}),
       ...(digitalStampEnabled !== undefined ? { digitalStampEnabled } : {}),
       ...(digitalStamp && digitalStampEnabled === undefined ? { digitalStampEnabled: true } : {}),
+      ...(professionalUserId !== null ? { licensedProfessionalUserId: String(professionalUserId) || null } : {}),
+      ...(professionalName ? { licensedProfessionalName: professionalName } : {}),
+      ...(professionalTitle ? { licensedProfessionalTitle: professionalTitle } : {}),
+      ...(professionalQualification ? { licensedProfessionalQualification: professionalQualification } : {}),
+      ...(professionalLicenceNumber ? { licensedProfessionalLicenceNumber: professionalLicenceNumber } : {}),
+      ...(professionalSignatureUrl ? { licensedProfessionalSignatureUrl: professionalSignatureUrl } : {}),
+      ...(licensedProfessionalActive !== undefined ? { licensedProfessionalActive } : {}),
     },
     create: {
       name: 'default',
@@ -101,6 +139,13 @@ export async function POST(req: Request) {
       brandColor: brandColor || '#7A2020',
       digitalStampUrl: digitalStampUrl || null,
       digitalStampEnabled: digitalStampEnabled ?? Boolean(digitalStamp),
+      licensedProfessionalUserId: typeof professionalUserId === 'string' ? professionalUserId || null : null,
+      licensedProfessionalName: professionalName || 'Jonathan Mugiira',
+      licensedProfessionalTitle: professionalTitle || 'Senior Solar PV & Electrical Engineer',
+      licensedProfessionalQualification: professionalQualification || 'EPRA T3 Solar Photovoltaic Technician',
+      licensedProfessionalLicenceNumber: professionalLicenceNumber || 'EPRA/SPVT/001782',
+      licensedProfessionalSignatureUrl: professionalSignatureUrl || null,
+      licensedProfessionalActive: licensedProfessionalActive ?? true,
     },
   });
 

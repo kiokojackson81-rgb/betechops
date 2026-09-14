@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/api";
+import { requireAttendant } from "@/lib/auth";
 import { buildCommissioningCertificatePdf } from "@/lib/commissioningCertificate";
 import { prisma } from "@/lib/prisma";
 
@@ -11,7 +11,7 @@ type ParamsContext = {
 };
 
 export async function GET(_request: Request, context: ParamsContext) {
-  const guard = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const guard = await requireAttendant(_request, ["ADMIN", "SUPERVISOR", "ATTENDANT", "TECHNICAL_TEAM"]);
   if (!guard.ok) return guard.res;
 
   const { id } = await context.params;

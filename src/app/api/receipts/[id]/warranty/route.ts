@@ -1,38 +1,66 @@
+import { activeLicensedProfessional } from "@/lib/professionalCommissioning";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api";
-import { deliverWarrantyCertificate, getWarrantyCertificate, issueWarrantyCertificate } from "@/lib/warrantyCertificates";
+import { deliverWarrantyCertificate, getWarrantyCertificate, issueWarrantyCertificate, warrantyReadiness, previewWarrantyCertificate, updateWarrantyCoverage } from "@/lib/warrantyCertificates";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type ParamsContext = { params: Promise<{ id: string }> | { id: string } };
-const bodySchema = z.object({ action: z.enum(["generate", "reissue", "send"]) });
+const bodySchema = z.object({
+  action: z.enum(["generate", "reissue", "send", "status", "replace"]),
+  reason: z.string().trim().min(1).max(1200).optional(),
+  status: z.enum(["ACTIVE", "EXPIRED", "VOID", "REPLACED", "UNDER_CLAIM"]).optional(),
+  replacement: z.object({ index: z.number().int().min(0).max(20), brand: z.string().trim().min(1).max(100), modelCapacity: z.string().trim().min(1).max(200), serialNumbers: z.string().trim().min(1).max(2000), replacementDate: z.string().date(), claimReference: z.string().trim().min(1).max(200) }).optional(),
+});
 
 export async function GET(_request: NextRequest, context: ParamsContext) {
-  const guard = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!guard.ok) return guard.res;
+  const viewer = guard.session?.user as { id?: string; role?: string } | undefined;
+  if (!["ADMIN", "SUPERVISOR"].includes(viewer?.role || "")) {
+    const configured = await activeLicensedProfessional();
+    if (!configured.active || !configured.professional.userId || configured.professional.userId !== viewer?.id) return NextResponse.json({ error: "Certificate management is restricted." }, { status: 403 });
+  }
   const { id } = await context.params;
-  const certificates = await getWarrantyCertificate(id, true);
-  return NextResponse.json({ ok: true, certificates });
+  if (new URL(_request.url).searchParams.get("preview") === "1") {
+    try {
+      const pdf = await previewWarrantyCertificate(id);
+      return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": "inline; filename=warranty-preview.pdf", "Cache-Control": "no-store" } });
+    } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to preview warranty." }, { status: 409 }); }
+  }
+  const [certificates, readiness] = await Promise.all([getWarrantyCertificate(id, true), warrantyReadiness(id)]);
+  return NextResponse.json({ ok: true, certificates, readiness });
 }
 
 export async function POST(request: NextRequest, context: ParamsContext) {
-  const guard = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!guard.ok) return guard.res;
+  const viewer = guard.session?.user as { id?: string; role?: string } | undefined;
+  if (!["ADMIN", "SUPERVISOR"].includes(viewer?.role || "")) {
+    const configured = await activeLicensedProfessional();
+    if (!configured.active || !configured.professional.userId || configured.professional.userId !== viewer?.id) return NextResponse.json({ error: "Certificate management is restricted." }, { status: 403 });
+  }
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid warranty certificate action." }, { status: 400 });
   const { id } = await context.params;
   const user = guard.session?.user as { id?: string; name?: string | null; email?: string | null } | undefined;
   const actor = { issuedById: user?.id || null, issuedByName: user?.name || user?.email || "Betech administrator" };
   try {
+    if (parsed.data.action === "status" || parsed.data.action === "replace") {
+      if (!user?.id || !parsed.data.reason || (parsed.data.action === "replace" ? !parsed.data.replacement : !parsed.data.status)) return NextResponse.json({ error: "Complete all fields and enter a reason." }, { status: 400 });
+      const history = await updateWarrantyCoverage({ receiptId: id, actorId: user.id, reason: parsed.data.reason, status: parsed.data.action === "status" ? parsed.data.status : undefined, replacement: parsed.data.action === "replace" ? parsed.data.replacement : undefined });
+      return NextResponse.json({ ok: true, history });
+    }
     if (parsed.data.action === "send") {
       const certificate = await getWarrantyCertificate(id);
       if (!certificate) return NextResponse.json({ error: "Generate the warranty certificate before sending it." }, { status: 409 });
       const delivery = await deliverWarrantyCertificate({ certificateId: certificate.id, accountUrl: `${new URL(request.url).origin}/account/projects/${id}`, actorId: actor.issuedById });
       return NextResponse.json({ ok: true, certificate, delivery });
     }
-    const issued = await issueWarrantyCertificate({ receiptId: id, origin: new URL(request.url).origin, reissue: parsed.data.action === "reissue", ...actor });
+    if (parsed.data.action === "reissue" && !parsed.data.reason) return NextResponse.json({ error: "Enter the reason for reissuing the warranty certificate." }, { status: 400 });
+    const issued = await issueWarrantyCertificate({ receiptId: id, origin: new URL(request.url).origin, reissue: parsed.data.action === "reissue", reason: parsed.data.reason, ...actor });
     return NextResponse.json({ ok: true, ...issued });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to issue the warranty certificate." }, { status: 409 });

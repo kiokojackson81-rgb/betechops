@@ -13,6 +13,24 @@ export async function getBranding() {
     brandColor: branding?.brandColor || '#7A2020',
     digitalStampUrl: branding?.digitalStampUrl || null,
     digitalStampEnabled: Boolean(branding?.digitalStampEnabled),
+    licensedProfessional: {
+      userId: branding?.licensedProfessionalUserId || null,
+      name: branding?.licensedProfessionalName || 'Jonathan Mugiira',
+      title: branding?.licensedProfessionalTitle || 'Senior Solar PV & Electrical Engineer',
+      qualification: branding?.licensedProfessionalQualification || 'EPRA T3 Solar Photovoltaic Technician',
+      licenceNumber: branding?.licensedProfessionalLicenceNumber || 'EPRA/SPVT/001782',
+      signatureUrl: branding?.licensedProfessionalSignatureUrl || null,
+      active: branding?.licensedProfessionalActive ?? true,
+    },
     siteTitle: process.env.RECEIPT_SITE_TITLE || 'Betech Solar Solutions',
   };
+}
+
+export function sameLicensedProfessional(
+  technicianName: string | null | undefined,
+  professionalName: string | null | undefined,
+) {
+  const normalize = (value: string | null | undefined) =>
+    String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return Boolean(normalize(technicianName) && normalize(technicianName) === normalize(professionalName));
 }

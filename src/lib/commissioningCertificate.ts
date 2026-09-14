@@ -1,9 +1,10 @@
+import { technicalConfiguration } from "@/lib/warrantyRules";
 import { readFile } from "fs/promises";
 import path from "path";
 import * as QRCode from "qrcode";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
 import { decryptCommissioningToken } from "@/lib/commissioning";
-import { getBranding } from "@/lib/branding";
+import { getBranding, sameLicensedProfessional } from "@/lib/branding";
 import { TERMS_DISPLAY_URL } from "@/lib/publicLinks";
 
 type CertificateSource = {
@@ -12,6 +13,11 @@ type CertificateSource = {
   customerTermsAcceptedAt?: Date | null;
   customerTokenCiphertext?: string | null;
   technician: { name: string | null } | null;
+  technicianSignedAt?: Date | null;
+  professionalApprovedAt?: Date | null;
+  professionalReviewedBy?: string | null;
+  professionalSignatureSnapshot?: string | null;
+  professionalProfileSnapshot?: unknown;
   data: unknown;
   receipt: {
     receiptNumber: string | null;
@@ -34,7 +40,6 @@ const MARGIN = 34;
 const INK = rgb(0.12, 0.12, 0.13);
 const MUTED = rgb(0.38, 0.39, 0.42);
 const MAROON = rgb(0.45, 0.02, 0.04);
-const MAROON_LIGHT = rgb(0.97, 0.92, 0.92);
 const GREY = rgb(0.95, 0.95, 0.95);
 const GREEN = rgb(0.04, 0.45, 0.22);
 const GREEN_LIGHT = rgb(0.9, 0.97, 0.92);
@@ -137,14 +142,14 @@ function drawVerifiedBadge(page: PDFPage, bold: PDFFont) {
 
 function drawDigitalStamp(page: PDFPage, stamp: PDFImage | null, stampDate: string, bold: PDFFont) {
   if (!stamp) return;
-  const size = 104;
-  const x = 450;
-  const y = 38;
+  const size = 46;
+  const x = 505;
+  const y = 34;
   const scale = Math.min(size / stamp.width, size / stamp.height);
   const width = stamp.width * scale;
   const height = stamp.height * scale;
   page.drawImage(stamp, { x: x + (size - width) / 2, y: y + (size - height) / 2, width, height });
-  if (!stampDate) return;
+  if (!stampDate || size < 60) return;
   page.drawRectangle({ x: x + 18, y: y + 25, width: 68, height: 16, color: rgb(1, 1, 1), opacity: 0.68 });
   const dateLabel = `DATE: ${stampDate}`;
   const fontSize = 6.2;
@@ -262,13 +267,15 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const evidence = getEvidence(certificateData);
   const receiptData = asRecord(source.receipt.data);
   const metadata = asRecord(source.receipt.order?.metadata);
-  const reference = source.receipt.receiptNumber || source.receipt.order?.orderNumber || "Project";
-  const customer = source.receipt.order?.customerName || valueFrom(receiptData, ["customerName"]) || "Customer";
-  const location = valueFrom(receiptData, ["customerLocation", "deliveryAddress", "town"]) || valueFrom(metadata, ["customerLocation", "deliveryAddress"]) || "";
-  const county = valueFrom(receiptData, ["county", "customerCounty"]) || valueFrom(metadata, ["county"]);
-  const gps = valueFrom(certificateData, ["gps", "gpsCoordinates"]) || valueFrom(receiptData, ["gps", "gpsCoordinates"]);
-  const installationDate = valueFrom(receiptData, ["installationDate", "scheduledDate"]) || valueFrom(metadata, ["installationDate"]);
-  const issuedDate = formatDate(source.issuedAt);
+  const frozenProject = asRecord(certificateData.projectSnapshot);
+  const reference = text(frozenProject.reference) || source.receipt.receiptNumber || source.receipt.order?.orderNumber || "Project";
+  const customer = text(frozenProject.customerName) || source.receipt.order?.customerName || valueFrom(receiptData, ["customerName"]) || "Customer";
+  const location = text(frozenProject.location) || valueFrom(receiptData, ["customerLocation", "deliveryAddress", "town"]) || valueFrom(metadata, ["customerLocation", "deliveryAddress"]) || "";
+  const site = asRecord(certificateData.site);
+  const installation = asRecord(certificateData.installation);
+  const county = valueFrom(site, ["county"]) || valueFrom(receiptData, ["county", "customerCounty"]) || valueFrom(metadata, ["county"]);
+  const gps = valueFrom(site, ["gps"]) || valueFrom(certificateData, ["gps", "gpsCoordinates"]) || valueFrom(receiptData, ["gps", "gpsCoordinates"]);
+  const issuedDate = formatDate(source.technicianSignedAt || source.issuedAt);
   const termsAcceptedAt = text(termsAcceptance.acceptedAt) || source.customerTermsAcceptedAt?.toISOString() || "";
   const acceptanceDate = termsAcceptedAt ? new Date(termsAcceptedAt) : source.issuedAt;
   const signatureDate = formatDate(source.issuedAt);
@@ -291,110 +298,122 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
     }
   }
   const branding = await getBranding();
-  const stampImage = branding.digitalStampEnabled && branding.digitalStampUrl
-    ? await embedImage(pdf, branding.digitalStampUrl)
-    : null;
+  const professionalSnapshot = asRecord(source.professionalProfileSnapshot);
+  const professional = {
+    name: valueFrom(professionalSnapshot, ["name"]) || branding.licensedProfessional.name,
+    title: valueFrom(professionalSnapshot, ["title"]) || branding.licensedProfessional.title,
+    qualification: valueFrom(professionalSnapshot, ["qualification"]) || branding.licensedProfessional.qualification,
+    licenceNumber: valueFrom(professionalSnapshot, ["licenceNumber"]) || branding.licensedProfessional.licenceNumber,
+    signatureUrl: text(source.professionalSignatureSnapshot) || valueFrom(professionalSnapshot, ["signatureUrl"]) || branding.licensedProfessional.signatureUrl || "",
+  };
+  const technicianIsProfessional = certificateData.installationCertifiedBySameProfessional === true || (certificateData.installationCertifiedBySameProfessional === undefined && sameLicensedProfessional(technician, professional.name));
+  const approved = Boolean(source.professionalApprovedAt && valueFrom(professionalSnapshot, ["name"]));
+  const professionalApprovalDate = formatDate(source.professionalApprovedAt);
+  const storedStamp = text(professionalSnapshot.stampUrl) || (branding.digitalStampEnabled ? branding.digitalStampUrl : null);
+  const stampImage = approved && storedStamp ? await embedImage(pdf, storedStamp) : null;
   drawLetterhead(page, letterheadImage);
   page.drawText("SOLAR PHOTOVOLTAIC SYSTEM", { x: MARGIN, y: 735, size: 16, font: bold, color: INK });
-  page.drawText("COMPLETION & COMMISSIONING CERTIFICATE", { x: MARGIN, y: 715, size: 15, font: bold, color: INK });
-  drawVerifiedBadge(page, bold);
+  page.drawText("COMPLETION & COMMISSIONING CERTIFICATE", { x: MARGIN, y: 715, size: 10, font: bold, color: INK });
+  if (approved) drawVerifiedBadge(page, bold);
+  else page.drawText("PROFESSIONAL APPROVAL NOT RECORDED", { x: 355, y: 707, size: 7, font: bold, color: MAROON });
   page.drawRectangle({ x: MARGIN, y: 674, width: A4[0] - MARGIN * 2, height: 27, color: GREY });
   [`Certificate No: ${source.certificateNo || "Pending"}`, `Project Ref: ${reference}`, `Completion Date: ${issuedDate || "As recorded"}`].forEach((line, index) => page.drawText(line, { x: MARGIN + 10 + index * 174, y: 684, size: 7.4, font: index === 0 ? bold : regular, color: INK }));
 
-  let y = 654;
-  drawSectionHeading(page, "Customer & Site Details", y, bold);
-  y -= 14;
-  page.drawRectangle({ x: MARGIN, y: y - 56, width: A4[0] - MARGIN * 2, height: 60, color: rgb(0.985, 0.985, 0.985), borderColor: rgb(0.86, 0.86, 0.86), borderWidth: 0.4 });
-  drawDetailRows(page, [["Customer name", customer], ["Phone", source.receipt.order?.customerPhone || ""], ["Installation location", location]], MARGIN + 9, y - 8, 252, regular, bold);
-  drawDetailRows(page, [["County", county], ["GPS", gps], ["Installation date", installationDate], ["Assigned technician", technician]], 306, y - 8, 250, regular, bold);
-  y -= 73;
+  const panel = (title: string, x: number, top: number, width: number, height: number) => {
+    page.drawRectangle({ x, y: top - height, width, height, borderColor: MAROON, borderWidth: 0.55, color: rgb(1, 1, 1) });
+    page.drawRectangle({ x, y: top - 17, width, height: 17, color: GREY });
+    const titleWidth = Math.min(width, bold.widthOfTextAtSize(title, 7.3) + 18);
+    page.drawRectangle({ x, y: top - 17, width: titleWidth, height: 17, color: MAROON });
+    page.drawText(title, { x: x + 7, y: top - 11.5, font: bold, size: 7.3, color: rgb(1, 1, 1) });
+  };
+  const fullWidth = A4[0] - MARGIN * 2;
+  panel("1. CUSTOMER & SITE DETAILS", MARGIN, 665, fullWidth, 83);
+  drawDetailRows(page, [["Customer", customer], ["Phone", source.receipt.order?.customerPhone || ""], ["Location", location], ["County / GPS", [county, gps].filter(Boolean).join(" / ")]], MARGIN + 8, 638, 310, regular, bold);
+  drawDetailRows(page, [["Technician", technician], [approved ? "Certified by" : "Review", approved ? professional.name : "Awaiting approval"], ["Handover date", acceptanceDateLabel]], 365, 638, 185, regular, bold);
+  ["Residential", "Commercial", "Institutional", "Industrial", "Agricultural", "Other"].forEach((label, index) => drawCheckbox(page, MARGIN + 8 + index * 86, 589, site.premises === label, label === "Other" && text(site.premisesOther) ? `Other: ${text(site.premisesOther).slice(0, 12)}` : label, regular));
 
-  drawSectionHeading(page, "System Installed", y, bold);
-  y -= 15;
+  panel("2. SYSTEM INSTALLED", MARGIN, 574, fullWidth, 84);
   const groups = extractEquipment(equipment, []);
-  if (groups.length) {
-    const columnWidth = (A4[0] - MARGIN * 2 - 12) / Math.min(groups.length, 3);
-    groups.forEach((group, index) => {
-      const x = MARGIN + index * (columnWidth + 6);
-      page.drawRectangle({ x, y: y - 64, width: columnWidth, height: 68, color: rgb(0.985, 0.985, 0.985), borderColor: rgb(0.86, 0.86, 0.86), borderWidth: 0.4 });
-      page.drawText(group.title, { x: x + 7, y: y - 7, size: 7.2, font: bold, color: MAROON });
-      drawDetailRows(page, group.rows.slice(0, 5), x + 7, y - 20, columnWidth - 14, regular, bold);
+  groups.slice(0, 3).forEach((group, index) => {
+    const x = MARGIN + 8 + index * (fullWidth / 3);
+    page.drawText(group.title, { x, y: 545, size: 8, font: bold, color: MAROON });
+    group.rows.slice(0, 5).forEach(([label, value], row) => {
+      page.drawText(`${label}:`, { x, y: 533 - row * 9, size: Math.min(6.5, 46 / Math.max(1, regular.widthOfTextAtSize(`${label}:`, 1))), font: regular, color: MUTED });
+      const fit = Math.min(6.5, 105 / Math.max(1, regular.widthOfTextAtSize(value, 1)));
+      page.drawText(value, { x: x + 48, y: 533 - row * 9, size: fit, font: regular, color: INK });
     });
-  } else page.drawText("Equipment details are supported by the installation evidence report.", { x: MARGIN + 8, y: y - 12, size: 8, font: regular, color: MUTED });
-  y -= 82;
-
-  drawSectionHeading(page, "Installation Type", y, bold);
-  page.drawText("Installation Type:", { x: MARGIN + 9, y: y - 14, size: 7.4, font: bold, color: INK });
-  drawCheckbox(page, MARGIN + 86, y - 14, true, "New Installation", regular);
-  drawCheckbox(page, MARGIN + 204, y - 14, false, "Upgrade", regular);
-  drawCheckbox(page, MARGIN + 286, y - 14, false, "Modification", regular);
-  page.drawText("System Configuration:", { x: MARGIN + 9, y: y - 28, size: 7.4, font: bold, color: INK });
-  drawCheckbox(page, MARGIN + 105, y - 28, true, "Hybrid", regular);
-  drawCheckbox(page, MARGIN + 184, y - 28, false, "Off-Grid", regular);
-  drawCheckbox(page, MARGIN + 275, y - 28, false, "Grid-Tied", regular);
-  y -= 45;
-
-  drawSectionHeading(page, "Commissioning Results", y, bold);
-  y -= 13;
-  const inspectionRows: Array<[string, string]> = [["Visual installation inspection", Object.values(evidence).flat().length ? "PASS" : "N/A"], ["Inverter operation", checklistValue(checklist, ["Inverter powers ON"])], ["PV charging", checklistValue(checklist, ["PV charging detected"])], ["Battery charging", checklistValue(checklist, ["Battery charging"])], ["Battery discharge", checklistValue(checklist, ["Battery discharging"])], ["Grid input", checklistValue(checklist, ["Grid input detected"])], ["Backup / Changeover", checklistValue(checklist, ["Backup/changeover tested"])], ["Protection devices", checklistValue(checklist, ["Protection devices installed"])], ["Earthing", checklistValue(checklist, ["Earthing connected"])], ["Monitoring", checklistValue(checklist, ["Monitoring configured"])]];
-  page.drawRectangle({ x: MARGIN, y: y - 78, width: A4[0] - MARGIN * 2, height: 82, color: rgb(0.99, 0.99, 0.99), borderColor: rgb(0.84, 0.84, 0.84), borderWidth: 0.4 });
-  inspectionRows.forEach(([label, result], index) => {
-    const rowY = y - 8 - index * 7.1;
-    page.drawText(label, { x: MARGIN + 8, y: rowY, size: 6.8, font: regular, color: INK });
-    page.drawText(result, { x: 445, y: rowY, size: 6.8, font: bold, color: result === "PASS" ? GREEN : result === "FAIL" ? rgb(0.72, 0.06, 0.08) : MUTED });
   });
-  const passed = inspectionRows.every(([, result]) => result !== "FAIL");
-  page.drawRectangle({ x: 334, y: y - 101, width: 227, height: 17, color: passed ? GREEN_LIGHT : MAROON_LIGHT, borderColor: passed ? GREEN : MAROON, borderWidth: 0.5 });
-  page.drawText(passed ? "SYSTEM PASSED COMMISSIONING" : "COMMISSIONING REVIEW REQUIRED", { x: 344, y: y - 95, size: 7.5, font: bold, color: passed ? GREEN : MAROON });
-  y -= 101;
+  panel("3. INSTALLATION TYPE", MARGIN, 482, fullWidth, 36);
+  ["New Installation", "Upgrade", "Modification"].forEach((label, index) => drawCheckbox(page, MARGIN + 8 + index * 88, 455, installation.type === label, label, regular));
+  ["Hybrid", "Off-Grid", "Grid-Tied"].forEach((label, index) => drawCheckbox(page, 330 + index * 77, 455, technicalConfiguration(installation.systemConfiguration) === `${label} Solar PV System`, label, regular));
 
-  const readings = measurementRows(measurements);
-  if (readings.length) {
-    drawSectionHeading(page, "Measurements", y, bold);
-    y -= 14;
-    page.drawRectangle({ x: MARGIN, y: y - 19, width: A4[0] - MARGIN * 2, height: 23, color: rgb(0.985, 0.985, 0.985), borderColor: rgb(0.86, 0.86, 0.86), borderWidth: 0.4 });
-    readings.slice(0, 4).forEach(([label, value], index) => page.drawText(`${label}: ${value}`, { x: MARGIN + 8 + (index % 2) * 252, y: y - 8 - Math.floor(index / 2) * 9, size: 7.2, font: regular, color: INK }));
-    y -= 33;
-  }
-  drawSectionHeading(page, "Completion Declaration", y, bold);
-  y -= 14;
-  drawLines(page, "We certify that the above Solar Photovoltaic System has been installed, inspected, tested and commissioned by Betech Solar Solutions. At the time of commissioning, the system was confirmed operational within the agreed installation scope. The customer was provided with basic system operating guidance, safety instructions, warranty information, load guidance and the applicable fault-reporting procedure.", MARGIN + 8, y, A4[0] - MARGIN * 2 - 16, regular, 6.65, INK, 8.2);
-  drawLines(page, "System performance and battery backup duration depend on actual connected load, usage pattern, weather conditions, solar irradiation and battery state of charge.", MARGIN + 8, y - 34, A4[0] - MARGIN * 2 - 16, italic, 6.5, MUTED, 8);
-  y -= 48;
+  panel("4. COMMISSIONING RESULTS", MARGIN, 438, 190, 177);
+  const inspectionRows: Array<[string, string]> = [["Visual installation inspection", Object.values(evidence).flat().length ? "PASS" : "N/A"], ["Inverter operation", checklistValue(checklist, ["Inverter powers ON"])], ["PV charging detected", checklistValue(checklist, ["PV charging detected"])], ["Battery charging", checklistValue(checklist, ["Battery charging"])], ["Battery discharging", checklistValue(checklist, ["Battery discharging"])], ["Grid input detected", checklistValue(checklist, ["Grid input detected"])], ["Backup / changeover tested", checklistValue(checklist, ["Backup/changeover tested"])], ["Protection devices installed", checklistValue(checklist, ["Protection devices installed"])], ["Earthing connected", checklistValue(checklist, ["Earthing connected"])], ["Monitoring configured", checklistValue(checklist, ["Monitoring configured"])]];
+  inspectionRows.forEach(([label, result], index) => {
+    const rowY = 412 - index * 12;
+    page.drawRectangle({ x: MARGIN + 6, y: rowY - 3, width: 178, height: 11, color: index % 2 ? GREY : rgb(0.97, 0.98, 0.98) });
+    page.drawText(label, { x: MARGIN + 10, y: rowY, size: 6.6, font: regular, color: INK });
+    page.drawText(result, { x: MARGIN + 151, y: rowY, size: 7, font: bold, color: result === "PASS" ? GREEN : MUTED });
+  });
+  const passed = approved && Object.values(checklist).some(value => value === "PASS") && inspectionRows.every(([, result]) => result === "PASS" || result === "N/A");
+  page.drawRectangle({ x: MARGIN + 6, y: 267, width: 178, height: 24, color: passed ? GREEN_LIGHT : GREY });
+  page.drawText(passed ? "SYSTEM PASSED COMMISSIONING" : "COMMISSIONING REVIEW REQUIRED", { x: MARGIN + 12, y: 276, size: 7.2, font: bold, color: passed ? GREEN : MAROON });
 
-  drawSectionHeading(page, "Customer Handover Completed", y, bold);
-  const handoverLabels: Array<[string, string]> = [["System operation explained", "System operation"], ["Shutdown / startup procedure explained", "Shutdown/startup"], ["Monitoring explained", "Monitoring"], ["Warranty explained", "Warranty"], ["Load limitations explained", "Load limitations"], ["Maintenance / panel cleaning explained", "Maintenance"], ["Fault reporting procedure explained", "Fault reporting"]];
-  handoverLabels.forEach(([label, key], index) => drawCheckbox(page, MARGIN + 8 + (index % 2) * 270, y - 13 - Math.floor(index / 2) * 8, handover[key] === true, label, regular));
-  y -= 46;
+  panel("5. MEASUREMENTS", 231, 438, 130, 177);
+  measurementRows(measurements).slice(0, 7).forEach(([label, value], index) => {
+    const rowY = 409 - index * 20;
+    page.drawRectangle({ x: 236, y: rowY - 5, width: 120, height: 19, color: index % 2 ? GREY : rgb(0.98, 0.99, 1) });
+    page.drawText(label, { x: 240, y: rowY, size: 6, font: regular, color: INK });
+    page.drawText(value, { x: 318, y: rowY, size: 6, font: regular, color: INK });
+  });
+  panel("6. CUSTOMER HANDOVER", 368, 438, 193, 93);
+  const handoverLabels: Array<[string, string]> = [["System operation explained", "System operation"], ["Shutdown / startup procedure", "Shutdown/startup"], ["Monitoring explained", "Monitoring"], ["Warranty explained", "Warranty"], ["Load limitations explained", "Load limitations"], ["Maintenance / panel cleaning", "Maintenance"], ["Fault reporting procedure", "Fault reporting"]];
+  handoverLabels.forEach(([label, key], index) => drawCheckbox(page, 376, 412 - index * 9.5, handover[key] === true, label, regular));
+  panel("7. CUSTOMER ACCEPTANCE", 368, 338, 193, 77);
+  drawCheckbox(page, 376, 313, handoverLabels.every(([, key]) => handover[key] === true), "Customer handover completed", regular);
+  drawCheckbox(page, 376, 302, termsAcceptance.accepted === true, "Terms & Conditions accepted", regular);
+  drawLines(page, "Customer confirms acceptance of the installation, performance, warranty and after-sales terms.", 376, 291, 176, regular, 6, INK, 7);
+  page.drawText(`Terms: ${TERMS_DISPLAY_URL}`, { x: 376, y: 273, size: 5.6, font: regular, color: rgb(0.04, 0.42, 0.75) });
+  page.drawText(`Accepted: ${acceptanceDateLabel}`, { x: 376, y: 265, size: 5.6, font: regular, color: MUTED });
 
-  const termsAccepted = termsAcceptance.accepted === true;
-  drawSectionHeading(page, "Customer Acceptance", y, bold);
-  drawCheckbox(page, MARGIN + 8, y - 13, handoverLabels.every(([, key]) => handover[key] === true), "Customer handover completed", regular);
-  drawCheckbox(page, MARGIN + 8, y - 24, termsAccepted, "Terms & Conditions Accepted", regular);
-  drawLines(page, "The Customer confirms that they have read, understood and accepted the Betech Solar Installation, Performance, Warranty & After-Sales Terms & Conditions applicable to this installation.", MARGIN + 8, y - 36, 385, regular, 6.15, INK, 7.3);
-  page.drawText(`Terms: ${TERMS_DISPLAY_URL}`, { x: MARGIN + 8, y: y - 58, size: 6.2, font: regular, color: rgb(0.04, 0.42, 0.75) });
-  page.drawText(`Acceptance Date: ${acceptanceDateLabel}`, { x: MARGIN + 8, y: y - 67, size: 6.2, font: regular, color: MUTED });
-  y -= 73;
-
+  panel("8. DECLARATION BY LICENSED SOLAR PROFESSIONAL", MARGIN, 253, fullWidth, 63);
+  drawLines(page, approved ? "I certify that the Solar Photovoltaic installation described in this Certificate has been inspected, tested and commissioned within the recorded scope of works and based on the commissioning information and installation evidence provided. To the best of my professional knowledge, the installation has been verified for operational condition, equipment identification, electrical protection, earthing and commissioning requirements applicable to the recorded installation." : "Professional certification has not been recorded. This document does not declare professional supervision or approval.", MARGIN + 8, 226, fullWidth - 16, regular, 6.8, INK, 9);
+  if (!technicianIsProfessional) drawLines(page, "Installation technician declaration: I confirm that I carried out the installation and commissioning activities recorded in this project and that the information, measurements and photographic evidence submitted are true to the best of my knowledge.", MARGIN + 8, 181, fullWidth - 16, regular, 6.2, INK, 8);
+  const y = 155;
   drawSectionHeading(page, "Signatures", y, bold);
   const signatureTop = y - 14;
-  page.drawRectangle({ x: MARGIN, y: signatureTop - 55, width: 250, height: 59, color: rgb(0.99, 0.99, 0.99), borderColor: rgb(0.84, 0.84, 0.84), borderWidth: 0.4 });
-  page.drawRectangle({ x: 310, y: signatureTop - 55, width: 251, height: 59, color: rgb(0.99, 0.99, 0.99), borderColor: rgb(0.84, 0.84, 0.84), borderWidth: 0.4 });
-  page.drawText("CUSTOMER / REPRESENTATIVE", { x: MARGIN + 8, y: signatureTop - 8, size: 7, font: bold, color: MAROON });
-  page.drawText("FOR BETECH SOLAR SOLUTIONS", { x: 318, y: signatureTop - 8, size: 7, font: bold, color: MAROON });
-  page.drawText(`Name: ${customer}`, { x: MARGIN + 8, y: signatureTop - 19, size: 6.8, font: regular, color: INK });
-  page.drawText(`Technician: ${technician}`, { x: 318, y: signatureTop - 19, size: 6.8, font: regular, color: INK });
   const customerSignature = text(signatures.customer);
   const technicianSignature = text(signatures.technician);
   const customerImage = customerSignature ? await embedImage(pdf, customerSignature) : null;
-  const technicianImage = technicianSignature.startsWith("data:image") ? await embedImage(pdf, technicianSignature) : null;
-  if (customerImage) { const scale = Math.min(90 / customerImage.width, 20 / customerImage.height); page.drawImage(customerImage, { x: MARGIN + 72, y: signatureTop - 43, width: customerImage.width * scale, height: customerImage.height * scale }); }
-  else page.drawText("Signature captured", { x: MARGIN + 72, y: signatureTop - 37, size: 7, font: italic, color: MUTED });
-  if (technicianImage) { const scale = Math.min(78 / technicianImage.width, 20 / technicianImage.height); page.drawImage(technicianImage, { x: 318, y: signatureTop - 43, width: technicianImage.width * scale, height: technicianImage.height * scale }); }
-  else page.drawText(technicianSignature || technician, { x: 318, y: signatureTop - 37, size: 8, font: italic, color: INK });
-  page.drawText(`Acceptance Date: ${acceptanceDateLabel}`, { x: MARGIN + 8, y: signatureTop - 49, size: 6.5, font: regular, color: MUTED });
-  page.drawText(`Date: ${technicianSignatureDate || signatureDate}`, { x: 318, y: signatureTop - 49, size: 6.5, font: regular, color: MUTED });
-  drawDigitalStamp(page, stampImage, stampDate, bold);
+  const technicianImage = /^(data:image|https:\/\/)/.test(technicianSignature) ? await embedImage(pdf, technicianSignature) : null;
+  const professionalImage = approved && professional.signatureUrl ? await embedImage(pdf, professional.signatureUrl) : null;
+  const boxCount = technicianIsProfessional ? 2 : 3;
+  const boxGap = 6;
+  const boxWidth = (A4[0] - MARGIN * 2 - boxGap * (boxCount - 1)) / boxCount;
+  const boxes = Array.from({ length: boxCount }, (_, index) => MARGIN + index * (boxWidth + boxGap));
+  boxes.forEach((x) => page.drawRectangle({ x, y: signatureTop - 61, width: boxWidth, height: 65, color: rgb(0.99, 0.99, 0.99), borderColor: rgb(0.84, 0.84, 0.84), borderWidth: 0.4 }));
+  page.drawText("CUSTOMER / REPRESENTATIVE", { x: boxes[0] + 6, y: signatureTop - 8, size: 6.3, font: bold, color: MAROON });
+  page.drawText(`Name: ${customer}`, { x: boxes[0] + 6, y: signatureTop - 19, size: 6.2, font: regular, color: INK });
+  if (customerImage) { const scale = Math.min((boxWidth - 20) / customerImage.width, 20 / customerImage.height); page.drawImage(customerImage, { x: boxes[0] + 12, y: signatureTop - 44, width: customerImage.width * scale, height: customerImage.height * scale }); }
+  else page.drawText(customerSignature ? "Signature captured" : "Signature not recorded", { x: boxes[0] + 8, y: signatureTop - 38, size: 6.5, font: italic, color: MUTED });
+  page.drawText(`Date: ${acceptanceDateLabel}`, { x: boxes[0] + 6, y: signatureTop - 53, size: 6.1, font: regular, color: MUTED });
+  const professionalBox = technicianIsProfessional ? boxes[1] : boxes[2];
+  if (!technicianIsProfessional) {
+    page.drawText("INSTALLATION TECHNICIAN", { x: boxes[1] + 6, y: signatureTop - 8, size: 6.3, font: bold, color: MAROON });
+    page.drawText(`Name: ${technician}`, { x: boxes[1] + 6, y: signatureTop - 19, size: 6.2, font: regular, color: INK });
+    page.drawText("Installed & Tested By", { x: boxes[1] + 6, y: signatureTop - 28, size: 5.8, font: regular, color: MUTED });
+    if (technicianImage) { const scale = Math.min((boxWidth - 20) / technicianImage.width, 18 / technicianImage.height); page.drawImage(technicianImage, { x: boxes[1] + 12, y: signatureTop - 47, width: technicianImage.width * scale, height: technicianImage.height * scale }); }
+    else page.drawText(technicianSignature || technician, { x: boxes[1] + 8, y: signatureTop - 42, size: 7, font: italic, color: INK });
+    page.drawText(`Date: ${technicianSignatureDate || signatureDate}`, { x: boxes[1] + 6, y: signatureTop - 53, size: 6.1, font: regular, color: MUTED });
+  }
+  page.drawText(technicianIsProfessional ? "INSTALLATION & PROFESSIONAL CERTIFICATION" : "SUPERVISED & CERTIFIED BY", { x: professionalBox + 6, y: signatureTop - 8, size: 5.9, font: bold, color: MAROON });
+  page.drawText(approved ? professional.name : "Approval not recorded", { x: professionalBox + 6, y: signatureTop - 19, size: 6.6, font: bold, color: INK });
+  page.drawText(approved ? professional.title : "", { x: professionalBox + 6, y: signatureTop - 28, size: 5.4, font: regular, color: INK });
+  page.drawText(approved ? `${professional.qualification} · ${professional.licenceNumber}` : "", { x: professionalBox + 6, y: signatureTop - 35, size: 4.8, font: regular, color: INK });
+  if (professionalImage) { const scale = Math.min((boxWidth - 18) / professionalImage.width, 14 / professionalImage.height); page.drawImage(professionalImage, { x: professionalBox + 10, y: signatureTop - 51, width: professionalImage.width * scale, height: professionalImage.height * scale }); }
+  else page.drawText("Signature not recorded", { x: professionalBox + 8, y: signatureTop - 47, size: 8, font: italic, color: INK });
+  page.drawText(`Date: ${professionalApprovalDate || signatureDate}`, { x: professionalBox + 6, y: signatureTop - 57, size: 5.8, font: regular, color: MUTED });
+  if (approved) drawDigitalStamp(page, stampImage, stampDate, bold);
 
   const verificationUrl = certificateVerificationUrl(source);
   if (verificationUrl) {

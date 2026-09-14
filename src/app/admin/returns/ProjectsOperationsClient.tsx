@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import ProjectDocuments from "./ProjectDocuments";
+import CertificateReviewPanel from "./CertificateReviewPanel";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 
@@ -99,14 +101,6 @@ type CommissioningLinkState = {
   link: string;
   status?: string;
   progress?: number;
-};
-
-type WarrantyCertificateState = {
-  id: string;
-  certificateNo: string;
-  version: number;
-  status: "ISSUED" | "SUPERSEDED";
-  issuedAt: string;
 };
 
 type ProjectsOperationsClientProps = {
@@ -434,9 +428,6 @@ export default function ProjectsOperationsClient({
   const [sendingReceiptId, setSendingReceiptId] = useState<string | null>(null);
   const [commissioningLinks, setCommissioningLinks] = useState<
     Record<string, CommissioningLinkState>
-  >({});
-  const [warrantyCertificates, setWarrantyCertificates] = useState<
-    Record<string, WarrantyCertificateState[]>
   >({});
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
@@ -1094,112 +1085,6 @@ export default function ProjectsOperationsClient({
           : "Unable to update commissioning link",
         "error",
       );
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  const downloadCommissioningCertificate = async (row: ProjectRow) => {
-    setSavingId(row.id);
-    try {
-      const response = await fetch(
-        `/api/receipts/${encodeURIComponent(row.id)}/commissioning/certificate`,
-        { credentials: "same-origin" },
-      );
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || "Unable to download the certificate");
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const disposition = response.headers.get("content-disposition") || "";
-      const filename = disposition.match(/filename="?([^";]+)"?/)?.[1] || "betech-completion-certificate.pdf";
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      showToast("Certificate download started.", "success");
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Unable to download the certificate",
-        "error",
-      );
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  const downloadWarrantyCertificate = async (row: ProjectRow) => {
-    setSavingId(row.id);
-    try {
-      const response = await fetch(
-        `/api/receipts/${encodeURIComponent(row.id)}/warranty/download`,
-        { credentials: "same-origin" },
-      );
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || "Unable to download the warranty certificate");
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const disposition = response.headers.get("content-disposition") || "";
-      link.href = url;
-      link.download = disposition.match(/filename="?([^\";]+)"?/)?.[1] || "betech-warranty-certificate.pdf";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      showToast("Warranty certificate download started.", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Unable to download the warranty certificate", "error");
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  const manageWarrantyCertificate = async (
-    row: ProjectRow,
-    action: "generate" | "reissue" | "send" | "history",
-  ) => {
-    setSavingId(row.id);
-    try {
-      const response = await fetch(`/api/receipts/${encodeURIComponent(row.id)}/warranty`, {
-        method: action === "history" ? "GET" : "POST",
-        headers: action === "history" ? undefined : { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: action === "history" ? undefined : JSON.stringify({ action }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload?.error || "Unable to update the warranty certificate");
-      const certificates = Array.isArray(payload?.certificates)
-        ? payload.certificates
-        : payload?.certificate
-          ? [payload.certificate]
-          : [];
-      if (certificates.length) {
-        setWarrantyCertificates((current) => ({ ...current, [row.id]: certificates }));
-      }
-      showToast(
-        action === "send"
-          ? "Warranty certificate delivery was sent to the customer."
-          : action === "history"
-            ? certificates.length
-              ? `Warranty certificate history loaded (${certificates.length} version${certificates.length === 1 ? "" : "s"}).`
-              : "No warranty certificate has been issued yet."
-            : payload?.reused
-              ? "The current warranty certificate is already issued."
-              : action === "reissue"
-                ? "A new immutable warranty certificate version was issued."
-                : "Warranty certificate issued.",
-        "success",
-      );
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Unable to update the warranty certificate", "error");
     } finally {
       setSavingId(null);
     }
@@ -2288,79 +2173,9 @@ export default function ProjectsOperationsClient({
                                           >
                                             Send Certificate to Customer
                                           </button>
-                                          <button
-                                            type="button"
-                                            disabled={savingId === row.id}
-                                            onClick={() =>
-                                              void downloadCommissioningCertificate(
-                                                row,
-                                              )
-                                            }
-                                            className="rounded-xl border border-cyan-300/40 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-50"
-                                          >
-                                            Download Certificate PDF
-                                          </button>
+                                          <ProjectDocuments receiptId={row.id} />
                                         </div>
-                                        <div className="mt-4 border-t border-cyan-500/15 pt-4">
-                                          <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300">
-                                            Warranty certificate
-                                          </div>
-                                          <p className="mt-2 text-xs leading-5 text-slate-400">
-                                            Available after the completion certificate has been issued. Each reissue creates a new immutable version and keeps the earlier certificate verifiable.
-                                          </p>
-                                          <div className="mt-3 flex flex-wrap gap-2">
-                                            <button
-                                              type="button"
-                                              disabled={savingId === row.id}
-                                              onClick={() => void manageWarrantyCertificate(row, "generate")}
-                                              className="rounded-xl bg-emerald-400 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50"
-                                            >
-                                              Generate Warranty Certificate
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={savingId === row.id}
-                                              onClick={() => void downloadWarrantyCertificate(row)}
-                                              className="rounded-xl border border-emerald-300/40 px-3 py-2 text-xs font-semibold text-emerald-100 disabled:opacity-50"
-                                            >
-                                              Download Warranty PDF
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={savingId === row.id}
-                                              onClick={() => void manageWarrantyCertificate(row, "send")}
-                                              className="rounded-xl border border-cyan-300/40 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-50"
-                                            >
-                                              Send to Customer
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={savingId === row.id}
-                                              onClick={() => void manageWarrantyCertificate(row, "reissue")}
-                                              className="rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-200 disabled:opacity-50"
-                                            >
-                                              Reissue / Regenerate
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={savingId === row.id}
-                                              onClick={() => void manageWarrantyCertificate(row, "history")}
-                                              className="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold text-slate-200 disabled:opacity-50"
-                                            >
-                                              View History
-                                            </button>
-                                          </div>
-                                          {warrantyCertificates[row.id]?.length ? (
-                                            <div className="mt-3 space-y-2">
-                                              {warrantyCertificates[row.id].map((certificate) => (
-                                                <div key={certificate.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#08111d] px-3 py-2 text-xs">
-                                                  <span className="font-semibold text-emerald-100">{certificate.certificateNo} · v{certificate.version}</span>
-                                                  <span className={certificate.status === "ISSUED" ? "text-emerald-300" : "text-amber-200"}>{certificate.status === "ISSUED" ? "Current" : "Superseded"}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ) : null}
-                                        </div>
+                                        <CertificateReviewPanel receiptId={row.id} />
                                         {commissioningLinks[row.id] ? (
                                           <div className="mt-3 break-all rounded-xl bg-[#08111d] p-3 text-xs text-cyan-100">
                                             {commissioningLinks[row.id].link}

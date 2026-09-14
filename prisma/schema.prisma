@@ -154,6 +154,7 @@ model TechnicalProfile {
   phoneNumber           String?
   epraLicenseNumber     String?
   epraLicenseClass      String?
+  signatureUrl          String?   @db.Text
   drivingLicenseDetails String?
   employmentDate        DateTime?
   activeAccount         Boolean   @default(true)
@@ -1595,6 +1596,10 @@ model Receipt {
 
 enum CommissioningSessionStatus {
   DRAFT
+  TECHNICIAN_COMPLETED
+  AWAITING_PROFESSIONAL_REVIEW
+  RETURNED_FOR_CORRECTION
+  PROFESSIONALLY_APPROVED
   ISSUED
   REVOKED
 }
@@ -1602,30 +1607,38 @@ enum CommissioningSessionStatus {
 /// One durable field-commissioning workspace per existing project receipt.
 /// The opaque token is stored only as a hash so it cannot be recovered from the database.
 model CommissioningSession {
-  id                      String                     @id @default(cuid())
-  receiptId               String                     @unique
-  technicianId            String?
-  tokenHash               String                     @unique
-  tokenCiphertext         String
-  customerTokenHash       String?                    @unique
-  customerTokenCiphertext String?
-  status                  CommissioningSessionStatus @default(DRAFT)
-  expiresAt               DateTime
-  revokedAt               DateTime?
-  lastAccessedAt          DateTime?
-  lastStep                String                     @default("panel-identification")
-  progress                Int                        @default(0)
-  data                    Json?
-  audit                   Json?
-  certificateNo           String?                    @unique
-  issuedAt                DateTime?
-  customerDeliveredAt     DateTime?
-  customerAcknowledgedAt  DateTime?
-  customerTermsAcceptedAt DateTime?
-  createdAt               DateTime                   @default(now())
-  updatedAt               DateTime                   @updatedAt
-  receipt                 Receipt                    @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  technician              User?                      @relation("CommissioningTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  id                            String                     @id @default(cuid())
+  receiptId                     String                     @unique
+  technicianId                  String?
+  tokenHash                     String                     @unique
+  tokenCiphertext               String
+  customerTokenHash             String?                    @unique
+  customerTokenCiphertext       String?
+  status                        CommissioningSessionStatus @default(DRAFT)
+  expiresAt                     DateTime
+  revokedAt                     DateTime?
+  lastAccessedAt                DateTime?
+  lastStep                      String                     @default("panel-identification")
+  progress                      Int                        @default(0)
+  data                          Json?
+  audit                         Json?
+  certificateNo                 String?                    @unique
+  issuedAt                      DateTime?
+  customerDeliveredAt           DateTime?
+  customerAcknowledgedAt        DateTime?
+  customerTermsAcceptedAt       DateTime?
+  technicianSignedAt            DateTime?
+  professionalApprovedAt        DateTime?
+  professionalReviewedBy        String?
+  supervisedByProfessionalId    String?
+  customerSignedAt              DateTime?
+  professionalSignatureSnapshot String?                    @db.Text
+  professionalProfileSnapshot   Json?
+  professionalReviewComment     String?                    @db.Text
+  createdAt                     DateTime                   @default(now())
+  updatedAt                     DateTime                   @updatedAt
+  receipt                       Receipt                    @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  technician                    User?                      @relation("CommissioningTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
 
   @@index([technicianId])
   @@index([status, expiresAt])
@@ -1644,6 +1657,8 @@ model WarrantyCertificate {
   commissioningSessionId      String
   certificateNo               String                    @unique
   version                     Int                       @default(1)
+  coverageStatus              String                    @default("ACTIVE")
+  history                     WarrantyHistory[]
   status                      WarrantyCertificateStatus @default(ISSUED)
   verificationTokenHash       String                    @unique
   verificationTokenCiphertext String
@@ -1662,6 +1677,19 @@ model WarrantyCertificate {
 
   @@index([receiptId, issuedAt])
   @@index([commissioningSessionId])
+}
+
+model WarrantyHistory {
+  id            String              @id @default(cuid())
+  certificateId String
+  action        String
+  reason        String              @db.Text
+  actorId       String
+  createdAt     DateTime            @default(now())
+  data          Json
+  certificate   WarrantyCertificate @relation(fields: [certificateId], references: [id], onDelete: Restrict)
+
+  @@index([certificateId, createdAt])
 }
 
 enum ProjectNotificationEventType {
@@ -2319,14 +2347,21 @@ model VoiceCallbackRequest {
 }
 
 model Branding {
-  id                  String   @id @default(cuid()) @db.Text
-  name                String   @unique @db.Text
-  letterheadUrl       String   @db.Text
-  logoUrl             String?  @db.Text
-  brandColor          String?  @db.Text
-  digitalStampUrl     String?  @db.Text
-  digitalStampEnabled Boolean  @default(false)
-  updatedAt           DateTime @updatedAt
+  id                                String   @id @default(cuid()) @db.Text
+  name                              String   @unique @db.Text
+  letterheadUrl                     String   @db.Text
+  logoUrl                           String?  @db.Text
+  brandColor                        String?  @db.Text
+  digitalStampUrl                   String?  @db.Text
+  digitalStampEnabled               Boolean  @default(false)
+  licensedProfessionalName          String   @default("Jonathan Mugiira") @db.Text
+  licensedProfessionalUserId        String?
+  licensedProfessionalTitle         String   @default("Senior Solar PV & Electrical Engineer") @db.Text
+  licensedProfessionalQualification String   @default("EPRA T3 Solar Photovoltaic Technician") @db.Text
+  licensedProfessionalLicenceNumber String   @default("EPRA/SPVT/001782") @db.Text
+  licensedProfessionalSignatureUrl  String?  @db.Text
+  licensedProfessionalActive        Boolean  @default(true)
+  updatedAt                         DateTime @updatedAt
 }
 
 model LipaPolePole {

@@ -29,6 +29,7 @@ type Attendant = {
     phoneNumber?: string | null;
     epraLicenseNumber?: string | null;
     epraLicenseClass?: string | null;
+    signatureUrl?: string | null;
     drivingLicenseDetails?: string | null;
     employmentDate?: string | Date | null;
     activeAccount?: boolean | null;
@@ -101,6 +102,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
       phoneNumber: attendant.technicalProfile?.phoneNumber ?? attendant.phone ?? "",
       epraLicenseNumber: attendant.technicalProfile?.epraLicenseNumber ?? "",
       epraLicenseClass: attendant.technicalProfile?.epraLicenseClass ?? "",
+      signatureUrl: attendant.technicalProfile?.signatureUrl ?? "",
       drivingLicenseDetails: attendant.technicalProfile?.drivingLicenseDetails ?? "",
       employmentDate:
         attendant.technicalProfile?.employmentDate
@@ -267,6 +269,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
             phoneNumber: state.technical.phoneNumber || state.phone.trim() || null,
             epraLicenseNumber: state.technical.epraLicenseNumber || null,
             epraLicenseClass: state.technical.epraLicenseClass || null,
+            signatureUrl: state.technical.signatureUrl || null,
             drivingLicenseDetails: state.technical.drivingLicenseDetails || null,
             employmentDate: state.technical.employmentDate || null,
             activeAccount: state.technical.activeAccount,
@@ -520,6 +523,8 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
               />
               Technical account active
             </label>
+            <label className="block text-sm">Saved signature image URL<input type="url" value={state.technical.signatureUrl} onChange={event => setState(current => ({ ...current, technical: { ...current.technical, signatureUrl: event.target.value } }))} className="mt-2 w-full rounded-lg border border-white/20 bg-slate-950 p-3" placeholder="https://…" /></label>
+
           </div>
         </div>
       ) : null}

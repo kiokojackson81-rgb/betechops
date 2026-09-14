@@ -95,7 +95,7 @@ export async function findAccessibleCommissioningSession(token: string) {
   const session = await prisma.commissioningSession.findUnique({
     where: { tokenHash },
     include: {
-      technician: { select: { id: true, name: true } },
+      technician: { select: { id: true, name: true, technicalProfile: { select: { signatureUrl: true } } } },
       receipt: {
         select: {
           receiptNumber: true,

@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { isReadyToIssue } from "@/lib/commissioningValidation";
 
 type Evidence = { url: string; fileName?: string; capturedAt?: string };
 type EquipmentKind = "panel" | "inverter" | "battery";
 type Draft = {
+  installation?: Record<string, string>;
+  site?: Record<string, string>;
   evidence?: Record<string, Evidence[]>;
   equipment?: Record<string, string>;
   checklist?: Record<string, string>;
@@ -22,13 +25,16 @@ type Draft = {
   [key: string]: unknown;
 };
 type Session = {
-  status: "DRAFT" | "ISSUED";
+  isCertifyingProfessional?: boolean;
+  professionalReviewComment?: string | null;
+  status: "DRAFT" | "TECHNICIAN_COMPLETED" | "AWAITING_PROFESSIONAL_REVIEW" | "RETURNED_FOR_CORRECTION" | "PROFESSIONALLY_APPROVED" | "ISSUED" | "REVOKED";
   readOnly: boolean;
   lastStep: string;
   progress: number;
   issuedAt: string | null;
   certificateNo: string | null;
   technicianName: string;
+  technicianSignatureUrl?: string | null;
   project: {
     reference: string;
     customerName: string;
@@ -114,7 +120,8 @@ export default function CommissioningClient({ token }: { token: string }) {
       ? Boolean(
           evidence.panelLabel?.length &&
           confirmations.panel &&
-          confirmations.panelQuantity,
+          confirmations.panelQuantity &&
+          draft.installation?.type && draft.installation?.systemConfiguration && draft.site?.premises && (draft.site.premises !== "Other" || draft.site.premisesOther?.trim()),
         )
       : id === "array"
         ? Boolean(evidence.panelArray?.length)
@@ -128,12 +135,12 @@ export default function CommissioningClient({ token }: { token: string }) {
             ? Boolean(
                 evidence.batteryLabel?.length &&
                 evidence.batteryInstallation?.length &&
-                confirmations.battery,
+                confirmations.battery && draft.equipment?.batterySerial?.trim(),
               )
             : id === "final-photos"
               ? Boolean(evidence.protection?.length && evidence.overall?.length)
               : id === "commissioning"
-                ? checks.every((check) => Boolean(draft.checklist?.[check]))
+                ? checks.every((check) => ["PASS", "N/A"].includes(draft.checklist?.[check] || ""))
                 : id === "handover"
                   ? Boolean(
                       draft.signatures?.customer &&
@@ -328,7 +335,7 @@ export default function CommissioningClient({ token }: { token: string }) {
   const issue = async () => {
     if (
       !confirm(
-        "Issue the completion certificate? This locks the commissioning record.",
+        "Complete the technician sign-off? If you are not the licensed solar professional, the project will move to professional review before a certificate is issued.",
       )
     )
       return;
@@ -363,10 +370,10 @@ export default function CommissioningClient({ token }: { token: string }) {
         current
           ? {
               ...current,
-              status: "ISSUED",
+              status: body.status || "AWAITING_PROFESSIONAL_REVIEW",
               readOnly: true,
-              certificateNo: body.certificateNo,
-              issuedAt: body.issuedAt,
+              certificateNo: body.certificateNo || null,
+              issuedAt: body.issuedAt || null,
             }
           : current,
       );
@@ -395,7 +402,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         Loading commissioningâ€¦
       </main>
     );
-  if (session.readOnly) return <IssuedView session={session} token={token} />;
+  if (session.readOnly) return session.status === "ISSUED" ? <IssuedView session={session} token={token} /> : <ProfessionalReviewPendingView session={session} />;
   const current = steps[activeStep];
   const canContinue = current.id === "review" || complete(current.id);
   return (
@@ -463,6 +470,18 @@ export default function CommissioningClient({ token }: { token: string }) {
             STEP {activeStep + 1} OF 8
           </p>
           <h2 className="mt-2 text-2xl font-black">{current.label}</h2>
+          {session.professionalReviewComment && session.status === "RETURNED_FOR_CORRECTION" ? <p role="alert" className="my-4 rounded-xl bg-amber-100 p-4 text-amber-950">Correction requested: {session.professionalReviewComment}</p> : null}
+          {current.id === "panels" ? <section className="my-4 space-y-4 rounded-2xl border border-slate-700 p-4">
+            <h3 className="font-bold">Customer &amp; site details</h3>
+            <p>{session.project.customerName} · {session.project.location}</p>
+            <label className="block">County<input className={inputClass} value={draft.site?.county || ""} onChange={event => patch("site", "county", event.target.value)} /></label>
+            <label className="block">Nature of premises<select className={inputClass} value={draft.site?.premises || ""} onChange={event => patch("site", "premises", event.target.value)}><option value="">Select premises</option>{["Residential", "Commercial", "Institutional", "Industrial", "Agricultural", "Other"].map(value => <option key={value}>{value}</option>)}</select></label>
+            {draft.site?.premises === "Other" ? <label className="block">Other premises<input maxLength={80} className={inputClass} value={draft.site?.premisesOther || ""} onChange={event => patch("site", "premisesOther", event.target.value)} /></label> : null}
+            <p className="text-sm">GPS: {draft.site?.gps || "Not captured"}</p>
+            <button type="button" className="rounded-xl border border-cyan-400 px-4 py-2" onClick={() => { if (!navigator.geolocation) { window.alert("GPS is unavailable on this device."); return; } navigator.geolocation.getCurrentPosition(position => patch("site", "gps", `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`), error => window.alert(error.message), { enableHighAccuracy: true, timeout: 15000 }); }}>Capture GPS</button>
+            <label className="block">Installation type<select className={inputClass} value={draft.installation?.type || ""} onChange={event => patch("installation", "type", event.target.value)}><option value="">Select type</option>{["New Installation", "Upgrade", "Modification"].map(value => <option key={value}>{value}</option>)}</select></label>
+            <label className="block">System configuration<select className={inputClass} value={draft.installation?.systemConfiguration || ""} onChange={event => patch("installation", "systemConfiguration", event.target.value)}><option value="">Select configuration</option>{["Hybrid", "Off-Grid", "Grid-Tied"].map(value => <option key={value}>{value}</option>)}</select></label>
+          </section> : null}
           <div className="mt-4">
             {current.id === "panels" && (
               <Panels
@@ -598,6 +617,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 termsAccepted={Boolean(draft.termsAcceptance?.accepted)}
                 customerSignature={draft.signatures?.customer || ""}
                 technician={session.technicianName}
+                savedTechnicianSignature={session.technicianSignatureUrl}
                 technicianSignature={draft.signatures?.technician || ""}
                 onAll={() =>
                   handoverItems.forEach((item) => patch("handover", item, true))
@@ -652,11 +672,11 @@ export default function CommissioningClient({ token }: { token: string }) {
             {current.id === "review" ? (
               <button
                 type="button"
-                disabled={completedStages < 7}
+                disabled={saveState === "saving" || !isReadyToIssue(draft).ready}
                 onClick={() => void issue()}
                 className="w-full rounded-2xl bg-cyan-400 px-5 py-4 text-base font-black text-slate-950 disabled:opacity-40"
               >
-                ISSUE COMPLETION CERTIFICATE
+                {session.isCertifyingProfessional ? "ISSUE & CERTIFY" : "SUBMIT FOR PROFESSIONAL REVIEW"}
               </button>
             ) : (
               <button
@@ -1285,6 +1305,7 @@ function Handover({
   termsAccepted,
   customerSignature,
   technicianSignature,
+  savedTechnicianSignature,
   onAll,
   onToggle,
   onTermsAccepted,
@@ -1297,6 +1318,7 @@ function Handover({
   termsAccepted: boolean;
   customerSignature: string;
   technicianSignature: string;
+  savedTechnicianSignature?: string | null;
   onAll: () => void;
   onToggle: (item: string, value: boolean) => void;
   onTermsAccepted: (value: boolean) => void;
@@ -1347,6 +1369,7 @@ function Handover({
       <div className="mt-6">
         <p className="text-xs font-black tracking-[.18em] text-cyan-300">TECHNICIAN SIGNATURE</p>
         <p className="mt-2 font-bold">{technician}</p>
+        {savedTechnicianSignature ? <button type="button" onClick={() => onTechnicianSignature(savedTechnicianSignature)} className="my-3 rounded-lg border border-cyan-400 px-3 py-2">Use my saved signature</button> : null}
         <SignaturePad value={technicianSignature} onChange={onTechnicianSignature} label="Technician finger signature" />
       </div>
     </section>
@@ -1452,7 +1475,7 @@ function Review({
   return (
     <section className="rounded-3xl bg-slate-900 p-5">
       <p className="text-xs font-black tracking-[.18em] text-emerald-300">
-        READY TO ISSUE
+        {isReadyToIssue(draft).ready ? "READY FOR SIGN-OFF" : "COMPLETION REQUIRED"}
       </p>
       <h3 className="mt-2 text-2xl font-black">Final review</h3>
       <div className="mt-5 space-y-3 text-sm">
@@ -1485,7 +1508,7 @@ function Review({
         ))}
       </div>
       <p className="mt-5 text-sm text-slate-400">
-        {completed}/8 stages completed. Issuing locks the commissioning record.
+        {completed}/8 stages completed. Completing technician sign-off sends the project for professional review unless the assigned technician is the licensed solar professional.
       </p>
     </section>
   );
@@ -1518,4 +1541,7 @@ function IssuedView({ session, token }: { session: Session; token: string }) {
       </article>
     </main>
   );
+}
+function ProfessionalReviewPendingView({ session }: { session: Session }) {
+  return <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900"><article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><div className="rounded-2xl border border-amber-700/20 bg-amber-50 p-4"><p className="text-xs font-black tracking-[.16em] text-amber-800">AWAITING PROFESSIONAL REVIEW</p><h1 className="mt-2 text-2xl font-black">Technician sign-off submitted</h1><p className="mt-2 text-sm text-slate-700">The installation evidence, tests, measurements and customer handover have been submitted for licensed professional review. The completion certificate will be issued only after approval.</p></div><p className="text-sm text-slate-700">Project: {session.project.reference}<br />Customer: {session.project.customerName}</p><p className="text-xs leading-5 text-slate-500">If a correction is required, the same secure technician link will reopen with the reviewer&apos;s instructions.</p></article></main>;
 }

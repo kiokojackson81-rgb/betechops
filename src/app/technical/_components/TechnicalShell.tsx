@@ -42,6 +42,7 @@ const sections = [
       { href: "/technical/sales", label: "Sales Monitor", icon: LineChart },
       { href: "/technical/site-visits", label: "Site Visits", icon: CalendarDays },
       { href: "/technical/projects", label: "Projects", icon: BriefcaseBusiness },
+      { href: "/technical/professional-review", label: "Professional Review", icon: ShieldCheck },
       { href: "/receipts", label: "Receipts", icon: Receipt, newTab: true },
       { href: "/technical/quotations", label: "Quotations", icon: FileText },
     ],
