@@ -1,3 +1,4 @@
+import { supervisorSignatureUrl } from "@/lib/supervisorSignature";
 import { prisma } from '@/lib/prisma';
 
 export async function getBranding() {
@@ -19,7 +20,7 @@ export async function getBranding() {
       title: branding?.licensedProfessionalTitle || 'Senior Solar PV & Electrical Engineer',
       qualification: branding?.licensedProfessionalQualification || 'EPRA T3 Solar Photovoltaic Technician',
       licenceNumber: branding?.licensedProfessionalLicenceNumber || 'EPRA/SPVT/001782',
-      signatureUrl: branding?.licensedProfessionalSignatureUrl || null,
+      signatureUrl: supervisorSignatureUrl({ name: branding?.licensedProfessionalName, signatureUrl: branding?.licensedProfessionalSignatureUrl }),
       active: branding?.licensedProfessionalActive ?? true,
     },
     siteTitle: process.env.RECEIPT_SITE_TITLE || 'Betech Solar Solutions',

@@ -1,3 +1,4 @@
+import { supervisorSignatureUrl } from "@/lib/supervisorSignature";
 import { NextResponse } from 'next/server';
 import { del, put } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
@@ -20,7 +21,7 @@ export async function GET() {
       licensedProfessionalTitle: branding?.licensedProfessionalTitle || 'Senior Solar PV & Electrical Engineer',
       licensedProfessionalQualification: branding?.licensedProfessionalQualification || 'EPRA T3 Solar Photovoltaic Technician',
       licensedProfessionalLicenceNumber: branding?.licensedProfessionalLicenceNumber || 'EPRA/SPVT/001782',
-      licensedProfessionalSignatureUrl: branding?.licensedProfessionalSignatureUrl || null,
+      licensedProfessionalSignatureUrl: supervisorSignatureUrl({ name: branding?.licensedProfessionalName, signatureUrl: branding?.licensedProfessionalSignatureUrl }),
       licensedProfessionalActive: branding?.licensedProfessionalActive ?? true,
     },
   });

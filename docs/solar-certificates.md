@@ -64,3 +64,8 @@ Admins can adjust each unit's warranty period when generating or reissuing warra
 Completed technician/agent submissions now issue immediately after the existing equipment, evidence, testing, customer acceptance and signature checks pass. The server loads the active supervisor profile, freezes its configured signature and stamp, completes the project and prepares/delivers the customer document bundle. A linked supervisor user account and separate approval are not required for this automatic flow.
 
 The certificate and audit distinguish automatic application of the supervisor signature from a personal manual review. The audit records the public-link or staff-action source and the actual administrative actor, when applicable. Existing waiting records can be finalized using **Generate certificates automatically** in the admin certificate controls or their original public link. Missing signature/stamp assets still prevent issuance. Concurrent and repeated issuance retain the existing transactional safeguards. No additional migration is required for automatic certification.
+
+
+## Configured supervisor signature
+
+The user-supplied Jonathan Mugiira JPEG (14 September 2026) is uploaded to the existing branding Blob store. Its URL and source SHA-256 are recorded in `src/lib/supervisorSignature.ts`. Certificate generation and Company Documents use this signature when Jonathan's saved signature is empty; a later uploaded replacement remains authoritative. The fallback does not apply to a different supervisor name. No database migration or additional signature upload is needed after deploying this change.
