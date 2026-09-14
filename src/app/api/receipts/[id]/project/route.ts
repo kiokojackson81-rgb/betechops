@@ -477,7 +477,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       await syncCompletedProjectReceiptToPricing(tx, receipt, nextProjectFlow);
     }
 
-    const commissioning = await syncCommissioningAssignment(tx, id, nextHandlerStaffIds[0] || null, actorId);
+    const commissioning = assignmentWasSubmitted ? await syncCommissioningAssignment(tx, id, nextHandlerStaffIds[0] || null, actorId, { staffIds: nextHandlerStaffIds, externalAgentIds: nextExternalAgentIds }) : null;
     if (commissioning && commissioning.tokenHash !== existing.commissioningSession?.tokenHash) replacementCommissioningToken = decryptCommissioningToken(commissioning.tokenCiphertext);
 
     return receipt;

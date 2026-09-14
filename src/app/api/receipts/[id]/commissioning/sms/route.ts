@@ -31,27 +31,28 @@ export async function GET(request: NextRequest, { params }: Context) {
   const session = await prisma.commissioningSession.findUnique({ where: { receiptId: id }, include: { receipt: { select: { receiptNumber: true, order: { select: { orderNumber: true, customerName: true, customerPhone: true } } } }, smsLogs: { orderBy: { createdAt: "desc" }, take: 50 } } });
   if (!session) return NextResponse.json({ error: "Assign a technician or create the commissioning link first." }, { status: 409 });
   const origin = request.nextUrl.origin;
+  let recipients: Array<{ id: string; name: string; phone: string; message: string }> = [];
   let technician: { name: string; phone: string; message: string } | null = null;
-  try { const preview = await technicianMessagePreview(id, origin); technician = { name: preview.name, phone: preview.phone, message: preview.message }; } catch { /* No technician SMS after issuance or revocation. */ }
+  try { const preview = await technicianMessagePreview(id, origin); recipients = preview.recipients; technician = { name: preview.name, phone: preview.phone, message: preview.message }; } catch { /* No technician SMS after issuance or revocation. */ }
   const customerLink = session.customerTokenCiphertext ? `${origin}/certificate/${decryptCommissioningToken(session.customerTokenCiphertext)}` : null;
   const customer = session.status === "ISSUED" ? {
     name: session.receipt.order?.customerName || "Customer", phone: session.receipt.order?.customerPhone || "",
     message: customerLink ? customerProjectDocumentsSms({ name: session.receipt.order?.customerName || "Customer", reference: session.receipt.receiptNumber || session.receipt.order?.orderNumber || "Project", link: customerLink }) : null,
     ready: Boolean(customerLink && session.documentsReadyAt && session.projectReceiptPdfUrl && session.completionPdfUrl && await getWarrantyCertificate(id)),
   } : null;
-  return NextResponse.json({ technician, customer, error: session.documentsError, history: session.smsLogs.map(log => ({ id: log.id, kind: log.kind, recipientName: log.recipientName, phone: log.phone, message: log.message, status: log.status, providerId: log.providerId, error: log.error, createdAt: log.createdAt, sentAt: log.sentAt })) }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ technician, recipients, customer, error: session.documentsError, history: session.smsLogs.map(log => ({ id: log.id, kind: log.kind, recipientName: log.recipientName, phone: log.phone, message: log.message, status: log.status, providerId: log.providerId, error: log.error, createdAt: log.createdAt, sentAt: log.sentAt })) }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: NextRequest, { params }: Context) {
   const guard = await guardManager();
   if (!guard.ok) return guard.res;
   const { id } = await params;
-  const parsed = z.object({ action: z.enum(["technician", "customer", "prepare"]) }).safeParse(await request.json().catch(() => null));
+  const parsed = z.object({ action: z.enum(["technician", "customer", "prepare"]), recipientId: z.string().optional() }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid SMS action." }, { status: 400 });
   const actorId = (guard.session?.user as { id?: string })?.id;
   try {
     if (parsed.data.action === "technician") {
-      const delivery = await sendTechnicianCommissioningLink({ receiptId: id, origin: request.nextUrl.origin, manual: true, actorId });
+      const delivery = await sendTechnicianCommissioningLink({ receiptId: id, origin: request.nextUrl.origin, manual: true, actorId, recipientId: parsed.data.recipientId });
       return NextResponse.json({ ok: delivery.status === "SENT", delivery, error: delivery.error }, { status: delivery.status === "FAILED" ? 502 : 200 });
     }
     const session = await prisma.commissioningSession.findUnique({ where: { receiptId: id } });

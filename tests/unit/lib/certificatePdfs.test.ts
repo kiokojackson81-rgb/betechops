@@ -34,3 +34,10 @@ test.each(["Test Installer", "Jonathan Mugiira"])("completion layout supports in
   mkdirSync("artifacts/certificate-review", { recursive: true });
   writeFileSync(`artifacts/certificate-review/completion-${name === "Test Installer" ? "supervised" : "self"}.pdf`, bytes);
 });
+
+test("warranty includes continuation pages for every additional unit", async () => {
+  const equipment = [...warranty.equipment, ...Array.from({ length: 8 }, (_, index) => ({ ...warranty.equipment[2], serialNumbers: `EXTRA-BATTERY-${index}`, warrantyYears: 2 }))];
+  const bytes = await buildWarrantyCertificatePdf({ ...warranty, equipment }, { preview: true });
+  expect((await PDFDocument.load(bytes)).getPageCount()).toBe(3);
+  writeFileSync("artifacts/certificate-review/warranty-multiple-units.pdf", bytes);
+});

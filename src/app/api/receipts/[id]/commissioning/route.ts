@@ -1,3 +1,4 @@
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { prepareProjectDocuments } from "@/lib/projectDocuments";
 import { syncCommissioningAssignment } from "@/lib/commissioningAssignments";
 import { NextRequest, NextResponse } from "next/server";
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ error: "This certificate is issued and its technician link is view-only." }, { status: 409 });
   }
 
-  const needsTechnician = !existing || action === "reassign";
+  const needsTechnician = action === "reassign";
   const technicianId = parsed.data.technicianId || existing?.technicianId || undefined;
   if (needsTechnician && !technicianId) {
     return NextResponse.json({ error: "Choose the assigned technician first." }, { status: 400 });
@@ -122,6 +123,17 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const technician = technicianId ? await prisma.user.findUnique({ where: { id: technicianId }, select: staffSelect }) : null;
   if (technicianId && (!technician || !technician.isActive)) {
     return NextResponse.json({ error: "The selected technician is unavailable." }, { status: 400 });
+  }
+
+  if (!existing) {
+    const receiptData = receipt.data as Record<string, unknown> | null;
+    const flow = readReceiptProjectFlow(receiptData?.projectFlow);
+    const staffIds = technicianId ? [technicianId] : flow?.handlerStaffIds || [];
+    const externalAgentIds = flow?.externalAgentIds || [];
+    if (staffIds.length || externalAgentIds.length) {
+      const created = await prisma.$transaction(tx => syncCommissioningAssignment(tx, id, staffIds[0] || null, actorId, { staffIds, externalAgentIds }));
+      return NextResponse.json({ ok: true, link: commissioningUrl(decryptCommissioningToken(created!.tokenCiphertext), new URL(req.url).origin), session: { id: created!.id, status: created!.status } });
+    }
   }
 
   // Create/send/resend deliberately return the same URL. They never rotate a token.

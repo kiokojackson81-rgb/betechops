@@ -1,3 +1,4 @@
+import { projectEquipmentDefaults } from "@/lib/commissioningEquipment";
 import { isReadyToIssue } from "@/lib/commissioningValidation";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -9,7 +10,7 @@ import {
   projectSummary,
 } from "@/lib/commissioning";
 import { TERMS_URL } from "@/lib/publicLinks";
-import { activeLicensedProfessional, issueProfessionallyApprovedCertificate, submitForProfessionalReview, technicianIsLicensedProfessional } from "@/lib/professionalCommissioning";
+import { activeLicensedProfessional, submitForProfessionalReview } from "@/lib/professionalCommissioning";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,9 +24,9 @@ const draftSchema = z.object({
 });
 
 async function publicSession(session: NonNullable<Awaited<ReturnType<typeof findAccessibleCommissioningSession>>>) {
-  const { professional, active } = await activeLicensedProfessional();
+  const defaults = await equipmentDefaults(session);
   return {
-    isCertifyingProfessional: active && Boolean(professional.userId && professional.userId === session.technicianId),
+    isCertifyingProfessional: false,
     professionalReviewComment: session.professionalReviewComment,
     status: session.status,
     readOnly: session.status !== "DRAFT" && session.status !== "RETURNED_FOR_CORRECTION",
@@ -35,10 +36,10 @@ async function publicSession(session: NonNullable<Awaited<ReturnType<typeof find
     progress: session.progress,
     issuedAt: session.issuedAt,
     certificateNo: session.certificateNo,
-    technicianName: session.technician?.name || "Assigned technician",
+    technicianName: String(asRecord(session.data).installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent"),
     technicianSignatureUrl: session.technician?.technicalProfile?.signatureUrl || null,
     project: projectSummary(session.receipt),
-    data: { ...asRecord(session.data), site: { county: asRecord(session.receipt.data).county || asRecord(session.receipt.order?.metadata).county || "", gps: asRecord(session.receipt.data).gps || asRecord(session.receipt.data).gpsCoordinates || "", ...asRecord(asRecord(session.data).site) } },
+    data: { ...asRecord(session.data), installerName: String(asRecord(session.data).installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || ""), equipment: { ...defaults, ...asRecord(asRecord(session.data).equipment) }, site: { county: asRecord(session.receipt.data).county || asRecord(session.receipt.order?.metadata).county || "", gps: asRecord(session.receipt.data).gps || asRecord(session.receipt.data).gpsCoordinates || "", ...asRecord(asRecord(session.data).site) } },
   };
 }
 
@@ -46,6 +47,17 @@ function asRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+async function equipmentDefaults(session: NonNullable<Awaited<ReturnType<typeof findAccessibleCommissioningSession>>>) {
+  const metadata = asRecord(session.receipt.order?.metadata);
+  const quoteId = metadata.quoteRequestId || asRecord(session.receipt.data).quoteRequestId;
+  let quotation: unknown = {};
+  if (typeof quoteId === "string" && quoteId) {
+    const rows = await prisma.$queryRaw<Array<{ quotationData: unknown }>>`SELECT "quotationData" FROM "QuoteRequest" WHERE "id" = ${quoteId} LIMIT 1`;
+    quotation = rows[0]?.quotationData;
+  }
+  return projectEquipmentDefaults(session.receipt.data, quotation, metadata);
 }
 
 function hasTermsAcceptance(data: Record<string, unknown>) {
@@ -80,6 +92,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     : null;
   const nextData = {
     ...parsed.data.data,
+    equipment: { ...await equipmentDefaults(session), ...asRecord(parsed.data.data.equipment) },
     signatures: {
       ...incomingSignatures,
       technicianSignedAt: incomingSignatures.technician ? (incomingSignatures.technician === savedSignatures.technician ? savedSignatures.technicianSignedAt || now.toISOString() : now.toISOString()) : null,
@@ -133,14 +146,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     : {};
   const validation = isReadyToIssue(data);
   if (!validation.ready) return NextResponse.json({ error: "Complete equipment serials, system configuration, evidence, passing tests, handover, terms acceptance and signatures before issuing.", validation }, { status: 400 });
-  const { professional, active } = await activeLicensedProfessional();
+  const { active } = await activeLicensedProfessional();
   if (!active) return NextResponse.json({ error: "A licensed solar professional profile must be active before a certificate can be issued." }, { status: 409 });
-  if (!technicianIsLicensedProfessional(session.technician?.name, professional, session.technicianId)) {
-    const submitted = await submitForProfessionalReview({ sessionId: session.id, technicianId: session.technicianId, technicianName: session.technician?.name });
-    return NextResponse.json({ ok: true, status: submitted.status, requiresProfessionalReview: true, message: "Technician sign-off is complete. The project is awaiting professional review and certification." });
-  }
-  try {
-  const issued = await issueProfessionallyApprovedCertificate({ sessionId: session.id, origin: new URL(req.url).origin, professional, approvedById: session.technicianId, approvedByName: session.technician?.name || professional.name });
-  return NextResponse.json({ ok: true, status: issued.updated.status, certificateNo: issued.updated.certificateNo, issuedAt: issued.updated.issuedAt, delivery: issued.delivery, warranty: issued.warranty });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to certify installation." }, { status: 409 }); }
+  const submitted = await submitForProfessionalReview({ sessionId: session.id, technicianId: session.technicianId, technicianName: String(data.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent") });
+  return NextResponse.json({ ok: true, status: submitted.status, requiresProfessionalReview: true, message: "Installation sign-off is complete. The project is awaiting professional review and certification." });
 }

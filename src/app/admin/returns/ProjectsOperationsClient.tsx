@@ -2106,10 +2106,10 @@ export default function ProjectsOperationsClient({
                                     <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300">
                                       Commissioning & certificate
                                     </div>
-                                    {assignedStaff.length > 0 ? (
+                                    {(
                                       <>
                                         <p className="mt-2 text-sm text-slate-300">
-                                          One persistent, secure link is reused
+                                          Agents and technicians can open this link without signing in. One secure link is reused
                                           until the certificate is issued or
                                           access is deliberately changed.
                                         </p>
@@ -2172,11 +2172,6 @@ export default function ProjectsOperationsClient({
                                           </div>
                                         ) : null}
                                       </>
-                                    ) : (
-                                      <p className="mt-2 text-sm text-slate-500">
-                                        Assign an internal technician to create
-                                        a commissioning link.
-                                      </p>
                                     )}
                                   </div>
                                 </div>

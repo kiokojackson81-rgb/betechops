@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { commissioningEquipmentUnits, type EquipmentUnit } from "@/lib/commissioningEquipment";
 import { isReadyToIssue } from "@/lib/commissioningValidation";
 
 type Evidence = { url: string; fileName?: string; capturedAt?: string };
 type EquipmentKind = "panel" | "inverter" | "battery";
 type Draft = {
+  additionalEquipment?: EquipmentUnit[];
+  installerName?: string;
   installation?: Record<string, string>;
   site?: Record<string, string>;
   evidence?: Record<string, Evidence[]>;
@@ -335,7 +338,7 @@ export default function CommissioningClient({ token }: { token: string }) {
   const issue = async () => {
     if (
       !confirm(
-        "Complete the technician sign-off? If you are not the licensed solar professional, the project will move to professional review before a certificate is issued.",
+        "Submit installation sign-off for licensed professional review and certification?",
       )
     )
       return;
@@ -474,6 +477,7 @@ export default function CommissioningClient({ token }: { token: string }) {
           {current.id === "panels" ? <section className="my-4 space-y-4 rounded-2xl border border-slate-700 p-4">
             <h3 className="font-bold">Customer &amp; site details</h3>
             <p>{session.project.customerName} · {session.project.location}</p>
+            <label className="block">Installer / agent completing this form<input className={inputClass} value={draft.installerName || ""} placeholder={session.technicianName} onChange={event => setDraft(value => ({ ...value, installerName: event.target.value }))} /></label>
             <label className="block">County<input className={inputClass} value={draft.site?.county || ""} onChange={event => patch("site", "county", event.target.value)} /></label>
             <label className="block">Nature of premises<select className={inputClass} value={draft.site?.premises || ""} onChange={event => patch("site", "premises", event.target.value)}><option value="">Select premises</option>{["Residential", "Commercial", "Institutional", "Industrial", "Agricultural", "Other"].map(value => <option key={value}>{value}</option>)}</select></label>
             {draft.site?.premises === "Other" ? <label className="block">Other premises<input maxLength={80} className={inputClass} value={draft.site?.premisesOther || ""} onChange={event => patch("site", "premisesOther", event.target.value)} /></label> : null}
@@ -574,6 +578,15 @@ export default function CommissioningClient({ token }: { token: string }) {
                 }
               />
             )}
+            {["panels", "inverter", "battery"].includes(current.id) ? <section className="mt-4 rounded-3xl bg-slate-900 p-5"><label className="block font-bold">{current.id === "panels" ? "Solar panels" : current.id === "battery" ? "Battery 1" : "Inverter 1"} warranty (years)<input type="number" min="0.0833333333" max="50" step="any" className={inputClass} value={draft.equipment?.[`${current.id === "panels" ? "panel" : current.id}WarrantyYears`] ?? ""} onChange={event => patch("equipment", `${current.id === "panels" ? "panel" : current.id}WarrantyYears`, event.target.value)} /></label><p className="mt-2 text-sm text-slate-400">Pre-filled from project or quotation where available. Adjust to the agreed coverage, for example 2 or 5 years. Subject to professional review.</p></section> : null}
+            {current.id === "inverter" || current.id === "battery" ? <section className="mt-4 space-y-4">
+              {(draft.additionalEquipment || []).filter(unit => unit.kind === current.id).map((unit, index) => <article key={unit.id} className="space-y-3 rounded-3xl border border-cyan-500/30 bg-slate-900 p-5"><div className="flex items-center justify-between"><h3 className="text-xl font-bold">{unit.kind === "battery" ? "Battery" : "Inverter"} {index + 2}</h3><button type="button" onClick={() => setDraft(value => ({ ...value, additionalEquipment: value.additionalEquipment?.filter(item => item.id !== unit.id) }))} className="text-rose-300">Remove</button></div>
+                {([['brand', 'Brand'], ['model', 'Model'], ['capacity', 'Capacity'], ['serial', 'Serial number'], ['warrantyYears', 'Warranty (years)']] as const).map(([key, label]) => <label className="block" key={key}>{label}<input className={inputClass} type={key === "warrantyYears" ? "number" : "text"} min={key === "warrantyYears" ? "0.0833333333" : undefined} max={key === "warrantyYears" ? 50 : undefined} step="any" maxLength={180} value={unit[key]} onChange={event => setDraft(value => ({ ...value, additionalEquipment: value.additionalEquipment?.map(item => item.id === unit.id ? { ...item, [key]: event.target.value } : item) }))} /></label>)}
+                <PhotoStep title="Equipment label and installation photos" note="Photograph this unit's serial label and installed position." items={unit.labelPhotos || []} token={token} onUploaded={photo => setDraft(value => ({ ...value, additionalEquipment: value.additionalEquipment?.map(item => item.id === unit.id ? { ...item, labelPhotos: [...(item.labelPhotos || []), photo] } : item) }))} onRemove={index => setDraft(value => ({ ...value, additionalEquipment: value.additionalEquipment?.map(item => item.id === unit.id ? { ...item, labelPhotos: item.labelPhotos?.filter((_, photoIndex) => index !== photoIndex) } : item) }))} />
+              </article>)}
+              <button type="button" disabled={(draft.additionalEquipment || []).length >= 48} className="rounded-xl bg-cyan-300 px-5 py-3 font-bold text-slate-950" onClick={() => { const kind = current.id as "battery" | "inverter"; setDraft(value => ({ ...value, additionalEquipment: [...(value.additionalEquipment || []), { id: crypto.randomUUID(), kind, brand: value.equipment?.[`${kind}Brand`] || "", model: value.equipment?.[`${kind}Model`] || "", capacity: value.equipment?.[`${kind}Capacity`] || "", serial: "", warrantyYears: value.equipment?.[`${kind}WarrantyYears`] || (kind === "battery" ? "10" : "5"), labelPhotos: [] }] })); }}>Add {current.id === "battery" ? "battery" : "inverter"}</button>
+            </section> : null}
+            {current.id === "review" ? <section className="my-4 rounded-3xl bg-slate-900 p-5"><h3 className="font-bold">Installed units and warranty</h3>{commissioningEquipmentUnits(draft).map(unit => <p className="mt-2 break-words" key={unit.id}>{unit.kind}: {unit.brand} {unit.model} · Serial: {unit.serial || "Missing"} · {unit.warrantyYears} years</p>)}</section> : null}
             {current.id === "final-photos" && (
               <>
                 <PhotoStep

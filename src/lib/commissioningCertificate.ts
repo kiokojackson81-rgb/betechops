@@ -1,3 +1,4 @@
+import { commissioningEquipmentUnits } from "@/lib/commissioningEquipment";
 import { technicalConfiguration } from "@/lib/warrantyRules";
 import { storedProjectDocument } from "@/lib/storedProjectDocument";
 import { readFile } from "fs/promises";
@@ -290,7 +291,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
       : source.issuedAt,
   );
   const stampDate = formatStampDate(acceptanceDate || source.issuedAt);
-  const technician = source.technician?.name || valueFrom(signatures, ["technician"]) || "Assigned technician";
+  const technician = text(certificateData.installerName) || source.technician?.name || "Installer / agent";
   const page = pdf.addPage(A4);
   const letterhead = await letterheadBytes();
   let letterheadImage: PDFImage | null = null;
@@ -428,8 +429,27 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
     } catch { /* A certificate remains valid even if QR generation is unavailable. */ }
   }
 
+  if (Array.isArray(certificateData.additionalEquipment) && certificateData.additionalEquipment.length) {
+    const units = commissioningEquipmentUnits(certificateData);
+    for (let offset = 0; offset < units.length; offset += 8) {
+      const unitPage = pdf.addPage(A4);
+      drawLetterhead(unitPage, letterheadImage);
+      unitPage.drawText("INSTALLED EQUIPMENT REGISTER", { x: MARGIN, y: 735, size: 14, font: bold, color: INK });
+      unitPage.drawText(`Certificate: ${source.certificateNo || "Pending"}`, { x: MARGIN, y: 714, size: 9, font: regular, color: MUTED });
+      units.slice(offset, offset + 8).forEach((unit, index) => {
+        const top = 680 - index * 76;
+        drawLines(unitPage, `${offset + index + 1}. ${unit.kind.toUpperCase()} - ${unit.brand} ${unit.model}`, MARGIN, top, 510, bold, 9);
+        drawLines(unitPage, `Capacity: ${unit.capacity || "Not recorded"} | Serial: ${unit.serial || "Not recorded"}`, MARGIN, top - 22, 510, regular, 8);
+        unitPage.drawText(`Warranty: ${unit.warrantyYears} years`, { x: MARGIN, y: top - 45, size: 8, font: regular, color: INK });
+      });
+    }
+  }
   const evidenceOrder: Array<[string, string]> = [["panelLabel", "Solar Panel Manufacturer Label"], ["panelArray", "Completed Solar Array"], ["inverterLabel", "Inverter Manufacturer Label"], ["inverterInstallation", "Installed Inverter"], ["batteryLabel", "Battery Manufacturer Label"], ["batteryInstallation", "Installed Battery"], ["protection", "Protection / Distribution Equipment"], ["overall", "Completed Installation"]];
   const evidenceItems = evidenceOrder.flatMap(([key, label]) => (evidence[key] || []).map((item) => ({ key, label, item }))).filter(({ item }) => Boolean(text(item.url)));
+  for (const unit of commissioningEquipmentUnits(certificateData)) {
+    if (unit.id === unit.kind) continue;
+    for (const item of unit.labelPhotos || []) if (item.url) evidenceItems.push({ key: `${unit.kind}Label`, label: `${unit.kind} - ${unit.serial}`, item });
+  }
   let evidencePage: PDFPage | null = null;
   let evidenceY = 0;
   let evidenceIndex = 0;

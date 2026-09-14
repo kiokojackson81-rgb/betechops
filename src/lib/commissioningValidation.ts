@@ -1,3 +1,4 @@
+import { equipmentValidationErrors } from "@/lib/commissioningEquipment";
 const hasTermsAcceptance = (data: Record<string, unknown>) => Boolean(data.termsAcceptance && typeof data.termsAcceptance === "object" && (data.termsAcceptance as Record<string, unknown>).accepted === true);
 
 export function isReadyToIssue(data: Record<string, unknown>) {
@@ -11,7 +12,7 @@ export function isReadyToIssue(data: Record<string, unknown>) {
   const missingEvidence = requiredEvidence.filter((key) => !Array.isArray(evidence[key]) || !(evidence[key] as unknown[]).some(item => item && typeof item === "object" && /^https:\/\//.test(String((item as Record<string, unknown>).url || ""))));
   const installation = data.installation as Record<string, unknown> | undefined;
   const equipment = data.equipment as Record<string, unknown> | undefined;
-  const missingEquipment = [!String(equipment?.batterySerial || "").trim() || /^(n\/?a|not recorded|unknown|-)$/i.test(String(equipment?.batterySerial)) ? "Battery serial number" : null, !["Hybrid", "Off-Grid", "Grid-Tied"].includes(String(installation?.systemConfiguration)) ? "System configuration" : null].filter(Boolean);
+  const missingEquipment = [...equipmentValidationErrors(data), !String(equipment?.batterySerial || "").trim() || /^(n\/?a|not recorded|unknown|-)$/i.test(String(equipment?.batterySerial)) ? "Battery serial number" : null, !["Hybrid", "Off-Grid", "Grid-Tied"].includes(String(installation?.systemConfiguration)) ? "System configuration" : null].filter(Boolean);
   const missingChecklist = requiredChecklist.filter((key) => !["PASS", "N/A"].includes(String(checklist[key])));
   const missingHandover = requiredHandover.filter((key) => handover[key] !== true);
   return {

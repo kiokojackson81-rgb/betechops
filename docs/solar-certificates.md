@@ -35,7 +35,7 @@ Local checks do not issue certificates, send customer messages, apply production
 
 ## Assignment SMS and project documents
 
-Apply `20260914150000_project_document_sms` with the preceding migrations before enabling this release. Assignment to the primary internal technician creates a secure commissioning link and submits one automatic SMS. Resends keep the same link and progress; changing technician invalidates the previous link and clears the previous technician signature.
+Apply `20260914150000_project_document_sms` with the preceding migrations before enabling this release. Assignment to internal technicians or external agents creates a secure commissioning link and submits an automatic SMS to each assigned recipient. Resends keep the same link and progress; changing technician invalidates the previous link and clears the previous technician signature.
 
 Professional certification marks the project completed and records its completion date without changing payment amounts. Completion and receipt PDFs are stored with integrity hashes, and the warranty is issued. The customer notification is submitted only after all three documents are ready. Partial generation is retained for retries.
 
@@ -46,3 +46,14 @@ BETECH SOLAR: Hi Samuel, you've been assigned project BETECH-123 for Thomas in K
 
 Customer SMS example:
 BETECH SOLAR: Hi Thomas, your solar installation for project BETECH-123 is completed and certified. Your Receipt, Completion Certificate and Warranty Certificate are ready. View or download your documents here: [secure customer documents link] Support: 0722 151 083.
+
+
+## Agents, multiple units and editable warranty periods
+
+Apply `20260914210000_commissioning_assignment` before this release. Assigned external agents and internal technicians each receive the secure commissioning form link by SMS. Access requires possession of the token, with no staff login. A change to the assigned recipients rotates the shared link and clears the previous installer signature. Admins can also create a public form link without an internal technician, then copy/share it. SMS previews list each assigned recipient separately.
+
+Public form submissions go to authenticated licensed professional review. The installer/agent name is captured in the form and frozen on certification; the token itself cannot apply the licensed professional approval.
+
+The form supports additional batteries and inverters, each with its own serial, photos and warranty period. Duplicate or missing additional-unit serials and missing unit label photos prevent certification. Warranty periods default from project receipt items, linked quotation items or full-system coverage, with the existing panel/inverter/battery defaults as fallback. Periods can be edited before submission and are reviewed with the equipment. Extra units are included in PDF continuation pages and warranty history.
+
+Admins can adjust each unit's warranty period when generating or reissuing warranty. Reissue requires a reason and stores a new PDF/version, retaining original coverage start dates and the previous issued document. This does not change project payments.

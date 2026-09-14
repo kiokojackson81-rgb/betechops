@@ -14,7 +14,8 @@ const bodySchema = z.object({
   action: z.enum(["generate", "reissue", "send", "status", "replace"]),
   reason: z.string().trim().min(1).max(1200).optional(),
   status: z.enum(["ACTIVE", "EXPIRED", "VOID", "REPLACED", "UNDER_CLAIM"]).optional(),
-  replacement: z.object({ index: z.number().int().min(0).max(20), brand: z.string().trim().min(1).max(100), modelCapacity: z.string().trim().min(1).max(200), serialNumbers: z.string().trim().min(1).max(2000), replacementDate: z.string().date(), claimReference: z.string().trim().min(1).max(200) }).optional(),
+  warrantyYears: z.array(z.number().positive().max(50)).max(51).optional(),
+  replacement: z.object({ index: z.number().int().min(0).max(50), brand: z.string().trim().min(1).max(100), modelCapacity: z.string().trim().min(1).max(200), serialNumbers: z.string().trim().min(1).max(2000), replacementDate: z.string().date(), claimReference: z.string().trim().min(1).max(200) }).optional(),
 });
 
 export async function GET(_request: NextRequest, context: ParamsContext) {
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest, context: ParamsContext) {
       return NextResponse.json({ ok: delivery.status === "SENT", certificate, delivery, error: delivery.error }, { status: delivery.status === "FAILED" ? 502 : 200 });
     }
     if (parsed.data.action === "reissue" && !parsed.data.reason) return NextResponse.json({ error: "Enter the reason for reissuing the warranty certificate." }, { status: 400 });
-    const issued = await issueWarrantyCertificate({ receiptId: id, origin: new URL(request.url).origin, reissue: parsed.data.action === "reissue", reason: parsed.data.reason, ...actor });
+    const issued = await issueWarrantyCertificate({ receiptId: id, origin: new URL(request.url).origin, reissue: parsed.data.action === "reissue", reason: parsed.data.reason, warrantyYears: parsed.data.warrantyYears, ...actor });
     return NextResponse.json({ ok: true, ...issued });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to issue the warranty certificate." }, { status: 409 });

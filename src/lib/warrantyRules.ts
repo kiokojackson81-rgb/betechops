@@ -8,9 +8,11 @@ export function technicalConfiguration(value: unknown): string {
 
 export function warrantyExpiry(start: Date, years: number): string {
   const expiry = new Date(start);
-  const month = expiry.getUTCMonth();
-  expiry.setUTCFullYear(expiry.getUTCFullYear() + years);
-  if (expiry.getUTCMonth() !== month) expiry.setUTCDate(0);
+  const day = expiry.getUTCDate();
+  expiry.setUTCDate(1);
+  expiry.setUTCMonth(expiry.getUTCMonth() + Math.round(years * 12));
+  const lastDay = new Date(Date.UTC(expiry.getUTCFullYear(), expiry.getUTCMonth() + 1, 0)).getUTCDate();
+  expiry.setUTCDate(Math.min(day, lastDay));
   expiry.setUTCDate(expiry.getUTCDate() - 1);
   return expiry.toISOString();
 }

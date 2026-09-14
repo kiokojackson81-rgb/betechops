@@ -158,7 +158,7 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
   const headings = ["Equipment", "Brand", "Model / Capacity", "Serial Number(s)", "Warranty", "Start Date", "Expiry Date"];
   page.drawRectangle({ x: M, y: 460, width: A4[0] - M * 2, height: 21, color: rgb(0.96, 0.91, 0.9), borderColor: rgb(0.78, 0.79, 0.82), borderWidth: 0.45 });
   headings.forEach((heading, index) => page.drawText(heading, { x: cols[index] + 4, y: 468, size: 6.1, font: bold, color: INK }));
-  snapshot.equipment.forEach((row, index) => {
+  snapshot.equipment.slice(0, 3).forEach((row, index) => {
     const top = 460 - index * 58;
     page.drawRectangle({ x: M, y: top - 58, width: A4[0] - M * 2, height: 58, color: index % 2 ? rgb(0.99, 0.99, 0.99) : PALE, borderColor: rgb(0.8, 0.82, 0.85), borderWidth: 0.4 });
     const values = [row.equipment, row.brand, row.modelCapacity, row.equipment === "Solar Panels" && row.serialNumbers !== "Not recorded" ? "Recorded in Commissioning Record" : row.serialNumbers, `${row.warrantyYears} Years`, formatDate(row.warrantyStartDate), formatDate(row.warrantyExpiryDate)];
@@ -168,7 +168,7 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
   y = 268;
   section(page, "3. WARRANTY TERMS  (summary)", y, bold);
   const terms = [
-    "Solar Panels - 25 Years; Lithium Battery - 10 Years; Inverter - 5 Years manufacturer warranty, subject to applicable manufacturer terms and conditions.",
+    "Coverage periods and expiry dates are specified for each unit in this certificate and its continuation pages, subject to applicable manufacturer terms and conditions.",
     "Covers qualifying manufacturing defects and abnormal equipment failure during normal use.",
     "Excludes misuse, overloading, unauthorized modifications, third-party repairs, physical damage, flooding, fire, natural disasters and operation outside manufacturer specifications.",
     "Normal battery capacity and solar panel performance degradation within manufacturer specifications are not warranty defects.",
@@ -199,5 +199,18 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
   drawStamp(page, stamp, bold);
   page.drawText(`Issued warranty document • ${snapshot.certificateNo}`, { x: M, y: 20, size: 6.2, font: regular, color: MUTED });
   page.drawText("Betech Solar Solutions • Terms and conditions apply", { x: 324, y: 20, size: 6.2, font: regular, color: MUTED });
+  for (let offset = 3; offset < snapshot.equipment.length; offset += 6) {
+    const continuation = pdf.addPage(A4);
+    continuation.drawText("EQUIPMENT WARRANTY DETAILS - CONTINUED", { x: M, y: 790, size: 13, font: bold, color: MAROON });
+    continuation.drawText(snapshot.certificateNo, { x: M, y: 767, size: 10, font: bold, color: INK });
+    snapshot.equipment.slice(offset, offset + 6).forEach((row, index) => {
+      const top = 728 - index * 105;
+      drawWrapped(continuation, `${offset + index + 1}. ${row.equipment} - ${row.brand} ${row.modelCapacity}`, M, top, 535, bold, 9, INK, 12);
+      drawWrapped(continuation, `Serial: ${row.serialNumbers}`, M, top - 30, 535, regular, 8, INK, 11);
+      continuation.drawText(`Warranty: ${row.warrantyYears} years | ${formatDate(row.warrantyStartDate)} to ${formatDate(row.warrantyExpiryDate)}`, { x: M, y: top - 67, size: 8, font: bold, color: GREEN });
+    });
+    continuation.drawText(`Part of ${snapshot.certificateNo} - Terms and conditions apply`, { x: M, y: 30, size: 7, font: regular, color: MUTED });
+  }
+  if (snapshot.equipment.length > 3) page.drawText("Additional equipment: see continuation pages", { x: M, y: 280, size: 7, font: bold, color: MAROON });
   return Buffer.from(await pdf.save());
 }

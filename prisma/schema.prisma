@@ -1607,6 +1607,7 @@ enum CommissioningSessionStatus {
 /// One durable field-commissioning workspace per existing project receipt.
 /// The opaque token is stored only as a hash so it cannot be recovered from the database.
 model CommissioningSession {
+  assignment                    Json?
   id                            String                     @id @default(cuid())
   receiptId                     String                     @unique
   technicianId                  String?

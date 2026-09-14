@@ -106,8 +106,9 @@ export async function issueProfessionallyApprovedCertificate(input: {
   const data = asRecord(session.data);
   const certificateData = {
     ...data,
+    installerName: String(data.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent"),
     projectSnapshot: { ...projectSummary(session.receipt), customerPhone: session.receipt.order?.customerPhone || "" },
-    installationCertifiedBySameProfessional: session.technicianId === input.professional.userId,
+    installationCertifiedBySameProfessional: session.technicianId === input.professional.userId && String(data.installerName || session.technician?.name || "").trim() === input.professional.name.trim(),
     termsAcceptance: {
       ...asRecord(data.termsAcceptance), accepted: true, acceptedAt: acceptedAt.toISOString(), termsVersionUrl: TERMS_URL, termsUrl: TERMS_URL,
       acceptedByCustomerName: projectSummary(session.receipt).customerName, customerName: projectSummary(session.receipt).customerName, certificateId: certificateNo, projectId: reference,

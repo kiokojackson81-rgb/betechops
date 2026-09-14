@@ -1,3 +1,4 @@
+import { commissioningEquipmentUnits, equipmentValidationErrors } from "@/lib/commissioningEquipment";
 import "server-only";
 
 import { technicalConfiguration, warrantyExpiry } from "@/lib/warrantyRules";
@@ -27,16 +28,16 @@ const choose = (record: Record<string, unknown>, keys: string[]) => keys.map((ke
 const isoDate = (date: Date) => date.toISOString();
 
 
-function extractEquipment(data: unknown, start: Date): WarrantyEquipment[] {
+export function extractEquipment(data: unknown, start: Date): WarrantyEquipment[] {
   const equipment = asRecord(asRecord(data).equipment);
   const panelQuantity = choose(equipment, ["panelQuantity", "panelQty", "panelCount"]);
   const panelModel = choose(equipment, ["panelModel"]);
   const panelRating = choose(equipment, ["panelRating", "panelWatts", "panelWattage"]);
   const panelModelCapacity = [panelModel, panelRating !== "Not recorded" ? panelRating : "", panelQuantity !== "Not recorded" ? `Quantity: ${panelQuantity}` : ""].filter(Boolean).join(" · ") || "Not recorded";
+  const panelYears = Number(equipment.panelWarrantyYears ?? 25);
   return [
-    { equipment: "Solar Panels", brand: choose(equipment, ["panelBrand"]), modelCapacity: panelModelCapacity, serialNumbers: choose(equipment, ["panelSerial", "panelSerialNumbers", "panelReference"]), warrantyYears: 25, warrantyStartDate: isoDate(start), warrantyExpiryDate: warrantyExpiry(start, 25) },
-    { equipment: "Inverter", brand: choose(equipment, ["inverterBrand"]), modelCapacity: [choose(equipment, ["inverterModel"]), choose(equipment, ["inverterCapacity", "inverterRating"])].filter((value) => value !== "Not recorded").join(" · ") || "Not recorded", serialNumbers: choose(equipment, ["inverterSerial", "inverterSerialNumber"]), warrantyYears: 5, warrantyStartDate: isoDate(start), warrantyExpiryDate: warrantyExpiry(start, 5) },
-    { equipment: "Lithium Battery", brand: choose(equipment, ["batteryBrand"]), modelCapacity: [choose(equipment, ["batteryModel"]), choose(equipment, ["batteryCapacity", "batteryRating"]), choose(equipment, ["batteryQuantity", "batteryQty"])].filter((value) => value !== "Not recorded").join(" · ") || "Not recorded", serialNumbers: choose(equipment, ["batterySerial", "batterySerialNumbers", "batterySerialNumber"]), warrantyYears: 10, warrantyStartDate: isoDate(start), warrantyExpiryDate: warrantyExpiry(start, 10) },
+    { equipment: "Solar Panels", brand: choose(equipment, ["panelBrand"]), modelCapacity: panelModelCapacity, serialNumbers: choose(equipment, ["panelSerial", "panelSerialNumbers", "panelReference"]), warrantyYears: panelYears, warrantyStartDate: isoDate(start), warrantyExpiryDate: warrantyExpiry(start, panelYears) },
+    ...commissioningEquipmentUnits(data).map(unit => ({ equipment: unit.kind === "battery" ? "Lithium Battery" as const : "Inverter" as const, brand: unit.brand || "Not recorded", modelCapacity: [unit.model, unit.capacity].filter(Boolean).join(" / ") || "Not recorded", serialNumbers: unit.serial || "Not recorded", warrantyYears: Number(unit.warrantyYears), warrantyStartDate: isoDate(start), warrantyExpiryDate: warrantyExpiry(start, Number(unit.warrantyYears)) })),
   ];
 }
 
@@ -56,7 +57,7 @@ function sourceSnapshot(session: CommissioningSource, certificateNo: string, ver
     installationLocation: text(frozenProject.location) || summary.location,
     installationType: choose(installation, ["type", "installationType"]) === "Not recorded" ? "New solar installation" : choose(installation, ["type", "installationType"]),
     systemConfiguration: technicalConfiguration(choose(installation, ["systemConfiguration", "configuration", "systemType"])),
-    technicianName: session.technician?.name || "Assigned technician",
+    technicianName: text(certificateData.installerName) || session.technician?.name || "Installer / agent",
     commissioningDate: isoDate(commissioningDate),
     issueDate: isoDate(issuedAt),
     verificationUrl,
@@ -102,7 +103,7 @@ export async function getWarrantyCertificate(
   return includeHistory ? certificates : certificates.find((certificate) => certificate.status === "ISSUED") || null;
 }
 
-export async function issueWarrantyCertificate(input: { receiptId: string; issuedById?: string | null; issuedByName?: string | null; origin: string; reissue?: boolean; reason?: string }) {
+export async function issueWarrantyCertificate(input: { receiptId: string; issuedById?: string | null; issuedByName?: string | null; origin: string; reissue?: boolean; reason?: string; warrantyYears?: number[] }) {
   const session = await commissioningSource(input.receiptId);
   if (!session || session.status !== "ISSUED" || !session.certificateNo || !session.issuedAt) {
     throw new Error("Issue a commissioned and verified Certificate of Completion before generating the warranty certificate.");
@@ -111,9 +112,11 @@ export async function issueWarrantyCertificate(input: { receiptId: string; issue
   if (existing && !input.reissue) return { certificate: existing, reused: true };
 
   const source = sourceSnapshot(session, "PREVIEW", "", new Date());
-  const battery = source.equipment.find(row => row.equipment === "Lithium Battery");
-  if (!battery || /^(not recorded|n\/?a|unknown|-)$/i.test(battery.serialNumbers.trim())) throw new Error("Capture the battery serial number in the commissioning record before issuing warranty.");
+  const batteries = source.equipment.filter(row => row.equipment === "Lithium Battery");
+  if (!batteries.length || batteries.some(battery => /^(not recorded|n\/?a|unknown|-)$/i.test(battery.serialNumbers.trim()))) throw new Error("Capture the battery serial number in the commissioning record before issuing warranty.");
   if (source.systemConfiguration === "Not recorded") throw new Error("Select Hybrid, Off-Grid or Grid-Tied in the commissioning record before issuing warranty.");
+  const errors = equipmentValidationErrors(session.data);
+  if (errors.length) throw new Error(errors.join(" "));
   const issuedAt = new Date();
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const certificateNo = await nextCertificateNumber(issuedAt);
@@ -123,7 +126,11 @@ export async function issueWarrantyCertificate(input: { receiptId: string; issue
     snapshot.coverageStatus = existing?.coverageStatus || "ACTIVE";
     if (existing && input.reissue) {
       const previous = await prisma.warrantyCertificate.findUnique({ where: { id: existing.id }, include: { history: { orderBy: { createdAt: "asc" } } } });
-      if (previous?.history.some(entry => entry.action === "REPLACEMENT")) snapshot.equipment = currentWarrantyEquipment(previous);
+      if (previous) snapshot.equipment = currentWarrantyEquipment(previous);
+    }
+    if (input.warrantyYears) {
+      if (input.warrantyYears.length !== snapshot.equipment.length || input.warrantyYears.some(years => !Number.isFinite(years) || years <= 0 || years > 50 || Math.abs(years * 12 - Math.round(years * 12)) > 0.00001)) throw new Error("Provide a valid warranty period for every equipment row (1 month to 50 years).");
+      snapshot.equipment = snapshot.equipment.map((row, index) => ({ ...row, warrantyYears: input.warrantyYears![index], warrantyExpiryDate: warrantyExpiry(new Date(row.warrantyStartDate), input.warrantyYears![index]) }));
     }
     const pdf = await buildWarrantyCertificatePdf(snapshot);
     const hash = createHash("sha256").update(pdf).digest("hex");
@@ -152,7 +159,7 @@ export async function issueWarrantyCertificate(input: { receiptId: string; issue
             data: snapshot as unknown as Prisma.InputJsonValue,
           },
         });
-        await tx.warrantyHistory.create({ data: { certificateId: created.id, action: existing ? "REISSUED" : "ISSUED", reason: input.reason || "Issued following successful commissioning", actorId: input.issuedById || "SYSTEM", data: { previousCertificateId: existing?.id || null, completionCertificateId: session.id } } });
+        await tx.warrantyHistory.create({ data: { certificateId: created.id, action: existing ? "REISSUED" : "ISSUED", reason: input.reason || "Issued following successful commissioning", actorId: input.issuedById || "SYSTEM", data: { previousCertificateId: existing?.id || null, completionCertificateId: session.id, warrantyYears: snapshot.equipment.map(row => row.warrantyYears) } } });
         if (existing) await tx.warrantyCertificate.update({ where: { id: existing.id }, data: { status: WarrantyCertificateStatus.SUPERSEDED, supersededAt: issuedAt, supersededById: created.id } });
         await tx.commissioningSession.update({ where: { id: session.id }, data: { audit: appendCommissioningAudit(session.audit, { at: issuedAt.toISOString(), action: input.reissue ? "WARRANTY_CERTIFICATE_REISSUED" : "WARRANTY_CERTIFICATE_ISSUED", actorId: input.issuedById || null, detail: { certificateNo, completionCertificateNo: session.certificateNo, version } }) } });
         return created;
