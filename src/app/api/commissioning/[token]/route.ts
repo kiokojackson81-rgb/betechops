@@ -10,6 +10,7 @@ import {
 } from "@/lib/commissioning";
 import { ensureCustomerCertificateToken, sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
 import { TERMS_URL } from "@/lib/publicLinks";
+import { deliverWarrantyCertificate, issueWarrantyCertificate } from "@/lib/warrantyCertificates";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -205,5 +206,25 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     console.error("[commissioning] certificate issued but customer delivery failed", error);
     delivery = { error: "Certificate issued, but automatic customer delivery needs attention." };
   }
-  return NextResponse.json({ ok: true, status: updated.status, certificateNo: updated.certificateNo, issuedAt: updated.issuedAt, delivery });
+  let warranty: unknown = null;
+  try {
+    const issuedWarranty = await issueWarrantyCertificate({
+      receiptId: updated.receiptId,
+      issuedById: session.technicianId,
+      issuedByName: session.technician?.name || "Assigned technician",
+      origin: new URL(req.url).origin,
+    });
+    const warrantyDelivery = await deliverWarrantyCertificate({
+      certificateId: issuedWarranty.certificate.id,
+      accountUrl: `${new URL(req.url).origin}/account/projects/${updated.receiptId}`,
+      actorId: session.technicianId,
+    });
+    warranty = { certificateNo: issuedWarranty.certificate.certificateNo, delivery: warrantyDelivery };
+  } catch (error) {
+    // Completion certificates stay valid even if document storage or a delivery
+    // provider is temporarily unavailable. Admin can generate/send the warranty later.
+    console.error("[commissioning] automatic warranty issuance failed", error);
+    warranty = { error: "Completion certificate issued. Warranty certificate generation needs attention." };
+  }
+  return NextResponse.json({ ok: true, status: updated.status, certificateNo: updated.certificateNo, issuedAt: updated.issuedAt, delivery, warranty });
 }
