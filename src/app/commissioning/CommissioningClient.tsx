@@ -473,7 +473,7 @@ export default function CommissioningClient({ token }: { token: string }) {
           {session.professionalReviewComment && session.status === "RETURNED_FOR_CORRECTION" ? <p role="alert" className="my-4 rounded-xl bg-amber-100 p-4 text-amber-950">Correction requested: {session.professionalReviewComment}</p> : null}
           {current.id === "panels" ? <section className="my-4 space-y-4 rounded-2xl border border-slate-700 p-4">
             <h3 className="font-bold">Customer &amp; site details</h3>
-            <p>{session.project.customerName} · {session.project.location}</p>
+            <p>{session.project.customerName} Â· {session.project.location}</p>
             <label className="block">County<input className={inputClass} value={draft.site?.county || ""} onChange={event => patch("site", "county", event.target.value)} /></label>
             <label className="block">Nature of premises<select className={inputClass} value={draft.site?.premises || ""} onChange={event => patch("site", "premises", event.target.value)}><option value="">Select premises</option>{["Residential", "Commercial", "Institutional", "Industrial", "Agricultural", "Other"].map(value => <option key={value}>{value}</option>)}</select></label>
             {draft.site?.premises === "Other" ? <label className="block">Other premises<input maxLength={80} className={inputClass} value={draft.site?.premisesOther || ""} onChange={event => patch("site", "premisesOther", event.target.value)} /></label> : null}

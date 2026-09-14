@@ -523,7 +523,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
               />
               Technical account active
             </label>
-            <label className="block text-sm">Saved signature image URL<input type="url" value={state.technical.signatureUrl} onChange={event => setState(current => ({ ...current, technical: { ...current.technical, signatureUrl: event.target.value } }))} className="mt-2 w-full rounded-lg border border-white/20 bg-slate-950 p-3" placeholder="https://…" /></label>
+            <label className="block text-sm">Saved signature image URL<input type="url" value={state.technical.signatureUrl} onChange={event => setState(current => ({ ...current, technical: { ...current.technical, signatureUrl: event.target.value } }))} className="mt-2 w-full rounded-lg border border-white/20 bg-slate-950 p-3" placeholder="https://â€¦" /></label>
 
           </div>
         </div>
