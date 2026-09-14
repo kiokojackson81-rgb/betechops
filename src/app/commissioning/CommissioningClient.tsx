@@ -336,15 +336,10 @@ export default function CommissioningClient({ token }: { token: string }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const issue = async () => {
-    if (
-      !confirm(
-        "Submit installation sign-off for licensed professional review and certification?",
-      )
-    )
-      return;
     setError("");
     setSaveState("saving");
     try {
+      if (!session?.readOnly) {
       const save = await fetch(
         `/api/commissioning/${encodeURIComponent(token)}`,
         {
@@ -358,6 +353,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         },
       );
       if (!save.ok) throw new Error("Final review could not be saved.");
+      }
       const response = await fetch(
         `/api/commissioning/${encodeURIComponent(token)}`,
         {
@@ -373,7 +369,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         current
           ? {
               ...current,
-              status: body.status || "AWAITING_PROFESSIONAL_REVIEW",
+              status: body.status || "ISSUED",
               readOnly: true,
               certificateNo: body.certificateNo || null,
               issuedAt: body.issuedAt || null,
@@ -405,7 +401,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         Loading commissioning…
       </main>
     );
-  if (session.readOnly) return session.status === "ISSUED" ? <IssuedView session={session} token={token} /> : <ProfessionalReviewPendingView session={session} />;
+  if (session.readOnly) return session.status === "ISSUED" ? <IssuedView session={session} token={token} /> : <ProfessionalReviewPendingView session={session} busy={saveState === "saving"} error={error} onIssue={() => void issue()} />;
   const current = steps[activeStep];
   const canContinue = current.id === "review" || complete(current.id);
   return (
@@ -578,7 +574,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 }
               />
             )}
-            {["panels", "inverter", "battery"].includes(current.id) ? <section className="mt-4 rounded-3xl bg-slate-900 p-5"><label className="block font-bold">{current.id === "panels" ? "Solar panels" : current.id === "battery" ? "Battery 1" : "Inverter 1"} warranty (years)<input type="number" min="0.0833333333" max="50" step="any" className={inputClass} value={draft.equipment?.[`${current.id === "panels" ? "panel" : current.id}WarrantyYears`] ?? ""} onChange={event => patch("equipment", `${current.id === "panels" ? "panel" : current.id}WarrantyYears`, event.target.value)} /></label><p className="mt-2 text-sm text-slate-400">Pre-filled from project or quotation where available. Adjust to the agreed coverage, for example 2 or 5 years. Subject to professional review.</p></section> : null}
+            {["panels", "inverter", "battery"].includes(current.id) ? <section className="mt-4 rounded-3xl bg-slate-900 p-5"><label className="block font-bold">{current.id === "panels" ? "Solar panels" : current.id === "battery" ? "Battery 1" : "Inverter 1"} warranty (years)<input type="number" min="0.0833333333" max="50" step="any" className={inputClass} value={draft.equipment?.[`${current.id === "panels" ? "panel" : current.id}WarrantyYears`] ?? ""} onChange={event => patch("equipment", `${current.id === "panels" ? "panel" : current.id}WarrantyYears`, event.target.value)} /></label><p className="mt-2 text-sm text-slate-400">Pre-filled from project or quotation where available. Adjust to the agreed coverage, for example 2 or 5 years. The selected coverage will appear on the issued warranty.</p></section> : null}
             {current.id === "inverter" || current.id === "battery" ? <section className="mt-4 space-y-4">
               {(draft.additionalEquipment || []).filter(unit => unit.kind === current.id).map((unit, index) => <article key={unit.id} className="space-y-3 rounded-3xl border border-cyan-500/30 bg-slate-900 p-5"><div className="flex items-center justify-between"><h3 className="text-xl font-bold">{unit.kind === "battery" ? "Battery" : "Inverter"} {index + 2}</h3><button type="button" onClick={() => setDraft(value => ({ ...value, additionalEquipment: value.additionalEquipment?.filter(item => item.id !== unit.id) }))} className="text-rose-300">Remove</button></div>
                 {([['brand', 'Brand'], ['model', 'Model'], ['capacity', 'Capacity'], ['serial', 'Serial number'], ['warrantyYears', 'Warranty (years)']] as const).map(([key, label]) => <label className="block" key={key}>{label}<input className={inputClass} type={key === "warrantyYears" ? "number" : "text"} min={key === "warrantyYears" ? "0.0833333333" : undefined} max={key === "warrantyYears" ? 50 : undefined} step="any" maxLength={180} value={unit[key]} onChange={event => setDraft(value => ({ ...value, additionalEquipment: value.additionalEquipment?.map(item => item.id === unit.id ? { ...item, [key]: event.target.value } : item) }))} /></label>)}
@@ -689,7 +685,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 onClick={() => void issue()}
                 className="w-full rounded-2xl bg-cyan-400 px-5 py-4 text-base font-black text-slate-950 disabled:opacity-40"
               >
-                {session.isCertifyingProfessional ? "ISSUE & CERTIFY" : "SUBMIT FOR PROFESSIONAL REVIEW"}
+                {saveState === "saving" ? "GENERATING CERTIFICATES..." : "SUBMIT & GENERATE CERTIFICATES"}
               </button>
             ) : (
               <button
@@ -1521,7 +1517,7 @@ function Review({
         ))}
       </div>
       <p className="mt-5 text-sm text-slate-400">
-        {completed}/8 stages completed. Completing technician sign-off sends the project for professional review unless the assigned technician is the licensed solar professional.
+        {completed}/8 stages completed. Submitting automatically issues the certificates using the configured supervisor signature and stamp once all required checks are complete.
       </p>
     </section>
   );
@@ -1555,6 +1551,6 @@ function IssuedView({ session, token }: { session: Session; token: string }) {
     </main>
   );
 }
-function ProfessionalReviewPendingView({ session }: { session: Session }) {
-  return <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900"><article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><div className="rounded-2xl border border-amber-700/20 bg-amber-50 p-4"><p className="text-xs font-black tracking-[.16em] text-amber-800">AWAITING PROFESSIONAL REVIEW</p><h1 className="mt-2 text-2xl font-black">Technician sign-off submitted</h1><p className="mt-2 text-sm text-slate-700">The installation evidence, tests, measurements and customer handover have been submitted for licensed professional review. The completion certificate will be issued only after approval.</p></div><p className="text-sm text-slate-700">Project: {session.project.reference}<br />Customer: {session.project.customerName}</p><p className="text-xs leading-5 text-slate-500">If a correction is required, the same secure technician link will reopen with the reviewer&apos;s instructions.</p></article></main>;
+function ProfessionalReviewPendingView({ session, busy, error, onIssue }: { session: Session; busy: boolean; error: string; onIssue: () => void }) {
+  return <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900"><article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><h1 className="text-2xl font-black">Installation details submitted</h1><p>Generate your certificates using the configured supervisor signature. No separate approval or supervisor sign-off is required.</p><p>Project: {session.project.reference}<br />Customer: {session.project.customerName}</p>{error ? <p role="alert">{error}</p> : null}<button disabled={busy} onClick={onIssue} className="w-full rounded-xl bg-[#7a0000] px-4 py-3 font-bold text-white disabled:opacity-50">{busy ? "Generating certificates..." : "Generate certificates automatically"}</button></article></main>;
 }

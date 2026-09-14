@@ -10,7 +10,7 @@ import {
   projectSummary,
 } from "@/lib/commissioning";
 import { TERMS_URL } from "@/lib/publicLinks";
-import { activeLicensedProfessional, submitForProfessionalReview } from "@/lib/professionalCommissioning";
+import { issueAutomaticCompletionCertificate } from "@/lib/professionalCommissioning";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const { token } = await context.params;
   const session = await findAccessibleCommissioningSession(token);
   if (!session) return NextResponse.json({ error: "This commissioning link is invalid, revoked, or expired." }, { status: 404 });
-  if (!["DRAFT", "RETURNED_FOR_CORRECTION"].includes(session.status)) return NextResponse.json({ error: "Certificate Issued — View Only" }, { status: 409 });
+  if (!["DRAFT", "RETURNED_FOR_CORRECTION", "AWAITING_PROFESSIONAL_REVIEW"].includes(session.status)) return NextResponse.json({ error: "Certificate Issued — View Only" }, { status: 409 });
   const payload = await req.json().catch(() => ({}));
   if (payload?.action !== "issue") return NextResponse.json({ error: "Unsupported commissioning action" }, { status: 400 });
   const data = session.data && typeof session.data === "object" && !Array.isArray(session.data)
@@ -146,8 +146,10 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     : {};
   const validation = isReadyToIssue(data);
   if (!validation.ready) return NextResponse.json({ error: "Complete equipment serials, system configuration, evidence, passing tests, handover, terms acceptance and signatures before issuing.", validation }, { status: 400 });
-  const { active } = await activeLicensedProfessional();
-  if (!active) return NextResponse.json({ error: "A licensed solar professional profile must be active before a certificate can be issued." }, { status: 409 });
-  const submitted = await submitForProfessionalReview({ sessionId: session.id, technicianId: session.technicianId, technicianName: String(data.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent") });
-  return NextResponse.json({ ok: true, status: submitted.status, requiresProfessionalReview: true, message: "Installation sign-off is complete. The project is awaiting professional review and certification." });
+  try {
+    const issued = await issueAutomaticCompletionCertificate({ sessionId: session.id, origin: new URL(req.url).origin, source: "PUBLIC_LINK" });
+    return NextResponse.json({ ok: true, status: issued.updated.status, certificateNo: issued.updated.certificateNo, issuedAt: issued.updated.issuedAt, delivery: issued.delivery, warranty: issued.warranty, message: "Certificates issued automatically using the configured supervisor signature." });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to issue certificates." }, { status: 409 });
+  }
 }

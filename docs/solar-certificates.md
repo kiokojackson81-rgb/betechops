@@ -57,3 +57,10 @@ Public form submissions go to authenticated licensed professional review. The in
 The form supports additional batteries and inverters, each with its own serial, photos and warranty period. Duplicate or missing additional-unit serials and missing unit label photos prevent certification. Warranty periods default from project receipt items, linked quotation items or full-system coverage, with the existing panel/inverter/battery defaults as fallback. Periods can be edited before submission and are reviewed with the equipment. Extra units are included in PDF continuation pages and warranty history.
 
 Admins can adjust each unit's warranty period when generating or reissuing warranty. Reissue requires a reason and stores a new PDF/version, retaining original coverage start dates and the previous issued document. This does not change project payments.
+
+
+## Automatic supervisor certification
+
+Completed technician/agent submissions now issue immediately after the existing equipment, evidence, testing, customer acceptance and signature checks pass. The server loads the active supervisor profile, freezes its configured signature and stamp, completes the project and prepares/delivers the customer document bundle. A linked supervisor user account and separate approval are not required for this automatic flow.
+
+The certificate and audit distinguish automatic application of the supervisor signature from a personal manual review. The audit records the public-link or staff-action source and the actual administrative actor, when applicable. Existing waiting records can be finalized using **Generate certificates automatically** in the admin certificate controls or their original public link. Missing signature/stamp assets still prevent issuance. Concurrent and repeated issuance retain the existing transactional safeguards. No additional migration is required for automatic certification.

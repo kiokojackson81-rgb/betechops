@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { appendCommissioningAudit, projectSummary } from "@/lib/commissioning";
-import { activeLicensedProfessional, issueProfessionallyApprovedCertificate } from "@/lib/professionalCommissioning";
+import { activeLicensedProfessional, issueAutomaticCompletionCertificate } from "@/lib/professionalCommissioning";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,16 +43,13 @@ export async function POST(request: NextRequest, context: ParamsContext) {
   if (!session) return NextResponse.json({ error: "Commissioning session not found." }, { status: 404 });
   if (session.status !== "AWAITING_PROFESSIONAL_REVIEW") return NextResponse.json({ error: "This project is not awaiting professional review." }, { status: 409 });
   const user = guard.session?.user as { id?: string; name?: string | null; email?: string | null } | undefined;
-  const actorName = user?.name || user?.email || "Licensed solar professional";
   if (parsed.data.action === "return") {
     if (!parsed.data.reason) return NextResponse.json({ error: "Enter a correction reason before returning the project to the technician." }, { status: 400 });
     const updated = await prisma.commissioningSession.update({ where: { id: session.id, status: "AWAITING_PROFESSIONAL_REVIEW", updatedAt: session.updatedAt }, data: { status: "RETURNED_FOR_CORRECTION", lastStep: parsed.data.step || "review", expiresAt: new Date(Date.now() + 30 * 86400000), professionalReviewComment: parsed.data.reason, audit: appendCommissioningAudit(session.audit, { at: new Date().toISOString(), action: "RETURNED_TO_TECHNICIAN_FOR_CORRECTION", actorId: user?.id || null, detail: { reason: parsed.data.reason, step: parsed.data.step || "review" } }) } });
     return NextResponse.json({ ok: true, status: updated.status, message: "Returned to the assigned technician for correction." });
   }
-  const { professional, active } = await activeLicensedProfessional();
-  if (!active) return NextResponse.json({ error: "Activate the Licensed Solar Professional profile before certifying projects." }, { status: 409 });
   try {
-  const issued = await issueProfessionallyApprovedCertificate({ sessionId: session.id, origin: new URL(request.url).origin, professional, approvedById: user?.id || null, approvedByName: actorName });
+  const issued = await issueAutomaticCompletionCertificate({ sessionId: session.id, origin: new URL(request.url).origin, actorId: user?.id || null, source: "STAFF_ACTION" });
   return NextResponse.json({ ok: true, status: issued.updated.status, certificateNo: issued.updated.certificateNo, issuedAt: issued.updated.issuedAt, delivery: issued.delivery, warranty: issued.warranty });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to certify installation." }, { status: 409 }); }
 }
