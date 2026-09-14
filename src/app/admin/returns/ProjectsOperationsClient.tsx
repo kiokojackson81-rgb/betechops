@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ProjectSmsPanel from "./ProjectSmsPanel";
 import ProjectDocuments from "./ProjectDocuments";
 import CertificateReviewPanel from "./CertificateReviewPanel";
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -2131,7 +2132,7 @@ export default function ProjectsOperationsClient({
                                             {savingId === row.id
                                               ? "Working…"
                                               : commissioningLinks[row.id]
-                                                ? "Copy / Send Link"
+                                                ? "Copy Link"
                                                 : "Create & Copy Link"}
                                           </button>
                                           <button
@@ -2160,22 +2161,11 @@ export default function ProjectsOperationsClient({
                                           >
                                             Revoke Access
                                           </button>
-                                          <button
-                                            type="button"
-                                            disabled={savingId === row.id}
-                                            onClick={() =>
-                                              void manageCommissioningLink(
-                                                row,
-                                                "deliver-certificate",
-                                              )
-                                            }
-                                            className="rounded-xl border border-emerald-400/30 px-3 py-2 text-xs font-semibold text-emerald-200 disabled:opacity-50"
-                                          >
-                                            Send Certificate to Customer
-                                          </button>
+
                                           <ProjectDocuments receiptId={row.id} />
                                         </div>
-                                        <CertificateReviewPanel receiptId={row.id} />
+                                        <CertificateReviewPanel receiptId={row.id} showSms={false} onCertified={() => void load()} />
+                                        <ProjectSmsPanel receiptId={row.id} />
                                         {commissioningLinks[row.id] ? (
                                           <div className="mt-3 break-all rounded-xl bg-[#08111d] p-3 text-xs text-cyan-100">
                                             {commissioningLinks[row.id].link}

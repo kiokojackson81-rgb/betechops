@@ -1,8 +1,10 @@
+import { prepareProjectDocuments } from "@/lib/projectDocuments";
+import { ensureCustomerCertificateToken, sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
 import { activeLicensedProfessional } from "@/lib/professionalCommissioning";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api";
-import { deliverWarrantyCertificate, getWarrantyCertificate, issueWarrantyCertificate, warrantyReadiness, previewWarrantyCertificate, updateWarrantyCoverage } from "@/lib/warrantyCertificates";
+import { getWarrantyCertificate, issueWarrantyCertificate, warrantyReadiness, previewWarrantyCertificate, updateWarrantyCoverage } from "@/lib/warrantyCertificates";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,8 +58,10 @@ export async function POST(request: NextRequest, context: ParamsContext) {
     if (parsed.data.action === "send") {
       const certificate = await getWarrantyCertificate(id);
       if (!certificate) return NextResponse.json({ error: "Generate the warranty certificate before sending it." }, { status: 409 });
-      const delivery = await deliverWarrantyCertificate({ certificateId: certificate.id, accountUrl: `${new URL(request.url).origin}/account/projects/${id}`, actorId: actor.issuedById });
-      return NextResponse.json({ ok: true, certificate, delivery });
+      await prepareProjectDocuments({ sessionId: certificate.commissioningSessionId, origin: new URL(request.url).origin, actorId: actor.issuedById });
+      const token = await ensureCustomerCertificateToken(certificate.commissioningSessionId);
+      const delivery = await sendCustomerCertificateDelivery({ sessionId: certificate.commissioningSessionId, certificateUrl: `${new URL(request.url).origin}/certificate/${token}`, actorId: actor.issuedById, manual: true });
+      return NextResponse.json({ ok: delivery.status === "SENT", certificate, delivery, error: delivery.error }, { status: delivery.status === "FAILED" ? 502 : 200 });
     }
     if (parsed.data.action === "reissue" && !parsed.data.reason) return NextResponse.json({ error: "Enter the reason for reissuing the warranty certificate." }, { status: 400 });
     const issued = await issueWarrantyCertificate({ receiptId: id, origin: new URL(request.url).origin, reissue: parsed.data.action === "reissue", reason: parsed.data.reason, ...actor });

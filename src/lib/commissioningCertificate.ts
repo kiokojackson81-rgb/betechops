@@ -1,4 +1,5 @@
 import { technicalConfiguration } from "@/lib/warrantyRules";
+import { storedProjectDocument } from "@/lib/storedProjectDocument";
 import { readFile } from "fs/promises";
 import path from "path";
 import * as QRCode from "qrcode";
@@ -8,6 +9,8 @@ import { getBranding, sameLicensedProfessional } from "@/lib/branding";
 import { TERMS_DISPLAY_URL } from "@/lib/publicLinks";
 
 type CertificateSource = {
+  completionPdfUrl?: string | null;
+  completionPdfSha256?: string | null;
   certificateNo: string | null;
   issuedAt: Date | null;
   customerTermsAcceptedAt?: Date | null;
@@ -251,6 +254,7 @@ function evidenceCaption(key: string, equipment: Record<string, unknown>) {
 }
 
 export async function buildCommissioningCertificatePdf(source: CertificateSource) {
+  if (source.completionPdfUrl) return storedProjectDocument(source.completionPdfUrl, source.completionPdfSha256);
   const pdf = await PDFDocument.create();
   pdf.setTitle(source.certificateNo || "Betech Solar Completion & Commissioning Certificate");
   pdf.setAuthor("Betech Solar Solutions");

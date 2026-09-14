@@ -1,3 +1,4 @@
+import { syncCommissioningAssignment } from "@/lib/commissioningAssignments";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -23,12 +24,8 @@ import {
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { publishProjectNotification } from "@/services/project-notifications/project-notification.service";
 import {
-  appendCommissioningAudit,
-  commissioningExpiry,
+  decryptCommissioningToken,
   commissioningUrl,
-  createCommissioningToken,
-  encryptCommissioningToken,
-  hashCommissioningToken,
 } from "@/lib/commissioning";
 import {
   hasProjectBookingDate,
@@ -480,41 +477,8 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       await syncCompletedProjectReceiptToPricing(tx, receipt, nextProjectFlow);
     }
 
-    // A draft link is scoped to its technician assignment. If an admin removes
-    // that technician, rotate it once for the replacement while keeping every
-    // saved answer, photo reference, signature and audit entry intact.
-    const currentCommissioning = existing.commissioningSession;
-    const technicianWasUnassigned = Boolean(
-      currentCommissioning?.technicianId &&
-      !nextHandlerStaffIds.includes(currentCommissioning.technicianId),
-    );
-    if (
-      currentCommissioning?.status === "DRAFT" &&
-      technicianWasUnassigned &&
-      nextHandlerStaffIds[0]
-    ) {
-      replacementCommissioningToken = createCommissioningToken();
-      await tx.commissioningSession.update({
-        where: { id: currentCommissioning.id },
-        data: {
-          technicianId: nextHandlerStaffIds[0],
-          tokenHash: hashCommissioningToken(replacementCommissioningToken),
-          tokenCiphertext: encryptCommissioningToken(
-            replacementCommissioningToken,
-          ),
-          expiresAt: commissioningExpiry(),
-          audit: appendCommissioningAudit(currentCommissioning.audit, {
-            at: new Date().toISOString(),
-            action: "TECHNICIAN_REASSIGNED_AND_TOKEN_REPLACED",
-            actorId,
-            detail: {
-              previousTechnicianId: currentCommissioning.technicianId,
-              technicianId: nextHandlerStaffIds[0],
-            },
-          }),
-        },
-      });
-    }
+    const commissioning = await syncCommissioningAssignment(tx, id, nextHandlerStaffIds[0] || null, actorId);
+    if (commissioning && commissioning.tokenHash !== existing.commissioningSession?.tokenHash) replacementCommissioningToken = decryptCommissioningToken(commissioning.tokenCiphertext);
 
     return receipt;
   });

@@ -134,3 +134,13 @@ export function certificateNumber(reference: string) {
   const suffix = randomBytes(3).toString("hex").toUpperCase();
   return `BSC-${stamp}-${reference.replace(/[^A-Z0-9]/gi, "").replace(/\s+/g, "").trim().slice(-8).toUpperCase() || "PROJECT"}-${suffix}`;
 }
+
+export async function ensureCustomerCertificateToken(sessionId: string) {
+  const existing = await prisma.commissioningSession.findUniqueOrThrow({ where: { id: sessionId }, select: { customerTokenCiphertext: true } });
+  if (existing.customerTokenCiphertext) return decryptCommissioningToken(existing.customerTokenCiphertext);
+  const token = createCommissioningToken();
+  const changed = await prisma.commissioningSession.updateMany({ where: { id: sessionId, customerTokenCiphertext: null }, data: { customerTokenHash: hashCommissioningToken(token), customerTokenCiphertext: encryptCommissioningToken(token) } });
+  if (changed.count) return token;
+  const saved = await prisma.commissioningSession.findUniqueOrThrow({ where: { id: sessionId }, select: { customerTokenCiphertext: true } });
+  return decryptCommissioningToken(saved.customerTokenCiphertext!);
+}

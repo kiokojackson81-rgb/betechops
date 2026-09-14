@@ -2,46 +2,31 @@
 
 import { useEffect, useState } from "react";
 
-type Certificate = {
-  certificateNo: string | null;
-  issuedAt: string | null;
-  technicianName: string;
-  project: { reference: string; customerName: string; location: string; system: string };
-  acknowledgedAt: string | null;
-  termsAcceptedAt: string | null;
+type ProjectDocuments = {
+  certificateNo: string; issuedAt: string; documentsReady: boolean;
+  project: { reference: string; customerName: string; location: string };
+  documents: Array<{ kind: string; label: string; available: boolean; url: string }>;
 };
 
 export default function CertificateCustomerClient({ token }: { token: string }) {
-  const [certificate, setCertificate] = useState<Certificate | null>(null);
-  const [completed, setCompleted] = useState(false);
-  const [terms, setTerms] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-
+  const [project, setProject] = useState<ProjectDocuments | null>(null);
+  const [error, setError] = useState("");
   useEffect(() => {
-    fetch(`/api/certificate/${encodeURIComponent(token)}`, { cache: "no-store" })
-      .then(async (response) => {
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body.error || "Certificate unavailable.");
-        setCertificate(body);
-        setCompleted(Boolean(body.acknowledgedAt));
-        setTerms(Boolean(body.termsAcceptedAt));
-      })
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Certificate unavailable."));
+    const controller = new AbortController();
+    fetch(`/api/certificate/${encodeURIComponent(token)}`, { cache: "no-store", signal: controller.signal }).then(async response => {
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Documents unavailable.");
+      setProject(body);
+    }).catch(error => { if (error.name !== "AbortError") setError(error.message || "Documents unavailable."); });
+    return () => controller.abort();
   }, [token]);
-
-  const acknowledge = async () => {
-    setSaving(true); setMessage("");
-    try {
-      const response = await fetch(`/api/certificate/${encodeURIComponent(token)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ installationCompleted: completed, termsAccepted: terms }) });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || "Confirmation could not be saved.");
-      setMessage("Thank you — your installation completion and terms acknowledgement have been recorded.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Confirmation could not be saved."); }
-    finally { setSaving(false); }
-  };
-
-  if (!certificate) return <main className="min-h-screen bg-slate-950 p-6 text-white"><div className="mx-auto max-w-xl rounded-3xl bg-slate-900 p-6">{message || "Loading certificate…"}</div></main>;
-  const download = `/api/certificate/${encodeURIComponent(token)}/download`;
-  return <main className="min-h-screen bg-[#f7f4ef] p-4 text-slate-900"><article className="mx-auto max-w-xl rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><div className="border-b border-[#7a0000]/15 pb-5"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><h1 className="mt-3 text-2xl font-black">Completion certificate ready</h1><p className="mt-2 text-sm text-slate-600">Your Solar PV Completion & Commissioning Certificate is ready to download.</p></div><dl className="mt-6 space-y-3 text-sm"><div><dt className="text-slate-500">Certificate</dt><dd className="font-black">{certificate.certificateNo}</dd></div><div><dt className="text-slate-500">Project</dt><dd className="font-bold">{certificate.project.reference}</dd></div><div><dt className="text-slate-500">Installation</dt><dd className="font-bold">{certificate.project.system}</dd></div><div><dt className="text-slate-500">Location</dt><dd className="font-bold">{certificate.project.location}</dd></div><div><dt className="text-slate-500">Technician</dt><dd className="font-bold">{certificate.technicianName}</dd></div></dl><a href={download} className="mt-6 block rounded-2xl bg-[#7a0000] px-5 py-4 text-center font-black text-white">DOWNLOAD CERTIFICATE (PDF)</a><section className="mt-6 rounded-2xl bg-[#fff7e8] p-4"><h2 className="font-black text-[#7a0000]">Installation completion acknowledgement</h2><label className="mt-4 flex gap-3 text-sm leading-6"><input type="checkbox" checked={completed} onChange={(event) => setCompleted(event.target.checked)} />I confirm that the installation was completed and I received the handover information.</label><label className="mt-4 flex gap-3 text-sm leading-6"><input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} />I have read and accept the <a className="font-bold text-[#7a0000] underline" href="/p/terms" target="_blank" rel="noreferrer">Solar Installation Terms & Conditions</a>.</label><button type="button" disabled={!completed || !terms || saving} onClick={() => void acknowledge()} className="mt-5 w-full rounded-xl border border-[#7a0000] px-4 py-3 font-black text-[#7a0000] disabled:opacity-40">{saving ? "Saving…" : "CONFIRM COMPLETION"}</button>{message ? <p className="mt-3 text-sm text-[#0f6b43]">{message}</p> : null}</section><p className="mt-6 text-xs leading-5 text-slate-500">Keep this certificate for your warranty and service records. It is also available whenever you sign in to your Betech account.</p></article></main>;
+  return <main className="min-h-screen bg-[#f7f4ef] px-4 py-8 text-slate-900"><article className="mx-auto max-w-2xl rounded-3xl border border-[#7a0000]/15 bg-white p-5 shadow-sm sm:p-8">
+    <header className="border-b border-[#7a0000]/15 pb-5"><p className="text-xs font-black tracking-[.18em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><h1 className="mt-3 text-2xl font-black sm:text-3xl">Your project documents</h1></header>
+    {!project ? <p role="status" className="py-6">{error || "Loading your documents..."}</p> : <>
+      <div className="mt-5 rounded-2xl bg-emerald-50 p-4"><p className="text-xs font-black tracking-wider text-emerald-800">COMPLETED &amp; CERTIFIED</p><p className="mt-2 font-bold">{project.project.customerName}</p><p className="mt-1 text-sm">Project {project.project.reference}<br />{project.project.location}</p><p className="mt-2 text-sm text-emerald-800">Certified on {new Date(project.issuedAt).toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi", day: "numeric", month: "long", year: "numeric" })}</p></div>
+      {!project.documentsReady ? <p role="status" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Some documents are still being prepared. Please check again shortly or contact Betech.</p> : null}
+      <ol className="mt-6 space-y-4">{project.documents.map((document, index) => <li key={document.kind} className="rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#7a0000]/10 font-black text-[#7a0000]">{index + 1}</span><h2 className="font-bold">{document.label}</h2></div>{document.available ? <div className="mt-4 flex flex-wrap gap-3"><a href={document.url} target="_blank" rel="noreferrer" className="rounded-xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white">View PDF</a><a href={`${document.url}?download=1`} className="rounded-xl border border-[#7a0000]/30 px-5 py-3 text-sm font-bold text-[#7a0000]">Download PDF</a></div> : <p className="mt-3 text-sm text-slate-500">Being prepared</p>}</li>)}</ol>
+    </>}
+    <footer className="mt-6 border-t border-slate-100 pt-5 text-sm text-slate-600">Need help? <a className="font-bold text-[#7a0000]" href="tel:+254722151083">0722 151 083</a><p className="mt-2 text-xs">Keep this secure link for your receipt, warranty and service records.</p></footer>
+  </article></main>;
 }

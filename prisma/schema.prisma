@@ -1632,6 +1632,14 @@ model CommissioningSession {
   professionalReviewedBy        String?
   supervisedByProfessionalId    String?
   customerSignedAt              DateTime?
+  completionPdfUrl              String?
+  completionPdfSha256           String?
+  projectReceiptPdfUrl          String?
+  projectReceiptPdfSha256       String?
+  documentsReadyAt              DateTime?
+  documentsPreparingAt          DateTime?
+  documentsError                String?                    @db.Text
+  smsLogs                       CommissioningSmsLog[]
   professionalSignatureSnapshot String?                    @db.Text
   professionalProfileSnapshot   Json?
   professionalReviewComment     String?                    @db.Text
@@ -1642,6 +1650,25 @@ model CommissioningSession {
 
   @@index([technicianId])
   @@index([status, expiresAt])
+}
+
+model CommissioningSmsLog {
+  id             String               @id @default(cuid())
+  sessionId      String
+  kind           String
+  recipientName  String
+  phone          String
+  message        String               @db.Text
+  idempotencyKey String               @unique
+  status         String               @default("PENDING")
+  providerId     String?
+  error          String?              @db.Text
+  actorId        String?
+  createdAt      DateTime             @default(now())
+  sentAt         DateTime?
+  session        CommissioningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }
 
 enum WarrantyCertificateStatus {

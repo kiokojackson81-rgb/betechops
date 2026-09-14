@@ -32,3 +32,17 @@ Live verification shows current equipment and coverage status, without phone num
 Focused tests cover commissioning requirements, professional account authorization, warranty classification, dates and status, replacement history, PDF integrity, and both completion signature layouts. Generated test PDFs are under `artifacts/certificate-review/`; these use test customer data and are not issued documents.
 
 Local checks do not issue certificates, send customer messages, apply production migrations or deploy the application. Live database, storage and customer delivery verification must use the configured deployment after migration.
+
+## Assignment SMS and project documents
+
+Apply `20260914150000_project_document_sms` with the preceding migrations before enabling this release. Assignment to the primary internal technician creates a secure commissioning link and submits one automatic SMS. Resends keep the same link and progress; changing technician invalidates the previous link and clears the previous technician signature.
+
+Professional certification marks the project completed and records its completion date without changing payment amounts. Completion and receipt PDFs are stored with integrity hashes, and the warranty is issued. The customer notification is submitted only after all three documents are ready. Partial generation is retained for retries.
+
+The customer link lists Receipt, Certificate of Completion, then Warranty Certificate, with view and download actions. Admin project controls show recipient and message previews, explicit send/resend actions, document-generation retry, and SMS history. SENT records gateway acceptance; FAILED includes the error. SENDING requires checking gateway delivery before resending. Automatic attempts are deduplicated; manual resends are separately logged.
+
+Technician SMS example:
+BETECH SOLAR: Hi Samuel, you've been assigned project BETECH-123 for Thomas in Konza. Complete installation checks, upload photos and sign off here: [secure technician link] Support: 0722 151 083.
+
+Customer SMS example:
+BETECH SOLAR: Hi Thomas, your solar installation for project BETECH-123 is completed and certified. Your Receipt, Completion Certificate and Warranty Certificate are ready. View or download your documents here: [secure customer documents link] Support: 0722 151 083.

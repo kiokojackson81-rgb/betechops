@@ -1,3 +1,5 @@
+import { prepareProjectDocuments } from "@/lib/projectDocuments";
+import { syncCommissioningAssignment } from "@/lib/commissioningAssignments";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api";
@@ -87,11 +89,12 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     if (!existing || existing.status !== "ISSUED") {
       return NextResponse.json({ error: "Issue the commissioning certificate before sending it to the customer." }, { status: 409 });
     }
+    await prepareProjectDocuments({ sessionId: existing.id, origin: new URL(req.url).origin, actorId });
     const createdToken = await ensureCustomerCertificateToken(existing.id);
     const customerToken = createdToken || decryptCommissioningToken(existing.customerTokenCiphertext || "");
     const link = `${new URL(req.url).origin}/certificate/${customerToken}`;
-    const delivery = await sendCustomerCertificateDelivery({ sessionId: existing.id, certificateUrl: link, actorId });
-    return NextResponse.json({ ok: true, link, delivery, message: "Certificate delivery has been sent to the customer channels available on the project." });
+    const delivery = await sendCustomerCertificateDelivery({ sessionId: existing.id, certificateUrl: link, actorId, manual: true });
+    return NextResponse.json({ ok: delivery.status === "SENT", link, delivery, error: delivery.error, message: "Customer document SMS submitted." }, { status: delivery.status === "FAILED" ? 502 : 200 });
   }
 
   if (action === "revoke") {
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ ok: true, message: "Commissioning link revoked." });
   }
 
-  if (existing?.status === "ISSUED" && ["regenerate", "reassign"].includes(action)) {
+  if (existing?.status === "ISSUED") {
     return NextResponse.json({ error: "This certificate is issued and its technician link is view-only." }, { status: 409 });
   }
 
@@ -122,10 +125,11 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   }
 
   // Create/send/resend deliberately return the same URL. They never rotate a token.
-  if (["create", "resend"].includes(action) && existing && existing.status === "DRAFT" && existing.expiresAt > new Date()) {
+  if (["create", "resend"].includes(action) && existing && existing.status !== "REVOKED") {
     if (parsed.data.technicianId && parsed.data.technicianId !== existing.technicianId) {
       return NextResponse.json({ error: "Use Reassign technician to invalidate the old link and authorize another technician." }, { status: 409 });
     }
+    if (existing.expiresAt <= new Date()) await prisma.commissioningSession.update({ where: { id: existing.id }, data: { expiresAt: commissioningExpiry() } });
     return NextResponse.json({
       ok: true,
       reused: true,
@@ -133,6 +137,11 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       message: "Use the existing commissioning link; no new token was generated.",
       session: adminSessionView(receipt).session,
     });
+  }
+
+  if (action === "reassign" && technicianId) {
+    const reassigned = await prisma.$transaction(tx => syncCommissioningAssignment(tx, id, technicianId, actorId));
+    return NextResponse.json({ ok: true, link: commissioningUrl(decryptCommissioningToken(reassigned!.tokenCiphertext), new URL(req.url).origin), session: reassigned && { id: reassigned.id, status: reassigned.status } });
   }
 
   const token = createCommissioningToken();
@@ -147,7 +156,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
           technicianId: technicianId ?? null,
           tokenHash,
           tokenCiphertext,
-          status: "DRAFT",
+          status: existing.status === "REVOKED" ? "DRAFT" : existing.status,
           revokedAt: null,
           expiresAt: commissioningExpiry(),
           audit: appendCommissioningAudit(existing.audit, {

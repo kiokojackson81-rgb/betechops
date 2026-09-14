@@ -1,3 +1,4 @@
+import { notifyAssignedCommissioningTechnician } from "@/lib/commissioningAssignments";
 import { Prisma, ProjectNotificationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
@@ -1036,6 +1037,10 @@ function formatSettledResult(
 export async function publishProjectNotification(
   input: ProjectNotificationQueueInput,
 ): Promise<ProjectNotificationPublishResult> {
+  if (input.event === "PROJECT_ASSIGNED") {
+    try { await notifyAssignedCommissioningTechnician(input.receiptId, input.triggeredByUserId); }
+    catch (error) { console.error("[commissioning] assignment SMS requires retry", { receiptId: input.receiptId, error: error instanceof Error ? error.message : String(error) }); }
+  }
   const context = await loadProjectNotificationContext(input);
   if (!context) {
     console.warn("[PROJECT_NOTIFY] no context loaded", {

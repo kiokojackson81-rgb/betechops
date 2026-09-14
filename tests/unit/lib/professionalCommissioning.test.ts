@@ -1,3 +1,6 @@
+jest.mock("@/lib/projectDocuments", () => ({}));
+jest.mock("@/lib/projectCompletion", () => ({}));
+jest.mock("@/lib/posCustomerAccountSync", () => ({}));
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("@/lib/prisma", () => ({ prisma: { commissioningSession: { findUnique: jest.fn(), update: jest.fn() }, user: { findUnique: jest.fn() } } }));
 jest.mock("@/lib/branding", () => ({ getBranding: jest.fn() }));

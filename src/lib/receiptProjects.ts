@@ -94,6 +94,7 @@ export type ReceiptProjectFlow = {
   externalAgentIds: string[];
   externalAgentPhone: string | null;
   assignedHandlers: ReceiptProjectHandlerAssignment[];
+  completedAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -513,6 +514,7 @@ export function buildReceiptProjectFlow(input: {
     externalAgentIds,
     externalAgentPhone: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.phone : null,
     assignedHandlers,
+    completedAt: toTrimmedString(existing?.completedAt) || null,
     createdAt: toTrimmedString(existing?.createdAt) || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   } satisfies ReceiptProjectFlow;
@@ -674,6 +676,7 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
             .map((entry) => entry.externalAgentId as string),
     externalAgentPhone: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.phone : externalAgentPhone,
     assignedHandlers,
+    completedAt: toTrimmedString(source.completedAt) || null,
     createdAt: toTrimmedString(source.createdAt) || null,
     updatedAt: toTrimmedString(source.updatedAt) || null,
   };
@@ -701,6 +704,7 @@ export function getReceiptProjectCompletionDate(
   const flow = readReceiptProjectFlow(value);
   if (!flow) return null;
   return (
+    normalizeOptionalDateObject(flow.completedAt) ??
     normalizeOptionalDateObject(flow.updatedAt) ??
     normalizeOptionalDateObject(fallbackUpdatedAt) ??
     normalizeOptionalDateObject(fallbackCreatedAt)

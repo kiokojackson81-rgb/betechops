@@ -7,7 +7,9 @@ import { getBranding } from "@/lib/branding";
 import { appendCommissioningAudit, certificateNumber, projectSummary } from "@/lib/commissioning";
 import { ensureCustomerCertificateToken, sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
 import { TERMS_URL } from "@/lib/publicLinks";
-import { deliverWarrantyCertificate, issueWarrantyCertificate } from "@/lib/warrantyCertificates";
+import { prepareProjectDocuments } from "@/lib/projectDocuments";
+import { completeCertifiedProject } from "@/lib/projectCompletion";
+import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 
 export type LicensedProfessionalSnapshot = {
   userId: string | null;
@@ -113,7 +115,9 @@ export async function issueProfessionallyApprovedCertificate(input: {
     terms_accepted: true, terms_accepted_at: acceptedAt.toISOString(), terms_version_url: TERMS_URL, terms_url: TERMS_URL,
     accepted_by_customer_name: projectSummary(session.receipt).customerName, customer_name: projectSummary(session.receipt).customerName, certificate_id: certificateNo, project_id: reference,
   };
-  const updated = await prisma.commissioningSession.update({
+  const updated = await prisma.$transaction(async tx => {
+  await completeCertifiedProject(tx, session.receiptId, issuedAt);
+  return tx.commissioningSession.update({
     where: { id: session.id, status: session.status, updatedAt: session.updatedAt },
     data: {
       status: "ISSUED", issuedAt, progress: 100, certificateNo, customerTermsAcceptedAt: acceptedAt,
@@ -127,21 +131,18 @@ export async function issueProfessionallyApprovedCertificate(input: {
       audit: appendCommissioningAudit(session.audit, { at: issuedAt.toISOString(), action: "CERTIFICATE_ISSUED_AFTER_PROFESSIONAL_CERTIFICATION", actorId: input.approvedById || session.technicianId, detail: { technicianId: session.technicianId, certificateNo, professional: input.professional.name, licenceNumber: input.professional.licenceNumber } }),
     },
   });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+  await syncPosReceiptToCustomerAccount(updated.receiptId).catch(error => console.error("[commissioning] customer account sync needs retry", error));
   let delivery: unknown = null;
-  try {
-    const customerToken = await ensureCustomerCertificateToken(updated.id);
-    if (customerToken) delivery = await sendCustomerCertificateDelivery({ sessionId: updated.id, certificateUrl: `${input.origin.replace(/\/$/, "")}/certificate/${customerToken}`, actorId: input.approvedById || session.technicianId });
-  } catch (error) {
-    console.error("[commissioning] certificate issued but customer delivery failed", error);
-    delivery = { error: "Certificate issued, but automatic customer delivery needs attention." };
-  }
   let warranty: unknown = null;
   try {
-    const issuedWarranty = await issueWarrantyCertificate({ receiptId: updated.receiptId, issuedById: input.approvedById || session.technicianId, issuedByName: input.approvedByName || input.professional.name, origin: input.origin });
-    warranty = { certificateNo: issuedWarranty.certificate.certificateNo, delivery: await deliverWarrantyCertificate({ certificateId: issuedWarranty.certificate.id, accountUrl: `${input.origin.replace(/\/$/, "")}/account/projects/${updated.receiptId}`, actorId: input.approvedById || session.technicianId }) };
+    warranty = await prepareProjectDocuments({ sessionId: updated.id, origin: input.origin, actorId: input.approvedById });
+    const customerToken = await ensureCustomerCertificateToken(updated.id);
+    delivery = await sendCustomerCertificateDelivery({ sessionId: updated.id, certificateUrl: `${input.origin.replace(/\/$/, "")}/certificate/${customerToken}`, actorId: input.approvedById });
   } catch (error) {
-    console.error("[commissioning] automatic warranty issuance failed", error);
-    warranty = { error: "Completion certificate issued. Warranty certificate generation needs attention." };
+    const detail = error instanceof Error ? error.message : "Document preparation failed.";
+    warranty = { error: detail };
+    delivery = { error: "Project completed. Customer SMS will be available once all documents are ready." };
   }
   return { updated, delivery, warranty };
 }

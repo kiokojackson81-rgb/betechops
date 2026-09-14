@@ -1,3 +1,5 @@
+import { getWarrantyCertificate } from "@/lib/warrantyCertificates";
+import { PROJECT_DOCUMENT_ORDER, PROJECT_DOCUMENT_LABELS } from "@/lib/projectDocumentMessages";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { appendCommissioningAudit, findCustomerCertificateSession, projectSummary } from "@/lib/commissioning";
@@ -9,14 +11,19 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   const { token } = await context.params;
   const session = await findCustomerCertificateSession(token);
   if (!session) return NextResponse.json({ error: "This certificate link is invalid or unavailable." }, { status: 404 });
+  const warranty = await getWarrantyCertificate(session.receiptId);
+  const available = { receipt: Boolean(session.projectReceiptPdfUrl), completion: Boolean(session.completionPdfUrl), warranty: Boolean(warranty) };
   return NextResponse.json({
+    status: "COMPLETED",
+    documentsReady: PROJECT_DOCUMENT_ORDER.every(kind => available[kind]),
+    documents: PROJECT_DOCUMENT_ORDER.map(kind => ({ kind, label: PROJECT_DOCUMENT_LABELS[kind], available: available[kind], url: `/api/certificate/${encodeURIComponent(token)}/documents/${kind}` })),
     certificateNo: session.certificateNo,
     issuedAt: session.issuedAt,
     technicianName: session.technician?.name || "Betech technician",
     project: projectSummary(session.receipt),
     acknowledgedAt: session.customerAcknowledgedAt,
     termsAcceptedAt: session.customerTermsAcceptedAt,
-  });
+  }, { headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" } });
 }
 
 export async function POST(req: NextRequest, context: ParamsContext) {
@@ -31,8 +38,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   await prisma.commissioningSession.update({
     where: { id: session.id },
     data: {
-      customerAcknowledgedAt: now,
-      customerTermsAcceptedAt: now,
+      customerAcknowledgedAt: session.customerAcknowledgedAt || now,
+      customerTermsAcceptedAt: session.customerTermsAcceptedAt || now,
       audit: appendCommissioningAudit(session.audit, { at: now.toISOString(), action: "CUSTOMER_ACCEPTED_COMPLETION_AND_TERMS" }),
     },
   });
