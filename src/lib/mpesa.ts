@@ -329,7 +329,7 @@ export async function initiateStkPushForResource(input: {
     await prisma.$executeRaw(Prisma.sql`UPDATE "LipaPolePole" SET "status" = 'AWAITING_PAYMENT'::"LipaPolePoleStatus", "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${target.id} AND "status" IN ('AWAITING_PAYMENT'::"LipaPolePoleStatus", 'PAYMENT_FAILED'::"LipaPolePoleStatus")`);
   }
   if (target.kind === "SITE_VISIT") {
-    await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "status" = 'PAYMENT_PENDING', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${target.id} AND "status" IN ('PAYMENT_PENDING', 'PAYMENT_FAILED')`);
+    await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "status" = 'PAYMENT_PENDING', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${target.id} AND "status" IN ('PENDING', 'PAYMENT_PENDING', 'PAYMENT_FAILED')`);
   }
   if (target.kind === "INSTALLATION_PROJECT") {
     await prisma.order.update({ where: { id: target.id }, data: { metadata: { ...paymentMetadata((await prisma.order.findUniqueOrThrow({ where: { id: target.id }, select: { metadata: true } })).metadata), installationPaymentState: "AWAITING_PAYMENT", installationPaymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), installationPaymentFailureReason: null } } });

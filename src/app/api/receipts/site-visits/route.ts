@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     actor: { id: actor.id, name: actor.name || actor.email || "Staff" },
-    canWaive: guard.role === "ADMIN" || guard.role === "SUPERVISOR",
+    canWaive: true,
     visits: visits.slice(0, 12),
   });
 }
@@ -64,15 +64,23 @@ export async function POST(request: NextRequest) {
   if (!input.preferredDate) {
     return NextResponse.json({ ok: false, error: "Select the customer's preferred visit date." }, { status: 400 });
   }
-  const visitFee = getStandardSiteVisitFee(input.county, input.town);
-  if (visitFee == null) {
+  const standardVisitFee = getStandardSiteVisitFee(input.county, input.town);
+  if (standardVisitFee == null) {
     return NextResponse.json({ ok: false, error: "Select a recognized county and town to calculate the visit fee." }, { status: 400 });
+  }
+  const visitFee = input.visitFee ?? standardVisitFee;
+  const feeAdjusted = visitFee !== standardVisitFee;
+  if (feeAdjusted && !input.feeOverrideReason?.trim()) {
+    return NextResponse.json({ ok: false, error: "Give a reason when changing the booking fee." }, { status: 400 });
   }
   if (input.paymentStatus === "PAID" && (!input.paymentMethod?.trim() || !input.paymentReference?.trim())) {
     return NextResponse.json({ ok: false, error: "Paid bookings require a payment method and reference." }, { status: 400 });
   }
-  if (input.paymentStatus === "WAIVED" && guard.role !== "ADMIN" && guard.role !== "SUPERVISOR") {
-    return NextResponse.json({ ok: false, error: "Only management can waive a site visit payment." }, { status: 403 });
+  if (input.paymentStatus === "WAIVED" && !input.waiverReason?.trim()) {
+    return NextResponse.json({ ok: false, error: "Give a reason for waiving the booking fee." }, { status: 400 });
+  }
+  if (input.paymentStatus === "WAIVED" && input.dataLoggerRequested) {
+    return NextResponse.json({ ok: false, error: "A data logger cannot be included in a waived booking." }, { status: 400 });
   }
 
   const requestedOwnerId = input.assignedStaffId?.trim();
@@ -115,7 +123,7 @@ export async function POST(request: NextRequest) {
         paymentAmount: input.paymentStatus === "PAID" ? totalPayable : undefined,
         paymentMethod: input.paymentStatus === "PAID" ? input.paymentMethod : undefined,
         paymentReference: input.paymentStatus === "PAID" ? input.paymentReference : undefined,
-        feeOverrideReason: undefined,
+        feeOverrideReason: feeAdjusted ? input.feeOverrideReason?.trim() : undefined,
         waiverReason: input.paymentStatus === "WAIVED" ? input.waiverReason : undefined,
       },
       {
@@ -127,17 +135,17 @@ export async function POST(request: NextRequest) {
     );
     if (!visit) return NextResponse.json({ ok: false, error: "Unable to create site visit." }, { status: 500 });
 
-    if (visit.paymentStatus === "PAID") {
-      void dispatchSiteVisitCreated(
-        visit,
-        visit.assignedStaffName ||
-          requestedOwner?.name ||
-          requestedOwner?.email ||
-          actor.name ||
-          actor.email ||
-          "Admin",
-      );
-    }
+    // Every staff booking uses the same queue and customer confirmation flow.
+    // Payment confirmation triggers its own follow-up in the M-Pesa callback.
+    void dispatchSiteVisitCreated(
+      visit,
+      visit.assignedStaffName ||
+        requestedOwner?.name ||
+        requestedOwner?.email ||
+        actor.name ||
+        actor.email ||
+        "Admin",
+    );
 
     return NextResponse.json({ ok: true, visit }, { status: 201 });
   } catch (error) {

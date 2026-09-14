@@ -452,6 +452,7 @@ export default function ReceiptsPageClient({
                 staffOptions={quotationStaffOptions}
                 staffLoading={quotationStaffLoading}
                 allowUnassigned={canCreateUnassigned}
+                canWaive={true}
               />
             ) : createDocumentType === "LPP" ? (
               <div>

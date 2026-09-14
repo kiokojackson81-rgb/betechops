@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -21,8 +21,8 @@ type StaffOption = {
   attendantCategory?: string | null;
 };
 
-type Props = { staffOptions: StaffOption[]; staffLoading?: boolean; allowUnassigned?: boolean };
-type PaymentStatus = "UNPAID" | "COLLECT_ON_SITE" | "PAID" | "WAIVED";
+type Props = { staffOptions: StaffOption[]; staffLoading?: boolean; allowUnassigned?: boolean; canWaive?: boolean };
+type BookingPaymentChoice = "COLLECT_ON_SITE" | "PAY_NOW" | "PAID" | "WAIVED";
 
 const money = (value: number) => `KES ${value.toLocaleString("en-KE")}`;
 const inputClass = "mt-1.5 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60";
@@ -39,7 +39,6 @@ function emptyForm() {
     customerName: "",
     customerPhone: "",
     customerEmail: "",
-    quoteRef: "",
     county: "",
     town: "",
     location: "",
@@ -53,9 +52,13 @@ function emptyForm() {
     assignedStaffId: "",
     dataLoggerRequested: false,
     dataLoggerDays: "1",
-    paymentStatus: "UNPAID" as PaymentStatus,
+    paymentChoice: "COLLECT_ON_SITE" as BookingPaymentChoice,
     paymentMethod: "M-PESA",
     paymentReference: "",
+    paymentPhone: "",
+    feeOverride: "",
+    feeOverrideReason: "",
+    waiverReason: "",
   };
 }
 
@@ -67,21 +70,32 @@ function apiPath() {
     : "/api/receipts/site-visits";
 }
 
+function paymentApiPath(visitId: string) {
+  if (typeof window === "undefined") return `/api/receipts/site-visits/${visitId}/pay`;
+  const impersonateId = new URLSearchParams(window.location.search).get("impersonateId");
+  return impersonateId
+    ? `/api/receipts/site-visits/${visitId}/pay?impersonateId=${encodeURIComponent(impersonateId)}`
+    : `/api/receipts/site-visits/${visitId}/pay`;
+}
+
 function Field({ title, children, wide = false }: { title: string; children: React.ReactNode; wide?: boolean }) {
   return <label className={`text-sm font-medium text-slate-200 ${wide ? "md:col-span-2" : ""}`}>{title}{children}</label>;
 }
 
-export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading = false, allowUnassigned = false }: Props) {
+export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading = false, allowUnassigned = false, canWaive = false }: Props) {
   const [form, setForm] = useState(emptyForm);
+  const preferredDateRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ visitRef: string; customerName: string; totalPayable: number; assignedStaffName: string | null } | null>(null);
+  const [success, setSuccess] = useState<{ visitRef: string; customerName: string; totalPayable: number; assignedStaffName: string | null; paymentPrompted?: boolean; paymentPromptError?: string } | null>(null);
 
   const towns = getTownsForCounty(form.county);
   const zone = getServiceZone(form.county, form.town);
-  const visitFee = zone?.siteVisitFee || 0;
+  const standardVisitFee = zone?.siteVisitFee || 0;
+  const requestedVisitFee = form.feeOverride === "" ? standardVisitFee : Number(form.feeOverride);
+  const feeAdjusted = form.feeOverride !== "" && requestedVisitFee !== standardVisitFee;
   const loggerFee = form.dataLoggerRequested ? Number(form.dataLoggerDays) * DATA_LOGGER_DAILY_RATE : 0;
-  const totalPayable = visitFee + loggerFee;
+  const totalPayable = requestedVisitFee + loggerFee;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -89,23 +103,42 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
     setError("");
     setSuccess(null);
     try {
+      if (!Number.isFinite(requestedVisitFee) || requestedVisitFee < 0) throw new Error("Enter a valid booking fee.");
+      if (feeAdjusted && !form.feeOverrideReason.trim()) throw new Error("Give a reason when changing the booking fee.");
+      if (form.paymentChoice === "WAIVED" && !form.waiverReason.trim()) throw new Error("Give the reason for waiving the booking fee.");
+      if (form.paymentChoice === "WAIVED" && form.dataLoggerRequested) throw new Error("Remove the data logger before waiving the booking fee. Data logger charges must be handled separately.");
+      const paymentStatus = form.paymentChoice === "PAY_NOW" ? "UNPAID" : form.paymentChoice;
       const response = await fetch(apiPath(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
           customerEmail: form.customerEmail || undefined,
-          quoteRef: form.quoteRef || undefined,
           landmark: form.landmark || undefined,
           dataLoggerDays: form.dataLoggerRequested ? Number(form.dataLoggerDays) : undefined,
-          paymentReference: form.paymentStatus === "PAID" ? form.paymentReference : undefined,
-          paymentMethod: form.paymentStatus === "PAID" ? form.paymentMethod : undefined,
-          waiverReason: form.paymentStatus === "WAIVED" ? "Approved by management at receipts desk" : undefined,
+          visitFee: requestedVisitFee,
+          feeOverrideReason: feeAdjusted ? form.feeOverrideReason.trim() : undefined,
+          paymentStatus,
+          paymentReference: form.paymentChoice === "PAID" ? form.paymentReference : undefined,
+          paymentMethod: form.paymentChoice === "PAID" ? form.paymentMethod : form.paymentChoice === "COLLECT_ON_SITE" ? "PAY_ON_SITE" : undefined,
+          waiverReason: form.paymentChoice === "WAIVED" ? form.waiverReason.trim() : undefined,
         }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || "Unable to book the site visit.");
-      setSuccess(payload.visit);
+      let paymentPrompted = false;
+      let paymentPromptError = "";
+      if (form.paymentChoice === "PAY_NOW") {
+        const paymentResponse = await fetch(paymentApiPath(payload.visit.id), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phoneNumber: form.paymentPhone || form.customerPhone }),
+        });
+        const paymentPayload = await paymentResponse.json().catch(() => null);
+        if (paymentResponse.ok) paymentPrompted = true;
+        else paymentPromptError = paymentPayload?.error || "The booking was created, but the M-Pesa prompt could not be sent.";
+      }
+      setSuccess({ ...payload.visit, paymentPrompted, paymentPromptError });
       setForm(emptyForm());
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to book the site visit.");
@@ -128,7 +161,9 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
       {success ? (
         <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-50">
           <div className="flex items-center gap-2 font-semibold"><CheckCircle2 className="h-5 w-5" /> {success.visitRef} booked successfully</div>
-          <p className="mt-1">{success.customerName} · {money(success.totalPayable)} · owner {success.assignedStaffName || "selected staff"}. Admin and Jonathan can now assign and schedule the technician.</p>
+          <p className="mt-1">{success.customerName} · {money(success.totalPayable)} · owner {success.assignedStaffName || "selected staff"}. The customer and the shared admin queue have been notified.</p>
+          {success.paymentPrompted ? <p className="mt-2 font-medium text-emerald-100">An M-Pesa PayBill prompt has been sent to the customer&apos;s phone.</p> : null}
+          {success.paymentPromptError ? <p className="mt-2 text-amber-100">{success.paymentPromptError}</p> : null}
         </div>
       ) : null}
 
@@ -139,7 +174,6 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
             <Field title="Customer name"><input required minLength={2} className={inputClass} value={form.customerName} onChange={(event) => setForm({ ...form, customerName: event.target.value })} /></Field>
             <Field title="Phone number"><input required inputMode="tel" placeholder="07xx xxx xxx" className={inputClass} value={form.customerPhone} onChange={(event) => setForm({ ...form, customerPhone: event.target.value })} /></Field>
             <Field title="Email (optional)"><input type="email" className={inputClass} value={form.customerEmail} onChange={(event) => setForm({ ...form, customerEmail: event.target.value })} /></Field>
-            <Field title="Existing quotation reference (optional)"><input placeholder="QT-..." className={inputClass} value={form.quoteRef} onChange={(event) => setForm({ ...form, quoteRef: event.target.value })} /></Field>
             <Field title={allowUnassigned ? "Sales owner (optional)" : "Staff requesting / customer owner"} wide><select required={!allowUnassigned} disabled={staffLoading} className={inputClass} value={form.assignedStaffId} onChange={(event) => setForm({ ...form, assignedStaffId: event.target.value })}><option value="">{allowUnassigned ? "Unassigned — allocate later" : "Select staff member"}</option>{staffOptions.map((member) => <option key={member.id} value={member.id}>{member.name || member.email || "Staff"}</option>)}</select><span className="mt-1 block text-xs font-normal text-slate-400">{allowUnassigned ? "No sales person is credited until an admin assigns the work." : "This staff member keeps customer and quotation ownership. Only admin assigns the technician."}</span></Field>
             <Field title="Project type"><select className={inputClass} value={form.projectType} onChange={(event) => setForm({ ...form, projectType: event.target.value })}>{SITE_VISIT_PROJECT_OPTIONS.map((project) => <option key={project.value} value={project.value}>{project.label}</option>)}</select></Field>
             <Field title="Visit purpose"><select className={inputClass} value={form.visitReason} onChange={(event) => setForm({ ...form, visitReason: event.target.value })}>{SITE_VISIT_REASON_OPTIONS.map((reason) => <option key={reason.value} value={reason.value}>{reason.label}</option>)}</select></Field>
@@ -155,7 +189,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
             <Field title="Town / service area"><select required disabled={!form.county} className={inputClass} value={form.town} onChange={(event) => setForm({ ...form, town: event.target.value })}><option value="">Select town</option>{towns.map((town) => <option key={town}>{town}</option>)}</select></Field>
             <Field title="Exact location" wide><input required placeholder="Estate, road, building or village" className={inputClass} value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
             <Field title="Nearby landmark (optional)"><input className={inputClass} value={form.landmark} onChange={(event) => setForm({ ...form, landmark: event.target.value })} /></Field>
-            <Field title="Preferred date"><input required type="date" min={new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })} className={inputClass} value={form.preferredDate} onChange={(event) => setForm({ ...form, preferredDate: event.target.value })} /></Field>
+            <Field title="Preferred date"><div className="mt-1.5 flex gap-2"><input ref={preferredDateRef} required type="date" min={new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" })} className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400/60" value={form.preferredDate} onChange={(event) => setForm({ ...form, preferredDate: event.target.value })} /><button type="button" aria-label="Open preferred-date calendar" onClick={() => preferredDateRef.current?.showPicker?.()} className="inline-flex shrink-0 items-center justify-center rounded-xl border border-cyan-400/40 px-3 text-cyan-200 transition hover:bg-cyan-400/10"><CalendarDays className="h-5 w-5" /></button></div><span className="mt-1 block text-xs font-normal text-slate-400">Choose the customer&apos;s preferred date from the calendar.</span></Field>
             <Field title="Preferred time"><select className={inputClass} value={form.preferredTimeLabel} onChange={(event) => setForm({ ...form, preferredTimeLabel: event.target.value })}><option value="MORNING">Morning</option><option value="AFTERNOON">Afternoon</option></select></Field>
           </div>
         </section>
@@ -165,18 +199,20 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
           <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr_0.9fr]">
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
               <label className="flex cursor-pointer items-start gap-3">
-                <input type="checkbox" className="mt-1 h-4 w-4 accent-cyan-400" checked={form.dataLoggerRequested} onChange={(event) => setForm({ ...form, dataLoggerRequested: event.target.checked })} />
+                <input type="checkbox" disabled={form.paymentChoice === "WAIVED"} className="mt-1 h-4 w-4 accent-cyan-400 disabled:cursor-not-allowed disabled:opacity-50" checked={form.dataLoggerRequested} onChange={(event) => setForm({ ...form, dataLoggerRequested: event.target.checked })} />
                 <span><span className="flex items-center gap-2 font-semibold text-white"><Database className="h-4 w-4 text-cyan-300" /> Add data logger</span><span className="mt-1 block text-xs text-slate-400">{money(DATA_LOGGER_DAILY_RATE)} per day, maximum 3 days.</span></span>
               </label>
               {form.dataLoggerRequested ? <label className="mt-4 block text-sm text-slate-200">Monitoring days<select className={inputClass} value={form.dataLoggerDays} onChange={(event) => setForm({ ...form, dataLoggerDays: event.target.value })}><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option></select></label> : null}
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
-              <label className="text-sm font-medium text-slate-200">Payment status<select className={inputClass} value={form.paymentStatus} onChange={(event) => setForm({ ...form, paymentStatus: event.target.value as PaymentStatus })}><option value="UNPAID">Awaiting payment</option><option value="COLLECT_ON_SITE">Collect payment on site</option><option value="PAID">Paid at desk</option></select></label>
-              {form.paymentStatus === "PAID" ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm text-slate-200">Method<select className={inputClass} value={form.paymentMethod} onChange={(event) => setForm({ ...form, paymentMethod: event.target.value })}><option>M-PESA</option><option>CASH</option><option>BANK</option><option>CARD</option></select></label><label className="text-sm text-slate-200">Reference<input required className={inputClass} value={form.paymentReference} onChange={(event) => setForm({ ...form, paymentReference: event.target.value })} /></label></div> : null}
+              <label className="text-sm font-medium text-slate-200">Payment arrangement<select className={inputClass} value={form.paymentChoice} onChange={(event) => { const paymentChoice = event.target.value as BookingPaymentChoice; setForm({ ...form, paymentChoice, dataLoggerRequested: paymentChoice === "WAIVED" ? false : form.dataLoggerRequested }); }}><option value="COLLECT_ON_SITE">Collect on site</option><option value="PAY_NOW">Prompt customer to pay now (M-Pesa PayBill)</option><option value="PAID">Payment recorded at desk</option>{canWaive ? <option value="WAIVED">Waive booking fee</option> : null}</select></label>
+              {form.paymentChoice === "PAY_NOW" ? <label className="mt-3 block text-sm text-slate-200">M-Pesa prompt phone<input inputMode="tel" placeholder="Customer phone (used if left blank)" className={inputClass} value={form.paymentPhone} onChange={(event) => setForm({ ...form, paymentPhone: event.target.value })} /><span className="mt-1 block text-xs text-slate-400">We will send the existing PayBill/STK payment prompt after this booking is created.</span></label> : null}
+              {form.paymentChoice === "PAID" ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm text-slate-200">Method<select className={inputClass} value={form.paymentMethod} onChange={(event) => setForm({ ...form, paymentMethod: event.target.value })}><option>M-PESA</option><option>CASH</option><option>BANK</option><option>CARD</option></select></label><label className="text-sm text-slate-200">Reference<input required className={inputClass} value={form.paymentReference} onChange={(event) => setForm({ ...form, paymentReference: event.target.value })} /></label></div> : null}
+              {form.paymentChoice === "WAIVED" ? <label className="mt-3 block text-sm text-slate-200">Waiver reason<textarea required rows={2} className={inputClass} value={form.waiverReason} onChange={(event) => setForm({ ...form, waiverReason: event.target.value })} /></label> : null}
             </div>
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
               <div className="text-xs uppercase tracking-wide text-cyan-200">Booking total</div>
-              <div className="mt-3 space-y-2 text-sm"><div className="flex justify-between gap-3 text-slate-300"><span>Site visit</span><strong className="text-white">{zone ? money(visitFee) : "Select location"}</strong></div><div className="flex justify-between gap-3 text-slate-300"><span>Data logger</span><strong className="text-white">{money(loggerFee)}</strong></div><div className="flex justify-between gap-3 border-t border-white/10 pt-2 text-base"><span className="font-semibold text-white">Total</span><strong className="text-cyan-200">{money(totalPayable)}</strong></div></div>
+              <div className="mt-3 space-y-2 text-sm"><div className="flex justify-between gap-3 text-slate-300"><span>Standard visit fee</span><strong className="text-white">{zone ? money(standardVisitFee) : "Select location"}</strong></div>{zone ? <label className="block text-xs text-slate-300">Adjust booking fee (optional)<input inputMode="decimal" min="0" type="number" className={inputClass} placeholder={String(standardVisitFee)} value={form.feeOverride} onChange={(event) => setForm({ ...form, feeOverride: event.target.value })} /></label> : null}{feeAdjusted ? <label className="block text-xs text-slate-300">Fee adjustment reason<textarea required rows={2} className={inputClass} value={form.feeOverrideReason} onChange={(event) => setForm({ ...form, feeOverrideReason: event.target.value })} /></label> : null}<div className="flex justify-between gap-3 text-slate-300"><span>Data logger</span><strong className="text-white">{money(loggerFee)}</strong></div><div className="flex justify-between gap-3 border-t border-white/10 pt-2 text-base"><span className="font-semibold text-white">Total</span><strong className="text-cyan-200">{money(totalPayable)}</strong></div></div>
               {zone ? <p className="mt-3 text-xs text-slate-400">{zone.name}</p> : null}
             </div>
           </div>
