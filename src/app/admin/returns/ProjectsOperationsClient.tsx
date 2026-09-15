@@ -6,6 +6,7 @@ import ProjectDocuments from "./ProjectDocuments";
 import CertificateReviewPanel from "./CertificateReviewPanel";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
+import { buildAdminCustomerPortalLoginHref } from "@/lib/adminCustomerPortalLink";
 
 type StaffOption = {
   id: string;
@@ -1430,6 +1431,11 @@ export default function ProjectsOperationsClient({
                   );
                   const quickTechLabels =
                     assignedStaff.length > 0 ? assignedStaff : assignedHandlers;
+                  const customerAccountHref = buildAdminCustomerPortalLoginHref({
+                    customerName: row.customerName,
+                    customerPhone: row.customerPhone,
+                    callbackUrl: "/account",
+                  });
                   return (
                     <Fragment key={row.id}>
                       <tr
@@ -1461,9 +1467,19 @@ export default function ProjectsOperationsClient({
                           </div>
                         </td>
                         <td className="px-4 py-5">
-                          <div className="text-sm font-medium text-white">
-                            {row.customerName || "No customer name"}
-                          </div>
+                          {row.customerName ? (
+                            <a
+                              href={customerAccountHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sm font-medium text-white transition hover:text-cyan-200 hover:underline"
+                              title="Open this customer account"
+                            >
+                              {row.customerName}
+                            </a>
+                          ) : (
+                            <div className="text-sm font-medium text-white">No customer name</div>
+                          )}
                           <div className="mt-1 text-sm text-slate-400">
                             {row.customerPhone || "No phone"}
                           </div>
@@ -1635,6 +1651,16 @@ export default function ProjectsOperationsClient({
                                       )}
                                     </div>
                                   </div>
+                                  {row.customerName ? (
+                                    <a
+                                      href={customerAccountHref}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="mt-4 inline-flex rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
+                                    >
+                                      Open Customer Account
+                                    </a>
+                                  ) : null}
                                 </div>
 
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { AdminCustomerRow } from "@/lib/adminCustomers";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
+import { buildAdminCustomerPortalLoginHref } from "@/lib/adminCustomerPortalLink";
 
 type CustomerRow = Omit<AdminCustomerRow, "firstPurchaseAt" | "lastPurchaseAt" | "orders"> & {
   firstPurchaseAt: string | null;
@@ -121,22 +122,6 @@ const formatStatus = (value?: string | null) =>
     .replace(/_/g, " ")
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-
-function buildPortalLoginHref(args: {
-  customerUserId?: string | null;
-  customerName?: string | null;
-  customerPhone?: string | null;
-  customerEmail?: string | null;
-  callbackUrl?: string;
-}) {
-  const params = new URLSearchParams();
-  if (args.customerUserId) params.set("userId", args.customerUserId);
-  if (args.customerName) params.set("name", args.customerName);
-  if (args.customerPhone) params.set("phone", args.customerPhone);
-  if (args.customerEmail) params.set("email", args.customerEmail);
-  params.set("callbackUrl", args.callbackUrl || "/account");
-  return `/api/admin/customers/portal-login?${params.toString()}`;
-}
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -314,6 +299,13 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
               emails: customer.emails,
               displayName: customer.displayName,
             });
+            const customerAccountHref = buildAdminCustomerPortalLoginHref({
+              customerUserId: customer.customerUserId,
+              customerName: customer.displayName,
+              customerPhone: customer.primaryPhone,
+              customerEmail: customer.primaryEmail,
+              callbackUrl: "/account",
+            });
             return (
               <div key={customer.id} className="transition hover:bg-white/[0.02]">
                 <div className="grid grid-cols-[56px_minmax(260px,1.9fr)_190px_110px_120px_160px_170px] items-center gap-3 px-4 py-4">
@@ -330,6 +322,9 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                     <Link href={profileHref} className="font-semibold text-white transition hover:text-cyan-200">
                       {customer.displayName}
                     </Link>
+                    <a href={customerAccountHref} target="_blank" rel="noreferrer" className="ml-3 text-xs font-semibold text-emerald-300 transition hover:text-emerald-200">
+                      Open account ↗
+                    </a>
                     <div className="mt-1 truncate text-xs text-slate-500">
                       {customer.shops.slice(0, 2).join(" · ") || "No linked shop"}{customer.shops.length > 2 ? ` +${customer.shops.length - 2} more` : ""}
                     </div>
@@ -441,7 +436,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                           </div>
                           <div className="mt-4 flex flex-wrap gap-2 text-xs">
                             <a
-                              href={buildPortalLoginHref({
+                              href={buildAdminCustomerPortalLoginHref({
                                 customerUserId: customer.customerUserId,
                                 customerName: customer.displayName,
                                 customerPhone: customer.primaryPhone,
@@ -690,7 +685,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
                                   {order.routeId ? (
                                     <a
-                                      href={buildPortalLoginHref({
+                                      href={buildAdminCustomerPortalLoginHref({
                                         customerUserId: order.customerUserId || customer.customerUserId,
                                         customerName: order.customerName || customer.displayName,
                                         customerPhone: order.customerPhone || customer.primaryPhone,
@@ -745,6 +740,13 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
             emails: customer.emails,
             displayName: customer.displayName,
           });
+          const customerAccountHref = buildAdminCustomerPortalLoginHref({
+            customerUserId: customer.customerUserId,
+            customerName: customer.displayName,
+            customerPhone: customer.primaryPhone,
+            customerEmail: customer.primaryEmail,
+            callbackUrl: "/account",
+          });
           return (
             <div key={customer.id} className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] p-4">
               <div className="flex items-start justify-between gap-3">
@@ -752,6 +754,9 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                   <Link href={profileHref} className="font-semibold text-white transition hover:text-cyan-200">
                     {customer.displayName}
                   </Link>
+                  <a href={customerAccountHref} target="_blank" rel="noreferrer" className="mt-1 block text-xs font-semibold text-emerald-300 transition hover:text-emerald-200">
+                    Open account ↗
+                  </a>
                   <div className="mt-1 text-sm text-slate-400">{customer.primaryPhone || customer.primaryEmail || "No contact details"}</div>
                 </div>
                 <button
@@ -817,7 +822,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs">
                     <a
-                      href={buildPortalLoginHref({
+                      href={buildAdminCustomerPortalLoginHref({
                         customerUserId: customer.customerUserId,
                         customerName: customer.displayName,
                         customerPhone: customer.primaryPhone,
@@ -846,7 +851,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                         <div className="mt-3 flex flex-wrap gap-2 text-xs">
                           {order.routeId ? (
                             <a
-                              href={buildPortalLoginHref({
+                              href={buildAdminCustomerPortalLoginHref({
                                 customerUserId: order.customerUserId || customer.customerUserId,
                                 customerName: order.customerName || customer.displayName,
                                 customerPhone: order.customerPhone || customer.primaryPhone,
