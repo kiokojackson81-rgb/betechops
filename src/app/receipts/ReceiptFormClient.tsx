@@ -74,13 +74,22 @@ type ReceiptFormProps = {
 };
 
 type PaymentChoice = "MPESA" | "CASH" | "MPESA_EXPRESS";
+type PaybillCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "DTB_PAYBILL" | "ABSA_PAYBILL";
 type ExpressPayment = {
   receiptId: string;
   reference: string;
   checkoutRequestId: string | null;
   status: "STARTING" | "AWAITING_PIN" | "FAILED" | "PAYBILL";
   message: string;
+  paymentCollectionMethod?: PaybillCollectionMethod;
 };
+
+const PAYBILL_OPTIONS: Array<{ value: PaybillCollectionMethod; label: string; detail: string; external: boolean }> = [
+  { value: "MPESA_PAYBILL", label: "Betech Paybill", detail: "Paybill 1231008 · Account number is the receipt reference", external: false },
+  { value: "EQUITY_PAYBILL", label: "Equity Paybill", detail: "External Equity payment channel", external: true },
+  { value: "DTB_PAYBILL", label: "DTB Paybill", detail: "External DTB payment channel", external: true },
+  { value: "ABSA_PAYBILL", label: "ABSA Paybill", detail: "External ABSA payment channel", external: true },
+];
 
 type ProjectDraft = {
   paymentTerm: ReceiptProjectPaymentTerm;
@@ -158,6 +167,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [mpesaPayerPhone, setMpesaPayerPhone] = useState("");
   const [editingMpesaPayerPhone, setEditingMpesaPayerPhone] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [externalPaymentReference, setExternalPaymentReference] = useState("");
   const [expressPayment, setExpressPayment] = useState<ExpressPayment | null>(null);
   const completedExpressCheckoutIds = useRef(new Set<string>());
   const hasPaymentMethodSelection = isMpesaExpress || selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
@@ -887,6 +897,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setIsMpesaExpress(true);
     setMpesaPayerPhone("");
     setEditingMpesaPayerPhone(false);
+    setExternalPaymentReference("");
     setSelectedPaymentMethods({ MPESA: false, CASH: false });
   };
 
@@ -977,6 +988,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setIsMpesaExpress(false);
     setMpesaPayerPhone("");
     setEditingMpesaPayerPhone(false);
+    setExternalPaymentReference("");
     setExpressPayment(null);
   };
 
@@ -1028,20 +1040,61 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
-  const switchToPaybill = async () => {
+  const selectPaybillPayment = async (paymentCollectionMethod: PaybillCollectionMethod) => {
     if (!expressPayment) return;
     try {
       const response = await fetch(`/api/receipts/${encodeURIComponent(expressPayment.receiptId)}/payment-method`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ paymentMethod: "MPESA", paymentCollectionMethod: "MPESA_PAYBILL" }),
+        body: JSON.stringify({ paymentMethod: "MPESA", paymentCollectionMethod }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error || "Unable to switch this sale to Paybill");
-      setExpressPayment((current) => current ? { ...current, status: "PAYBILL", checkoutRequestId: null, message: "Use the Paybill details below. The receipt will print only after the payment is confirmed." } : null);
+      const option = PAYBILL_OPTIONS.find((item) => item.value === paymentCollectionMethod);
+      setExternalPaymentReference("");
+      setExpressPayment((current) => current ? {
+        ...current,
+        status: "PAYBILL",
+        checkoutRequestId: null,
+        paymentCollectionMethod,
+        message: option?.external
+          ? `Use the selected ${option.label} channel, then confirm payment to print the receipt.`
+          : "Use the Betech Paybill details below. The receipt prints after payment is confirmed.",
+      } : null);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Unable to switch to Paybill", "error");
+    }
+  };
+
+  const confirmExternalPayment = async () => {
+    if (!expressPayment?.receiptId) return;
+    const paymentCollectionMethod = expressPayment.paymentCollectionMethod;
+    const option = PAYBILL_OPTIONS.find((item) => item.value === paymentCollectionMethod);
+    if (!option?.external) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/receipts/${encodeURIComponent(expressPayment.receiptId)}/external-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ paymentCollectionMethod, paymentReference: externalPaymentReference }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.error || "Unable to confirm external payment");
+      openSavedReceiptWindow(expressPayment.receiptId, true);
+      showToast(
+        body?.alreadyConfirmed
+          ? "Payment is already recorded. Opening the receipt to print."
+          : `${option.label} payment confirmed. Opening the receipt to print.`,
+        "success",
+      );
+      onCreated?.({ receiptId: expressPayment.receiptId }, { staffId, serial: expressPayment.reference, receiptId: expressPayment.receiptId });
+      resetForm();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to confirm external payment", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1082,7 +1135,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   }, [expressPayment?.checkoutRequestId, expressPayment?.status]);
 
   useEffect(() => {
-    if (!expressPayment || expressPayment.status !== "PAYBILL") return;
+    if (
+      !expressPayment ||
+      expressPayment.status !== "PAYBILL" ||
+      expressPayment.paymentCollectionMethod !== "MPESA_PAYBILL"
+    ) return;
     let cancelled = false;
     const completionKey = `PAYBILL:${expressPayment.receiptId}`;
     const poll = async () => {
@@ -1103,7 +1160,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     const timer = window.setInterval(() => void poll(), 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expressPayment?.receiptId, expressPayment?.status]);
+  }, [expressPayment?.receiptId, expressPayment?.status, expressPayment?.paymentCollectionMethod]);
 
   const handleSave = async () => {
 
@@ -1960,8 +2017,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         <p className="mt-1 text-sm text-slate-200">{expressPayment.message}</p>
         <p className="mt-2 text-xs text-slate-300">Reference: <span className="font-mono">{expressPayment.reference}</span> · Amount: KES {total.toLocaleString()}</p>
         {expressPayment.status === "AWAITING_PIN" ? <p className="mt-2 text-xs text-emerald-100">Checking confirmation automatically. Do not print until this screen confirms payment.</p> : null}
-        {expressPayment.status === "FAILED" ? <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={saving} onClick={() => void retryMpesaExpressPrompt()} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{saving ? "Sending…" : "Retry STK Prompt"}</button><button type="button" onClick={() => void switchToPaybill()} className="rounded-xl border border-amber-300/60 px-4 py-2 text-sm font-bold text-amber-100">Switch to Paybill</button></div> : null}
-        {expressPayment.status === "PAYBILL" ? <div className="mt-4 rounded-xl border border-sky-300/30 bg-slate-950/40 p-3 text-sm"><p>Paybill number: <strong>1231008</strong></p><p className="mt-1">Account number: <strong className="font-mono">{expressPayment.reference}</strong></p><p className="mt-1">Amount: <strong>KES {total.toLocaleString()}</strong></p><p className="mt-2 text-xs text-slate-300">Checking for Paybill confirmation automatically. The receipt will open to print after payment is confirmed.</p></div> : null}
+        {expressPayment.status === "FAILED" ? <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={saving} onClick={() => void retryMpesaExpressPrompt()} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{saving ? "Sending…" : "Retry STK Prompt"}</button><button type="button" onClick={() => void selectPaybillPayment("MPESA_PAYBILL")} className="rounded-xl border border-amber-300/60 px-4 py-2 text-sm font-bold text-amber-100">Choose Paybill</button></div> : null}
+        {expressPayment.status === "PAYBILL" ? <div className="mt-4 space-y-4 rounded-xl border border-sky-300/30 bg-slate-950/40 p-3 text-sm"><div><p className="font-semibold text-white">Choose payment channel</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{PAYBILL_OPTIONS.map((option) => <button key={option.value} type="button" disabled={saving} onClick={() => void selectPaybillPayment(option.value)} className={`rounded-xl border p-3 text-left transition ${expressPayment.paymentCollectionMethod === option.value ? "border-sky-300 bg-sky-300/10 text-sky-100" : "border-slate-700 text-slate-200 hover:border-sky-300/60"}`}><span className="block font-semibold">{option.label}</span><span className="mt-1 block text-xs text-slate-300">{option.detail}</span></button>)}</div></div>{expressPayment.paymentCollectionMethod === "MPESA_PAYBILL" ? <div><p>Paybill number: <strong>1231008</strong></p><p className="mt-1">Account number: <strong className="font-mono">{expressPayment.reference}</strong></p><p className="mt-1">Amount: <strong>KES {total.toLocaleString()}</strong></p><p className="mt-2 text-xs text-slate-300">Checking for Betech Paybill confirmation automatically. The receipt opens after payment is confirmed.</p></div> : <div className="space-y-3"><p>Amount: <strong>KES {total.toLocaleString()}</strong> · Reference: <strong className="font-mono">{expressPayment.reference}</strong></p><div><label className={labelClass}>Bank payment reference (optional)</label><input value={externalPaymentReference} onChange={(event) => setExternalPaymentReference(event.target.value)} placeholder="Deposit slip or transaction reference" className={fieldClass} /></div><button type="button" disabled={saving} onClick={() => void confirmExternalPayment()} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{saving ? "Confirming…" : "Confirm payment & print receipt"}</button><p className="text-xs text-slate-300">This records the selected external payment channel, staff confirmation, time, and reference before printing.</p></div>}</div> : null}
       </section> : null}
 
       <div>

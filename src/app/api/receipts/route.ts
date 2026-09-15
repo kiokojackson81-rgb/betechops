@@ -729,7 +729,7 @@ export async function GET(req: NextRequest) {
     ).trim().toUpperCase() || null;
     const completedCounterSale =
       effectivePaymentStatus === "PAID" &&
-      ["MPESA_EXPRESS", "MPESA_PAYBILL"].includes(paymentCollectionMethod || "");
+      ["MPESA_EXPRESS", "MPESA_PAYBILL", "EQUITY_PAYBILL", "DTB_PAYBILL", "ABSA_PAYBILL"].includes(paymentCollectionMethod || "");
 
     const recognitionDate =
       getReceiptProjectCompletionDate(rawData.projectFlow, undefined, r.generatedAt ?? r.createdAt) ??

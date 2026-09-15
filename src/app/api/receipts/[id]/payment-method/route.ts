@@ -5,6 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { isReceiptWithinEditableWindow, receiptEditRestrictionMessage } from "@/lib/receiptEditAccess";
 
+const PAYBILL_COLLECTION_METHODS = new Set([
+  "MPESA_PAYBILL",
+  "EQUITY_PAYBILL",
+  "DTB_PAYBILL",
+  "ABSA_PAYBILL",
+]);
+
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
 
 function resolveParams(context: ParamsContext): Promise<{ id: string }> {
@@ -27,6 +34,9 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     rawPaymentMethod === "CASH" ? PaymentMethod.CASH : rawPaymentMethod === "MPESA" ? PaymentMethod.MPESA : null;
   if (!paymentMethod) {
     return NextResponse.json({ error: "Invalid payment method" }, { status: 400 });
+  }
+  if (paymentCollectionMethod && !PAYBILL_COLLECTION_METHODS.has(paymentCollectionMethod)) {
+    return NextResponse.json({ error: "Invalid Paybill payment channel" }, { status: 400 });
   }
 
   const actorId = (guard.session?.user as { id?: string } | undefined)?.id ?? null;
@@ -61,13 +71,15 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         throw new Error(receiptEditRestrictionMessage());
       }
 
+      const isPaybillCollection = PAYBILL_COLLECTION_METHODS.has(paymentCollectionMethod);
+      const fallbackMarkedAt = new Date().toISOString();
       const nextData = {
         ...((receipt.data as Record<string, unknown> | null) ?? {}),
         paymentMethod,
-        ...(paymentCollectionMethod === "MPESA_PAYBILL"
+        ...(isPaybillCollection
           ? {
-              paymentCollectionMethod: "MPESA_PAYBILL",
-              mpesaExpressFallbackAt: new Date().toISOString(),
+              paymentCollectionMethod,
+              mpesaExpressFallbackAt: fallbackMarkedAt,
             }
           : {}),
       };
@@ -84,15 +96,15 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         },
       });
 
-      if (paymentCollectionMethod === "MPESA_PAYBILL" && receipt.order) {
+      if (isPaybillCollection && receipt.order) {
         const order = await tx.order.findUnique({ where: { id: receipt.order.id }, select: { metadata: true } });
         await tx.order.update({
           where: { id: receipt.order.id },
           data: {
             metadata: {
               ...((order?.metadata as Record<string, unknown> | null) ?? {}),
-              paymentCollectionMethod: "MPESA_PAYBILL",
-              mpesaExpressFallbackAt: new Date().toISOString(),
+              paymentCollectionMethod,
+              mpesaExpressFallbackAt: fallbackMarkedAt,
             },
           },
         });
@@ -123,7 +135,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
                   ? (receipt.data as Record<string, unknown>).paymentMethod ?? null
                   : null,
             },
-            after: { paymentMethod },
+            after: { paymentMethod, paymentCollectionMethod: isPaybillCollection ? paymentCollectionMethod : null },
           },
         });
       } catch {

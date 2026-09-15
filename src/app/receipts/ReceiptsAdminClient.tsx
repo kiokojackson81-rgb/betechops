@@ -348,6 +348,17 @@ const formatBadgeLabel = (value?: string | null) =>
         .replace(/\b\w/g, (match) => match.toUpperCase())
     : "-";
 
+const paymentCollectionLabel = (paymentCollectionMethod?: string | null, paymentMethod?: string | null) => {
+  switch (paymentCollectionMethod) {
+    case "MPESA_EXPRESS": return "M-Pesa Express";
+    case "MPESA_PAYBILL": return "Betech Paybill";
+    case "EQUITY_PAYBILL": return "Equity Paybill";
+    case "DTB_PAYBILL": return "DTB Paybill";
+    case "ABSA_PAYBILL": return "Absa Paybill";
+    default: return paymentMethod;
+  }
+};
+
 const getDocBadgeClass = (docType?: string | null) => {
   if (!docType) return "border border-white/10 bg-white/5 text-white";
   return (
@@ -2700,7 +2711,7 @@ export default function ReceiptsAdminClient({
                         <span
                           className={`${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`}
                         >
-                          {formatBadgeLabel(row.paymentCollectionMethod === "MPESA_EXPRESS" ? "M-Pesa Express" : row.paymentCollectionMethod === "MPESA_PAYBILL" ? "M-Pesa Paybill" : row.paymentMethod)}
+                          {formatBadgeLabel(paymentCollectionLabel(row.paymentCollectionMethod, row.paymentMethod))}
                         </span>
                       </td>
                       <td className="px-3 py-3">
