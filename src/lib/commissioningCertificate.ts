@@ -386,7 +386,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   page.drawText("Installation Technician Declaration", { x: MARGIN + 8, y: 226, size: 6.8, font: bold, color: MAROON });
   drawLines(page, "I confirm that I carried out the installation, testing and commissioning of the solar photovoltaic system described in this certificate. I further confirm that the equipment details, commissioning results, measurements and installation evidence recorded herein are true and accurate to the best of my knowledge.", MARGIN + 8, 217, fullWidth - 16, regular, 5.9, INK, 7);
   page.drawText("Professional Certification", { x: MARGIN + 8, y: 188, size: 6.8, font: bold, color: MAROON });
-  drawLines(page, "I have reviewed the installation and commissioning records presented for this project, including the system configuration, equipment identification, test results and supporting installation evidence. Based on the information provided, I am satisfied that the system has been successfully installed, tested and commissioned and is approved for handover to the customer. This Completion & Commissioning Certificate is hereby authorised and certified on behalf of Betech Solar Solutions.", MARGIN + 8, 179, fullWidth - 16, regular, 5.75, INK, 6.8);
+  drawLines(page, "Based on the recorded system configuration, equipment identification, commissioning results and supporting installation evidence, this Completion & Commissioning Certificate is authorised and certified on behalf of Betech Solar Solutions for handover to the customer.", MARGIN + 8, 179, fullWidth - 16, regular, 5.75, INK, 6.8);
   const y = 145;
   drawSectionHeading(page, "Signatures", y, bold);
   const signatureTop = y - 14;

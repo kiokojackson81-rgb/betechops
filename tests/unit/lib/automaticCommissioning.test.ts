@@ -10,7 +10,7 @@ jest.mock("@/lib/commissioningDelivery", () => ({ ensureCustomerCertificateToken
 import { prisma } from "@/lib/prisma";
 import { getBranding } from "@/lib/branding";
 import { isReadyToIssue } from "@/lib/commissioningValidation";
-import { issueProfessionallyApprovedCertificate } from "@/lib/professionalCommissioning";
+import { issueAutomaticCompletionCertificate, issueProfessionallyApprovedCertificate } from "@/lib/professionalCommissioning";
 import { completeCertifiedProject } from "@/lib/projectCompletion";
 import { sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
 const originalFetch = global.fetch;
@@ -19,35 +19,38 @@ beforeEach(() => {
   jest.clearAllMocks();
   (getBranding as jest.Mock).mockResolvedValue({ licensedProfessional: profile, digitalStampUrl: "https://example.invalid/stamp.png" });
   (isReadyToIssue as jest.Mock).mockReturnValue({ ready: true });
-  (prisma.commissioningSession.findUnique as jest.Mock).mockResolvedValue({ id: "s", receiptId: "r", status: "AWAITING_PROFESSIONAL_REVIEW", updatedAt: new Date(), customerTermsAcceptedAt: new Date(), data: { installerName: "Agent Jackson", termsAcceptance: { accepted: true } }, receipt: { order: { customerPhone: "0700000000" } } });
+  (prisma.commissioningSession.findUnique as jest.Mock).mockResolvedValue({ id: "s", receiptId: "r", status: "DRAFT", updatedAt: new Date(), customerTermsAcceptedAt: new Date(), data: { installerName: "Agent Jackson", termsAcceptance: { accepted: true } }, receipt: { order: { customerPhone: "0700000000" } } });
   (prisma.commissioningSession.update as jest.Mock).mockResolvedValue({ id: "s", receiptId: "r", status: "ISSUED" });
   (prisma.user.findUnique as jest.Mock).mockResolvedValue({ isActive: true });
   (prisma.$transaction as jest.Mock).mockImplementation(async callback => callback(prisma));
   global.fetch = jest.fn().mockResolvedValue({ ok: true, headers: { get: () => "image/png" }, arrayBuffer: async () => Buffer.from("test-image") });
 });
 afterAll(() => { global.fetch = originalFetch; });
-test("records a licensed professional authorisation, then completes and delivers the project", async () => {
-  await issueProfessionallyApprovedCertificate({ sessionId: "s", origin: "https://example.invalid", professional: profile, approvedById: "licensed-professional", approvedByName: "Jonathan Mugiira" });
+test("automatically signs, completes and delivers once the technician record is complete", async () => {
+  await issueAutomaticCompletionCertificate({ sessionId: "s", origin: "https://example.invalid", source: "PUBLIC_LINK" });
   const saved = (prisma.commissioningSession.update as jest.Mock).mock.calls[0][0].data;
   expect(saved.status).toBe("ISSUED");
   expect(saved.professionalSignatureSnapshot).toMatch(/^data:image\/png;base64,/);
-  expect(saved.professionalReviewedBy).toBe("Jonathan Mugiira");
-  expect(saved.data.certificationMode).toBe("PROFESSIONAL_REVIEW");
-  expect(saved.audit[0]).toMatchObject({ action: "CERTIFICATE_ISSUED_AFTER_PROFESSIONAL_CERTIFICATION", actorId: "licensed-professional" });
-  expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: "licensed-professional" }, select: { isActive: true } });
+  expect(saved.professionalReviewedBy).toBeNull();
+  expect(saved.data.certificationMode).toBe("AUTOMATIC_SUPERVISOR_SIGNATURE");
+  expect(saved.audit[0]).toMatchObject({ action: "CERTIFICATE_AUTO_ISSUED_WITH_SUPERVISOR_SIGNATURE", actorId: null, detail: { automaticSource: "PUBLIC_LINK" } });
+  expect(prisma.user.findUnique).not.toHaveBeenCalled();
   expect(completeCertifiedProject).toHaveBeenCalled();
   expect(sendCustomerCertificateDelivery).toHaveBeenCalled();
 });
 test("rejects an administrator who is not the linked licensed professional", async () => {
+  const existing = await prisma.commissioningSession.findUnique({ where: { id: "s" } });
+  (prisma.commissioningSession.findUnique as jest.Mock).mockResolvedValue({ ...existing, status: "AWAITING_PROFESSIONAL_REVIEW" });
   await expect(issueProfessionallyApprovedCertificate({ sessionId: "s", origin: "https://example.invalid", professional: profile, approvedById: "admin" })).rejects.toThrow("Only the licensed professional");
   expect(prisma.$transaction).not.toHaveBeenCalled();
 });
-test("incomplete checks cannot be authorised", async () => {
+test("incomplete checks cannot issue automatically", async () => {
   (isReadyToIssue as jest.Mock).mockReturnValue({ ready: false });
-  await expect(issueProfessionallyApprovedCertificate({ sessionId: "s", origin: "https://example.invalid", professional: profile, approvedById: "licensed-professional" })).rejects.toThrow("must be complete");
+  await expect(issueAutomaticCompletionCertificate({ sessionId: "s", origin: "https://example.invalid", source: "PUBLIC_LINK" })).rejects.toThrow("must be complete");
   expect(prisma.$transaction).not.toHaveBeenCalled();
 });
-test("requires the configured signature before professional authorisation", async () => {
-  await expect(issueProfessionallyApprovedCertificate({ sessionId: "s", origin: "https://example.invalid", professional: { ...profile, signatureUrl: null }, approvedById: "licensed-professional" })).rejects.toThrow("signature");
+test("requires the configured signature before automatic issuance", async () => {
+  (getBranding as jest.Mock).mockResolvedValue({ licensedProfessional: { ...profile, signatureUrl: null }, digitalStampUrl: "https://example.invalid/stamp.png" });
+  await expect(issueAutomaticCompletionCertificate({ sessionId: "s", origin: "https://example.invalid", source: "PUBLIC_LINK" })).rejects.toThrow("signature");
   expect(prisma.$transaction).not.toHaveBeenCalled();
 });

@@ -75,13 +75,22 @@ async function snapshotImage(url: string | null | undefined, label: string) {
   return `data:${type};base64,${bytes.toString("base64")}`;
 }
 
-/** A linked licensed professional authorises issuance and freezes the signed record. */
+/** Uses the configured supervisor signature and stamp after every required installer check is complete. */
+export async function issueAutomaticCompletionCertificate(input: { sessionId: string; origin: string; actorId?: string | null; source: "PUBLIC_LINK" | "STAFF_ACTION" }) {
+  const { professional, active } = await activeLicensedProfessional();
+  if (!active) throw new Error("Activate the supervisor profile in Company Documents before issuing certificates.");
+  if (!professional.name.trim() || !professional.licenceNumber.trim()) throw new Error("Configure the supervisor name and licence number in Company Documents.");
+  return issueProfessionallyApprovedCertificate({ sessionId: input.sessionId, origin: input.origin, professional, approvedById: input.actorId || null, automaticSource: input.source });
+}
+
+/** A linked professional may also authorise a record manually when an exception needs review. */
 export async function issueProfessionallyApprovedCertificate(input: {
   sessionId: string;
   origin: string;
   professional: LicensedProfessionalSnapshot;
   approvedById?: string | null;
   approvedByName?: string | null;
+  automaticSource?: "PUBLIC_LINK" | "STAFF_ACTION";
 }) {
   const session = await prisma.commissioningSession.findUnique({
     where: { id: input.sessionId },
@@ -91,10 +100,13 @@ export async function issueProfessionallyApprovedCertificate(input: {
     },
   });
   if (!session) throw new Error("Commissioning session not found.");
-  if (session.status !== "AWAITING_PROFESSIONAL_REVIEW") throw new Error("Submit the completed installation for professional review before certification.");
-  if (!input.professional.userId || input.professional.userId !== input.approvedById) throw new Error("Only the licensed professional's linked staff account may certify this installation. Link the account in Company Documents settings.");
-  const professionalAccount = await prisma.user.findUnique({ where: { id: input.professional.userId }, select: { isActive: true } });
-  if (!professionalAccount?.isActive) throw new Error("The licensed professional account is inactive.");
+  if (!input.automaticSource && session.status !== "AWAITING_PROFESSIONAL_REVIEW") throw new Error("Submit the completed installation for professional review before certification.");
+  if (input.automaticSource && !["DRAFT", "RETURNED_FOR_CORRECTION", "AWAITING_PROFESSIONAL_REVIEW"].includes(session.status)) throw new Error("The completion certificate has already been issued.");
+  if (!input.automaticSource) {
+    if (!input.professional.userId || input.professional.userId !== input.approvedById) throw new Error("Only the licensed professional's linked staff account may certify this installation. Link the account in Company Documents settings.");
+    const professionalAccount = await prisma.user.findUnique({ where: { id: input.professional.userId }, select: { isActive: true } });
+    if (!professionalAccount?.isActive) throw new Error("The licensed professional account is inactive.");
+  }
   if (!session.customerTermsAcceptedAt || asRecord(asRecord(session.data).termsAcceptance).accepted !== true) throw new Error("Customer terms acceptance is required before certification.");
   if (!input.professional.signatureUrl) throw new Error("Upload the licensed professional signature before certification.");
   if (!isReadyToIssue(asRecord(session.data)).ready) throw new Error("Commissioning evidence, equipment, tests, handover and signatures must be complete and all tests must pass or be marked N/A.");
@@ -106,7 +118,7 @@ export async function issueProfessionallyApprovedCertificate(input: {
   const data = asRecord(session.data);
   const certificateData = {
     ...data,
-    certificationMode: "PROFESSIONAL_REVIEW",
+    certificationMode: input.automaticSource ? "AUTOMATIC_SUPERVISOR_SIGNATURE" : "PROFESSIONAL_REVIEW",
     installerName: String(data.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent"),
     projectSnapshot: { ...projectSummary(session.receipt), customerPhone: session.receipt.order?.customerPhone || "" },
     installationCertifiedBySameProfessional: session.technicianId === input.professional.userId && String(data.installerName || session.technician?.name || "").trim() === input.professional.name.trim(),
@@ -126,11 +138,11 @@ export async function issueProfessionallyApprovedCertificate(input: {
       technicianSignedAt: session.technicianSignedAt || issuedAt,
       professionalApprovedAt: issuedAt,
       supervisedByProfessionalId: input.professional.userId,
-      professionalReviewedBy: input.approvedByName || input.professional.name,
+      professionalReviewedBy: input.automaticSource ? null : input.approvedByName || input.professional.name,
       professionalSignatureSnapshot: signatureSnapshot,
       professionalProfileSnapshot: { ...input.professional, stampUrl: stampSnapshot },
       data: certificateData as Prisma.InputJsonValue,
-      audit: appendCommissioningAudit(session.audit, { at: issuedAt.toISOString(), action: "CERTIFICATE_ISSUED_AFTER_PROFESSIONAL_CERTIFICATION", actorId: input.approvedById, detail: { technicianId: session.technicianId, certificateNo, professional: input.professional.name, licenceNumber: input.professional.licenceNumber } }),
+      audit: appendCommissioningAudit(session.audit, { at: issuedAt.toISOString(), action: input.automaticSource ? "CERTIFICATE_AUTO_ISSUED_WITH_SUPERVISOR_SIGNATURE" : "CERTIFICATE_ISSUED_AFTER_PROFESSIONAL_CERTIFICATION", actorId: input.automaticSource ? input.approvedById || null : input.approvedById, detail: { automaticSource: input.automaticSource || null, technicianId: session.technicianId, certificateNo, professional: input.professional.name, licenceNumber: input.professional.licenceNumber } }),
     },
   });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });

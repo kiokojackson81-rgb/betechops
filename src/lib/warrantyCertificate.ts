@@ -155,7 +155,7 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
   });
 
   let y = 628;
-  section(page, "1. CUSTOMER & PROJECT DETAILS  (inherited from Completion Certificate)", y, bold);
+  section(page, "1. CUSTOMER & PROJECT DETAILS", y, bold);
   box(page, M, y - 108, A4[0] - M * 2, 94);
   const left: Array<[string, string]> = [["Customer Name", snapshot.customerName], ["Phone Number", snapshot.customerPhone || "Not recorded"], ["Installation Location", snapshot.installationLocation], ["Project Reference", snapshot.projectReference], ["Completion Certificate No.", snapshot.completionCertificateNo]];
   const right: Array<[string, string]> = [["Commissioning Date", formatDate(snapshot.commissioningDate)], ["Warranty Start Date", formatDate(snapshot.commissioningDate)], ["Installation Type", snapshot.installationType], ["System Configuration", snapshot.systemConfiguration], ["Assigned Technician", snapshot.technicianName]];
@@ -167,7 +167,7 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
   }));
 
   y = 499;
-  section(page, "2. EQUIPMENT WARRANTY DETAILS  (inherited from Completion Certificate)", y, bold);
+  section(page, "2. EQUIPMENT WARRANTY DETAILS", y, bold);
   const cols = [M, 94, 146, 254, 374, 445, 511, A4[0] - M];
   const headings = ["Equipment", "Brand", "Model / Capacity", "Serial Number(s)", "Warranty", "Start Date", "Expiry Date"];
   page.drawRectangle({ x: M, y: 460, width: A4[0] - M * 2, height: 21, color: rgb(0.96, 0.91, 0.9), borderColor: rgb(0.78, 0.79, 0.82), borderWidth: 0.45 });
@@ -186,7 +186,7 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
     "Covers qualifying manufacturing defects and abnormal equipment failure during normal use.",
     "Excludes misuse, overloading, unauthorized modifications, third-party repairs, physical damage, flooding, fire, natural disasters and operation outside manufacturer specifications.",
     "Normal battery capacity and solar panel performance degradation within manufacturer specifications are not warranty defects.",
-    `Detailed Terms & Conditions: ${TERMS_DISPLAY_URL}`,
+    `Warranty Terms & Conditions: ${WARRANTY_SUPPORT_URL.replace(/^https:\/\//, "")}`,
   ];
   box(page, M, 146, 386, 104);
   let termsY = 237;
@@ -213,8 +213,8 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
   page.drawText(`Issue Date: ${formatDate(snapshot.issueDate)}`, { x: 365, y: 52, size: 6, font: regular, color: MUTED });
   if (authorisedSignature) { const scale = Math.min(100 / authorisedSignature.width, 16 / authorisedSignature.height); page.drawImage(authorisedSignature, { x: 365, y: 35, width: authorisedSignature.width * scale, height: authorisedSignature.height * scale }); }
   drawStamp(page, stamp, snapshot.issueDate, bold);
-  page.drawText(`Issued warranty document • ${snapshot.certificateNo}`, { x: M, y: 20, size: 6.2, font: regular, color: MUTED });
-  page.drawText("Betech Solar Solutions • Terms and conditions apply", { x: 324, y: 20, size: 6.2, font: regular, color: MUTED });
+  page.drawText(`Issued warranty document • ${snapshot.certificateNo} • Betech Solar Solutions`, { x: M, y: 20, size: 6.2, font: regular, color: MUTED });
+  page.drawText(`Installation terms: ${TERMS_DISPLAY_URL}`, { x: 386, y: 20, size: 5.8, font: regular, color: MUTED });
   for (let offset = 3; offset < snapshot.equipment.length; offset += 6) {
     const continuation = pdf.addPage(A4);
     continuation.drawText("EQUIPMENT WARRANTY DETAILS - CONTINUED", { x: M, y: 790, size: 13, font: bold, color: MAROON });
@@ -225,7 +225,8 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
       drawWrapped(continuation, `Serial: ${row.serialNumbers}`, M, top - 30, 535, regular, 8, INK, 11);
       continuation.drawText(`Warranty: ${row.warrantyYears} years | ${formatDate(row.warrantyStartDate)} to ${formatDate(row.warrantyExpiryDate)}`, { x: M, y: top - 67, size: 8, font: bold, color: GREEN });
     });
-    continuation.drawText(`Part of ${snapshot.certificateNo} - Terms and conditions apply`, { x: M, y: 30, size: 7, font: regular, color: MUTED });
+    continuation.drawText(`Issued warranty document • ${snapshot.certificateNo} • Betech Solar Solutions`, { x: M, y: 30, size: 6.2, font: regular, color: MUTED });
+    continuation.drawText(`Installation terms: ${TERMS_DISPLAY_URL}`, { x: 386, y: 30, size: 5.8, font: regular, color: MUTED });
   }
   if (snapshot.equipment.length > 3) page.drawText("Additional equipment: see continuation pages", { x: M, y: 280, size: 7, font: bold, color: MAROON });
   const supportPage = pdf.addPage(A4);
