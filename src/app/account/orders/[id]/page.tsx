@@ -40,8 +40,8 @@ export default async function AccountOrderDetailPage({
   return (
     <div className="grid w-full min-w-0 gap-4">
       <section className={`${shopStyles.lightCard} p-5 sm:p-7`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <div className={shopStyles.sectionEyebrow}>Order details</div>
             <h1 className="mt-3 text-2xl font-black sm:text-3xl">
               {order.orderRef}
@@ -51,7 +51,7 @@ export default async function AccountOrderDetailPage({
               {order.itemsCount} items
             </p>
           </div>
-          <div className="text-right">
+          <div className="flex items-end justify-between gap-3 sm:block sm:text-right">
             <span className="rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#7a0000]">
               {formatStatus(order.status)}
             </span>
@@ -61,7 +61,7 @@ export default async function AccountOrderDetailPage({
           </div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Link href="/account/orders" className={shopStyles.secondaryButton}>
+          <Link href="/account/orders" className={`${shopStyles.secondaryButton} w-full sm:w-auto`}>
             Back to orders
           </Link>
           {order.receiptId ? (
@@ -69,7 +69,7 @@ export default async function AccountOrderDetailPage({
               href={`/api/receipts/${encodeURIComponent(order.receiptId)}/pdf?download=1`}
               target="_blank"
               rel="noreferrer"
-              className={shopStyles.primaryButton}
+              className={`${shopStyles.primaryButton} w-full sm:w-auto`}
             >
               <Download className="h-4 w-4" />
               Download receipt
@@ -80,7 +80,7 @@ export default async function AccountOrderDetailPage({
               href={`/api/account/projects/${encodeURIComponent(order.receiptId)}/certificate`}
               target="_blank"
               rel="noreferrer"
-              className={shopStyles.primaryButton}
+              className={`${shopStyles.primaryButton} w-full sm:w-auto`}
             >
               <Download className="h-4 w-4" />
               Download completion certificate
@@ -91,7 +91,7 @@ export default async function AccountOrderDetailPage({
               href={`/api/account/projects/${encodeURIComponent(order.receiptId)}/warranty`}
               target="_blank"
               rel="noreferrer"
-              className={shopStyles.primaryButton}
+              className={`${shopStyles.primaryButton} w-full sm:w-auto`}
             >
               <Download className="h-4 w-4" />
               Download warranty certificate
@@ -112,7 +112,7 @@ export default async function AccountOrderDetailPage({
                 className={index ? "border-t border-[#7a0000]/10 p-4" : "p-4"}
               >
                 <div className="break-words font-bold">{item.productName}</div>
-                <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
                   <span>
                     Qty: <b>{item.quantity}</b>
                   </span>

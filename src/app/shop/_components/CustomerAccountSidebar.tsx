@@ -69,7 +69,7 @@ export default function CustomerAccountSidebar({
       </div>
 
       <nav
-        className="mt-5 flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-2 xl:overflow-visible xl:pb-0"
+        className="mt-5 -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-2 sm:-mx-5 sm:px-5 xl:mx-0 xl:block xl:space-y-2 xl:overflow-visible xl:px-0 xl:pb-0"
         aria-label="Customer account"
       >
         {items.map(({ icon: Icon, label, href, exact }) => {
@@ -78,7 +78,7 @@ export default function CustomerAccountSidebar({
             <Link
               key={label}
               href={href}
-              className={`flex shrink-0 items-center gap-3 rounded-[16px] border px-3 py-3 text-sm font-semibold transition xl:w-full ${
+              className={`flex min-h-11 shrink-0 snap-start items-center gap-3 rounded-[16px] border px-3 py-3 text-sm font-semibold transition xl:w-full ${
                 active
                   ? "border-[#7a0000]/20 bg-white text-[#7a0000] shadow-[0_12px_24px_rgba(122,0,0,0.08)]"
                   : "border-[#7a0000]/10 bg-[#fcfaf7] text-slate-700 hover:border-[#7a0000]/25 hover:bg-white hover:text-[#7a0000]"

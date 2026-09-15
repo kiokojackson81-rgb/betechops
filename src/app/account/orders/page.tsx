@@ -45,17 +45,17 @@ export default async function AccountOrdersPage() {
           orders.map((order) => (
             <article
               key={order.routeId}
-              className="min-w-0 rounded-[22px] border border-[#7a0000]/10 bg-[#fcfaf7] p-5"
+              className="min-w-0 rounded-[22px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4 sm:p-5"
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <div className="font-black">{order.orderRef}</div>
                   <div className="mt-1 text-sm text-slate-500">
                     {formatDate(order.createdAt)} · {order.deliveryMethod} ·{" "}
                     {order.itemsCount} items
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="flex items-end justify-between gap-3 sm:block sm:text-right">
                   <span className="rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#7a0000]">
                     {formatStatus(order.status)}
                   </span>
@@ -85,7 +85,7 @@ export default async function AccountOrdersPage() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
                   href={`/account/orders/${encodeURIComponent(order.routeId)}`}
-                  className={shopStyles.primaryButton}
+                  className={`${shopStyles.primaryButton} w-full sm:w-auto`}
                 >
                   View order details
                 </Link>
@@ -94,7 +94,7 @@ export default async function AccountOrdersPage() {
                     href={`/api/receipts/${encodeURIComponent(order.receiptId)}/pdf?download=1`}
                     target="_blank"
                     rel="noreferrer"
-                    className={shopStyles.secondaryButton}
+                    className={`${shopStyles.secondaryButton} w-full sm:w-auto`}
                   >
                     Download receipt
                   </a>
@@ -104,7 +104,7 @@ export default async function AccountOrdersPage() {
                     href={`/api/account/projects/${encodeURIComponent(order.receiptId)}/certificate`}
                     target="_blank"
                     rel="noreferrer"
-                    className={shopStyles.secondaryButton}
+                    className={`${shopStyles.secondaryButton} w-full sm:w-auto`}
                   >
                     Download completion certificate
                   </a>
@@ -114,7 +114,7 @@ export default async function AccountOrdersPage() {
                     href={`/api/account/projects/${encodeURIComponent(order.receiptId)}/warranty`}
                     target="_blank"
                     rel="noreferrer"
-                    className={shopStyles.secondaryButton}
+                    className={`${shopStyles.secondaryButton} w-full sm:w-auto`}
                   >
                     Download warranty certificate
                   </a>
