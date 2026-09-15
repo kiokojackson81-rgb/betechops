@@ -43,6 +43,7 @@ type ReceiptRow = {
   status?: string | null;
   items?: Array<{ id: string }> | null;
   paymentMethod?: "MPESA" | "CASH" | null;
+  paymentCollectionMethod?: string | null;
   paymentStatus?: string | null;
   source?: "pos" | "marketing" | "support";
   detailUrl?: string | null;
@@ -2699,7 +2700,7 @@ export default function ReceiptsAdminClient({
                         <span
                           className={`${badgeBaseClass} ${getPaymentBadgeClass(row.paymentMethod)}`}
                         >
-                          {formatBadgeLabel(row.paymentMethod)}
+                          {formatBadgeLabel(row.paymentCollectionMethod === "MPESA_EXPRESS" ? "M-Pesa Express" : row.paymentCollectionMethod === "MPESA_PAYBILL" ? "M-Pesa Paybill" : row.paymentMethod)}
                         </span>
                       </td>
                       <td className="px-3 py-3">

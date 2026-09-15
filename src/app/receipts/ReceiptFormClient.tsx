@@ -155,6 +155,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
   const [isMpesaExpress, setIsMpesaExpress] = useState(false);
+  const [mpesaPayerPhone, setMpesaPayerPhone] = useState("");
   const [expressPayment, setExpressPayment] = useState<ExpressPayment | null>(null);
   const completedExpressCheckoutIds = useRef(new Set<string>());
   const hasPaymentMethodSelection = isMpesaExpress || selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
@@ -879,6 +880,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const selectMpesaExpress = () => {
     if (expressPayment) return;
     setIsMpesaExpress(true);
+    setMpesaPayerPhone((current) => current.trim() || customerPhone.trim());
     setSelectedPaymentMethods({ MPESA: false, CASH: false });
   };
 
@@ -967,6 +969,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setCatalogOpen(false);
     setStaffId(defaultStaffId);
     setIsMpesaExpress(false);
+    setMpesaPayerPhone("");
     setExpressPayment(null);
   };
 
@@ -975,7 +978,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ resourceType: "ORDER", reference, phoneNumber: customerPhone }),
+      body: JSON.stringify({ resourceType: "ORDER", reference, phoneNumber: mpesaPayerPhone.trim() || customerPhone.trim() }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || !body?.ok || !body?.checkoutRequestId) {
@@ -1173,7 +1176,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               ? {
                   ...(prefillMetadata ?? {}),
                   ...(resolvedPaymentMethod === "MPESA_EXPRESS"
-                    ? { paymentCollectionMethod: "MPESA_EXPRESS", mpesaExpressInitiatedAt: new Date().toISOString() }
+                    ? {
+                        paymentCollectionMethod: "MPESA_EXPRESS",
+                        mpesaExpressInitiatedAt: new Date().toISOString(),
+                        mpesaPayerPhone: mpesaPayerPhone.trim() || customerPhone.trim(),
+                      }
                     : {}),
                   ...(websiteOrderId
                     ? {
@@ -1840,7 +1847,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               M-Pesa Express
             </button>
           </div>
-          {isMpesaExpress ? <p className="mt-2 text-xs leading-5 text-emerald-200">Preview the receipt with the customer first, then send the STK prompt. Printing and customer delivery remain locked until M-Pesa confirms payment.</p> : null}
+          {isMpesaExpress ? <div className="mt-3 space-y-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3"><p className="text-xs leading-5 text-emerald-200">Preview the receipt with the customer first, then send the STK prompt. Printing and customer delivery remain locked until M-Pesa confirms payment.</p><div><label className={labelClass}>M-Pesa number to prompt</label><input type="tel" inputMode="tel" value={mpesaPayerPhone} onChange={(event) => setMpesaPayerPhone(event.target.value)} placeholder={customerPhone || "07XX XXX XXX"} className={fieldClass} /><p className="mt-1 text-xs text-slate-300">Change this when another authorised person is paying. The customer&apos;s receipt contact remains unchanged.</p></div></div> : null}
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
               <label className={labelClass}>Deposit (KES)</label>

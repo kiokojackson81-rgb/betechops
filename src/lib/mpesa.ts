@@ -778,9 +778,26 @@ async function applyConfirmedPaymentInTransaction(
     total = toNumber(order.totalAmount);
     paidBefore = Math.max(0, toNumber(order.paidAmount));
     paidAfter = Math.min(total, paidBefore + amount);
+    const orderMetadata = paymentMetadata(order.metadata);
+    const isCounterPayment = ["MPESA_EXPRESS", "MPESA_PAYBILL"].includes(String(orderMetadata.paymentCollectionMethod || ""));
     await tx.order.update({
       where: { id: order.id },
-      data: { paidAmount: paidAfter, paymentStatus: paidAfter >= total ? "PAID" : "PARTIAL", status: paidAfter >= total ? "PROCESSING" : order.status },
+      data: {
+        paidAmount: paidAfter,
+        paymentStatus: paidAfter >= total ? "PAID" : "PARTIAL",
+        // A counter receipt has no fulfilment step after the customer has
+        // confirmed payment. Other order types retain their Processing state.
+        status: paidAfter >= total ? (isCounterPayment ? "COMPLETED" : "PROCESSING") : order.status,
+        ...(isCounterPayment
+          ? {
+              metadata: {
+                ...orderMetadata,
+                mpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null,
+                mpesaPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(),
+              },
+            }
+          : {}),
+      },
     });
   }
 

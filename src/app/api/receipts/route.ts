@@ -49,7 +49,7 @@ const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
   const candidate = value.toUpperCase().trim();
   if (candidate === "CASH") return "CASH";
-  if (candidate === "MPESA") return "MPESA";
+  if (candidate === "MPESA" || candidate === "MPESA_EXPRESS") return "MPESA";
   return null;
 };
 
@@ -723,7 +723,13 @@ export async function GET(req: NextRequest) {
     const effectiveProjectStage =
       projectFlowData?.isProject && r.order?.status === "CANCELED"
         ? "CANCELLED"
-        : projectFlowData?.stage ?? null;
+      : projectFlowData?.stage ?? null;
+    const paymentCollectionMethod = String(
+      rawData.paymentCollectionMethod ?? rawData.paymentMethod ?? "",
+    ).trim().toUpperCase() || null;
+    const completedCounterSale =
+      effectivePaymentStatus === "PAID" &&
+      ["MPESA_EXPRESS", "MPESA_PAYBILL"].includes(paymentCollectionMethod || "");
 
     const recognitionDate =
       getReceiptProjectCompletionDate(rawData.projectFlow, undefined, r.generatedAt ?? r.createdAt) ??
@@ -745,10 +751,13 @@ export async function GET(req: NextRequest) {
       buyingTotal: resolvedBuyingTotal > 0 ? resolvedBuyingTotal : null,
       profit,
       attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
-      status: r.order?.status ?? r.order?.paymentStatus ?? null,
+      // Correctly label historical M-Pesa Express records created before the
+      // counter-sale completion status was introduced.
+      status: completedCounterSale ? "COMPLETED" : r.order?.status ?? r.order?.paymentStatus ?? null,
       customerType: String((r.data as any)?.customerType ?? "").trim() || null,
       items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
       paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
+      paymentCollectionMethod,
       paymentStatus: effectivePaymentStatus,
       detailUrl: `/receipts/${r.id}`,
       isPodDelivery: Boolean(podDeliveryData?.status),
