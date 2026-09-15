@@ -103,7 +103,7 @@ export async function sendMpesaRefundOtp(input: { refundId: string; actorId: str
     return { phone, code, refundId: refund.id, amount: amountOf(refund.amount) };
   });
   try {
-    await sendTransactionalSms(prepared.phone, `Betech Solar: refund approval code ${prepared.code}. It authorizes KSh ${prepared.amount.toLocaleString("en-KE")} and expires in 5 minutes. Do not share it.`);
+    await sendTransactionalSms(prepared.phone, `Refund approval code ${prepared.code}. It authorizes KSh ${prepared.amount.toLocaleString("en-KE")} and expires in 5 minutes. Do not share it.`);
   } catch (error) {
     await prisma.mpesaRefund.updateMany({ where: { id: prepared.refundId, status: "OTP_PENDING" }, data: { status: "DRAFT", otpHash: null, otpExpiresAt: null } });
     throw new Error(error instanceof Error ? `Refund OTP could not be delivered: ${error.message}` : "Refund OTP could not be delivered");

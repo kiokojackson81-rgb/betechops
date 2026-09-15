@@ -705,7 +705,7 @@ async function notifyConfirmedInstallationProject(orderId: string, receiptNumber
   await syncPosReceiptToCustomerAccount(order.receipt.id).catch((error) => console.error("[mpesa] installation project account sync failed", error));
   // This call occurs only after the conditional PENDING->SUCCESS claim. The
   // callback cannot apply or announce the booking a second time.
-  await sendTransactionalSms(order.customerPhone || payerPhone || "", `Betech Solar: M-Pesa payment received for installation booking ${order.orderNumber}. Paid: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")}. Receipt: ${receiptNumber || "pending"}. Preferred date: ${preferredDate}. We will confirm the installation schedule separately.`).catch((error) => console.error("[mpesa] installation confirmation SMS failed", error));
+  await sendTransactionalSms(order.customerPhone || payerPhone || "", `M-Pesa payment received for installation booking ${order.orderNumber}. Paid: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")}. Receipt: ${receiptNumber || "pending"}. Preferred date: ${preferredDate}. We will confirm the installation schedule separately.`).catch((error) => console.error("[mpesa] installation confirmation SMS failed", error));
 }
 
 async function markStkResourcePaymentFailed(payment: MpesaPayment) {
