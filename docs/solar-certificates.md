@@ -69,3 +69,8 @@ The certificate and audit distinguish automatic application of the supervisor si
 ## Configured supervisor signature
 
 The user-supplied Jonathan Mugiira JPEG (14 September 2026) is uploaded to the existing branding Blob store. Its URL and source SHA-256 are recorded in `src/lib/supervisorSignature.ts`. Certificate generation and Company Documents use this signature when Jonathan's saved signature is empty; a later uploaded replacement remains authoritative. The fallback does not apply to a different supervisor name. No database migration or additional signature upload is needed after deploying this change.
+
+
+## Configured company stamp
+
+The user-supplied company stamp JPEG (15 September 2026) is uploaded to the branding Blob store. `src/lib/companyStamp.ts` records its URL and source SHA-256. Previously unconfigured branding now supplies this enabled stamp to certificate generation and Company Documents. Saved replacement stamps and explicit removals remain supported. Stamp upload controls accept PNG and JPEG. No database migration or additional stamp upload is required after deployment.

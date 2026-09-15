@@ -1,3 +1,4 @@
+import { companyStampSettings } from "@/lib/companyStamp";
 import { supervisorSignatureUrl } from "@/lib/supervisorSignature";
 import { prisma } from '@/lib/prisma';
 
@@ -12,8 +13,7 @@ export async function getBranding() {
     logoUrl:
       branding?.logoUrl || process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png',
     brandColor: branding?.brandColor || '#7A2020',
-    digitalStampUrl: branding?.digitalStampUrl || null,
-    digitalStampEnabled: Boolean(branding?.digitalStampEnabled),
+    ...companyStampSettings(branding),
     licensedProfessional: {
       userId: branding?.licensedProfessionalUserId || null,
       name: branding?.licensedProfessionalName || 'Jonathan Mugiira',

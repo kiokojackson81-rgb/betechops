@@ -1,3 +1,4 @@
+import { companyStampSettings, DEFAULT_COMPANY_STAMP_URL } from "@/lib/companyStamp";
 import { supervisorSignatureUrl } from "@/lib/supervisorSignature";
 import { NextResponse } from 'next/server';
 import { del, put } from '@vercel/blob';
@@ -14,8 +15,7 @@ export async function GET() {
     ok: true,
     professionalAccounts: await prisma.user.findMany({ where: { isActive: true, OR: [{ technicalProfile: { isNot: null } }, { role: { in: ['ADMIN', 'SUPERVISOR'] } }] }, select: { id: true, name: true, email: true }, orderBy: { name: 'asc' } }),
     companyDocuments: {
-      digitalStampUrl: branding?.digitalStampUrl || null,
-      digitalStampEnabled: Boolean(branding?.digitalStampEnabled),
+      ...companyStampSettings(branding),
       licensedProfessionalUserId: branding?.licensedProfessionalUserId || null,
       licensedProfessionalName: branding?.licensedProfessionalName || 'Jonathan Mugiira',
       licensedProfessionalTitle: branding?.licensedProfessionalTitle || 'Senior Solar PV & Electrical Engineer',
@@ -81,14 +81,15 @@ export async function POST(req: Request) {
   }
 
   if (digitalStamp) {
-    if (digitalStamp.type !== 'image/png' || digitalStamp.size > 8 * 1024 * 1024) {
-      return NextResponse.json({ ok: false, error: 'Upload a PNG stamp image no larger than 8 MB.' }, { status: 400 });
+    if (!/^image\/(png|jpeg|jpg)$/i.test(digitalStamp.type) || digitalStamp.size > 8 * 1024 * 1024) {
+      return NextResponse.json({ ok: false, error: 'Upload a PNG or JPG stamp image no larger than 8 MB.' }, { status: 400 });
     }
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       return NextResponse.json({ ok: false, error: 'Stamp storage is not configured.' }, { status: 503 });
     }
     const arrayBuffer = await digitalStamp.arrayBuffer();
-    const res = await put(`branding/digital-stamp-${Date.now()}.png`, Buffer.from(arrayBuffer), {
+    const ext = /png/i.test(digitalStamp.type) ? "png" : "jpg";
+    const res = await put(`branding/digital-stamp-${Date.now()}.${ext}`, Buffer.from(arrayBuffer), {
       access: 'public',
       contentType: digitalStamp.type || 'image/png',
       token: process.env.BLOB_READ_WRITE_TOKEN,
@@ -110,9 +111,14 @@ export async function POST(req: Request) {
   }
 
   const existing = await prisma.branding.findUnique({ where: { name: 'default' } });
-  if (removeDigitalStamp && existing?.digitalStampUrl && process.env.BLOB_READ_WRITE_TOKEN) {
-    await del(existing.digitalStampUrl, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
-    digitalStampUrl = null;
+  if (removeDigitalStamp) {
+    if (existing?.digitalStampUrl && existing.digitalStampUrl !== DEFAULT_COMPANY_STAMP_URL && process.env.BLOB_READ_WRITE_TOKEN) {
+      await del(existing.digitalStampUrl, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
+    }
+    digitalStampUrl = "";
+  } else if (!digitalStamp && digitalStampEnabled !== undefined && existing?.digitalStampUrl == null) {
+    // Persist the default URL so a later explicit enable/disable choice is retained.
+    digitalStampUrl = DEFAULT_COMPANY_STAMP_URL;
   }
 
   // Use the typed Prisma client now that generated types are available.
@@ -138,7 +144,7 @@ export async function POST(req: Request) {
       letterheadUrl: letterheadUrl || process.env.NEXT_PUBLIC_RECEIPT_LETTERHEAD_URL || '/letterhead.jpg',
       logoUrl: logoUrl || process.env.NEXT_PUBLIC_RECEIPT_LOGO_URL || '/logo.png',
       brandColor: brandColor || '#7A2020',
-      digitalStampUrl: digitalStampUrl || null,
+      digitalStampUrl: digitalStampUrl ?? null,
       digitalStampEnabled: digitalStampEnabled ?? Boolean(digitalStamp),
       licensedProfessionalUserId: typeof professionalUserId === 'string' ? professionalUserId || null : null,
       licensedProfessionalName: professionalName || 'Jonathan Mugiira',

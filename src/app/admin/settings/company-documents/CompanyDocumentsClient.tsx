@@ -73,8 +73,8 @@ export default function CompanyDocumentsClient() {
   };
 
   const upload = async (file: File) => {
-    if (file.type !== "image/png") {
-      setStatus("Upload a PNG stamp template with a transparent background.");
+    if (!/^image\/(png|jpeg|jpg)$/i.test(file.type)) {
+      setStatus("Upload a PNG or JPG company stamp.");
       return;
     }
     const form = new FormData();
@@ -109,11 +109,11 @@ export default function CompanyDocumentsClient() {
       <header>
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">Settings · Company Documents</p>
         <h1 className="mt-2 text-3xl font-semibold">Digital Stamp</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Upload one reusable Betech PNG stamp template. Each completion certificate automatically overlays the customer signing date when the stamp is enabled.</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Use the configured Betech stamp or upload a replacement PNG or JPG for newly issued certificates.</p>
       </header>
 
       <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6">
-        <input ref={fileRef} type="file" accept="image/png" className="hidden" onChange={(event) => {
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) void upload(file);
           event.currentTarget.value = "";
@@ -121,7 +121,7 @@ export default function CompanyDocumentsClient() {
         <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_260px] md:items-center">
           <div>
             <h2 className="text-lg font-semibold">Betech Solar Solutions rubber stamp</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Use a high-resolution transparent PNG without a fixed date. The certificate prints it at approximately 35–45 mm beside the authorised technician signature.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Use a clear PNG or JPG stamp without a fixed date. The stamp appears with the certificate authorisation details.</p>
             <div className="mt-5 flex flex-wrap gap-3">
               <button type="button" disabled={saving} onClick={() => fileRef.current?.click()} className="rounded-xl bg-cyan-400 px-4 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">
                 {documents.digitalStampUrl ? "Replace stamp image" : "Upload stamp image"}
