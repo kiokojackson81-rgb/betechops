@@ -66,6 +66,7 @@ const WEBSITE_LIFECYCLE = [
 ] as const;
 
 const SHOP_BASE_URL = "https://www.betech.co.ke";
+const WEBSITE_ORDER_TABLE_COLUMNS = "grid min-w-[1120px] grid-cols-[56px_minmax(220px,1.5fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)]";
 
 function formatCurrency(value: number) {
   return `Ksh ${value.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
@@ -612,8 +613,8 @@ export default function WebsiteOrdersDeskClient({
           )}
         </div>
       ) : (
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel,#121723)]">
-        <div className="grid grid-cols-[56px_minmax(220px,1.5fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)] gap-3 border-b border-white/10 px-4 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[var(--panel,#121723)]">
+        <div className={`${WEBSITE_ORDER_TABLE_COLUMNS} gap-3 border-b border-white/10 px-4 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400`}>
           <div>Open</div>
           <div>Customer</div>
           <div>Phone</div>
@@ -630,10 +631,11 @@ export default function WebsiteOrdersDeskClient({
             const customerProfileHref = buildCustomerProfileHref(order, impersonateId);
             return (
               <div key={order.id} className="border-b border-white/10 last:border-b-0">
-                <div className="grid grid-cols-[56px_minmax(220px,1.5fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)] gap-3 px-4 py-4 text-sm">
+                <div className={`${WEBSITE_ORDER_TABLE_COLUMNS} gap-3 px-4 py-4 text-sm`}>
                   <button
                     type="button"
                     onClick={() => setExpandedId(open ? null : order.id)}
+                    aria-label={`${open ? "Close" : "Open"} order ${order.orderRef}`}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 transition hover:bg-white/10"
                   >
                     {open ? (
@@ -658,9 +660,6 @@ export default function WebsiteOrdersDeskClient({
                     <span className="inline-flex rounded-full border border-emerald-400/15 bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-emerald-300">
                       {order.status.replace(/_/g, " ")}
                     </span>
-                  </div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    {open ? "Order actions below" : "Open order"}
                   </div>
                 </div>
 
