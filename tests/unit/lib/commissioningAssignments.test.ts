@@ -39,6 +39,14 @@ test("an external agent can receive a public commissioning assignment without st
   expect(created.tokenCiphertext).toBeTruthy();
 });
 
+test("a legacy internal technician assignment creates a public link when the staff list is empty", async () => {
+  tx.commissioningSession.findUnique.mockResolvedValue(null);
+  await syncCommissioningAssignment(tx as unknown as Prisma.TransactionClient, "r", "samuel", "admin", { staffIds: [], externalAgentIds: [] });
+  const created = tx.commissioningSession.create.mock.calls[0][0].data;
+  expect(created.technicianId).toBe("samuel");
+  expect(created.assignment.staffIds).toEqual(["samuel"]);
+});
+
 test("changing the assigned agent rotates access and removes the prior signature", async () => {
   tx.commissioningSession.findUnique.mockResolvedValue({ id: "s", status: "DRAFT", technicianId: null, assignment: { staffIds: [], externalAgentIds: ["old"] }, data: { signatures: { technician: "old" } } });
   await syncCommissioningAssignment(tx as unknown as Prisma.TransactionClient, "r", null, "admin", { staffIds: [], externalAgentIds: ["jackson"] });

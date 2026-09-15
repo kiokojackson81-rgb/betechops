@@ -25,6 +25,9 @@ const draftSchema = z.object({
 
 async function publicSession(session: NonNullable<Awaited<ReturnType<typeof findAccessibleCommissioningSession>>>) {
   const defaults = await equipmentDefaults(session);
+  const sessionData = asRecord(session.data);
+  const site = asRecord(sessionData.site);
+  const installation = asRecord(sessionData.installation);
   return {
     isCertifyingProfessional: false,
     professionalReviewComment: session.professionalReviewComment,
@@ -36,10 +39,25 @@ async function publicSession(session: NonNullable<Awaited<ReturnType<typeof find
     progress: session.progress,
     issuedAt: session.issuedAt,
     certificateNo: session.certificateNo,
-    technicianName: String(asRecord(session.data).installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent"),
+    technicianName: String(sessionData.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent"),
     technicianSignatureUrl: session.technician?.technicalProfile?.signatureUrl || null,
     project: projectSummary(session.receipt),
-    data: { ...asRecord(session.data), installerName: String(asRecord(session.data).installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || ""), equipment: { ...defaults, ...asRecord(asRecord(session.data).equipment) }, site: { county: asRecord(session.receipt.data).county || asRecord(session.receipt.order?.metadata).county || "", gps: asRecord(session.receipt.data).gps || asRecord(session.receipt.data).gpsCoordinates || "", ...asRecord(asRecord(session.data).site) } },
+    data: {
+      ...sessionData,
+      installerName: String(sessionData.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || ""),
+      equipment: { ...defaults, ...asRecord(sessionData.equipment) },
+      site: {
+        county: asRecord(session.receipt.data).county || asRecord(session.receipt.order?.metadata).county || "",
+        gps: asRecord(session.receipt.data).gps || asRecord(session.receipt.data).gpsCoordinates || "",
+        ...site,
+        premises: String(site.premises || "").trim() || "Residential",
+      },
+      installation: {
+        ...installation,
+        type: String(installation.type || "").trim() || "New Installation",
+        systemConfiguration: String(installation.systemConfiguration || "").trim() || "Hybrid",
+      },
+    },
   };
 }
 

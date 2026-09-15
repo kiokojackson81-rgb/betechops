@@ -79,6 +79,8 @@ const steps = [
   { id: "review", label: "Final review" },
 ] as const;
 const initialDraft: Draft = {
+  installation: { type: "New Installation", systemConfiguration: "Hybrid" },
+  site: { premises: "Residential" },
   evidence: {},
   equipment: {},
   checklist: {},
@@ -110,6 +112,7 @@ export default function CommissioningClient({ token }: { token: string }) {
     "loading" | "saved" | "saving" | "offline" | "error"
   >("loading");
   const [error, setError] = useState("");
+  const [gpsMessage, setGpsMessage] = useState("");
   const loaded = useRef(false);
   const cacheKey = `betech-commissioning-draft:${token}`;
   const evidence = draft.evidence || {};
@@ -477,8 +480,11 @@ export default function CommissioningClient({ token }: { token: string }) {
             <label className="block">County<input className={inputClass} value={draft.site?.county || ""} onChange={event => patch("site", "county", event.target.value)} /></label>
             <label className="block">Nature of premises<select className={inputClass} value={draft.site?.premises || ""} onChange={event => patch("site", "premises", event.target.value)}><option value="">Select premises</option>{["Residential", "Commercial", "Institutional", "Industrial", "Agricultural", "Other"].map(value => <option key={value}>{value}</option>)}</select></label>
             {draft.site?.premises === "Other" ? <label className="block">Other premises<input maxLength={80} className={inputClass} value={draft.site?.premisesOther || ""} onChange={event => patch("site", "premisesOther", event.target.value)} /></label> : null}
-            <p className="text-sm">GPS: {draft.site?.gps || "Not captured"}</p>
-            <button type="button" className="rounded-xl border border-cyan-400 px-4 py-2" onClick={() => { if (!navigator.geolocation) { window.alert("GPS is unavailable on this device."); return; } navigator.geolocation.getCurrentPosition(position => patch("site", "gps", `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`), error => window.alert(error.message), { enableHighAccuracy: true, timeout: 15000 }); }}>Capture GPS</button>
+            <label className="block">Site location / landmark <span className="text-slate-400">(optional)</span><input className={inputClass} value={draft.site?.manualLocation || ""} placeholder="Enter a landmark or address if GPS is unavailable" onChange={event => patch("site", "manualLocation", event.target.value)} /></label>
+            <label className="block">GPS coordinates <span className="text-slate-400">(optional)</span><input className={inputClass} value={draft.site?.gps || ""} placeholder="e.g. -1.286389, 36.817223" onChange={event => { setGpsMessage(""); patch("site", "gps", event.target.value); }} /></label>
+            <div className="flex flex-wrap gap-3"><button type="button" className="rounded-xl border border-cyan-400 px-4 py-2" onClick={() => { if (!navigator.geolocation) { setGpsMessage("GPS is unavailable on this device. Enter the location manually or continue without GPS."); return; } navigator.geolocation.getCurrentPosition(position => { setGpsMessage(""); patch("site", "gps", `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`); }, () => setGpsMessage("GPS was not shared. Enter the location manually or continue without GPS."), { enableHighAccuracy: true, timeout: 15000 }); }}>Capture GPS</button><button type="button" className="rounded-xl border border-slate-600 px-4 py-2 text-slate-200" onClick={() => { patch("site", "gps", ""); setGpsMessage("GPS skipped. You can continue without it."); }}>Skip GPS</button></div>
+            <p className="text-sm text-slate-400">GPS: {draft.site?.gps || "Optional — not captured"}</p>
+            {gpsMessage ? <p role="status" className="text-sm text-amber-200">{gpsMessage}</p> : null}
             <label className="block">Installation type<select className={inputClass} value={draft.installation?.type || ""} onChange={event => patch("installation", "type", event.target.value)}><option value="">Select type</option>{["New Installation", "Upgrade", "Modification"].map(value => <option key={value}>{value}</option>)}</select></label>
             <label className="block">System configuration<select className={inputClass} value={draft.installation?.systemConfiguration || ""} onChange={event => patch("installation", "systemConfiguration", event.target.value)}><option value="">Select configuration</option>{["Hybrid", "Off-Grid", "Grid-Tied"].map(value => <option key={value}>{value}</option>)}</select></label>
           </section> : null}

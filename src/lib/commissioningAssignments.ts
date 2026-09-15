@@ -11,7 +11,7 @@ const record = (value: unknown) => value && typeof value === "object" && !Array.
 export async function syncCommissioningAssignment(tx: Prisma.TransactionClient, receiptId: string, technicianId: string | null, actorId?: string | null, assignees?: { staffIds: string[]; externalAgentIds: string[] }) {
   const existing = await tx.commissioningSession.findUnique({ where: { receiptId } });
   if (existing?.status === "ISSUED") return existing;
-  const staffIds = [...new Set(assignees?.staffIds || (technicianId ? [technicianId] : []))];
+  const staffIds = [...new Set(assignees?.staffIds?.length ? assignees.staffIds : technicianId ? [technicianId] : [])];
   const externalAgentIds = [...new Set(assignees?.externalAgentIds || [])];
   const assignment = { staffIds, externalAgentIds, names: [] as string[] };
   const previous = record(existing?.assignment);
