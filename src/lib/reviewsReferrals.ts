@@ -514,6 +514,18 @@ type ReferralPolicy = {
   requiresFullPayment: boolean;
 };
 
+export type ReferralRewardPreview = {
+  productName: string;
+  commissionType: "PERCENTAGE" | "FIXED";
+  commissionRate: number | null;
+  fixedAmount: number | null;
+  potentialCommission: number;
+  trackingDays: number;
+  requiresFullPayment: boolean;
+};
+
+const REFERRAL_TRACKING_DAYS = 90;
+
 function toDate(value: unknown) {
   if (value instanceof Date) return value;
   if (typeof value === "string" || typeof value === "number") {
@@ -975,6 +987,25 @@ async function getReferralPolicyForProduct(productId: string): Promise<ReferralP
     minimumQualifyingSale: null,
     holdingDays: 7,
     requiresFullPayment: true,
+  };
+}
+
+async function getReferralRewardPreviewForProduct(productId: string): Promise<ReferralRewardPreview | null> {
+  const [product, policy] = await Promise.all([
+    getProductSummary(productId),
+    getReferralPolicyForProduct(productId),
+  ]);
+  if (!policy.enabled) return null;
+
+  const saleAmount = Number(product.sellingPrice || 0);
+  return {
+    productName: product.name,
+    commissionType: policy.commissionType,
+    commissionRate: policy.commissionRate,
+    fixedAmount: policy.fixedAmount,
+    potentialCommission: calculateReferralCommission(saleAmount, policy),
+    trackingDays: REFERRAL_TRACKING_DAYS,
+    requiresFullPayment: policy.requiresFullPayment,
   };
 }
 
@@ -1527,6 +1558,12 @@ async function getExistingReviewInvitationForPurchase(input: {
 async function getReviewUrlForExistingInvitation(row: Record<string, unknown>) {
   const token = await ensureInvitationPublicToken(row);
   return `https://www.betech.co.ke/review/${token}`;
+}
+
+export async function getReferralRewardPreviewForReceipt(receiptId: string): Promise<ReferralRewardPreview | null> {
+  const invitation = await getExistingReviewInvitationForPurchase({ receiptId });
+  const productId = cleanOptional(invitation?.productId);
+  return productId ? getReferralRewardPreviewForProduct(productId) : null;
 }
 
 export async function ensureReviewInvitationForReceipt(

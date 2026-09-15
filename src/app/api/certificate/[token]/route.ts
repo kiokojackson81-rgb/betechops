@@ -1,6 +1,6 @@
 import { getWarrantyCertificate } from "@/lib/warrantyCertificates";
 import { PROJECT_DOCUMENT_ORDER, PROJECT_DOCUMENT_LABELS } from "@/lib/projectDocumentMessages";
-import { ensureReviewInvitationForReceipt } from "@/lib/reviewsReferrals";
+import { ensureReviewInvitationForReceipt, getReferralRewardPreviewForReceipt } from "@/lib/reviewsReferrals";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { appendCommissioningAudit, findCustomerCertificateSession, projectSummary } from "@/lib/commissioning";
@@ -17,6 +17,9 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     completedAt: session.issuedAt || undefined,
     deliveryMode: "project",
   }).catch(() => null);
+  const referralReward = review?.reviewUrl
+    ? await getReferralRewardPreviewForReceipt(session.receiptId).catch(() => null)
+    : null;
   const available = { receipt: Boolean(session.projectReceiptPdfUrl), completion: Boolean(session.completionPdfUrl), warranty: Boolean(warranty) };
   return NextResponse.json({
     status: "COMPLETED",
@@ -29,6 +32,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     acknowledgedAt: session.customerAcknowledgedAt,
     termsAcceptedAt: session.customerTermsAcceptedAt,
     reviewUrl: review?.reviewUrl || null,
+    referralReward,
   }, { headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" } });
 }
 
