@@ -78,7 +78,7 @@ type ExpressPayment = {
   receiptId: string;
   reference: string;
   checkoutRequestId: string | null;
-  status: "AWAITING_PIN" | "FAILED" | "PAYBILL";
+  status: "STARTING" | "AWAITING_PIN" | "FAILED" | "PAYBILL";
   message: string;
 };
 
@@ -156,6 +156,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
   const [isMpesaExpress, setIsMpesaExpress] = useState(false);
   const [mpesaPayerPhone, setMpesaPayerPhone] = useState("");
+  const [editingMpesaPayerPhone, setEditingMpesaPayerPhone] = useState(false);
   const [expressPayment, setExpressPayment] = useState<ExpressPayment | null>(null);
   const completedExpressCheckoutIds = useRef(new Set<string>());
   const hasPaymentMethodSelection = isMpesaExpress || selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
@@ -881,6 +882,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (expressPayment) return;
     setIsMpesaExpress(true);
     setMpesaPayerPhone((current) => current.trim() || customerPhone.trim());
+    setEditingMpesaPayerPhone(false);
     setSelectedPaymentMethods({ MPESA: false, CASH: false });
   };
 
@@ -970,16 +972,30 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setStaffId(defaultStaffId);
     setIsMpesaExpress(false);
     setMpesaPayerPhone("");
+    setEditingMpesaPayerPhone(false);
     setExpressPayment(null);
   };
 
   const sendMpesaExpressPrompt = async (receiptId: string, reference: string) => {
-    const response = await fetch("/api/payments/mpesa/stk", {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 25_000);
+    let response: Response;
+    try {
+      response = await fetch("/api/payments/mpesa/stk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
       body: JSON.stringify({ resourceType: "ORDER", reference, phoneNumber: mpesaPayerPhone.trim() || customerPhone.trim() }),
-    });
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("The M-Pesa request took too long. Retry the prompt or use Paybill.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
     const body = await response.json().catch(() => ({}));
     if (!response.ok || !body?.ok || !body?.checkoutRequestId) {
       throw new Error(body?.error || "Unable to send the M-Pesa Express prompt");
@@ -998,6 +1014,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const retryMpesaExpressPrompt = async () => {
     if (!expressPayment) return;
     setSaving(true);
+    setExpressPayment((current) => current ? { ...current, status: "STARTING", message: "Sending a new M-Pesa prompt…" } : null);
     try {
       await sendMpesaExpressPrompt(expressPayment.receiptId, expressPayment.reference);
     } catch (error) {
@@ -1141,6 +1158,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
 
     setSaving(true);
+    if (resolvedPaymentMethod === "MPESA_EXPRESS") {
+      setExpressPayment({
+        receiptId: "",
+        reference: serial,
+        checkoutRequestId: null,
+        status: "STARTING",
+        message: "Preparing the receipt and M-Pesa prompt…",
+      });
+    }
     try {
       const payload = {
         docType: docType.toLowerCase(),
@@ -1194,7 +1220,25 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           items: normalizedItems,
         };
 
-      const res = await fetch("/api/receipts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "same-origin" });
+      const saveController = new AbortController();
+      const saveTimeout = window.setTimeout(() => saveController.abort(), 35_000);
+      let res: Response;
+      try {
+        res = await fetch("/api/receipts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "same-origin",
+          signal: saveController.signal,
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          throw new Error("The receipt is taking longer than expected. Please check receipt history before trying again to avoid a duplicate sale.");
+        }
+        throw error;
+      } finally {
+        window.clearTimeout(saveTimeout);
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         // handle duplicate owner (409) specially
@@ -1206,7 +1250,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         return showToast(data?.error || "Failed to save receipt", "error");
       }
 
-      if (data?.persistenceConfirmed === false) {
+      if (data?.persistenceConfirmed === false && resolvedPaymentMethod !== "MPESA_EXPRESS") {
         showToast(data?.message || "Receipt is awaiting confirmation. Do not print or recreate it yet.", "error");
         onCreated?.(data, { staffId, serial, receiptId: typeof data?.receiptId === "string" ? data.receiptId : null });
         return;
@@ -1253,6 +1297,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         resetForm();
       }
     } catch (err) {
+      if (resolvedPaymentMethod === "MPESA_EXPRESS") {
+        setExpressPayment((current) => ({
+          receiptId: current?.receiptId || "",
+          reference: current?.reference || serial,
+          checkoutRequestId: null,
+          status: "FAILED",
+          message: err instanceof Error ? err.message : "Unable to prepare the M-Pesa prompt. Retry or use Paybill.",
+        }));
+      }
       showToast(err instanceof Error ? err.message : "Failed to save", "error");
     } finally {
       setSaving(false);
@@ -1847,7 +1900,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               M-Pesa Express
             </button>
           </div>
-          {isMpesaExpress ? <div className="mt-3 space-y-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3"><p className="text-xs leading-5 text-emerald-200">Preview the receipt with the customer first, then send the STK prompt. Printing and customer delivery remain locked until M-Pesa confirms payment.</p><div><label className={labelClass}>M-Pesa number to prompt</label><input type="tel" inputMode="tel" value={mpesaPayerPhone} onChange={(event) => setMpesaPayerPhone(event.target.value)} placeholder={customerPhone || "07XX XXX XXX"} className={fieldClass} /><p className="mt-1 text-xs text-slate-300">Change this when another authorised person is paying. The customer&apos;s receipt contact remains unchanged.</p></div></div> : null}
+          {isMpesaExpress ? <div className="mt-3 space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3"><p className="text-xs leading-5 text-emerald-200">Preview the receipt with the customer first, then send the STK prompt. Printing and customer delivery remain locked until M-Pesa confirms payment.</p><div><label className={labelClass}>M-Pesa number to prompt</label>{editingMpesaPayerPhone ? <div className="mt-1 flex flex-wrap gap-2"><input type="tel" inputMode="tel" autoFocus value={mpesaPayerPhone} onChange={(event) => setMpesaPayerPhone(event.target.value)} placeholder="07XX XXX XXX" className={`${fieldClass} mt-0 flex-1`} /><button type="button" onClick={() => { setMpesaPayerPhone(customerPhone.trim()); setEditingMpesaPayerPhone(false); }} className="rounded-xl border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-100">Use customer number</button></div> : <div className="mt-1 flex flex-wrap items-center gap-3"><strong className="rounded-lg bg-slate-950/70 px-3 py-2 font-mono text-sm text-white">{mpesaPayerPhone || customerPhone || "Add a customer phone number"}</strong><button type="button" onClick={() => setEditingMpesaPayerPhone(true)} className="rounded-xl border border-emerald-300/50 px-3 py-2 text-xs font-semibold text-emerald-100">Change phone number</button></div>}<p className="mt-1 text-xs text-slate-300">This can be another authorised payer; it does not change the customer&apos;s receipt contact.</p></div></div> : null}
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
               <label className={labelClass}>Deposit (KES)</label>
@@ -1899,7 +1952,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       )}
 
       {expressPayment ? <section className={`rounded-2xl border p-4 ${expressPayment.status === "FAILED" ? "border-amber-400/40 bg-amber-400/10" : expressPayment.status === "PAYBILL" ? "border-sky-400/40 bg-sky-400/10" : "border-emerald-400/40 bg-emerald-400/10"}`}>
-        <p className="text-sm font-bold">{expressPayment.status === "AWAITING_PIN" ? "Waiting for M-Pesa PIN" : expressPayment.status === "PAYBILL" ? "Paybill payment" : "M-Pesa prompt needs attention"}</p>
+        <p className="text-sm font-bold">{expressPayment.status === "STARTING" ? "Preparing M-Pesa prompt" : expressPayment.status === "AWAITING_PIN" ? "Waiting for M-Pesa PIN" : expressPayment.status === "PAYBILL" ? "Paybill payment" : "M-Pesa prompt needs attention"}</p>
         <p className="mt-1 text-sm text-slate-200">{expressPayment.message}</p>
         <p className="mt-2 text-xs text-slate-300">Reference: <span className="font-mono">{expressPayment.reference}</span> · Amount: KES {total.toLocaleString()}</p>
         {expressPayment.status === "AWAITING_PIN" ? <p className="mt-2 text-xs text-emerald-100">Checking confirmation automatically. Do not print until this screen confirms payment.</p> : null}
