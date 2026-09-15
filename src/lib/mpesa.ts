@@ -11,6 +11,7 @@ import { dispatchSiteVisitCreated } from "@/lib/siteVisitNotifications";
 import { buildReceiptProjectFlow } from "@/lib/receiptProjects";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { sendTransactionalSms } from "@/lib/africasTalking";
+import { sendReceiptChannels } from "@/workers/receiptSender";
 
 const DARAJA_PRODUCTION_BASE_URL = "https://api.safaricom.co.ke";
 const DEFAULT_CALLBACK_BASE_URL = "https://betech.co.ke";
@@ -708,6 +709,22 @@ async function notifyConfirmedInstallationProject(orderId: string, receiptNumber
   await sendTransactionalSms(order.customerPhone || payerPhone || "", `M-Pesa payment received for installation booking ${order.orderNumber}. Paid: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")}. Receipt: ${receiptNumber || "pending"}. Preferred date: ${preferredDate}. We will confirm the installation schedule separately.`).catch((error) => console.error("[mpesa] installation confirmation SMS failed", error));
 }
 
+async function finalizeConfirmedPosExpressReceipt(orderId: string) {
+  if (typeof prisma.order.findUnique !== "function") return;
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      receipt: { select: { id: true, data: true } },
+    },
+  });
+  const receipt = order?.receipt;
+  const data = paymentMetadata(receipt?.data);
+  if (!receipt || !["MPESA_EXPRESS", "MPESA_PAYBILL"].includes(String(data.paymentCollectionMethod || ""))) return;
+
+  await syncPosReceiptToCustomerAccount(receipt.id).catch((error) => console.error("[mpesa] POS Express account sync failed", error));
+  await sendReceiptChannels(receipt.id, [], { requestId: `mpesa-confirmed-${orderId}` }).catch((error) => console.error("[mpesa] POS Express receipt notification failed", error));
+}
+
 async function markStkResourcePaymentFailed(payment: MpesaPayment) {
   if (payment.resourceType === "LPP" && payment.resourceId) await prisma.$executeRaw(Prisma.sql`UPDATE "LipaPolePole" SET "status" = 'PAYMENT_FAILED'::"LipaPolePoleStatus", "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${payment.resourceId} AND "status" = 'AWAITING_PAYMENT'::"LipaPolePoleStatus"`);
   if (payment.resourceType === "SITE_VISIT" && payment.resourceId) await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "status" = 'PAYMENT_FAILED', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${payment.resourceId} AND "status" = 'PAYMENT_PENDING'`);
@@ -1055,6 +1072,7 @@ export async function handleStkCallback(payload: unknown) {
         payerPhone: normalizeDarajaPhone(metadata.phoneNumber || "") || confirmation.payment.phoneNumber,
       });
     }
+    if (confirmation?.application.applied && confirmation.payment.orderId) await finalizeConfirmedPosExpressReceipt(confirmation.payment.orderId);
     if (confirmation?.application.applied && confirmation.payment.resourceType === "SITE_VISIT" && confirmation.payment.resourceId) await notifyConfirmedSiteVisit(confirmation.payment.resourceId);
     if (confirmation?.application.applied && confirmation.payment.resourceType === "INSTALLATION_PROJECT" && confirmation.payment.resourceId) await notifyConfirmedInstallationProject(confirmation.payment.resourceId, metadata.receiptNumber, normalizeDarajaPhone(metadata.phoneNumber || "") || confirmation.payment.phoneNumber);
     return;
@@ -1113,6 +1131,7 @@ export async function handleC2bConfirmation(payload: unknown) {
       payerPhone: phoneNumber,
     });
   }
+  if (confirmation?.application.applied && confirmation.payment.orderId) await finalizeConfirmedPosExpressReceipt(confirmation.payment.orderId);
   // C2B is a real confirmation for PayBill STK too.  A matching pending STK
   // request becomes successful here, but only the C2B row above applies its
   // amount to the order.  Receipt numbers stay unique to the C2B ledger row.

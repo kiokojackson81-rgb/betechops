@@ -1153,6 +1153,7 @@ export async function POST(req: NextRequest) {
     isPodPaymentMethod(payload?.paymentMethod) ||
     normalizeCustomerType(payload?.customerType) === "pod";
   const isProjectReceipt = normalizeCustomerType(payload?.customerType) === "project";
+  const isMpesaExpress = String(payload?.paymentMethod || "").trim().toUpperCase() === "MPESA_EXPRESS";
   const normalizedDeliveryAddress =
     typeof payload?.deliveryAddress === "string" ? payload.deliveryAddress.trim() : "";
   const requestId = randomUUID();
@@ -1270,9 +1271,16 @@ export async function POST(req: NextRequest) {
               projectFlow: normalizedProjectFlow,
             }
           : metadataFromPayload;
-      const podMetadata = isPodDelivery
+      const paymentCollectionMetadata = isMpesaExpress
         ? {
             ...(receiptMetadata ?? {}),
+            paymentCollectionMethod: "MPESA_EXPRESS",
+            mpesaExpressInitiatedAt: entryDateIso,
+          }
+        : receiptMetadata;
+      const podMetadata = isPodDelivery
+        ? {
+            ...(paymentCollectionMetadata ?? {}),
             podDelivery: {
               status: 'pending',
               type: 'pay_on_delivery',
@@ -1281,7 +1289,7 @@ export async function POST(req: NextRequest) {
               createdById: issuedById ?? null,
             },
           }
-        : receiptMetadata;
+        : paymentCollectionMetadata;
       const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
 
       const projectPaidAmount = Number(normalizedProjectFlow?.totalPaidAmount ?? 0);
@@ -1294,6 +1302,8 @@ export async function POST(req: NextRequest) {
             ? "PENDING"
             : isPodDelivery
               ? "PENDING"
+              : isMpesaExpress
+                ? "PENDING"
               : "COMPLETED";
       const orderPaymentStatus =
         isProjectReceipt
@@ -1306,8 +1316,10 @@ export async function POST(req: NextRequest) {
             ? "PARTIAL"
             : isPodDelivery
               ? "UNPAID"
+              : isMpesaExpress
+                ? "UNPAID"
               : "PAID";
-      const paidAmountValue = isProjectReceipt ? projectPaidAmount : docType === "LAYAWAY" ? deposit : isPodDelivery ? 0 : Number(total) || 0;
+      const paidAmountValue = isProjectReceipt ? projectPaidAmount : docType === "LAYAWAY" ? deposit : isPodDelivery || isMpesaExpress ? 0 : Number(total) || 0;
       // choose shop: provided or first active
       let shopId = payload?.shopId;
       if (!shopId) {
@@ -1579,6 +1591,7 @@ export async function POST(req: NextRequest) {
         },
         data: {
           ...payload,
+          ...(isMpesaExpress ? { paymentCollectionMethod: "MPESA_EXPRESS" } : {}),
           orderRef: serial,
           needsPricing: hasVariableCostItems,
           totals: {
@@ -2206,21 +2219,23 @@ export async function POST(req: NextRequest) {
       orderRef: result.orderRef,
     });
 
-    try {
-      const customerAccountSync = await syncPosReceiptToCustomerAccount(result.receiptId);
-      console.info("[receipts] synced POS receipt to customer account", {
-        requestId,
-        receiptId: result.receiptId,
-        orderRef: result.orderRef,
-        customerAccountSync,
-      });
-    } catch (customerSyncErr) {
-      console.error("[receipts] failed to sync POS receipt to customer account", {
-        requestId,
-        receiptId: result.receiptId,
-        orderRef: result.orderRef,
-        error: customerSyncErr instanceof Error ? customerSyncErr.message : String(customerSyncErr),
-      });
+    if (!isMpesaExpress) {
+      try {
+        const customerAccountSync = await syncPosReceiptToCustomerAccount(result.receiptId);
+        console.info("[receipts] synced POS receipt to customer account", {
+          requestId,
+          receiptId: result.receiptId,
+          orderRef: result.orderRef,
+          customerAccountSync,
+        });
+      } catch (customerSyncErr) {
+        console.error("[receipts] failed to sync POS receipt to customer account", {
+          requestId,
+          receiptId: result.receiptId,
+          orderRef: result.orderRef,
+          error: customerSyncErr instanceof Error ? customerSyncErr.message : String(customerSyncErr),
+        });
+      }
     }
 
     const projectNotificationResults: ProjectNotificationPublishResult[] = [];
@@ -2310,7 +2325,7 @@ export async function POST(req: NextRequest) {
       customerType: payload?.customerType ?? null,
     });
 
-    if (!isPodDelivery && shouldSendGenericCustomerNotifications) {
+    if (!isPodDelivery && !isMpesaExpress && shouldSendGenericCustomerNotifications) {
       const internalPromise = (async () => {
         try {
           await notifyInternalReceipt(result.receiptId, docType, requestId);
@@ -2342,7 +2357,7 @@ export async function POST(req: NextRequest) {
         console.info(`[receiptSender][${requestId}] SKIP generic customer send pipeline`, {
           receiptId: result.receiptId,
           customerType: payload?.customerType ?? null,
-          reason: "generic_notifications_disabled_for_project",
+          reason: isMpesaExpress ? "mpesa_express_awaiting_confirmation" : "generic_notifications_disabled_for_project",
         });
     } else {
       // For POD receipts, still trigger an immediate WhatsApp via Chatrace at

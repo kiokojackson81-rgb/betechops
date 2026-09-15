@@ -22,6 +22,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const { id } = await resolveParams(context);
   const body = await req.json().catch(() => ({}));
   const rawPaymentMethod = String(body?.paymentMethod ?? "").toUpperCase().trim();
+  const paymentCollectionMethod = String(body?.paymentCollectionMethod ?? "").toUpperCase().trim();
   const paymentMethod =
     rawPaymentMethod === "CASH" ? PaymentMethod.CASH : rawPaymentMethod === "MPESA" ? PaymentMethod.MPESA : null;
   if (!paymentMethod) {
@@ -63,6 +64,12 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       const nextData = {
         ...((receipt.data as Record<string, unknown> | null) ?? {}),
         paymentMethod,
+        ...(paymentCollectionMethod === "MPESA_PAYBILL"
+          ? {
+              paymentCollectionMethod: "MPESA_PAYBILL",
+              mpesaExpressFallbackAt: new Date().toISOString(),
+            }
+          : {}),
       };
       const nextTotals = {
         ...((receipt.totals as Record<string, unknown> | null) ?? {}),
@@ -76,6 +83,20 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
           totals: nextTotals,
         },
       });
+
+      if (paymentCollectionMethod === "MPESA_PAYBILL" && receipt.order) {
+        const order = await tx.order.findUnique({ where: { id: receipt.order.id }, select: { metadata: true } });
+        await tx.order.update({
+          where: { id: receipt.order.id },
+          data: {
+            metadata: {
+              ...((order?.metadata as Record<string, unknown> | null) ?? {}),
+              paymentCollectionMethod: "MPESA_PAYBILL",
+              mpesaExpressFallbackAt: new Date().toISOString(),
+            },
+          },
+        });
+      }
 
       const normalizedReceiptNumber = canonicalReceiptNumber(receipt.order?.orderNumber ?? "");
       if (normalizedReceiptNumber) {

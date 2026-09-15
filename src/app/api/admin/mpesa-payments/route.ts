@@ -35,11 +35,14 @@ function serialize(payment: {
   transactionAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  order: { id: string; orderNumber: string; totalAmount: number; paidAmount: number; paymentStatus: string } | null;
+  order: { id: string; orderNumber: string; totalAmount: number; paidAmount: number; paymentStatus: string; metadata: unknown } | null;
   websiteOrder: { id: string; orderRef: string; total: unknown; metadata: unknown; status: string } | null;
 }) {
   const websiteMetadata = payment.websiteOrder?.metadata && typeof payment.websiteOrder.metadata === "object"
     ? payment.websiteOrder.metadata as Record<string, unknown>
+    : {};
+  const orderMetadata = payment.order?.metadata && typeof payment.order.metadata === "object"
+    ? payment.order.metadata as Record<string, unknown>
     : {};
   return {
     id: payment.id,
@@ -69,6 +72,7 @@ function serialize(payment: {
       total: number(payment.order.totalAmount),
       paid: number(payment.order.paidAmount),
       paymentStatus: payment.order.paymentStatus,
+      paymentCollectionMethod: typeof orderMetadata.paymentCollectionMethod === "string" ? orderMetadata.paymentCollectionMethod : null,
     } : payment.websiteOrder ? {
       kind: "WEBSITE_ORDER" as const,
       id: payment.websiteOrder.id,
@@ -119,7 +123,7 @@ export async function GET(request: NextRequest) {
   if (Object.keys(createdAt).length) where.createdAt = createdAt;
 
   const include = {
-    order: { select: { id: true, orderNumber: true, totalAmount: true, paidAmount: true, paymentStatus: true } },
+    order: { select: { id: true, orderNumber: true, totalAmount: true, paidAmount: true, paymentStatus: true, metadata: true } },
     websiteOrder: { select: { id: true, orderRef: true, total: true, metadata: true, status: true } },
   } satisfies Prisma.MpesaPaymentInclude;
   const [payments, successful, unmatched] = await Promise.all([
