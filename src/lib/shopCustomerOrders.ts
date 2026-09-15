@@ -33,6 +33,8 @@ export type CustomerAccountOrderSummary = {
   customerLocation: string;
   itemsCount: number;
   receiptId: string | null;
+  completionCertificateAvailable: boolean;
+  warrantyCertificateAvailable: boolean;
   source: "WEBSITE" | "POS";
   itemPreview: Array<{
     productName: string;
@@ -69,6 +71,8 @@ export type CustomerAccountOrderDetail = {
   notes: string | null;
   receiptId: string | null;
   receiptNumber: string | null;
+  completionCertificateAvailable: boolean;
+  warrantyCertificateAvailable: boolean;
   itemsCount: number;
   source: "WEBSITE" | "POS";
   items: Array<{
@@ -222,6 +226,8 @@ function buildSummaryFromWebsiteOrder(order: {
     customerLocation: order.customerLocation,
     itemsCount: order._count.items,
     receiptId: order.receiptId,
+    completionCertificateAvailable: false,
+    warrantyCertificateAvailable: false,
     source: order.source === "POS" ? "POS" : "WEBSITE",
     itemPreview: order.items.map((item) => ({
       productName: item.productName,
@@ -266,6 +272,8 @@ function buildSummaryFromReceipt(receipt: {
     customerLocation: buildReceiptLocation(metadata),
     itemsCount: receipt.order?.items.length || 0,
     receiptId: receipt.id,
+    completionCertificateAvailable: false,
+    warrantyCertificateAvailable: false,
     source: "POS",
     itemPreview:
       receipt.order?.items.map((item) => ({
@@ -443,9 +451,37 @@ export async function listCustomerAccountOrders(args: {
     )
     .map(buildSummaryFromReceipt);
 
-  return [...websiteSummaries, ...fallbackSummaries]
+  const summaries = [...websiteSummaries, ...fallbackSummaries]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, args.take ?? 20);
+  const receiptIds = summaries.map((order) => order.receiptId).filter((id): id is string => Boolean(id));
+  if (!receiptIds.length) return summaries;
+
+  const issuedSessions = await prisma.commissioningSession.findMany({
+    where: { receiptId: { in: receiptIds }, status: "ISSUED" },
+    select: {
+      receiptId: true,
+      receipt: {
+        select: {
+          warrantyCertificates: {
+            where: { status: "ISSUED" },
+            take: 1,
+            select: { id: true },
+          },
+        },
+      },
+    },
+  });
+  const documentsByReceipt = new Map(
+    issuedSessions.map((session) => [session.receiptId, {
+      completionCertificateAvailable: true,
+      warrantyCertificateAvailable: session.receipt.warrantyCertificates.length > 0,
+    }]),
+  );
+  return summaries.map((order) => ({
+    ...order,
+    ...(order.receiptId ? documentsByReceipt.get(order.receiptId) : undefined),
+  }));
 }
 
 export async function getCustomerAccountOrderDetail(args: {
@@ -475,6 +511,12 @@ export async function getCustomerAccountOrderDetail(args: {
         receiptNumber: true,
         generatedAt: true,
         createdAt: true,
+        commissioningSession: { select: { status: true } },
+        warrantyCertificates: {
+          where: { status: "ISSUED" },
+          take: 1,
+          select: { id: true },
+        },
         order: {
           select: {
             orderNumber: true,
@@ -553,6 +595,8 @@ export async function getCustomerAccountOrderDetail(args: {
       notes: typeof metadata.notes === "string" && metadata.notes.trim() ? metadata.notes.trim() : null,
       receiptId: receipt.id,
       receiptNumber: receipt.receiptNumber,
+      completionCertificateAvailable: receipt.commissioningSession?.status === "ISSUED",
+      warrantyCertificateAvailable: receipt.commissioningSession?.status === "ISSUED" && receipt.warrantyCertificates.length > 0,
       itemsCount: items.reduce((sum, item) => sum + item.quantity, 0),
       source: "POS",
       items,
@@ -623,6 +667,26 @@ export async function getCustomerAccountOrderDetail(args: {
   const paymentMetadata = readJsonObject(websiteOrder.metadata);
   const amountPaid = Math.max(0, Number(paymentMetadata.amountPaid || 0));
   const total = toNumber(websiteOrder.total);
+  const issuedSession = websiteOrder.receiptId
+    ? await prisma.commissioningSession.findUnique({
+        where: { receiptId: websiteOrder.receiptId },
+        select: {
+          status: true,
+          receipt: {
+            select: {
+              warrantyCertificates: {
+                where: { status: "ISSUED" },
+                take: 1,
+                select: { id: true },
+              },
+            },
+          },
+        },
+      })
+    : null;
+  const completionCertificateAvailable = issuedSession?.status === "ISSUED";
+  const warrantyCertificateAvailable = completionCertificateAvailable && Boolean(issuedSession?.receipt.warrantyCertificates.length);
+
   return {
     routeId: args.routeId,
     orderRef: websiteOrder.orderRef,
@@ -650,6 +714,8 @@ export async function getCustomerAccountOrderDetail(args: {
     notes: websiteOrder.notes,
     receiptId: websiteOrder.receiptId,
     receiptNumber: websiteOrder.receipt?.receiptNumber || null,
+    completionCertificateAvailable,
+    warrantyCertificateAvailable,
     itemsCount: websiteOrder.items.reduce((sum, item) => sum + item.quantity, 0),
     source: websiteOrder.source === "POS" ? "POS" : "WEBSITE",
     items: websiteOrder.items.map((item) => ({

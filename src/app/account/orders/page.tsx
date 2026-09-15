@@ -99,6 +99,26 @@ export default async function AccountOrdersPage() {
                     Download receipt
                   </a>
                 ) : null}
+                {order.receiptId && order.completionCertificateAvailable ? (
+                  <a
+                    href={`/api/account/projects/${encodeURIComponent(order.receiptId)}/certificate`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={shopStyles.secondaryButton}
+                  >
+                    Download completion certificate
+                  </a>
+                ) : null}
+                {order.receiptId && order.warrantyCertificateAvailable ? (
+                  <a
+                    href={`/api/account/projects/${encodeURIComponent(order.receiptId)}/warranty`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={shopStyles.secondaryButton}
+                  >
+                    Download warranty certificate
+                  </a>
+                ) : null}
               </div>
             </article>
           ))

@@ -75,6 +75,28 @@ export default async function AccountOrderDetailPage({
               Download receipt
             </a>
           ) : null}
+          {order.receiptId && order.completionCertificateAvailable ? (
+            <a
+              href={`/api/account/projects/${encodeURIComponent(order.receiptId)}/certificate`}
+              target="_blank"
+              rel="noreferrer"
+              className={shopStyles.primaryButton}
+            >
+              <Download className="h-4 w-4" />
+              Download completion certificate
+            </a>
+          ) : null}
+          {order.receiptId && order.warrantyCertificateAvailable ? (
+            <a
+              href={`/api/account/projects/${encodeURIComponent(order.receiptId)}/warranty`}
+              target="_blank"
+              rel="noreferrer"
+              className={shopStyles.primaryButton}
+            >
+              <Download className="h-4 w-4" />
+              Download warranty certificate
+            </a>
+          ) : null}
         </div>
       </section>
       <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]">
