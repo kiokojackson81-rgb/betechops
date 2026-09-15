@@ -139,7 +139,7 @@ const REVIEW_REFERRAL_SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS "ReferralLink" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
-    "reviewId" TEXT NOT NULL,
+    "reviewId" TEXT,
     "productId" TEXT NOT NULL,
     "productName" TEXT NOT NULL,
     "referredName" TEXT,
@@ -166,6 +166,7 @@ const REVIEW_REFERRAL_SCHEMA_SQL = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "ReferralLink_referralCode_key" ON "ReferralLink"("referralCode")`,
   `CREATE INDEX IF NOT EXISTS "ReferralLink_accountId_createdAt_idx" ON "ReferralLink"("accountId","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "ReferralLink_referredPhone_createdAt_idx" ON "ReferralLink"("referredPhone","createdAt")`,
+  `ALTER TABLE "ReferralLink" ALTER COLUMN "reviewId" DROP NOT NULL`,
   `ALTER TABLE "ReferralLink" ADD COLUMN IF NOT EXISTS "saleAmount" NUMERIC(12,2)`,
   `ALTER TABLE "ReferralLink" ADD COLUMN IF NOT EXISTS "matchedWebsiteOrderId" TEXT`,
   `ALTER TABLE "ReferralLink" ADD COLUMN IF NOT EXISTS "matchedReceiptId" TEXT`,
@@ -2250,7 +2251,7 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
     });
     const ownershipLock = await claimReferralOwnershipLock(tx, {
       normalizedPhone: referredPhone,
-      source: "post_review_referral",
+      source: review ? "post_review_referral" : "review_invitation_referral",
       ownerType: "review_referral",
       ownerUserId: cleanOptional(invitation.customerUserId),
       ownerReferralAccountId: account.accountId,
