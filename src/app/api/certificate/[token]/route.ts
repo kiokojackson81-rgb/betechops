@@ -1,5 +1,6 @@
 import { getWarrantyCertificate } from "@/lib/warrantyCertificates";
 import { PROJECT_DOCUMENT_ORDER, PROJECT_DOCUMENT_LABELS } from "@/lib/projectDocumentMessages";
+import { ensureReviewInvitationForReceipt } from "@/lib/reviewsReferrals";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { appendCommissioningAudit, findCustomerCertificateSession, projectSummary } from "@/lib/commissioning";
@@ -12,6 +13,10 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   const session = await findCustomerCertificateSession(token);
   if (!session) return NextResponse.json({ error: "This certificate link is invalid or unavailable." }, { status: 404 });
   const warranty = await getWarrantyCertificate(session.receiptId);
+  const review = await ensureReviewInvitationForReceipt(session.receiptId, {
+    completedAt: session.issuedAt || undefined,
+    deliveryMode: "project",
+  }).catch(() => null);
   const available = { receipt: Boolean(session.projectReceiptPdfUrl), completion: Boolean(session.completionPdfUrl), warranty: Boolean(warranty) };
   return NextResponse.json({
     status: "COMPLETED",
@@ -23,6 +28,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     project: projectSummary(session.receipt),
     acknowledgedAt: session.customerAcknowledgedAt,
     termsAcceptedAt: session.customerTermsAcceptedAt,
+    reviewUrl: review?.reviewUrl || null,
   }, { headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" } });
 }
 
