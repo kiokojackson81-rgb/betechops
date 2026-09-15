@@ -931,10 +931,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   };
 
   const handlePreview = (autoPrint = false) => {
-    if (isMpesaExpress) {
-      showToast("Send and confirm the M-Pesa Express prompt before printing the receipt", "error");
-      return;
-    }
     if (!staffId && !canCreateUnassigned) {
       showToast("Select staff before previewing", "error");
       return;
@@ -1844,7 +1840,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               M-Pesa Express
             </button>
           </div>
-          {isMpesaExpress ? <p className="mt-2 text-xs leading-5 text-emerald-200">The customer receives an STK prompt now. The receipt only opens for printing after M-Pesa confirms payment.</p> : null}
+          {isMpesaExpress ? <p className="mt-2 text-xs leading-5 text-emerald-200">Preview the receipt with the customer first, then send the STK prompt. Printing and customer delivery remain locked until M-Pesa confirms payment.</p> : null}
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
               <label className={labelClass}>Deposit (KES)</label>

@@ -714,7 +714,9 @@ async function finalizeConfirmedPosExpressReceipt(orderId: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: {
-      receipt: { select: { id: true, data: true } },
+      orderNumber: true,
+      paidAmount: true,
+      receipt: { select: { id: true, receiptNumber: true, data: true } },
     },
   });
   const receipt = order?.receipt;
@@ -723,6 +725,10 @@ async function finalizeConfirmedPosExpressReceipt(orderId: string) {
 
   await syncPosReceiptToCustomerAccount(receipt.id).catch((error) => console.error("[mpesa] POS Express account sync failed", error));
   await sendReceiptChannels(receipt.id, [], { requestId: `mpesa-confirmed-${orderId}` }).catch((error) => console.error("[mpesa] POS Express receipt notification failed", error));
+  await sendTransactionalSms(
+    "0722151083",
+    `M-Pesa payment successful. Receipt: ${receipt.receiptNumber || order.orderNumber}. Amount: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")}. Method: ${String(data.paymentCollectionMethod) === "MPESA_PAYBILL" ? "Paybill fallback" : "M-Pesa Express"}.`,
+  ).catch((error) => console.error("[mpesa] POS Express operations SMS failed", error));
 }
 
 async function markStkResourcePaymentFailed(payment: MpesaPayment) {
