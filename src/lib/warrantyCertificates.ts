@@ -32,7 +32,7 @@ export function extractEquipment(data: unknown, start: Date): WarrantyEquipment[
   const equipment = asRecord(asRecord(data).equipment);
   const panelQuantity = choose(equipment, ["panelQuantity", "panelQty", "panelCount"]);
   const panelModel = choose(equipment, ["panelModel"]);
-  const panelRating = choose(equipment, ["panelRating", "panelWatts", "panelWattage"]);
+  const panelRating = choose(equipment, ["panelRating", "panelWatts", "panelWattage", "panelRatedPower"]);
   const panelModelCapacity = [panelModel, panelRating !== "Not recorded" ? panelRating : "", panelQuantity !== "Not recorded" ? `Quantity: ${panelQuantity}` : ""].filter(Boolean).join(" · ") || "Not recorded";
   const panelYears = Number(equipment.panelWarrantyYears ?? 25);
   return [
@@ -45,6 +45,8 @@ function sourceSnapshot(session: CommissioningSource, certificateNo: string, ver
   const summary = projectSummary(session.receipt);
   const certificateData = asRecord(session.data);
   const installation = asRecord(certificateData.installation);
+  const signatures = asRecord(certificateData.signatures);
+  const professional = asRecord(session.professionalProfileSnapshot);
   const commissioningDate = session.technicianSignedAt || session.issuedAt || issuedAt;
   const frozenProject = asRecord(certificateData.projectSnapshot);
   return {
@@ -58,6 +60,13 @@ function sourceSnapshot(session: CommissioningSource, certificateNo: string, ver
     installationType: choose(installation, ["type", "installationType"]) === "Not recorded" ? "New solar installation" : choose(installation, ["type", "installationType"]),
     systemConfiguration: technicalConfiguration(choose(installation, ["systemConfiguration", "configuration", "systemType"])),
     technicianName: text(certificateData.installerName) || session.technician?.name || "Installer / agent",
+    technicianSignatureUrl: text(signatures.technician) || null,
+    authorisedByName: text(session.professionalReviewedBy) || text(professional.name) || null,
+    authorisedByTitle: text(professional.title) || null,
+    authorisedByQualification: text(professional.qualification) || null,
+    authorisedByLicenceNumber: text(professional.licenceNumber) || null,
+    authorisedSignatureUrl: text(session.professionalSignatureSnapshot) || text(professional.signatureUrl) || null,
+    companyStampUrl: text(professional.stampUrl) || null,
     commissioningDate: isoDate(commissioningDate),
     issueDate: isoDate(issuedAt),
     verificationUrl,

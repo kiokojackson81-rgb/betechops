@@ -7,7 +7,7 @@ import * as QRCode from "qrcode";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
 import { decryptCommissioningToken } from "@/lib/commissioning";
 import { getBranding, sameLicensedProfessional } from "@/lib/branding";
-import { TERMS_DISPLAY_URL } from "@/lib/publicLinks";
+import { TERMS_DISPLAY_URL, TERMS_URL } from "@/lib/publicLinks";
 
 type CertificateSource = {
   completionPdfUrl?: string | null;
@@ -47,6 +47,8 @@ const MAROON = rgb(0.45, 0.02, 0.04);
 const GREY = rgb(0.95, 0.95, 0.95);
 const GREEN = rgb(0.04, 0.45, 0.22);
 const GREEN_LIGHT = rgb(0.9, 0.97, 0.92);
+const WARRANTY_SUPPORT_URL = "https://www.betech.co.ke/warranty-support";
+const REPORT_ISSUE_URL = "https://www.betech.co.ke/support/report-issue";
 
 function asRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -153,13 +155,12 @@ function drawDigitalStamp(page: PDFPage, stamp: PDFImage | null, stampDate: stri
   const width = stamp.width * scale;
   const height = stamp.height * scale;
   page.drawImage(stamp, { x: x + (size - width) / 2, y: y + (size - height) / 2, width, height });
-  if (!stampDate || size < 60) return;
-  page.drawRectangle({ x: x + 18, y: y + 25, width: 68, height: 16, color: rgb(1, 1, 1), opacity: 0.68 });
+  if (!stampDate) return;
   const dateLabel = `DATE: ${stampDate}`;
-  const fontSize = 6.2;
+  const fontSize = 4.8;
   page.drawText(dateLabel, {
     x: x + (size - bold.widthOfTextAtSize(dateLabel, fontSize)) / 2,
-    y: y + 30,
+    y: y + 2,
     size: fontSize,
     font: bold,
     color: rgb(0.08, 0.13, 0.68),
@@ -194,7 +195,7 @@ function getEvidence(data: Record<string, unknown>) {
 
 function extractEquipment(equipment: Record<string, unknown>, projectItems: string[]): EquipmentRow[] {
   const panelQuantity = valueFrom(equipment, ["panelQuantity", "panelQty", "panelCount"]);
-  const panelRating = valueFrom(equipment, ["panelRating", "panelWatts", "panelWattage"]);
+  const panelRating = valueFrom(equipment, ["panelRating", "panelWatts", "panelWattage", "panelRatedPower"]);
   const panelWatts = Number((panelRating || projectItems.join(" ")).match(/(\d{3,4})\s*W/i)?.[1] || 0);
   const panelCount = Number(panelQuantity.match(/\d+/)?.[0] || projectItems.join(" ").match(/(\d+)\s*[x]/i)?.[1] || 0);
   const pvCapacity = panelWatts > 0 && panelCount > 0 ? `${((panelWatts * panelCount) / 1000).toFixed(2)} kWp` : "";
@@ -290,7 +291,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
       ? new Date(text(signatures.technicianSignedAt))
       : source.issuedAt,
   );
-  const stampDate = formatStampDate(acceptanceDate || source.issuedAt);
+  const stampDate = formatStampDate(source.professionalApprovedAt || source.issuedAt);
   const technician = text(certificateData.installerName) || source.technician?.name || "Installer / agent";
   const page = pdf.addPage(A4);
   const letterhead = await letterheadBytes();
@@ -381,10 +382,12 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   page.drawText(`Terms: ${TERMS_DISPLAY_URL}`, { x: 376, y: 273, size: 5.6, font: regular, color: rgb(0.04, 0.42, 0.75) });
   page.drawText(`Accepted: ${acceptanceDateLabel}`, { x: 376, y: 265, size: 5.6, font: regular, color: MUTED });
 
-  panel("8. DECLARATION BY LICENSED SOLAR PROFESSIONAL", MARGIN, 253, fullWidth, 63);
-  drawLines(page, approved && certificateData.certificationMode === "AUTOMATIC_SUPERVISOR_SIGNATURE" ? "This certificate is issued automatically from the recorded installer checks, equipment identification, installation evidence, customer handover and signatures. The configured supervisor signature and company stamp are applied automatically on successful validation; no separate manual professional review is recorded." : approved ? "I certify that the Solar Photovoltaic installation described in this Certificate has been inspected, tested and commissioned within the recorded scope of works and based on the commissioning information and installation evidence provided. To the best of my professional knowledge, the installation has been verified for operational condition, equipment identification, electrical protection, earthing and commissioning requirements applicable to the recorded installation." : "Professional certification has not been recorded. This document does not declare professional supervision or approval.", MARGIN + 8, 226, fullWidth - 16, regular, 6.8, INK, 9);
-  if (!technicianIsProfessional) drawLines(page, "Installation technician declaration: I confirm that I carried out the installation and commissioning activities recorded in this project and that the information, measurements and photographic evidence submitted are true to the best of my knowledge.", MARGIN + 8, 181, fullWidth - 16, regular, 6.2, INK, 8);
-  const y = 155;
+  panel("8. DECLARATION & PROFESSIONAL CERTIFICATION", MARGIN, 253, fullWidth, 90);
+  page.drawText("Installation Technician Declaration", { x: MARGIN + 8, y: 226, size: 6.8, font: bold, color: MAROON });
+  drawLines(page, "I confirm that I carried out the installation, testing and commissioning of the solar photovoltaic system described in this certificate. I further confirm that the equipment details, commissioning results, measurements and installation evidence recorded herein are true and accurate to the best of my knowledge.", MARGIN + 8, 217, fullWidth - 16, regular, 5.9, INK, 7);
+  page.drawText("Professional Certification", { x: MARGIN + 8, y: 188, size: 6.8, font: bold, color: MAROON });
+  drawLines(page, "I have reviewed the installation and commissioning records presented for this project, including the system configuration, equipment identification, test results and supporting installation evidence. Based on the information provided, I am satisfied that the system has been successfully installed, tested and commissioned and is approved for handover to the customer. This Completion & Commissioning Certificate is hereby authorised and certified on behalf of Betech Solar Solutions.", MARGIN + 8, 179, fullWidth - 16, regular, 5.75, INK, 6.8);
+  const y = 145;
   drawSectionHeading(page, "Signatures", y, bold);
   const signatureTop = y - 14;
   const customerSignature = text(signatures.customer);
@@ -406,7 +409,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   if (!technicianIsProfessional) {
     page.drawText("INSTALLATION TECHNICIAN", { x: boxes[1] + 6, y: signatureTop - 8, size: 6.3, font: bold, color: MAROON });
     page.drawText(`Name: ${technician}`, { x: boxes[1] + 6, y: signatureTop - 19, size: 6.2, font: regular, color: INK });
-    page.drawText("Installed & Tested By", { x: boxes[1] + 6, y: signatureTop - 28, size: 5.8, font: regular, color: MUTED });
+    page.drawText("Installed, Tested & Commissioned By", { x: boxes[1] + 6, y: signatureTop - 28, size: 5.35, font: regular, color: MUTED });
     if (technicianImage) { const scale = Math.min((boxWidth - 20) / technicianImage.width, 18 / technicianImage.height); page.drawImage(technicianImage, { x: boxes[1] + 12, y: signatureTop - 47, width: technicianImage.width * scale, height: technicianImage.height * scale }); }
     else page.drawText(technicianSignature || technician, { x: boxes[1] + 8, y: signatureTop - 42, size: 7, font: italic, color: INK });
     page.drawText(`Date: ${technicianSignatureDate || signatureDate}`, { x: boxes[1] + 6, y: signatureTop - 53, size: 6.1, font: regular, color: MUTED });
@@ -415,10 +418,12 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   page.drawText(approved ? professional.name : "Approval not recorded", { x: professionalBox + 6, y: signatureTop - 19, size: 6.6, font: bold, color: INK });
   page.drawText(approved ? professional.title : "", { x: professionalBox + 6, y: signatureTop - 28, size: 5.4, font: regular, color: INK });
   page.drawText(approved ? `${professional.qualification} · ${professional.licenceNumber}` : "", { x: professionalBox + 6, y: signatureTop - 35, size: 4.8, font: regular, color: INK });
-  if (professionalImage) { const scale = Math.min((boxWidth - 18) / professionalImage.width, 14 / professionalImage.height); page.drawImage(professionalImage, { x: professionalBox + 10, y: signatureTop - 51, width: professionalImage.width * scale, height: professionalImage.height * scale }); }
+  page.drawText("Signature", { x: professionalBox + 6, y: signatureTop - 42, size: 5.2, font: regular, color: MUTED });
+  if (professionalImage) { const scale = Math.min((boxWidth - 18) / professionalImage.width, 12 / professionalImage.height); page.drawImage(professionalImage, { x: professionalBox + 10, y: signatureTop - 55, width: professionalImage.width * scale, height: professionalImage.height * scale }); }
   else page.drawText("Signature not recorded", { x: professionalBox + 8, y: signatureTop - 47, size: 8, font: italic, color: INK });
-  page.drawText(`Date: ${professionalApprovalDate || signatureDate}`, { x: professionalBox + 6, y: signatureTop - 57, size: 5.8, font: regular, color: MUTED });
+  page.drawText(`Certification Date: ${professionalApprovalDate || signatureDate}`, { x: professionalBox + 6, y: signatureTop - 64, size: 5.2, font: regular, color: MUTED });
   if (approved) drawDigitalStamp(page, stampImage, stampDate, bold);
+  if (approved) page.drawText("Company Stamp", { x: 500, y: 22, size: 4.8, font: regular, color: MUTED });
 
   const verificationUrl = certificateVerificationUrl(source);
   if (verificationUrl) {
@@ -484,6 +489,28 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
     evidenceFallback.drawText("INSTALLATION & COMMISSIONING EVIDENCE REPORT", { x: MARGIN, y: 735, size: 14, font: bold, color: INK });
     evidenceFallback.drawText("No evidence photos were available to include in this certificate copy.", { x: MARGIN, y: 705, size: 9, font: regular, color: MUTED });
   }
+  const supportPage = pdf.addPage(A4);
+  drawLetterhead(supportPage, letterheadImage);
+  supportPage.drawText("CUSTOMER SUPPORT & PROJECT DOCUMENTS", { x: MARGIN, y: 724, size: 15, font: bold, color: INK });
+  supportPage.drawText(`Completion Certificate: ${source.certificateNo || "Pending"}   •   Project: ${reference}`, { x: MARGIN, y: 706, size: 7.5, font: regular, color: MUTED });
+  const supportCards = [
+    { title: "SOLAR SYSTEM TERMS & CONDITIONS", url: TERMS_URL, copy: "This installation is governed by the Solar System Installation, Performance, Warranty & After-Sales Terms & Conditions." },
+    { title: "WARRANTY SUPPORT", url: WARRANTY_SUPPORT_URL, copy: "Scan for warranty support, coverage guidance and the information needed for a warranty request." },
+    { title: "REPORT AN ISSUE", url: REPORT_ISSUE_URL, copy: "Tell us what went wrong and provide the details our support team needs to assist you. You can track updates from your account after submitting your report." },
+  ];
+  for (const [index, card] of supportCards.entries()) {
+    const top = 650 - index * 170;
+    supportPage.drawRectangle({ x: MARGIN, y: top - 138, width: fullWidth, height: 138, color: rgb(0.99, 0.99, 0.99), borderColor: rgb(0.84, 0.84, 0.84), borderWidth: 0.6 });
+    supportPage.drawText(card.title, { x: MARGIN + 15, y: top - 22, size: 10, font: bold, color: MAROON });
+    drawLines(supportPage, card.copy, MARGIN + 15, top - 42, 310, regular, 7.6, INK, 10);
+    drawLines(supportPage, card.url.replace(/^https:\/\//, ""), MARGIN + 15, top - 104, 310, regular, 6.4, rgb(0.04, 0.42, 0.75), 8);
+    try {
+      const qr = await QRCode.toDataURL(card.url, { margin: 0, width: 220, errorCorrectionLevel: "M" });
+      const qrImage = await embedImage(pdf, qr);
+      if (qrImage) supportPage.drawImage(qrImage, { x: 456, y: top - 122, width: 104, height: 104 });
+    } catch { /* The support page remains useful if QR artwork cannot be generated. */ }
+  }
+  supportPage.drawText("Support: info@betech.co.ke  •  Call / WhatsApp: 0722 151 083  •  www.betech.co.ke", { x: MARGIN, y: 42, size: 7.2, font: bold, color: INK });
   const pages = pdf.getPages();
   pages.forEach((item, index) => drawFooter(item, regular, index + 1, pages.length));
   return Buffer.from(await pdf.save());

@@ -359,7 +359,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "issue" }),
+          body: JSON.stringify({ action: "submit" }),
         },
       );
       const body = await response.json().catch(() => ({}));
@@ -369,10 +369,10 @@ export default function CommissioningClient({ token }: { token: string }) {
         current
           ? {
               ...current,
-              status: body.status || "ISSUED",
+              status: body.status || "AWAITING_PROFESSIONAL_REVIEW",
               readOnly: true,
-              certificateNo: body.certificateNo || null,
-              issuedAt: body.issuedAt || null,
+              certificateNo: null,
+              issuedAt: null,
             }
           : current,
       );
@@ -685,7 +685,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 onClick={() => void issue()}
                 className="w-full rounded-2xl bg-cyan-400 px-5 py-4 text-base font-black text-slate-950 disabled:opacity-40"
               >
-                {saveState === "saving" ? "GENERATING CERTIFICATES..." : "SUBMIT & GENERATE CERTIFICATES"}
+                {saveState === "saving" ? "SUBMITTING FOR AUTHORISATION..." : "SUBMIT FOR PROFESSIONAL AUTHORISATION"}
               </button>
             ) : (
               <button
@@ -1051,7 +1051,7 @@ function EquipmentConfirm({
         onClick={onManual}
         className="mt-3 text-sm font-bold text-cyan-200"
       >
-        {manual ? "HIDE MANUAL DETAILS" : "ENTER DETAILS MANUALLY"}
+        {manual ? "HIDE MANUAL DETAILS" : "ENTER BRAND / MODEL DETAILS MANUALLY"}
       </button>
       {(identified || confirmed) && (
         <button
@@ -1078,6 +1078,14 @@ function EquipmentConfirm({
               className={inputClass}
               value={equipment.model}
               onChange={(event) => onEquipment({ model: event.target.value })}
+            />
+          </label>
+          <label className="text-sm">
+            {kind === "panel" ? "Panel rating" : "Capacity / rating"}
+            <input
+              className={inputClass}
+              value={kind === "panel" ? equipment.ratedPower : equipment.capacity}
+              onChange={(event) => onEquipment(kind === "panel" ? { ratedPower: event.target.value } : { capacity: event.target.value })}
             />
           </label>
           <label className="text-sm">
@@ -1517,7 +1525,7 @@ function Review({
         ))}
       </div>
       <p className="mt-5 text-sm text-slate-400">
-        {completed}/8 stages completed. Submitting automatically issues the certificates using the configured supervisor signature and stamp once all required checks are complete.
+        {completed}/8 stages completed. Submitting sends the completed record to the licensed professional for review and authorisation.
       </p>
     </section>
   );
@@ -1551,6 +1559,6 @@ function IssuedView({ session, token }: { session: Session; token: string }) {
     </main>
   );
 }
-function ProfessionalReviewPendingView({ session, busy, error, onIssue }: { session: Session; busy: boolean; error: string; onIssue: () => void }) {
-  return <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900"><article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><h1 className="text-2xl font-black">Installation details submitted</h1><p>Generate your certificates using the configured supervisor signature. No separate approval or supervisor sign-off is required.</p><p>Project: {session.project.reference}<br />Customer: {session.project.customerName}</p>{error ? <p role="alert">{error}</p> : null}<button disabled={busy} onClick={onIssue} className="w-full rounded-xl bg-[#7a0000] px-4 py-3 font-bold text-white disabled:opacity-50">{busy ? "Generating certificates..." : "Generate certificates automatically"}</button></article></main>;
+function ProfessionalReviewPendingView({ session, error }: { session: Session; busy: boolean; error: string; onIssue: () => void }) {
+  return <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900"><article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><h1 className="text-2xl font-black">Installation details submitted</h1><p>The commissioning record is awaiting review and authorisation by the licensed solar professional. Certificates will be issued once that authorisation is recorded.</p><p>Project: {session.project.reference}<br />Customer: {session.project.customerName}</p>{error ? <p role="alert">{error}</p> : null}</article></main>;
 }

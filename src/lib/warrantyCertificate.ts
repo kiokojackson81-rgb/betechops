@@ -5,7 +5,7 @@ import path from "path";
 import * as QRCode from "qrcode";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
 import { getBranding } from "@/lib/branding";
-import { TERMS_DISPLAY_URL } from "@/lib/publicLinks";
+import { TERMS_DISPLAY_URL, TERMS_URL } from "@/lib/publicLinks";
 
 export type WarrantyEquipment = {
   equipment: "Solar Panels" | "Inverter" | "Lithium Battery";
@@ -29,6 +29,13 @@ export type WarrantyCertificateSnapshot = {
   installationType: string;
   systemConfiguration: string;
   technicianName: string;
+  technicianSignatureUrl?: string | null;
+  authorisedByName?: string | null;
+  authorisedByTitle?: string | null;
+  authorisedByQualification?: string | null;
+  authorisedByLicenceNumber?: string | null;
+  authorisedSignatureUrl?: string | null;
+  companyStampUrl?: string | null;
   commissioningDate: string;
   issueDate: string;
   verificationUrl: string;
@@ -42,6 +49,8 @@ const INK = rgb(0.06, 0.12, 0.23);
 const MUTED = rgb(0.32, 0.37, 0.46);
 const GREEN = rgb(0.02, 0.46, 0.22);
 const PALE = rgb(0.985, 0.975, 0.96);
+const WARRANTY_SUPPORT_URL = "https://www.betech.co.ke/warranty-support";
+const REPORT_ISSUE_URL = "https://www.betech.co.ke/support/report-issue";
 
 function wrap(value: string, font: PDFFont, size: number, width: number) {
   const words = value.split(/\s+/).filter(Boolean).flatMap(word => {
@@ -81,6 +90,8 @@ async function letterheadBytes() {
 
 async function imageFromUrl(pdf: PDFDocument, url: string) {
   try {
+    const inline = url.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/i);
+    if (inline) return /png/i.test(inline[1]) ? await pdf.embedPng(Buffer.from(inline[2], "base64")) : await pdf.embedJpg(Buffer.from(inline[2], "base64"));
     const response = await fetch(url);
     if (!response.ok) return null;
     const bytes = new Uint8Array(await response.arrayBuffer());
@@ -103,14 +114,15 @@ function box(page: PDFPage, x: number, y: number, width: number, height: number)
   page.drawRectangle({ x, y, width, height, color: PALE, borderColor: rgb(0.8, 0.82, 0.85), borderWidth: 0.45 });
 }
 
-function drawStamp(page: PDFPage, image: PDFImage | null, bold: PDFFont) {
+function drawStamp(page: PDFPage, image: PDFImage | null, date: string, bold: PDFFont) {
   if (!image) return;
   const max = 56;
   const scale = Math.min(max / image.width, max / image.height);
   const width = image.width * scale;
   const height = image.height * scale;
   page.drawImage(image, { x: 250 + (max - width) / 2, y: 55 + (max - height) / 2, width, height });
-  page.drawText("DIGITALLY AUTHORISED", { x: 242, y: 44, size: 5.5, font: bold, color: MAROON });
+  page.drawText("Company Stamp", { x: 249, y: 47, size: 5.5, font: bold, color: MAROON });
+  page.drawText(`Date: ${formatDate(date)}`, { x: 244, y: 39, size: 5.3, font: bold, color: MUTED });
 }
 
 /** Builds the single, compact issued warranty document from an immutable snapshot. */
@@ -125,7 +137,9 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
   if (letterhead) {
     try { letterheadImage = await pdf.embedJpg(letterhead); } catch { try { letterheadImage = await pdf.embedPng(letterhead); } catch { /* Preserve the certificate content if an asset is unavailable. */ } }
   }
-  const stamp = !options.preview && branding.digitalStampUrl ? await imageFromUrl(pdf, branding.digitalStampUrl) : null;
+  const stamp = !options.preview && (snapshot.companyStampUrl || branding.digitalStampUrl) ? await imageFromUrl(pdf, snapshot.companyStampUrl || branding.digitalStampUrl!) : null;
+  const technicianSignature = snapshot.technicianSignatureUrl ? await imageFromUrl(pdf, snapshot.technicianSignatureUrl) : null;
+  const authorisedSignature = snapshot.authorisedSignatureUrl ? await imageFromUrl(pdf, snapshot.authorisedSignatureUrl) : null;
   if (!options.preview && !stamp) throw new Error("The existing Betech digital stamp must be configured and accessible before warranty issuance.");
   drawLetterhead(page, letterheadImage);
 
@@ -183,20 +197,22 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
     const match = qr.match(/^data:image\/png;base64,(.+)$/i);
     if (match) { const qrImage = await pdf.embedPng(Buffer.from(match[1], "base64")); page.drawImage(qrImage, { x: 438, y: 164, width: 65, height: 65 }); }
   } catch { /* The issued certificate remains valid if QR artwork cannot be rendered. */ }
-  page.drawText("VERIFY WARRANTY", { x: 505, y: 230, size: 5.5, font: bold, color: MAROON });
+  page.drawText("SCAN TO VERIFY WARRANTY", { x: 491, y: 230, size: 5.1, font: bold, color: MAROON });
   drawWrapped(page, `Status: ${options.preview ? "DRAFT" : (snapshot.coverageStatus || "ACTIVE").replaceAll("_", " ")}\n${snapshot.certificateNo}\n${snapshot.projectReference}`, 511, 217, 48, regular, 6.2, MUTED, 7.2);
 
   section(page, "4. AUTHORISED BY", 126, bold);
   box(page, M, 42, A4[0] - M * 2, 66);
-  page.drawText("For Betech Solar Solutions", { x: M + 10, y: 88, size: 7.5, font: bold, color: INK });
-  page.drawText(`Technician: ${snapshot.technicianName}`, { x: M + 10, y: 74, size: 7, font: regular, color: INK });
-  page.drawText(`Issue date: ${formatDate(snapshot.issueDate)}`, { x: M + 10, y: 61, size: 7, font: regular, color: INK });
-  page.drawText(`Commissioned: ${formatDate(snapshot.commissioningDate)}`, { x: M + 10, y: 49, size: 6, font: regular, color: MUTED });
-  page.drawText(options.preview ? "PREVIEW - NOT ISSUED" : "DIGITALLY ISSUED & VERIFIED", { x: 365, y: 88, size: 8, font: bold, color: GREEN });
-  page.drawText(snapshot.certificateNo, { x: 365, y: 74, size: 7, font: bold, color: INK });
-  page.drawText(`Issued: ${formatDate(snapshot.issueDate)}`, { x: 365, y: 61, size: 6.5, font: regular, color: MUTED });
-  page.drawText("Digitally issued by Betech Solar Solutions", { x: 365, y: 49, size: 6, font: regular, color: MUTED });
-  drawStamp(page, stamp, bold);
+  page.drawText("Installation Technician", { x: M + 10, y: 88, size: 7.5, font: bold, color: INK });
+  page.drawText(snapshot.technicianName, { x: M + 10, y: 74, size: 7, font: regular, color: INK });
+  page.drawText("Signature", { x: M + 10, y: 61, size: 6, font: regular, color: MUTED });
+  if (technicianSignature) { const scale = Math.min(85 / technicianSignature.width, 18 / technicianSignature.height); page.drawImage(technicianSignature, { x: M + 58, y: 52, width: technicianSignature.width * scale, height: technicianSignature.height * scale }); }
+  page.drawText(`Commissioned: ${formatDate(snapshot.commissioningDate)}`, { x: M + 10, y: 45, size: 6, font: regular, color: MUTED });
+  page.drawText(options.preview ? "PREVIEW - NOT ISSUED" : "AUTHORISED & ISSUED BY", { x: 365, y: 88, size: 8, font: bold, color: GREEN });
+  page.drawText(snapshot.authorisedByName || "Betech Solar Solutions", { x: 365, y: 75, size: 7, font: bold, color: INK });
+  page.drawText(snapshot.authorisedByTitle || "Betech Solar Solutions", { x: 365, y: 64, size: 6.1, font: regular, color: INK });
+  page.drawText(`Issue Date: ${formatDate(snapshot.issueDate)}`, { x: 365, y: 52, size: 6, font: regular, color: MUTED });
+  if (authorisedSignature) { const scale = Math.min(100 / authorisedSignature.width, 16 / authorisedSignature.height); page.drawImage(authorisedSignature, { x: 365, y: 35, width: authorisedSignature.width * scale, height: authorisedSignature.height * scale }); }
+  drawStamp(page, stamp, snapshot.issueDate, bold);
   page.drawText(`Issued warranty document • ${snapshot.certificateNo}`, { x: M, y: 20, size: 6.2, font: regular, color: MUTED });
   page.drawText("Betech Solar Solutions • Terms and conditions apply", { x: 324, y: 20, size: 6.2, font: regular, color: MUTED });
   for (let offset = 3; offset < snapshot.equipment.length; offset += 6) {
@@ -212,5 +228,27 @@ export async function buildWarrantyCertificatePdf(snapshot: WarrantyCertificateS
     continuation.drawText(`Part of ${snapshot.certificateNo} - Terms and conditions apply`, { x: M, y: 30, size: 7, font: regular, color: MUTED });
   }
   if (snapshot.equipment.length > 3) page.drawText("Additional equipment: see continuation pages", { x: M, y: 280, size: 7, font: bold, color: MAROON });
+  const supportPage = pdf.addPage(A4);
+  drawLetterhead(supportPage, letterheadImage);
+  supportPage.drawText("CUSTOMER SUPPORT & WARRANTY ASSISTANCE", { x: M, y: 724, size: 15, font: bold, color: INK });
+  supportPage.drawText(`Warranty Certificate: ${snapshot.certificateNo}   •   Project: ${snapshot.projectReference}`, { x: M, y: 706, size: 7.5, font: regular, color: MUTED });
+  const supportCards = [
+    { title: "SOLAR SYSTEM TERMS & CONDITIONS", url: TERMS_URL, copy: "This installation is governed by the Solar System Installation, Performance, Warranty & After-Sales Terms & Conditions." },
+    { title: "WARRANTY SUPPORT", url: WARRANTY_SUPPORT_URL, copy: "Scan for warranty support, coverage guidance and the information needed for a warranty request." },
+    { title: "REPORT AN ISSUE", url: REPORT_ISSUE_URL, copy: "Tell us what went wrong and provide the details our support team needs to assist you. You can track updates from your account after submitting your report." },
+  ];
+  for (const [index, card] of supportCards.entries()) {
+    const top = 650 - index * 170;
+    supportPage.drawRectangle({ x: M, y: top - 138, width: A4[0] - M * 2, height: 138, color: rgb(0.99, 0.99, 0.99), borderColor: rgb(0.84, 0.84, 0.84), borderWidth: 0.6 });
+    supportPage.drawText(card.title, { x: M + 15, y: top - 22, size: 10, font: bold, color: MAROON });
+    drawWrapped(supportPage, card.copy, M + 15, top - 42, 310, regular, 7.6, INK, 10);
+    drawWrapped(supportPage, card.url.replace(/^https:\/\//, ""), M + 15, top - 104, 310, regular, 6.4, rgb(0.04, 0.42, 0.75), 8);
+    try {
+      const qr = await QRCode.toDataURL(card.url, { margin: 0, width: 220, errorCorrectionLevel: "M" });
+      const match = qr.match(/^data:image\/png;base64,(.+)$/i);
+      if (match) { const qrImage = await pdf.embedPng(Buffer.from(match[1], "base64")); supportPage.drawImage(qrImage, { x: 456, y: top - 122, width: 104, height: 104 }); }
+    } catch { /* The support page remains useful if QR artwork cannot be generated. */ }
+  }
+  supportPage.drawText("Support: info@betech.co.ke  •  Call / WhatsApp: 0722 151 083  •  www.betech.co.ke", { x: M, y: 42, size: 7.2, font: bold, color: INK });
   return Buffer.from(await pdf.save());
 }
