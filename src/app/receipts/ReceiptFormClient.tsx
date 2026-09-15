@@ -157,6 +157,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [isMpesaExpress, setIsMpesaExpress] = useState(false);
   const [mpesaPayerPhone, setMpesaPayerPhone] = useState("");
   const [editingMpesaPayerPhone, setEditingMpesaPayerPhone] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [expressPayment, setExpressPayment] = useState<ExpressPayment | null>(null);
   const completedExpressCheckoutIds = useRef(new Set<string>());
   const hasPaymentMethodSelection = isMpesaExpress || selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
@@ -734,10 +735,13 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     try {
       const url = buildPreviewUrl(draft);
       setLastPrintableUrl(url);
-      const target = autoPrint ? `${url}&autoPrint=1` : url;
-      const previewWindow = window.open(target, "_blank");
-      if (!previewWindow) {
-        throw new Error("Popup blocked");
+      if (autoPrint) {
+        const previewWindow = window.open(`${url}&autoPrint=1`, "_blank");
+        if (!previewWindow) throw new Error("Popup blocked");
+      } else {
+        // Keep the cashier in the same workflow. Opening a separate preview
+        // tab can leave the browser focused on its native print UI.
+        setPreviewUrl(url);
       }
       return true;
     } catch (err) {
@@ -1316,7 +1320,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const fieldClass = "mt-1 w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
   const checkboxClass = "h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500";
 
-  return (
+    return (
     <>
       <div className="receipt-screen space-y-6">
       {showHero && (
@@ -2040,6 +2044,24 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     {duplicateOwner && (
       <ReceiptDuplicateModal owner={duplicateOwner} onClose={() => setDuplicateOwner(null)} />
     )}
+    {previewUrl ? (
+      <div className="fixed inset-0 z-[100] flex min-h-0 items-stretch bg-slate-950/85 p-2 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true" aria-label="Receipt preview">
+        <section className="flex min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 text-slate-900 sm:px-6">
+            <div>
+              <h2 className="font-semibold">Receipt preview</h2>
+              <p className="text-xs text-slate-600">Check it with the customer, then close this preview to send the M-Pesa prompt.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => { const printWindow = window.open(previewUrl, "_blank"); if (!printWindow) showToast("Allow popups to print the preview", "error"); }} className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100">Print preview</button>
+              <button type="button" onClick={() => setPreviewUrl(null)} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700">Continue to M-Pesa prompt</button>
+            </div>
+          </header>
+          <iframe title="Receipt preview" src={previewUrl} className="min-h-0 flex-1 bg-white" />
+          <footer className="flex justify-end border-t border-slate-200 bg-white p-3"><button type="button" onClick={() => setPreviewUrl(null)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100">Close preview</button></footer>
+        </section>
+      </div>
+    ) : null}
     </>
   );
 }
