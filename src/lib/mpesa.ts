@@ -336,7 +336,7 @@ export async function initiateStkPushForResource(input: {
     await prisma.order.update({ where: { id: target.id }, data: { metadata: { ...paymentMetadata((await prisma.order.findUniqueOrThrow({ where: { id: target.id }, select: { metadata: true } })).metadata), installationPaymentState: "AWAITING_PAYMENT", installationPaymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), installationPaymentFailureReason: null } } });
   }
 
-  await prisma.mpesaPayment.create({
+  const ledgerPayment = await prisma.mpesaPayment.create({
     data: {
       channel: "STK",
       status: "PENDING",
@@ -350,6 +350,13 @@ export async function initiateStkPushForResource(input: {
       resultDescription: result.ResponseDescription || result.CustomerMessage || null,
       callbackPayload: jsonValue(result),
     },
+  });
+  console.info("[mpesa] STK ledger attempt recorded", {
+    paymentId: ledgerPayment.id,
+    resourceType: input.resourceType,
+    reference: target.reference,
+    amount,
+    checkoutRequestId: result.CheckoutRequestID,
   });
   return { checkoutRequestId: result.CheckoutRequestID, amount, alreadyPending: false };
 }
@@ -715,20 +722,32 @@ async function finalizeConfirmedPosExpressReceipt(orderId: string) {
     where: { id: orderId },
     select: {
       orderNumber: true,
+      customerName: true,
       paidAmount: true,
       receipt: { select: { id: true, receiptNumber: true, data: true } },
+      mpesaPayments: {
+        where: { status: "SUCCESS" },
+        orderBy: [{ transactionAt: "desc" }, { createdAt: "desc" }],
+        take: 1,
+        select: { receiptNumber: true, transactionId: true },
+      },
     },
   });
   const receipt = order?.receipt;
   const data = paymentMetadata(receipt?.data);
   if (!receipt || !["MPESA_EXPRESS", "MPESA_PAYBILL"].includes(String(data.paymentCollectionMethod || ""))) return;
 
-  await syncPosReceiptToCustomerAccount(receipt.id).catch((error) => console.error("[mpesa] POS Express account sync failed", error));
-  await sendReceiptChannels(receipt.id, [], { requestId: `mpesa-confirmed-${orderId}` }).catch((error) => console.error("[mpesa] POS Express receipt notification failed", error));
+  const mpesaReceipt = order.mpesaPayments[0]?.receiptNumber || order.mpesaPayments[0]?.transactionId || null;
+  // Send the operations alert first. Account synchronisation and customer
+  // document delivery can involve slow external services and must not delay
+  // the cashier's proof that the payment was received.
   await sendTransactionalSms(
     "0722151083",
-    `M-Pesa payment successful. Receipt: ${receipt.receiptNumber || order.orderNumber}. Amount: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")}. Method: ${String(data.paymentCollectionMethod) === "MPESA_PAYBILL" ? "Paybill fallback" : "M-Pesa Express"}.`,
+    `M-Pesa received: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")} from ${order.customerName || "customer"} for receipt ${receipt.receiptNumber || order.orderNumber}.${mpesaReceipt ? ` M-Pesa code: ${mpesaReceipt}.` : ""} Method: ${String(data.paymentCollectionMethod) === "MPESA_PAYBILL" ? "Paybill" : "M-Pesa Express"}.`,
   ).catch((error) => console.error("[mpesa] POS Express operations SMS failed", error));
+
+  await syncPosReceiptToCustomerAccount(receipt.id).catch((error) => console.error("[mpesa] POS Express account sync failed", error));
+  await sendReceiptChannels(receipt.id, [], { requestId: `mpesa-confirmed-${orderId}` }).catch((error) => console.error("[mpesa] POS Express receipt notification failed", error));
 }
 
 async function markStkResourcePaymentFailed(payment: MpesaPayment) {
@@ -1053,9 +1072,16 @@ export async function handleStkCallback(payload: unknown) {
   const resultCode = Number(callback.ResultCode);
   const resultDescription = String(callback.ResultDesc || "").trim() || null;
   if (!checkoutRequestId) return;
+  console.info("[mpesa] STK callback received", {
+    checkoutRequestId,
+    merchantRequestId: merchantRequestId || null,
+    resultCode: Number.isFinite(resultCode) ? resultCode : null,
+    resultDescription,
+  });
   const payment = await prisma.mpesaPayment.findUnique({ where: { checkoutRequestId } });
   if (!payment) {
     await prisma.mpesaPayment.create({ data: { channel: "STK", status: "UNMATCHED", checkoutRequestId, merchantRequestId: merchantRequestId || null, resultCode: Number.isFinite(resultCode) ? resultCode : null, resultDescription, callbackPayload: jsonValue(payload) } }).catch(() => undefined);
+    console.warn("[mpesa] STK callback had no initiation ledger record", { checkoutRequestId, merchantRequestId: merchantRequestId || null });
     return;
   }
   if (resultCode === 0) {
@@ -1087,6 +1113,15 @@ export async function handleStkCallback(payload: unknown) {
       return;
     }
     const confirmation = await applyConfirmedPayment(payment.id, { ...metadata, phoneNumber: normalizeDarajaPhone(metadata.phoneNumber || "") || payment.phoneNumber, resultCode, resultDescription, payload });
+    console.info("[mpesa] STK callback ledger result", {
+      paymentId: payment.id,
+      checkoutRequestId,
+      applied: Boolean(confirmation?.application.applied),
+      amount: metadata.amount,
+      mpesaReceipt: metadata.receiptNumber,
+      resourceType: payment.resourceType,
+      orderId: payment.orderId,
+    });
     if (confirmation?.application.applied && confirmation.payment.websiteOrderId) {
       await notifyConfirmedWebsiteOrder({
         websiteOrderId: confirmation.payment.websiteOrderId,
@@ -1106,6 +1141,12 @@ export async function handleStkCallback(payload: unknown) {
   await prisma.mpesaPayment.update({
     where: { id: payment.id },
     data: { status: resultCode === 1032 ? "CANCELLED" : "FAILED", resultCode: Number.isFinite(resultCode) ? resultCode : null, resultDescription, callbackPayload: jsonValue(payload) },
+  });
+  console.info("[mpesa] STK attempt closed", {
+    paymentId: payment.id,
+    checkoutRequestId,
+    status: resultCode === 1032 ? "CANCELLED" : "FAILED",
+    resultCode: Number.isFinite(resultCode) ? resultCode : null,
   });
   await markStkResourcePaymentFailed(payment);
 }
