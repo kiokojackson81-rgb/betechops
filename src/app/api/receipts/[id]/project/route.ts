@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
+import { ensureReviewInvitationForReceipt } from "@/lib/reviewsReferrals";
 import { requireRole } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import {
@@ -510,6 +511,22 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     wasCompleted,
     isCompleted,
   });
+
+  // A project may be completed and posted without a commissioning certificate.
+  // Schedule its review directly from the POS completion transition so this
+  // remains independent of certificate generation and project message delivery.
+  if (isCompleted && !wasCompleted) {
+    const completedAt = nextProjectFlow.completedAt || nextProjectFlow.updatedAt || new Date().toISOString();
+    await ensureReviewInvitationForReceipt(id, {
+      completedAt: new Date(completedAt),
+      deliveryMode: "project",
+    }).catch((error) => {
+      console.error("[reviews] failed to schedule review after project completion", {
+        receiptId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
 
   const notificationResults: Array<unknown> = [];
   for (const event of queuedEvents) {
