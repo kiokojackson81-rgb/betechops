@@ -1898,6 +1898,17 @@ export async function backfillReviewInvitationsForRecentSales(input?: {
   const limit = Math.min(Math.max(Number(input?.limit || 200), 1), 500);
   const windowStart = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
 
+  // Send existing due invitations before rebuilding recent-sale coverage. A
+  // backfill query may encounter an older or partially migrated record, but
+  // that must never stop customers with an already scheduled invitation from
+  // receiving their review request.
+  const dueProcessing = input?.processDue
+    ? await processDueReviewInvitations({
+        limit: Math.min(Math.max(limit, 1), 250),
+        dryRun: Boolean(input?.dryRun),
+      })
+    : null;
+
   const orders = await prisma.websiteOrder.findMany({
     where: {
       createdAt: {
@@ -1946,7 +1957,7 @@ export async function backfillReviewInvitationsForRecentSales(input?: {
     skippedInvitations: 0,
     touchedOrders: 0,
     touchedReceipts: 0,
-    dueProcessing: null as null | Awaited<ReturnType<typeof processDueReviewInvitations>>,
+    dueProcessing,
     orders: [] as Array<{
       websiteOrderId: string;
       orderRef: string | null;
@@ -2010,13 +2021,6 @@ export async function backfillReviewInvitationsForRecentSales(input?: {
         skipped: Number(result.skipped || 0),
       });
     }
-  }
-
-  if (input?.processDue) {
-    summary.dueProcessing = await processDueReviewInvitations({
-      limit: Math.min(Math.max(limit, 1), 250),
-      dryRun: Boolean(input?.dryRun),
-    });
   }
 
   return summary;

@@ -1,5 +1,5 @@
 import { noStoreJson } from "@/lib/api";
-import { backfillReviewInvitationsForRecentSales } from "@/lib/reviewsReferrals";
+import { backfillReviewInvitationsForRecentSales, processDueReviewInvitations } from "@/lib/reviewsReferrals";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,15 +24,29 @@ async function handle(request: Request) {
 
   const limitParam = Number.parseInt(url.searchParams.get("limit") || "", 10);
   const dryRun = ["1", "true", "yes"].includes(String(url.searchParams.get("dryRun") || "").toLowerCase());
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
 
   try {
-    const backfill = await backfillReviewInvitationsForRecentSales({
-      lookbackDays: 90,
-      limit: Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined,
-      dryRun,
-      processDue: true,
-    });
-    return noStoreJson({ ok: true, cron: true, dryRun, summary: backfill.dueProcessing, backfill });
+    // Delivery is intentionally isolated from the optional 90-day backfill.
+    // An older record with a schema/data problem must not prevent due review
+    // invitations from sending on this run.
+    const dueProcessing = await processDueReviewInvitations({ limit, dryRun });
+    let backfill: Awaited<ReturnType<typeof backfillReviewInvitationsForRecentSales>> | null = null;
+    let backfillError: string | null = null;
+
+    try {
+      backfill = await backfillReviewInvitationsForRecentSales({
+        lookbackDays: 90,
+        limit,
+        dryRun,
+        processDue: false,
+      });
+    } catch (error) {
+      backfillError = error instanceof Error ? error.message : "Unable to backfill recent review invitations.";
+      console.error("[reviews] review invitation backfill failed after due invitations were processed", error);
+    }
+
+    return noStoreJson({ ok: true, cron: true, dryRun, summary: dueProcessing, backfill, backfillError });
   } catch (error) {
     return noStoreJson(
       { ok: false, error: error instanceof Error ? error.message : "Unable to process due review invitations." },
