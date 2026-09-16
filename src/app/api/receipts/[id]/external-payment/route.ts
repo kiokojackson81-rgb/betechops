@@ -134,6 +134,40 @@ export async function POST(req: NextRequest, context: ParamsContext) {
         },
       });
 
+      // External Paybill confirmations previously changed the receipt only.
+      // Keep a finance-ledger audit row as well. It intentionally has no
+      // Safaricom receipt key: this is a staff-confirmed external channel,
+      // not a Daraja settlement that should be counted as one.
+      const existingLedgerPayment = await tx.mpesaPayment.findFirst({
+        where: { orderId: receipt.order.id },
+        select: { id: true },
+      });
+      if (!existingLedgerPayment) {
+        await tx.mpesaPayment.create({
+          data: {
+            channel: "C2B",
+            status: "SUCCESS",
+            purpose: "ORDER_PAYMENT",
+            orderId: receipt.order.id,
+            accountReference: receipt.order.orderNumber,
+            requestedAmount: totalAmount,
+            amount: totalAmount,
+            phoneNumber: receipt.order.customerPhone ?? null,
+            resultCode: 0,
+            resultDescription: `${channelLabel(paymentCollectionMethod)} payment confirmed by ${actorName}.${paymentReference ? ` Staff reference: ${paymentReference}.` : ""}`,
+            transactionAt: new Date(confirmedAt),
+            callbackPayload: {
+              source: "staff_confirmed_external_paybill",
+              receiptId: receipt.id,
+              paymentCollectionMethod,
+              paymentReference,
+              confirmedById: actorId,
+              confirmedBy: actorName,
+            },
+          },
+        });
+      }
+
       const normalizedReceiptNumber = canonicalReceiptNumber(receipt.order.orderNumber);
       if (normalizedReceiptNumber) {
         await tx.marketingReceipt.updateMany({

@@ -15,6 +15,7 @@ import {
   extractMpesaTransactionCode,
   normalizeLppPaymentReference,
 } from "@/lib/mpesaReference";
+import { syncLppMpesaPaymentToLedger } from "@/lib/mpesaPaymentLedger";
 import { getLipaPolePoleMaxInstallments } from "@/lib/lipaPolePoleConfig";
 import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
 import {
@@ -1473,6 +1474,14 @@ export async function recordLppPayment(
       summary: completion.summary,
     };
   });
+  if (db === prisma && input.method === "MPESA") {
+    await syncLppMpesaPaymentToLedger(result.paymentId).catch((error) =>
+      console.error("[lpp] failed to sync manual M-Pesa payment to finance ledger", {
+        paymentId: result.paymentId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
   if (db === prisma && paymentStatus === "SUCCESS") {
     await safelyDispatchLppLifecycleNotifications({
       lipaPolePoleId: input.lipaPolePoleId,
@@ -1567,6 +1576,14 @@ export async function reviewLppPayment(
       summary: completion.summary,
     };
   });
+  if (db === prisma) {
+    await syncLppMpesaPaymentToLedger(result.paymentId).catch((error) =>
+      console.error("[lpp] failed to sync reviewed M-Pesa payment to finance ledger", {
+        paymentId: result.paymentId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
   if (db === prisma) {
     await safelyDispatchLppLifecycleNotifications({
       lipaPolePoleId: input.lipaPolePoleId,
@@ -1670,6 +1687,14 @@ export async function reverseLppPayment(
       summary: completion.summary,
     };
   });
+  if (db === prisma) {
+    await syncLppMpesaPaymentToLedger(result.reversedPaymentId).catch((error) =>
+      console.error("[lpp] failed to sync reversed M-Pesa payment to finance ledger", {
+        paymentId: result.reversedPaymentId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
   if (db === prisma) {
     await safelyDispatchLppLifecycleNotifications({
       lipaPolePoleId: input.lipaPolePoleId,

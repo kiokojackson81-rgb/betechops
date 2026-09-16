@@ -2,6 +2,10 @@ import { MpesaPaymentChannel, MpesaPaymentStatus, Prisma } from "@prisma/client"
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isSettledMpesaPayment, summarizeMpesaSettlements } from "@/lib/mpesaSettlements";
+import {
+  backfillCompletedPosMpesaPaymentLedger,
+  backfillLppMpesaPaymentLedger,
+} from "@/lib/mpesaPaymentLedger";
 import { requireWebsiteOrdersAdmin } from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +91,16 @@ function serialize(payment: {
 export async function GET(request: NextRequest) {
   const guard = await requireWebsiteOrdersAdmin();
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+
+  // Older LPP entries and POS receipts were saved before every payment path
+  // wrote an MpesaPayment record. Repair those audit gaps before showing the
+  // monitoring view. A failed repair never hides the existing Daraja ledger.
+  await Promise.all([
+    backfillLppMpesaPaymentLedger(),
+    backfillCompletedPosMpesaPaymentLedger(),
+  ]).catch((error) =>
+    console.error("[admin/mpesa-payments] ledger backfill failed", error),
+  );
 
   const params = request.nextUrl.searchParams;
   const query = params.get("q")?.trim() || "";
