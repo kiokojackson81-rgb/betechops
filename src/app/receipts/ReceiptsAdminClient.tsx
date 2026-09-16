@@ -135,6 +135,35 @@ type PodOutcomeDraft = {
   overrideEvidence: boolean;
 };
 
+const CANCELLATION_REASONS = [
+  { code: "CUSTOMER_CHANGED_MIND", label: "Customer changed mind" },
+  { code: "DUPLICATE_ORDER", label: "Duplicate order or receipt" },
+  { code: "ORDER_DETAILS_ERROR", label: "Wrong item, quantity, or customer details" },
+  { code: "PRICING_ERROR", label: "Price, discount, or tax entry error" },
+  { code: "OUT_OF_STOCK", label: "Item out of stock" },
+  { code: "SUPPLIER_UNAVAILABLE", label: "Supplier cannot fulfil the item" },
+  { code: "PAYMENT_FAILED", label: "Payment failed or was declined" },
+  { code: "PAYMENT_NOT_COMPLETED", label: "Customer did not complete payment" },
+  { code: "DELIVERY_NOT_AVAILABLE", label: "Delivery address is outside coverage" },
+  { code: "CUSTOMER_UNREACHABLE", label: "Customer unreachable" },
+  { code: "ORDER_REPLACED", label: "Order replaced or merged with another order" },
+  { code: "SUSPECTED_FRAUD", label: "Suspected fraudulent order" },
+  { code: "TEST_OR_TRAINING", label: "Test or training entry" },
+  { code: "OTHER", label: "Other — enter a reason" },
+] as const;
+
+type CancellationReasonCode = (typeof CANCELLATION_REASONS)[number]["code"];
+
+type CancellationDraft = {
+  receiptId: string;
+  reference: string;
+  customerName: string;
+  isPaid: boolean;
+  reasonCode: CancellationReasonCode;
+  customReason: string;
+  refundRequired: boolean;
+};
+
 type EditItem = {
   id: string;
   title: string;
@@ -550,6 +579,7 @@ export default function ReceiptsAdminClient({
     saving: false,
   });
   const [deleting, setDeleting] = useState(false);
+  const [cancellation, setCancellation] = useState<CancellationDraft | null>(null);
   const [exporting, setExporting] = useState(false);
   const [podActionId, setPodActionId] = useState<string | null>(null);
   const [podOutcome, setPodOutcome] = useState<PodOutcomeDraft | null>(null);
@@ -1531,18 +1561,43 @@ export default function ReceiptsAdminClient({
     }
   }, []);
 
-  const handleDeleteReceipt = async () => {
-    if (!selected || !allowEdit) return;
-    const reason = window.prompt(
-      "Cancel this receipt and reverse its sales, profit and commission calculations. Optional reason:",
-    );
-    if (reason === null) return;
+  const openCancellation = (row: ReceiptRow) => {
+    if (!allowEdit) return;
+    if (row.id.startsWith("marketing-")) {
+      showToast("Deletion is only supported for sales receipts", "info");
+      return;
+    }
+    const isPaid = String(row.paymentStatus ?? "").toUpperCase() === "PAID";
+    setCancellation({
+      receiptId: row.id,
+      reference: row.orderRef || row.id,
+      customerName: row.customerName || "Walk-in customer",
+      isPaid,
+      reasonCode: "CUSTOMER_CHANGED_MIND",
+      customReason: "",
+      refundRequired: isPaid,
+    });
+  };
+
+  const submitCancellation = async () => {
+    if (!cancellation || !allowEdit) return;
+    const reasonOption = CANCELLATION_REASONS.find((item) => item.code === cancellation.reasonCode);
+    const customReason = cancellation.customReason.trim();
+    if (cancellation.reasonCode === "OTHER" && !customReason) {
+      showToast("Enter the cancellation reason", "error");
+      return;
+    }
+    const reason = cancellation.reasonCode === "OTHER" ? customReason : reasonOption?.label || customReason;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/receipts/${selected.id}/cancel`, {
+      const res = await fetch(`/api/receipts/${cancellation.receiptId}/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({
+          reasonCode: cancellation.reasonCode,
+          reason,
+          refundRequired: cancellation.refundRequired,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1550,15 +1605,21 @@ export default function ReceiptsAdminClient({
         const lower = String(errMsg).toLowerCase();
         if (res.status === 404 || lower.includes("not found")) {
           showToast("Receipt not found; refreshing list", "info");
-          closeDrawer();
+          if (selected?.id === cancellation.receiptId) closeDrawer();
+          setCancellation(null);
           await loadRows(page);
-          setDeleting(false);
           return;
         }
         throw new Error(errMsg);
       }
-      showToast("Receipt cancelled and calculations reversed", "success");
-      closeDrawer();
+      showToast(
+        cancellation.refundRequired
+          ? "Receipt cancelled. Refund follow-up has been recorded."
+          : "Receipt cancelled and calculations reversed",
+        "success",
+      );
+      if (selected?.id === cancellation.receiptId) closeDrawer();
+      setCancellation(null);
       await loadRows(page);
     } catch (err) {
       const message =
@@ -1569,47 +1630,18 @@ export default function ReceiptsAdminClient({
     }
   };
 
-  const deleteReceiptById = async (receiptId: string) => {
-    if (!allowEdit) return;
-    if (receiptId.startsWith("marketing-")) {
-      showToast("Deletion is only supported for sales receipts", "info");
+  const handleDeleteReceipt = () => {
+    if (selected) openCancellation(selected);
+  };
+
+  const deleteReceiptById = (receiptId: string) => {
+    const row = rows.find((item) => item.id === receiptId);
+    if (!row) {
+      showToast("Receipt not found; refreshing list", "info");
+      void loadRows(page);
       return;
     }
-    const reason = window.prompt(
-      "Cancel this receipt and reverse its sales, profit and commission calculations. Optional reason:",
-    );
-    if (reason === null) return;
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/receipts/${receiptId}/cancel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const errMsg = data?.error || "Failed to cancel receipt";
-        const lower = String(errMsg).toLowerCase();
-        if (res.status === 404 || lower.includes("not found")) {
-          showToast("Receipt not found; refreshing list", "info");
-          if (selected?.id === receiptId) closeDrawer();
-          await loadRows(page);
-          setDeleting(false);
-          return;
-        }
-        throw new Error(errMsg);
-      }
-      showToast("Receipt cancelled and calculations reversed", "success");
-      // if we deleted the currently selected, close drawer
-      if (selected?.id === receiptId) closeDrawer();
-      await loadRows(page);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to cancel receipt";
-      showToast(message, "error");
-    } finally {
-      setDeleting(false);
-    }
+    openCancellation(row);
   };
 
   useEffect(() => {
@@ -3814,7 +3846,105 @@ export default function ReceiptsAdminClient({
         onDraftChange={updateDraft}
         onSave={handleSaveEdit}
       />
+      <CancellationModal
+        draft={cancellation}
+        processing={deleting}
+        onChange={(patch) =>
+          setCancellation((current) => current ? { ...current, ...patch } : current)
+        }
+        onClose={() => setCancellation(null)}
+        onSubmit={() => void submitCancellation()}
+      />
     </main>
+  );
+}
+
+function CancellationModal({
+  draft,
+  processing,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  draft: CancellationDraft | null;
+  processing: boolean;
+  onChange: (patch: Partial<CancellationDraft>) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  if (!draft) return null;
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="cancellation-title">
+      <form
+        className="w-full max-w-xl rounded-3xl border border-rose-400/25 bg-[#0b1424] p-5 text-slate-100 shadow-2xl sm:p-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+      >
+        <p className="text-xs font-black uppercase tracking-[.25em] text-rose-300">Cancel receipt</p>
+        <h2 id="cancellation-title" className="mt-2 text-2xl font-bold text-white">Choose a cancellation reason</h2>
+        <p className="mt-2 text-sm text-slate-300">
+          {draft.reference} · {draft.customerName}
+        </p>
+        <p className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 p-3 text-sm leading-6 text-rose-100">
+          This cancels the receipt and reverses its sales, profit, and commission calculations. It does not send money back to the customer automatically.
+        </p>
+
+        <label className="mt-5 block text-sm font-semibold text-white">
+          Cancellation reason
+          <select
+            value={draft.reasonCode}
+            onChange={(event) => onChange({ reasonCode: event.target.value as CancellationReasonCode, customReason: "" })}
+            disabled={processing}
+            className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-rose-300 disabled:opacity-50"
+          >
+            {CANCELLATION_REASONS.map((reason) => (
+              <option key={reason.code} value={reason.code}>{reason.label}</option>
+            ))}
+          </select>
+        </label>
+
+        {draft.reasonCode === "OTHER" ? (
+          <label className="mt-4 block text-sm font-semibold text-white">
+            Explain the reason
+            <textarea
+              value={draft.customReason}
+              onChange={(event) => onChange({ customReason: event.target.value })}
+              disabled={processing}
+              required
+              maxLength={500}
+              rows={3}
+              placeholder="Enter the cancellation reason"
+              className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-rose-300 disabled:opacity-50"
+            />
+          </label>
+        ) : null}
+
+        {draft.isPaid ? (
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm text-amber-50">
+            <input
+              type="checkbox"
+              checked={draft.refundRequired}
+              onChange={(event) => onChange({ refundRequired: event.target.checked })}
+              disabled={processing}
+              className="mt-1 h-4 w-4 accent-amber-400"
+            />
+            <span>
+              <span className="block font-semibold">Refund required</span>
+              <span className="mt-1 block leading-5 text-amber-100/85">Record a refund follow-up for this paid receipt. This marks the refund as required; it does not issue a refund automatically.</span>
+            </span>
+          </label>
+        ) : null}
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={processing} className="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/5 disabled:opacity-50">Keep receipt</button>
+          <button type="submit" disabled={processing} className="rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-400 disabled:opacity-50">
+            {processing ? "Cancelling..." : "Cancel receipt"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 

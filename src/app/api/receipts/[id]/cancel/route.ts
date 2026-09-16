@@ -16,7 +16,32 @@ import { publishSummaryUpdate } from "@/lib/receiptSseBroker";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ reason: z.string().trim().max(500).optional() });
+const cancellationReasonCodes = [
+  "CUSTOMER_CHANGED_MIND",
+  "DUPLICATE_ORDER",
+  "ORDER_DETAILS_ERROR",
+  "PRICING_ERROR",
+  "OUT_OF_STOCK",
+  "SUPPLIER_UNAVAILABLE",
+  "PAYMENT_FAILED",
+  "PAYMENT_NOT_COMPLETED",
+  "DELIVERY_NOT_AVAILABLE",
+  "CUSTOMER_UNREACHABLE",
+  "ORDER_REPLACED",
+  "SUSPECTED_FRAUD",
+  "TEST_OR_TRAINING",
+  "OTHER",
+] as const;
+
+const schema = z.object({
+  reasonCode: z.enum(cancellationReasonCodes).optional(),
+  reason: z.string().trim().max(500).optional(),
+  refundRequired: z.boolean().optional(),
+}).superRefine((value, context) => {
+  if (value.reasonCode === "OTHER" && !value.reason) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "Enter the cancellation reason." });
+  }
+});
 type ParamsContext = { params: Promise<{ id: string }> | { id: string } };
 
 export async function POST(request: NextRequest, context: ParamsContext) {
@@ -54,6 +79,7 @@ export async function POST(request: NextRequest, context: ParamsContext) {
     paidAmount: receipt.order.paidAmount,
     totalAmount: receipt.order.totalAmount,
   };
+  const refundRequired = Boolean(parsed.data.refundRequired) && Number(receipt.order.paidAmount) > 0;
   const baseData =
     receipt.data &&
     typeof receipt.data === "object" &&
@@ -112,7 +138,12 @@ export async function POST(request: NextRequest, context: ParamsContext) {
             : {}),
           cancelledAt,
           cancelledById: actorId,
+          cancellationReasonCode: parsed.data.reasonCode || null,
           cancellationReason: parsed.data.reason || null,
+          refundRequired,
+          refundStatus: refundRequired ? "REFUND_REQUIRED" : null,
+          refundAmount: refundRequired ? Number(receipt.order.paidAmount) : null,
+          refundRequestedAt: refundRequired ? cancelledAt : null,
         } as Prisma.InputJsonValue,
       },
     });
@@ -137,7 +168,11 @@ export async function POST(request: NextRequest, context: ParamsContext) {
           cancellation: {
             cancelledAt,
             cancelledById: actorId,
+            reasonCode: parsed.data.reasonCode || null,
             reason: parsed.data.reason || null,
+            refundRequired,
+            refundStatus: refundRequired ? "REFUND_REQUIRED" : null,
+            refundAmount: refundRequired ? Number(receipt.order.paidAmount) : null,
           },
         } as Prisma.InputJsonValue,
       },
@@ -153,7 +188,11 @@ export async function POST(request: NextRequest, context: ParamsContext) {
           status: "CANCELED",
           paymentStatus: "UNPAID",
           paidAmount: 0,
+          reasonCode: parsed.data.reasonCode || null,
           reason: parsed.data.reason || null,
+          refundRequired,
+          refundStatus: refundRequired ? "REFUND_REQUIRED" : null,
+          refundAmount: refundRequired ? Number(receipt.order.paidAmount) : null,
         } as Prisma.InputJsonValue,
       },
     });
@@ -171,5 +210,5 @@ export async function POST(request: NextRequest, context: ParamsContext) {
     timestamp: new Date().toISOString(),
   });
   await syncPosReceiptToCustomerAccount(id).catch(() => undefined);
-  return NextResponse.json({ ok: true, status: "CANCELED" });
+  return NextResponse.json({ ok: true, status: "CANCELED", refundRequired });
 }
