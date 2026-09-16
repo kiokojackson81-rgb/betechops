@@ -520,12 +520,18 @@ async function buildReceiptAttachment(receiptId: string, fileName: string) {
 async function ensureProjectReviewLink(receiptId: string) {
   const receipt = await prisma.receipt.findUnique({
     where: { id: receiptId },
-    select: { createdAt: true },
+    select: { createdAt: true, data: true },
   });
   if (!receipt) return null;
 
+  const receiptData = receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+    ? receipt.data as Record<string, unknown>
+    : {};
+  const projectFlow = readReceiptProjectFlow(receiptData.projectFlow);
+  const completedAt = projectFlow?.completedAt || projectFlow?.updatedAt || receipt.createdAt;
+
   const review = await ensureReviewInvitationForReceipt(receiptId, {
-    completedAt: receipt.createdAt,
+    completedAt: new Date(completedAt),
     deliveryMode: "project",
   });
   return review.reviewUrl;

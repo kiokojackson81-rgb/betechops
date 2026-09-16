@@ -184,7 +184,12 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
           ...(projectFlow ? {
           projectStage: projectFlow.stage,
           projectScheduledDate: projectFlow.scheduledDate,
-          deliveredAt: projectFlow.stage === "COMPLETED_POSTED" ? receipt.createdAt.toISOString() : null,
+          // A project becomes eligible for its review invitation when it is
+          // certified, not when its original receipt was first created.
+          deliveredAt:
+            projectFlow.stage === "COMPLETED_POSTED"
+              ? projectFlow.completedAt || projectFlow.updatedAt || receipt.createdAt.toISOString()
+              : null,
           } : {}),
         }
       : {}),

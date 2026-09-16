@@ -2003,7 +2003,7 @@ export async function backfillReviewInvitationsForRecentSales(input?: {
       if (!isCompletedProject || !isDeliveredPod) continue;
 
       const completedAt =
-        (isProject && toDate(projectFlow.updatedAt)) ||
+        (isProject && (toDate(projectFlow.completedAt) || toDate(projectFlow.updatedAt))) ||
         (isPod && toDate(podDelivery.deliveredAt)) ||
         receipt.generatedAt ||
         receipt.createdAt;

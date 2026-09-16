@@ -10,6 +10,7 @@ import { TERMS_URL } from "@/lib/publicLinks";
 import { prepareProjectDocuments } from "@/lib/projectDocuments";
 import { completeCertifiedProject } from "@/lib/projectCompletion";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
+import { ensureReviewInvitationForReceipt } from "@/lib/reviewsReferrals";
 
 export type LicensedProfessionalSnapshot = {
   userId: string | null;
@@ -147,6 +148,13 @@ export async function issueProfessionallyApprovedCertificate(input: {
   });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
   await syncPosReceiptToCustomerAccount(updated.receiptId).catch(error => console.error("[commissioning] customer account sync needs retry", error));
+  // The normal customer-account sync provisions this too. Keep a direct
+  // certificate-path safeguard so every certified installation, including
+  // agent-managed projects, receives its seven-day review invitation.
+  await ensureReviewInvitationForReceipt(updated.receiptId, {
+    completedAt: issuedAt,
+    deliveryMode: "project",
+  }).catch(error => console.error("[commissioning] review invitation provisioning needs retry", error));
   let delivery: unknown = null;
   let warranty: unknown = null;
   try {
