@@ -144,7 +144,19 @@ const POS_MOBILE_MONEY_METHODS = new Set([
  */
 export async function backfillCompletedPosMpesaPaymentLedger(take = 500) {
   const receipts = await prisma.receipt.findMany({
-    where: { order: { is: { paymentStatus: "PAID" } } },
+    // Some early counter-sale records reached COMPLETED before their payment
+    // status/paid amount was persisted. Include both markers so that a sale
+    // visible as complete in POS can never disappear from the finance audit.
+    where: {
+      order: {
+        is: {
+          OR: [
+            { paymentStatus: "PAID" },
+            { status: "COMPLETED" },
+          ],
+        },
+      },
+    },
     select: {
       id: true,
       createdAt: true,
@@ -155,9 +167,13 @@ export async function backfillCompletedPosMpesaPaymentLedger(take = 500) {
           orderNumber: true,
           totalAmount: true,
           paidAmount: true,
+          paymentStatus: true,
+          status: true,
           customerPhone: true,
           metadata: true,
-          mpesaPayments: { select: { id: true }, take: 1 },
+          mpesaPayments: {
+            select: { id: true, status: true, receiptNumber: true, transactionId: true },
+          },
         },
       },
     },
@@ -168,7 +184,11 @@ export async function backfillCompletedPosMpesaPaymentLedger(take = 500) {
   let synchronized = 0;
   for (const receipt of receipts) {
     const order = receipt.order;
-    if (!order || order.mpesaPayments.length) continue;
+    if (!order) continue;
+    // A successful Daraja/C2B record is authoritative. Failed or cancelled
+    // prompts are still useful history, but must not hide a POS sale that was
+    // later completed through a separate payment path.
+    if (order.mpesaPayments.some((payment) => payment.status === "SUCCESS")) continue;
     const receiptData = asRecord(receipt.data);
     const orderMetadata = asRecord(order.metadata);
     const method = String(
@@ -181,7 +201,13 @@ export async function backfillCompletedPosMpesaPaymentLedger(take = 500) {
     );
     const suppliedReference = String(externalPayment.paymentReference ?? "").trim() || null;
     const marker = `${LEGACY_POS_LEDGER_PREFIX}${order.id}`;
-    const amount = new Prisma.Decimal(order.paidAmount ?? order.totalAmount);
+    // `paidAmount` is often zero on records written by the old POS completion
+    // path. A completed receipt still needs its actual receipt total in the
+    // ledger; `0 ?? total` would incorrectly retain zero here.
+    const paidAmount = Number(order.paidAmount ?? 0);
+    const totalAmount = Number(order.totalAmount ?? 0);
+    const amount = new Prisma.Decimal(paidAmount > 0 ? paidAmount : totalAmount);
+    if (amount.lte(0)) continue;
 
     try {
       await prisma.mpesaPayment.upsert({
@@ -197,13 +223,14 @@ export async function backfillCompletedPosMpesaPaymentLedger(take = 500) {
           phoneNumber: order.customerPhone ?? null,
           merchantRequestId: marker,
           resultCode: 0,
-          resultDescription: `Historical POS ${method.replace(/_/g, " ")} payment marked completed; no Daraja callback record was retained.${suppliedReference ? ` Staff reference: ${suppliedReference}.` : ""}`,
+          resultDescription: `POS ${method.replace(/_/g, " ")} payment was marked ${order.paymentStatus === "PAID" ? "paid" : "completed"}; no Daraja callback record was retained.${suppliedReference ? ` Staff reference: ${suppliedReference}.` : ""}`,
           transactionAt: receipt.createdAt,
           callbackPayload: {
             source: "legacy_completed_pos_receipt",
             receiptId: receipt.id,
             paymentCollectionMethod: method,
             staffReference: suppliedReference,
+            priorAttemptCount: order.mpesaPayments.length,
           },
         },
         update: {},
