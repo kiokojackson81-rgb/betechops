@@ -91,6 +91,35 @@ const initialDraft: Draft = {
 };
 const inputClass =
   "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-white outline-none focus:border-cyan-400";
+
+async function prepareEvidencePhoto(file: File) {
+  const maxDimension = 2048;
+  const preferredMaximumSize = 3 * 1024 * 1024;
+  const isCompressible = /^image\/(jpeg|jpg|png|webp)$/i.test(file.type);
+  if (file.size <= preferredMaximumSize || !isCompressible || typeof createImageBitmap !== "function") return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!blob || blob.size >= file.size) return file;
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "commissioning-photo";
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
+  } catch {
+    // HEIC and older devices can fail browser decoding. The server still
+    // accepts the original image and returns a clear size/type error if needed.
+    return file;
+  }
+}
 const expectedPanel = (items: string[]) => {
   const text = items.find((item) => /panel/i.test(item)) || items[0] || "";
   return {
@@ -786,19 +815,18 @@ function Panels({
         onRemove={onRemovePhoto}
         onEquipment={onEquipment}
       />
-      {items.length ? (
-        <EquipmentConfirm
-          kind="panel"
-          expected={expected.text || "Project equipment"}
-          equipment={equipment}
-          confirmed={confirmed}
-          onConfirm={onConfirm}
-          onClear={onClearEquipment}
-          manual={manual}
-          onManual={onManual}
-          onEquipment={onEquipment}
-        />
-      ) : null}
+      <EquipmentConfirm
+        kind="panel"
+        expected={expected.text || "Project equipment"}
+        equipment={equipment}
+        confirmed={confirmed}
+        labelPhotoAttached={items.length > 0}
+        onConfirm={onConfirm}
+        onClear={onClearEquipment}
+        manual={manual}
+        onManual={onManual}
+        onEquipment={onEquipment}
+      />
       {confirmed ? (
         <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
           <p className="text-xs font-black tracking-wider text-cyan-200">
@@ -905,19 +933,18 @@ function EquipmentStep({
           onEquipment={onEquipment}
         />
       </section>
-      {labelItems.length ? (
-        <EquipmentConfirm
-          kind={kind}
-          expected={expected}
-          equipment={equipment}
-          confirmed={confirmed}
-          onConfirm={onConfirm}
-          onClear={onClearEquipment}
-          manual={manual}
-          onManual={onManual}
-          onEquipment={onEquipment}
-        />
-      ) : null}
+      <EquipmentConfirm
+        kind={kind}
+        expected={expected}
+        equipment={equipment}
+        confirmed={confirmed}
+        labelPhotoAttached={labelItems.length > 0}
+        onConfirm={onConfirm}
+        onClear={onClearEquipment}
+        manual={manual}
+        onManual={onManual}
+        onEquipment={onEquipment}
+      />
       {labelItems.length ? (
         <PhotoStep
           title={`Installed ${title.toLowerCase()}`}
@@ -999,6 +1026,7 @@ function EquipmentConfirm({
   expected,
   equipment,
   confirmed,
+  labelPhotoAttached,
   onConfirm,
   onClear,
   manual,
@@ -1009,6 +1037,7 @@ function EquipmentConfirm({
   expected: string;
   equipment: Record<string, string>;
   confirmed: boolean;
+  labelPhotoAttached: boolean;
   onConfirm: () => void;
   onClear: () => void;
   manual: boolean;
@@ -1041,13 +1070,19 @@ function EquipmentConfirm({
       <p className="mt-4 text-sm text-slate-400">
         Expected from project: {expected}
       </p>
+      {!labelPhotoAttached ? (
+        <p className="mt-3 rounded-xl border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
+          Enter the label details now if they cannot be read automatically. A clear manufacturer-label photo is still required before this step can be completed.
+        </p>
+      ) : null}
       {!confirmed ? (
         <button
           type="button"
           onClick={onConfirm}
-          className="mt-4 w-full rounded-xl bg-cyan-400 px-4 py-3 font-black text-slate-950"
+          disabled={!labelPhotoAttached}
+          className="mt-4 w-full rounded-xl bg-cyan-400 px-4 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          ✓ YES, CONTINUE
+          {labelPhotoAttached ? "✓ YES, CONTINUE" : "ADD LABEL PHOTO TO CONTINUE"}
         </button>
       ) : (
         <p className="mt-4 font-bold text-emerald-300">✓ Confirmed</p>
@@ -1124,14 +1159,16 @@ function PhotoCapture({
     setUploading(true);
     setError("");
     try {
+      const uploadFile = await prepareEvidencePhoto(file);
       const form = new FormData();
-      form.set("file", file);
+      form.set("file", uploadFile);
       const response = await fetch(
         `/api/commissioning/${encodeURIComponent(token)}/evidence`,
         { method: "POST", body: form },
       );
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Photo upload failed.");
+      if (typeof body.url !== "string" || !body.url) throw new Error("Photo storage did not return a usable image link. Please retry.");
       onUploaded({
         url: body.url,
         fileName: body.fileName,
