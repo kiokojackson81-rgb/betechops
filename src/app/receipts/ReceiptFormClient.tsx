@@ -672,6 +672,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   useEffect(() => {
     const cash = toNumber(cashPaid);
     const mpesa = toNumber(mpesaPaid);
+    // In the Express flow the cashier may enter the cash portion while an
+    // item price is still being completed. Do not erase that amount just
+    // because the live receipt total is briefly zero.
+    if (isMpesaExpress) {
+      const cashApplied = Math.max(0, Math.min(total, cash));
+      const nextMpesa = Math.max(0, total - cashApplied);
+      if (Math.abs(mpesa - nextMpesa) > 0.1) {
+        setMpesaPaid(nextMpesa);
+      }
+      return;
+    }
     if (cash > total) {
       setCashPaid(total);
       setMpesaPaid(0);
@@ -680,7 +691,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (Math.abs(cash + mpesa - total) > 0.1) {
       setMpesaPaid(Math.max(0, total - cash));
     }
-  }, [total, cashPaid, mpesaPaid]);
+  }, [total, cashPaid, mpesaPaid, isMpesaExpress]);
 
   const buildDraft = (resolvedPaymentMethod: PaymentChoice) => ({
     items,
@@ -941,6 +952,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
     const parsed = Number(rawValue);
     if (Number.isNaN(parsed)) return;
+    if (isMpesaExpress && total <= 0) {
+      // Keep the amount visible while the cashier finishes the receipt. The
+      // server still rejects an Express prompt unless a positive balance is
+      // available, so this cannot create an invalid payment.
+      setCashPaid(Math.max(0, parsed));
+      setMpesaPaid(0);
+      return;
+    }
     const clamped = Math.max(0, Math.min(total, parsed));
     setCashPaid(clamped);
     setMpesaPaid(Math.max(0, total - clamped));
@@ -1990,7 +2009,25 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           {isMpesaExpress ? <div className="mt-3 space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3">
             <p className="text-xs leading-5 text-emerald-200">Preview the receipt with the customer, record any cash received, then send an STK prompt for the remaining balance. The receipt completes only after M-Pesa confirms that balance.</p>
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-100"><input type="checkbox" checked={cashWithMpesaExpress} onChange={(event) => { const enabled = event.target.checked; setCashWithMpesaExpress(enabled); setCashPaid(0); setMpesaPaid(total); }} className={checkboxClass} />Add a cash portion</label>
-            {cashWithMpesaExpress ? <div className="rounded-lg border border-emerald-300/20 bg-slate-950/40 p-3"><label className={labelClass}>Cash received now (KES)</label><input type="number" min={0} max={Math.max(0, total - 1)} value={cashPaid === "" ? "" : cashPaid} onChange={(event) => handleCashPaidChange(event.target.value)} className={fieldClass} /><p className="mt-2 text-sm text-emerald-100">M-Pesa Express balance to prompt: <strong>KES {normalizedPaymentBreakdown.mpesa.toLocaleString()}</strong></p></div> : null}
+            {cashWithMpesaExpress ? (
+              <div className="rounded-lg border border-emerald-300/20 bg-slate-950/40 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className={labelClass}>Cash received now (KES)</label>
+                  <span className="text-xs text-slate-300">Receipt total: KES {total.toLocaleString()}</span>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  max={total > 0 ? Math.max(0, total - 1) : undefined}
+                  value={cashPaid === "" ? "" : cashPaid}
+                  onChange={(event) => handleCashPaidChange(event.target.value)}
+                  className={fieldClass}
+                />
+                <p className="mt-2 text-sm text-emerald-100">M-Pesa Express balance to prompt: <strong>KES {normalizedPaymentBreakdown.mpesa.toLocaleString()}</strong></p>
+                {total <= 0 ? <p className="mt-1 text-xs text-amber-200">Add an item price to calculate the M-Pesa balance. Your entered cash amount will remain here.</p> : null}
+                {total > 0 && numericCashPaid >= total ? <p className="mt-1 text-xs text-amber-200">Leave at least KES 1 for the M-Pesa Express prompt.</p> : null}
+              </div>
+            ) : null}
             <div><label className={labelClass}>Customer M-Pesa number</label>{editingMpesaPayerPhone ? <div className="mt-1 flex flex-wrap gap-2"><input type="tel" inputMode="tel" autoFocus value={mpesaPayerPhone} onChange={(event) => setMpesaPayerPhone(event.target.value)} placeholder="07XX XXX XXX" className={`${fieldClass} mt-0 flex-1`} /><button type="button" onClick={() => { setMpesaPayerPhone(""); setEditingMpesaPayerPhone(false); }} className="rounded-xl border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-100">Use customer number</button></div> : <div className="mt-1 flex flex-wrap items-center gap-3"><strong className="rounded-lg bg-slate-950/70 px-3 py-2 font-mono text-sm text-white">{customerPhone || "Customer phone required"}</strong><button type="button" disabled={!customerPhone.trim()} onClick={() => { setMpesaPayerPhone(customerPhone.trim()); setEditingMpesaPayerPhone(true); }} className="rounded-xl border border-emerald-300/50 px-3 py-2 text-xs font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Change phone number</button></div>}<p className="mt-1 text-xs text-slate-300">{customerPhone.trim() ? "The prompt uses this customer number by default. Change it only when another authorised person is paying." : "Enter the customer phone number above before sending an M-Pesa prompt."}</p></div>
           </div> : null}
           {docType === "LAYAWAY" && (
