@@ -81,6 +81,7 @@ type ExpressPayment = {
   checkoutRequestId: string | null;
   status: "STARTING" | "AWAITING_PIN" | "FAILED" | "PAYBILL";
   message: string;
+  mpesaAmount: number;
   paymentCollectionMethod?: PaybillCollectionMethod;
 };
 
@@ -164,6 +165,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
   const [isMpesaExpress, setIsMpesaExpress] = useState(false);
+  const [cashWithMpesaExpress, setCashWithMpesaExpress] = useState(false);
   const [mpesaPayerPhone, setMpesaPayerPhone] = useState("");
   const [editingMpesaPayerPhone, setEditingMpesaPayerPhone] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -617,10 +619,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
   const selectedStaff = staffMembers.find((a) => a.id === staffId);
   const effectiveShowDiscount = showDiscount || normalizedDiscount > 0;
-  const showSplitPaymentInputs = !isMpesaExpress && selectedPaymentMethods.MPESA && selectedPaymentMethods.CASH;
+  const showSplitPaymentInputs = (!isMpesaExpress && selectedPaymentMethods.MPESA && selectedPaymentMethods.CASH) || (isMpesaExpress && cashWithMpesaExpress);
   const numericCashPaid = toNumber(cashPaid);
   const numericMpesaPaid = toNumber(mpesaPaid);
   const normalizedPaymentBreakdown = useMemo(() => {
+    if (isMpesaExpress) {
+      const cash = cashWithMpesaExpress ? Math.max(0, Math.min(total, numericCashPaid)) : 0;
+      return { cash, mpesa: Math.max(0, total - cash) };
+    }
     if (!showSplitPaymentInputs) {
       return {
         cash: primaryPaymentMethod === "CASH" ? total : 0,
@@ -637,7 +643,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       cash: safeCash,
       mpesa: Math.max(0, safeMpesa + shortfall),
     };
-  }, [showSplitPaymentInputs, primaryPaymentMethod, total, numericCashPaid, numericMpesaPaid]);
+  }, [isMpesaExpress, cashWithMpesaExpress, showSplitPaymentInputs, primaryPaymentMethod, total, numericCashPaid, numericMpesaPaid]);
 
   const previewProjectFlow = useMemo(
     () =>
@@ -723,7 +729,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       cash: normalizedPaymentBreakdown.cash,
       mpesa: normalizedPaymentBreakdown.mpesa,
     },
-    paymentMethods: { ...selectedPaymentMethods, MPESA_EXPRESS: isMpesaExpress },
+    paymentMethods: { ...selectedPaymentMethods, CASH: selectedPaymentMethods.CASH || (isMpesaExpress && cashWithMpesaExpress), MPESA_EXPRESS: isMpesaExpress },
   });
 
   const [lastPrintableUrl, setLastPrintableUrl] = useState<string | null>(null);
@@ -882,6 +888,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       return;
     }
     setIsMpesaExpress(false);
+    setCashWithMpesaExpress(false);
     setSelectedPaymentMethods((prev) => {
       const isActive = prev[method];
       const other = method === "MPESA" ? "CASH" : "MPESA";
@@ -895,6 +902,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const selectMpesaExpress = () => {
     if (expressPayment) return;
     setIsMpesaExpress(true);
+    setCashWithMpesaExpress(false);
+    setCashPaid(0);
+    setMpesaPaid(total);
     setMpesaPayerPhone("");
     setEditingMpesaPayerPhone(false);
     setExternalPaymentReference("");
@@ -1020,6 +1030,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       receiptId,
       reference,
       checkoutRequestId: body.checkoutRequestId,
+      mpesaAmount: Number(body.amount || normalizedPaymentBreakdown.mpesa),
       status: "AWAITING_PIN",
       message: body.alreadyPending
         ? "An M-Pesa prompt is already open on the customer’s phone."
@@ -1178,6 +1189,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
     if (total <= 0) return showToast("Total must be greater than zero", "error");
     const resolvedPaymentMethod = primaryPaymentMethod;
+    if (resolvedPaymentMethod === "MPESA_EXPRESS") {
+      const cashPortion = normalizedPaymentBreakdown.cash;
+      const mpesaBalance = normalizedPaymentBreakdown.mpesa;
+      if (cashPortion < 0 || cashPortion >= total || mpesaBalance <= 0) {
+        return showToast("Leave a positive balance for the M-Pesa Express prompt", "error");
+      }
+      if (!Number.isInteger(mpesaBalance)) {
+        return showToast("The M-Pesa Express balance must be a whole KES amount", "error");
+      }
+    }
     const projectFlow =
       customerType === "project"
         ? buildReceiptProjectFlow({
@@ -1224,6 +1245,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         receiptId: "",
         reference: serial,
         checkoutRequestId: null,
+        mpesaAmount: normalizedPaymentBreakdown.mpesa,
         status: "STARTING",
         message: "Preparing the receipt and M-Pesa prompt…",
       });
@@ -1267,6 +1289,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                         paymentCollectionMethod: "MPESA_EXPRESS",
                         mpesaExpressInitiatedAt: new Date().toISOString(),
                         mpesaPayerPhone: mpesaPayerPhone.trim() || customerPhone.trim(),
+                        cashPortion: normalizedPaymentBreakdown.cash,
+                        mpesaExpressBalance: normalizedPaymentBreakdown.mpesa,
                       }
                     : {}),
                   ...(websiteOrderId
@@ -1336,6 +1360,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             receiptId,
             reference: serial,
             checkoutRequestId: null,
+            mpesaAmount: normalizedPaymentBreakdown.mpesa,
             status: "FAILED",
             message: error instanceof Error ? error.message : "The M-Pesa prompt could not be sent. Retry or switch to Paybill.",
           });
@@ -1363,6 +1388,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           receiptId: current?.receiptId || "",
           reference: current?.reference || serial,
           checkoutRequestId: null,
+          mpesaAmount: current?.mpesaAmount || normalizedPaymentBreakdown.mpesa,
           status: "FAILED",
           message: err instanceof Error ? err.message : "Unable to prepare the M-Pesa prompt. Retry or use Paybill.",
         }));
@@ -1961,7 +1987,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               M-Pesa Express
             </button>
           </div>
-          {isMpesaExpress ? <div className="mt-3 space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3"><p className="text-xs leading-5 text-emerald-200">Check the receipt preview with the customer, then send the STK prompt. The receipt is recorded when the prompt is sent; payment confirmation and customer delivery follow after M-Pesa confirms payment.</p><div><label className={labelClass}>Customer M-Pesa number</label>{editingMpesaPayerPhone ? <div className="mt-1 flex flex-wrap gap-2"><input type="tel" inputMode="tel" autoFocus value={mpesaPayerPhone} onChange={(event) => setMpesaPayerPhone(event.target.value)} placeholder="07XX XXX XXX" className={`${fieldClass} mt-0 flex-1`} /><button type="button" onClick={() => { setMpesaPayerPhone(""); setEditingMpesaPayerPhone(false); }} className="rounded-xl border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-100">Use customer number</button></div> : <div className="mt-1 flex flex-wrap items-center gap-3"><strong className="rounded-lg bg-slate-950/70 px-3 py-2 font-mono text-sm text-white">{customerPhone || "Customer phone required"}</strong><button type="button" disabled={!customerPhone.trim()} onClick={() => { setMpesaPayerPhone(customerPhone.trim()); setEditingMpesaPayerPhone(true); }} className="rounded-xl border border-emerald-300/50 px-3 py-2 text-xs font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Change phone number</button></div>}<p className="mt-1 text-xs text-slate-300">{customerPhone.trim() ? "The prompt uses this customer number by default. Change it only when another authorised person is paying." : "Enter the customer phone number above before sending an M-Pesa prompt."}</p></div></div> : null}
+          {isMpesaExpress ? <div className="mt-3 space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3">
+            <p className="text-xs leading-5 text-emerald-200">Preview the receipt with the customer, record any cash received, then send an STK prompt for the remaining balance. The receipt completes only after M-Pesa confirms that balance.</p>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-100"><input type="checkbox" checked={cashWithMpesaExpress} onChange={(event) => { const enabled = event.target.checked; setCashWithMpesaExpress(enabled); setCashPaid(0); setMpesaPaid(total); }} className={checkboxClass} />Add a cash portion</label>
+            {cashWithMpesaExpress ? <div className="rounded-lg border border-emerald-300/20 bg-slate-950/40 p-3"><label className={labelClass}>Cash received now (KES)</label><input type="number" min={0} max={Math.max(0, total - 1)} value={cashPaid === "" ? "" : cashPaid} onChange={(event) => handleCashPaidChange(event.target.value)} className={fieldClass} /><p className="mt-2 text-sm text-emerald-100">M-Pesa Express balance to prompt: <strong>KES {normalizedPaymentBreakdown.mpesa.toLocaleString()}</strong></p></div> : null}
+            <div><label className={labelClass}>Customer M-Pesa number</label>{editingMpesaPayerPhone ? <div className="mt-1 flex flex-wrap gap-2"><input type="tel" inputMode="tel" autoFocus value={mpesaPayerPhone} onChange={(event) => setMpesaPayerPhone(event.target.value)} placeholder="07XX XXX XXX" className={`${fieldClass} mt-0 flex-1`} /><button type="button" onClick={() => { setMpesaPayerPhone(""); setEditingMpesaPayerPhone(false); }} className="rounded-xl border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-100">Use customer number</button></div> : <div className="mt-1 flex flex-wrap items-center gap-3"><strong className="rounded-lg bg-slate-950/70 px-3 py-2 font-mono text-sm text-white">{customerPhone || "Customer phone required"}</strong><button type="button" disabled={!customerPhone.trim()} onClick={() => { setMpesaPayerPhone(customerPhone.trim()); setEditingMpesaPayerPhone(true); }} className="rounded-xl border border-emerald-300/50 px-3 py-2 text-xs font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Change phone number</button></div>}<p className="mt-1 text-xs text-slate-300">{customerPhone.trim() ? "The prompt uses this customer number by default. Change it only when another authorised person is paying." : "Enter the customer phone number above before sending an M-Pesa prompt."}</p></div>
+          </div> : null}
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
               <label className={labelClass}>Deposit (KES)</label>
@@ -1977,7 +2008,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
       </div>
 
-      {showSplitPaymentInputs && (
+      {showSplitPaymentInputs && !isMpesaExpress && (
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className={labelClass}>Cash paid (KES)</label>
@@ -2015,10 +2046,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       {expressPayment ? <section className={`rounded-2xl border p-4 ${expressPayment.status === "FAILED" ? "border-amber-400/40 bg-amber-400/10" : expressPayment.status === "PAYBILL" ? "border-sky-400/40 bg-sky-400/10" : "border-emerald-400/40 bg-emerald-400/10"}`}>
         <p className="text-sm font-bold">{expressPayment.status === "STARTING" ? "Preparing M-Pesa prompt" : expressPayment.status === "AWAITING_PIN" ? "Waiting for M-Pesa PIN" : expressPayment.status === "PAYBILL" ? "Paybill payment" : "M-Pesa prompt needs attention"}</p>
         <p className="mt-1 text-sm text-slate-200">{expressPayment.message}</p>
-        <p className="mt-2 text-xs text-slate-300">Reference: <span className="font-mono">{expressPayment.reference}</span> · Amount: KES {total.toLocaleString()}</p>
+        <p className="mt-2 text-xs text-slate-300">Reference: <span className="font-mono">{expressPayment.reference}</span> · M-Pesa balance: KES {expressPayment.mpesaAmount.toLocaleString()}{total > expressPayment.mpesaAmount ? ` · Cash recorded: KES ${(total - expressPayment.mpesaAmount).toLocaleString()}` : ""}</p>
         {expressPayment.status === "AWAITING_PIN" ? <p className="mt-2 text-xs text-emerald-100">Checking confirmation automatically. Do not print until this screen confirms payment.</p> : null}
         {expressPayment.status === "FAILED" ? <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={saving} onClick={() => void retryMpesaExpressPrompt()} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{saving ? "Sending…" : "Retry STK Prompt"}</button><button type="button" onClick={() => void selectPaybillPayment("MPESA_PAYBILL")} className="rounded-xl border border-amber-300/60 px-4 py-2 text-sm font-bold text-amber-100">Choose Paybill</button></div> : null}
-        {expressPayment.status === "PAYBILL" ? <div className="mt-4 space-y-4 rounded-xl border border-sky-300/30 bg-slate-950/40 p-3 text-sm"><div><p className="font-semibold text-white">Choose payment channel</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{PAYBILL_OPTIONS.map((option) => <button key={option.value} type="button" disabled={saving} onClick={() => void selectPaybillPayment(option.value)} className={`rounded-xl border p-3 text-left transition ${expressPayment.paymentCollectionMethod === option.value ? "border-sky-300 bg-sky-300/10 text-sky-100" : "border-slate-700 text-slate-200 hover:border-sky-300/60"}`}><span className="block font-semibold">{option.label}</span><span className="mt-1 block text-xs text-slate-300">{option.detail}</span></button>)}</div></div>{expressPayment.paymentCollectionMethod === "MPESA_PAYBILL" ? <div><p>Paybill number: <strong>1231008</strong></p><p className="mt-1">Account number: <strong className="font-mono">{expressPayment.reference}</strong></p><p className="mt-1">Amount: <strong>KES {total.toLocaleString()}</strong></p><p className="mt-2 text-xs text-slate-300">Checking for Betech Paybill confirmation automatically. The receipt opens after payment is confirmed.</p></div> : <div className="space-y-3"><p>Amount: <strong>KES {total.toLocaleString()}</strong> · Reference: <strong className="font-mono">{expressPayment.reference}</strong></p><div><label className={labelClass}>Bank payment reference (optional)</label><input value={externalPaymentReference} onChange={(event) => setExternalPaymentReference(event.target.value)} placeholder="Deposit slip or transaction reference" className={fieldClass} /></div><button type="button" disabled={saving} onClick={() => void confirmExternalPayment()} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{saving ? "Confirming…" : "Confirm payment & print receipt"}</button><p className="text-xs text-slate-300">This records the selected external payment channel, staff confirmation, time, and reference before printing.</p></div>}</div> : null}
+        {expressPayment.status === "PAYBILL" ? <div className="mt-4 space-y-4 rounded-xl border border-sky-300/30 bg-slate-950/40 p-3 text-sm"><div><p className="font-semibold text-white">Choose payment channel</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{PAYBILL_OPTIONS.map((option) => <button key={option.value} type="button" disabled={saving} onClick={() => void selectPaybillPayment(option.value)} className={`rounded-xl border p-3 text-left transition ${expressPayment.paymentCollectionMethod === option.value ? "border-sky-300 bg-sky-300/10 text-sky-100" : "border-slate-700 text-slate-200 hover:border-sky-300/60"}`}><span className="block font-semibold">{option.label}</span><span className="mt-1 block text-xs text-slate-300">{option.detail}</span></button>)}</div></div>{expressPayment.paymentCollectionMethod === "MPESA_PAYBILL" ? <div><p>Paybill number: <strong>1231008</strong></p><p className="mt-1">Account number: <strong className="font-mono">{expressPayment.reference}</strong></p><p className="mt-1">Amount: <strong>KES {expressPayment.mpesaAmount.toLocaleString()}</strong></p><p className="mt-2 text-xs text-slate-300">Checking for Betech Paybill confirmation automatically. The receipt opens after payment is confirmed.</p></div> : <div className="space-y-3"><p>Amount: <strong>KES {expressPayment.mpesaAmount.toLocaleString()}</strong> · Reference: <strong className="font-mono">{expressPayment.reference}</strong></p><div><label className={labelClass}>Bank payment reference (optional)</label><input value={externalPaymentReference} onChange={(event) => setExternalPaymentReference(event.target.value)} placeholder="Deposit slip or transaction reference" className={fieldClass} /></div><button type="button" disabled={saving} onClick={() => void confirmExternalPayment()} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50">{saving ? "Confirming…" : "Confirm payment & print receipt"}</button><p className="text-xs text-slate-300">This records the selected external payment channel, staff confirmation, time, and reference before printing.</p></div>}</div> : null}
       </section> : null}
 
       <div>
@@ -2091,7 +2122,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={handleSave}
             >
-              {saving ? "Saving..." : isMpesaExpress ? "Send M-Pesa Prompt" : "Save to System & Print"}
+              {saving ? "Saving..." : isMpesaExpress ? cashWithMpesaExpress ? "Record Cash & Send M-Pesa Prompt" : "Send M-Pesa Prompt" : "Save to System & Print"}
             </button>
           </div>
         </div>

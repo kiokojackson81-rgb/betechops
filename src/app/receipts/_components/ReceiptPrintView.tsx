@@ -85,7 +85,6 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
     normalizedIssuedByObjectName ||
     "____";
   const paymentMethodRaw = (data?.paymentMethod || "").toString().toUpperCase();
-  const paymentLabel = paymentMethodRaw === "CASH" ? "Cash" : "MPESA";
   const showDiscount = Boolean(data?.showDiscount) || Number(data?.discount || 0) > 0;
   const discountValue = Number(data?.discount || 0);
   const depositValue = Number(data?.deposit || data?.totals?.deposit || 0);
@@ -98,6 +97,13 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
   };
   const mpesaPaidAmount = Number(paymentBreakdown.mpesa ?? 0);
   const cashPaidAmount = Number(paymentBreakdown.cash ?? 0);
+  const paymentLabel = cashPaidAmount > 0 && mpesaPaidAmount > 0
+    ? "Cash + M-Pesa Express"
+    : paymentMethodRaw === "CASH"
+      ? "Cash"
+      : paymentMethodRaw === "MPESA_EXPRESS"
+        ? "M-Pesa Express"
+        : "MPESA";
   const paymentReference =
     (typeof paymentBreakdown.reference === "string" && paymentBreakdown.reference.trim()) ||
     (typeof paymentBreakdown.mpesaReference === "string" && paymentBreakdown.mpesaReference.trim()) ||

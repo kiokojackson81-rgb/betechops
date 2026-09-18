@@ -1209,6 +1209,26 @@ export async function POST(req: NextRequest) {
   const taxAmount = payload?.showTax ? (subtotal * (taxRate / 100)) : 0;
   const discount = parseNumber(payload?.discount || 0);
   const total = subtotal + taxAmount - discount;
+  const requestedPaymentBreakdown =
+    payload?.paymentBreakdown && typeof payload.paymentBreakdown === "object" && !Array.isArray(payload.paymentBreakdown)
+      ? payload.paymentBreakdown as Record<string, unknown>
+      : {};
+  const expressCashAmount = isMpesaExpress
+    ? Math.max(0, Math.min(total, parseNumber(requestedPaymentBreakdown.cash || 0)))
+    : 0;
+  const expressMpesaBalance = isMpesaExpress ? Math.max(0, total - expressCashAmount) : 0;
+  if (isMpesaExpress && (!Number.isInteger(expressMpesaBalance) || expressMpesaBalance < 1)) {
+    return NextResponse.json(
+      { ok: false, error: "M-Pesa Express must have a whole-KES balance of at least KES 1 after any cash payment." },
+      { status: 400 },
+    );
+  }
+  const normalizedPaymentBreakdown = isMpesaExpress
+    ? { cash: expressCashAmount, mpesa: expressMpesaBalance }
+    : {
+        cash: Math.max(0, parseNumber(requestedPaymentBreakdown.cash || 0)),
+        mpesa: Math.max(0, parseNumber(requestedPaymentBreakdown.mpesa || 0)),
+      };
   const deposit = docType === "LAYAWAY" ? parseNumber(payload?.deposit || 0) : 0;
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
 
@@ -1285,6 +1305,9 @@ export async function POST(req: NextRequest) {
             ...(receiptMetadata ?? {}),
             paymentCollectionMethod: "MPESA_EXPRESS",
             mpesaExpressInitiatedAt: entryDateIso,
+            cashPortion: expressCashAmount,
+            mpesaExpressBalance: expressMpesaBalance,
+            ...(expressCashAmount > 0 ? { cashRecordedAt: entryDateIso } : {}),
           }
         : receiptMetadata;
       const podMetadata = isPodDelivery
@@ -1326,9 +1349,9 @@ export async function POST(req: NextRequest) {
             : isPodDelivery
               ? "UNPAID"
               : isMpesaExpress
-                ? "UNPAID"
+                ? expressCashAmount > 0 ? "PARTIAL" : "UNPAID"
               : "PAID";
-      const paidAmountValue = isProjectReceipt ? projectPaidAmount : docType === "LAYAWAY" ? deposit : isPodDelivery || isMpesaExpress ? 0 : Number(total) || 0;
+      const paidAmountValue = isProjectReceipt ? projectPaidAmount : docType === "LAYAWAY" ? deposit : isPodDelivery ? 0 : isMpesaExpress ? expressCashAmount : Number(total) || 0;
       // choose shop: provided or first active
       let shopId = payload?.shopId;
       if (!shopId) {
@@ -1600,6 +1623,7 @@ export async function POST(req: NextRequest) {
         },
         data: {
           ...payload,
+          paymentBreakdown: normalizedPaymentBreakdown,
           ...(isMpesaExpress ? { paymentCollectionMethod: "MPESA_EXPRESS" } : {}),
           orderRef: serial,
           needsPricing: hasVariableCostItems,

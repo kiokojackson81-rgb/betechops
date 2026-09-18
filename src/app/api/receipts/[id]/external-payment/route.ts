@@ -80,12 +80,14 @@ export async function POST(req: NextRequest, context: ParamsContext) {
 
       const totalAmount = Math.max(0, Number(receipt.order.totalAmount));
       const paidAmount = Math.max(0, Number(receipt.order.paidAmount));
+      const amountDue = Math.max(0, totalAmount - paidAmount);
       if (receipt.order.paymentStatus === "PAID" && paidAmount >= totalAmount) {
         return {
           receiptId: receipt.id,
           attendantId: receipt.order.attendantId,
           receiptNumber: receipt.receiptNumber ?? receipt.order.orderNumber,
           totalAmount,
+          amountDue: 0,
           alreadyConfirmed: true,
         };
       }
@@ -150,8 +152,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
             purpose: "ORDER_PAYMENT",
             orderId: receipt.order.id,
             accountReference: receipt.order.orderNumber,
-            requestedAmount: totalAmount,
-            amount: totalAmount,
+            requestedAmount: amountDue,
+            amount: amountDue,
             phoneNumber: receipt.order.customerPhone ?? null,
             resultCode: 0,
             resultDescription: `${channelLabel(paymentCollectionMethod)} payment confirmed by ${actorName}.${paymentReference ? ` Staff reference: ${paymentReference}.` : ""}`,
@@ -211,6 +213,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
         attendantId: receipt.order.attendantId,
         receiptNumber: receipt.receiptNumber ?? receipt.order.orderNumber,
         totalAmount,
+        amountDue,
         alreadyConfirmed: false,
       };
     });
@@ -232,7 +235,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       }).catch((error) => console.error("[external-payment] receipt notification failed", error));
       await sendTransactionalSms(
         "0722151083",
-        `External payment confirmed. Receipt: ${result.receiptNumber}. Amount: KSh ${result.totalAmount.toLocaleString("en-KE")}. Method: ${channelLabel(paymentCollectionMethod)}. Confirmed by: ${actorName}.`,
+        `External payment confirmed. Receipt: ${result.receiptNumber}. Amount: KSh ${result.amountDue.toLocaleString("en-KE")}. Method: ${channelLabel(paymentCollectionMethod)}. Confirmed by: ${actorName}.`,
       ).catch((error) => console.error("[external-payment] operations SMS failed", error));
     }
 

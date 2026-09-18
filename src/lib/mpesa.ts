@@ -738,12 +738,18 @@ async function finalizeConfirmedPosExpressReceipt(orderId: string) {
   if (!receipt || !["MPESA_EXPRESS", "MPESA_PAYBILL"].includes(String(data.paymentCollectionMethod || ""))) return;
 
   const mpesaReceipt = order.mpesaPayments[0]?.receiptNumber || order.mpesaPayments[0]?.transactionId || null;
+  const paymentBreakdown = paymentMetadata(data.paymentBreakdown);
+  const cashPortion = Math.max(0, toNumber(paymentBreakdown.cash));
+  const mpesaPortion = Math.max(0, toNumber(paymentBreakdown.mpesa));
+  const paymentSummary = cashPortion > 0
+    ? ` Cash: KSh ${cashPortion.toLocaleString("en-KE")}; M-Pesa: KSh ${(mpesaPortion || Math.max(0, toNumber(order.paidAmount) - cashPortion)).toLocaleString("en-KE")}.`
+    : "";
   // Send the operations alert first. Account synchronisation and customer
   // document delivery can involve slow external services and must not delay
   // the cashier's proof that the payment was received.
   await sendTransactionalSms(
     "0722151083",
-    `M-Pesa received: KSh ${toNumber(order.paidAmount).toLocaleString("en-KE")} from ${order.customerName || "customer"} for receipt ${receipt.receiptNumber || order.orderNumber}.${mpesaReceipt ? ` M-Pesa code: ${mpesaReceipt}.` : ""} Method: ${String(data.paymentCollectionMethod) === "MPESA_PAYBILL" ? "Paybill" : "M-Pesa Express"}.`,
+    `M-Pesa received: KSh ${(mpesaPortion || toNumber(order.paidAmount)).toLocaleString("en-KE")} from ${order.customerName || "customer"} for receipt ${receipt.receiptNumber || order.orderNumber}.${paymentSummary}${mpesaReceipt ? ` M-Pesa code: ${mpesaReceipt}.` : ""} Method: ${String(data.paymentCollectionMethod) === "MPESA_PAYBILL" ? "Paybill" : "M-Pesa Express"}.`,
   ).catch((error) => console.error("[mpesa] POS Express operations SMS failed", error));
 
   await syncPosReceiptToCustomerAccount(receipt.id).catch((error) => console.error("[mpesa] POS Express account sync failed", error));
