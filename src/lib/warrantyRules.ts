@@ -3,6 +3,8 @@ export function technicalConfiguration(value: unknown): string {
   if (["hybrid", "hybrid solar pv system"].includes(key)) return "Hybrid Solar PV System";
   if (["off grid", "off grid solar pv system"].includes(key)) return "Off-Grid Solar PV System";
   if (["grid tied", "grid tied solar pv system"].includes(key)) return "Grid-Tied Solar PV System";
+  if (["direct dc", "dc", "direct current"].includes(key)) return "Direct-DC Solar System";
+  if (["standalone", "solar thermal", "solar thermal system", "standalone / solar thermal"].includes(key)) return "Standalone / Solar Thermal System";
   return "Not recorded";
 }
 

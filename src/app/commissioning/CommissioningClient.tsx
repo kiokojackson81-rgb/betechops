@@ -4,11 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { commissioningEquipmentUnits, type EquipmentUnit } from "@/lib/commissioningEquipment";
 import { isReadyToIssue } from "@/lib/commissioningValidation";
+import { COMMISSIONING_PROFILES, commissioningProfile, type CommissioningSystemProfile } from "@/lib/commissioningProfiles";
 
 type Evidence = { url: string; fileName?: string; capturedAt?: string };
 type EquipmentKind = "panel" | "inverter" | "battery";
 type Draft = {
   additionalEquipment?: EquipmentUnit[];
+  systemEquipment?: EquipmentUnit[];
+  systemProfile?: CommissioningSystemProfile;
   installerName?: string;
   installation?: Record<string, string>;
   site?: Record<string, string>;
@@ -47,24 +50,19 @@ type Session = {
   };
   data: Draft;
 };
-const checks = [
-  "Inverter powers ON",
-  "PV charging detected",
-  "Battery charging",
-  "Battery discharging",
-  "Grid input detected",
-  "Backup/changeover tested",
-  "Protection devices installed",
-  "Earthing connected",
-  "Monitoring configured",
-  "Customer training completed",
-] as const;
 const handoverItems = [
   "System operation",
   "Shutdown/startup",
   "Monitoring",
   "Warranty",
   "Load limitations",
+  "Maintenance",
+  "Fault reporting",
+] as const;
+const requiredHandoverItems = [
+  "System operation",
+  "Shutdown/startup",
+  "Warranty",
   "Maintenance",
   "Fault reporting",
 ] as const;
@@ -79,6 +77,7 @@ const steps = [
   { id: "review", label: "Final review" },
 ] as const;
 const initialDraft: Draft = {
+  systemProfile: "SOLAR_PV_STORAGE",
   installation: { type: "New Installation", systemConfiguration: "Hybrid" },
   site: { premises: "Residential" },
   evidence: {},
@@ -146,6 +145,13 @@ export default function CommissioningClient({ token }: { token: string }) {
   const cacheKey = `betech-commissioning-draft:${token}`;
   const evidence = draft.evidence || {};
   const confirmations = draft.confirmations || {};
+  const profile = commissioningProfile(draft.systemProfile);
+  const visibleSteps = useMemo(() => steps.filter((step) => {
+    if (step.id === "array") return profile.panels;
+    if (step.id === "inverter") return profile.inverter;
+    if (step.id === "battery") return profile.battery;
+    return true;
+  }), [profile]);
   const expected = useMemo(
     () => expectedPanel(session?.project.expectedItems || []),
     [session?.project.expectedItems],
@@ -153,21 +159,19 @@ export default function CommissioningClient({ token }: { token: string }) {
   const complete = (id: string) =>
     id === "panels"
       ? Boolean(
-          evidence.panelLabel?.length &&
-          confirmations.panel &&
-          confirmations.panelQuantity &&
+          (!profile.panels || (evidence.panelLabel?.length && confirmations.panel && confirmations.panelQuantity)) &&
           draft.installation?.type && draft.installation?.systemConfiguration && draft.site?.premises && (draft.site.premises !== "Other" || draft.site.premisesOther?.trim()),
         )
       : id === "array"
-        ? Boolean(evidence.panelArray?.length)
+        ? !profile.panels || Boolean(evidence.panelArray?.length)
         : id === "inverter"
-          ? Boolean(
+          ? !profile.inverter || Boolean(
               evidence.inverterLabel?.length &&
               evidence.inverterInstallation?.length &&
               confirmations.inverter,
             )
           : id === "battery"
-            ? Boolean(
+            ? !profile.battery || Boolean(
                 evidence.batteryLabel?.length &&
                 evidence.batteryInstallation?.length &&
                 confirmations.battery && draft.equipment?.batterySerial?.trim(),
@@ -175,22 +179,22 @@ export default function CommissioningClient({ token }: { token: string }) {
             : id === "final-photos"
               ? Boolean(evidence.protection?.length && evidence.overall?.length)
               : id === "commissioning"
-                ? checks.every((check) => ["PASS", "N/A"].includes(draft.checklist?.[check] || ""))
+                ? profile.checklist.every((check) => ["PASS", "N/A"].includes(draft.checklist?.[check] || ""))
                 : id === "handover"
                   ? Boolean(
                       draft.signatures?.customer &&
                       draft.signatures?.technician &&
                       draft.termsAcceptance?.accepted &&
-                      handoverItems.every((item) => draft.handover?.[item]),
+                      requiredHandoverItems.every((item) => draft.handover?.[item]),
                     )
                   : false;
-  const completedStages = steps
+  const completedStages = visibleSteps
     .slice(0, -1)
     .filter((step) => complete(step.id)).length;
-  const progress = Math.round((completedStages / 8) * 100);
+  const progress = Math.round((completedStages / Math.max(1, visibleSteps.length - 1)) * 100);
   const firstIncomplete = Math.max(
     0,
-    steps.findIndex((step) => !complete(step.id)),
+    visibleSteps.findIndex((step) => !complete(step.id)),
   );
   useEffect(() => {
     let alive = true;
@@ -249,7 +253,16 @@ export default function CommissioningClient({ token }: { token: string }) {
         setSession(next);
         setDraft(merged);
         setLastStep(next.lastStep || "panels");
-        const index = steps.findIndex((step) => step.id === next.lastStep);
+        // Resolve the saved step after the profile has been merged. Older solar
+        // sessions can include steps that are hidden for a pump, heater or DC kit.
+        const restoredProfile = commissioningProfile(merged.systemProfile);
+        const restoredSteps = steps.filter((step) => {
+          if (step.id === "array") return restoredProfile.panels;
+          if (step.id === "inverter") return restoredProfile.inverter;
+          if (step.id === "battery") return restoredProfile.battery;
+          return true;
+        });
+        const index = restoredSteps.findIndex((step) => step.id === next.lastStep);
         setActiveStep(index >= 0 ? index : 0);
         setResumePrompt(next.progress > 0);
         setSaveState("saved");
@@ -269,6 +282,15 @@ export default function CommissioningClient({ token }: { token: string }) {
       alive = false;
     };
   }, [cacheKey, token]);
+  useEffect(() => {
+    const index = visibleSteps.findIndex((step) => step.id === lastStep);
+    if (index >= 0) {
+      setActiveStep(index);
+      return;
+    }
+    setActiveStep(0);
+    setLastStep(visibleSteps[0]?.id || "panels");
+  }, [lastStep, visibleSteps]);
   useEffect(() => {
     if (!loaded.current || session?.readOnly) return;
     localStorage.setItem(cacheKey, JSON.stringify(draft));
@@ -364,7 +386,7 @@ export default function CommissioningClient({ token }: { token: string }) {
     });
   const go = (index: number) => {
     setActiveStep(index);
-    setLastStep(steps[index].id);
+    setLastStep(visibleSteps[index]?.id || visibleSteps[0]?.id || "panels");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const issue = async () => {
@@ -434,7 +456,7 @@ export default function CommissioningClient({ token }: { token: string }) {
       </main>
     );
   if (session.readOnly) return session.status === "ISSUED" ? <IssuedView session={session} token={token} /> : <ProfessionalReviewPendingView session={session} busy={saveState === "saving"} error={error} onIssue={() => void issue()} />;
-  const current = steps[activeStep];
+  const current = visibleSteps[Math.min(activeStep, Math.max(0, visibleSteps.length - 1))] || visibleSteps[0];
   const canContinue = current.id === "review" || complete(current.id);
   return (
     <main className="min-h-screen bg-slate-950 pb-28 text-slate-100">
@@ -481,7 +503,7 @@ export default function CommissioningClient({ token }: { token: string }) {
             <p className="mt-2 text-sm text-slate-400">
               {session.project.customerName} · {session.project.location}
               <br />
-              {completedStages}/8 stages complete
+              {completedStages}/{Math.max(0, visibleSteps.length - 1)} stages complete
             </p>
             <button
               type="button"
@@ -498,14 +520,16 @@ export default function CommissioningClient({ token }: { token: string }) {
       ) : (
         <div className="mx-auto max-w-xl p-4">
           <p className="text-xs font-black tracking-[.2em] text-cyan-300">
-            STEP {activeStep + 1} OF 8
+            STEP {Math.min(activeStep + 1, visibleSteps.length)} OF {visibleSteps.length}
           </p>
-          <h2 className="mt-2 text-2xl font-black">{current.label}</h2>
+          <h2 className="mt-2 text-2xl font-black">{current.id === "panels" && !profile.panels ? "System equipment" : current.label}</h2>
           {session.professionalReviewComment && session.status === "RETURNED_FOR_CORRECTION" ? <p role="alert" className="my-4 rounded-xl bg-amber-100 p-4 text-amber-950">Correction requested: {session.professionalReviewComment}</p> : null}
           {current.id === "panels" ? <section className="my-4 space-y-4 rounded-2xl border border-slate-700 p-4">
             <h3 className="font-bold">Customer &amp; site details</h3>
             <p>{session.project.customerName} · {session.project.location}</p>
             <label className="block">Installer / agent completing this form<input className={inputClass} value={draft.installerName || ""} placeholder={session.technicianName} onChange={event => setDraft(value => ({ ...value, installerName: event.target.value }))} /></label>
+            <label className="block">System type<select className={inputClass} value={profile.id} onChange={event => { const nextProfile = commissioningProfile(event.target.value); const suggestedConfiguration = nextProfile.id === "SOLAR_WATER_HEATER" ? "Standalone / Solar Thermal" : ["DC_SOLAR_KIT", "SOLAR_WATER_PUMP"].includes(nextProfile.id) ? "Direct DC" : nextProfile.id === "SOLAR_PV_NO_STORAGE" ? "Grid-Tied" : nextProfile.id === "BATTERY_BACKUP" ? "Off-Grid" : "Hybrid"; setDraft(value => { const existing = value.systemEquipment || []; const required = nextProfile.extraEquipment.map((unit) => existing.find(item => item.kind === unit.kind) || { id: crypto.randomUUID(), kind: unit.kind, label: unit.label, brand: "", model: "", capacity: "", serial: "", warrantyYears: "5", labelPhotos: [] }); return { ...value, systemProfile: nextProfile.id, installation: { ...(value.installation || {}), systemConfiguration: suggestedConfiguration }, systemEquipment: nextProfile.id === "CUSTOM" ? existing : required }; }); setActiveStep(0); setLastStep("panels"); }}><option value="">Select system type</option>{COMMISSIONING_PROFILES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+            <p className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm text-cyan-100">{profile.summary}. The form, required photos and warranty certificate will use this system type.</p>
             <label className="block">County<input className={inputClass} value={draft.site?.county || ""} onChange={event => patch("site", "county", event.target.value)} /></label>
             <label className="block">Nature of premises<select className={inputClass} value={draft.site?.premises || ""} onChange={event => patch("site", "premises", event.target.value)}><option value="">Select premises</option>{["Residential", "Commercial", "Institutional", "Industrial", "Agricultural", "Other"].map(value => <option key={value}>{value}</option>)}</select></label>
             {draft.site?.premises === "Other" ? <label className="block">Other premises<input maxLength={80} className={inputClass} value={draft.site?.premisesOther || ""} onChange={event => patch("site", "premisesOther", event.target.value)} /></label> : null}
@@ -515,10 +539,10 @@ export default function CommissioningClient({ token }: { token: string }) {
             <p className="text-sm text-slate-400">GPS: {draft.site?.gps || "Optional — not captured"}</p>
             {gpsMessage ? <p role="status" className="text-sm text-amber-200">{gpsMessage}</p> : null}
             <label className="block">Installation type<select className={inputClass} value={draft.installation?.type || ""} onChange={event => patch("installation", "type", event.target.value)}><option value="">Select type</option>{["New Installation", "Upgrade", "Modification"].map(value => <option key={value}>{value}</option>)}</select></label>
-            <label className="block">System configuration<select className={inputClass} value={draft.installation?.systemConfiguration || ""} onChange={event => patch("installation", "systemConfiguration", event.target.value)}><option value="">Select configuration</option>{["Hybrid", "Off-Grid", "Grid-Tied"].map(value => <option key={value}>{value}</option>)}</select></label>
+            <label className="block">System configuration<select className={inputClass} value={draft.installation?.systemConfiguration || ""} onChange={event => patch("installation", "systemConfiguration", event.target.value)}><option value="">Select configuration</option>{["Hybrid", "Off-Grid", "Grid-Tied", "Direct DC", "Standalone / Solar Thermal"].map(value => <option key={value}>{value}</option>)}</select></label>
           </section> : null}
           <div className="mt-4">
-            {current.id === "panels" && (
+            {current.id === "panels" && profile.panels && (
               <Panels
                 expected={expected}
                 items={evidence.panelLabel || []}
@@ -541,6 +565,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 onManual={() => setManual(manual === "panel" ? null : "panel")}
               />
             )}
+            {current.id === "panels" && (profile.extraEquipment.length > 0 || profile.id === "CUSTOM") ? <SystemEquipmentEditor profile={profile} units={draft.systemEquipment || []} token={token} onChange={(units) => setDraft(value => ({ ...value, systemEquipment: units }))} /> : null}
             {current.id === "array" && (
               <PhotoStep
                 title="Panel array"
@@ -640,6 +665,7 @@ export default function CommissioningClient({ token }: { token: string }) {
             )}
             {current.id === "commissioning" && (
               <Commissioning
+                checks={profile.checklist}
                 checklist={draft.checklist || {}}
                 measurements={draft.measurements || {}}
                 onChecklist={(key, value) => patch("checklist", key, value)}
@@ -664,7 +690,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 savedTechnicianSignature={session.technicianSignatureUrl}
                 technicianSignature={draft.signatures?.technician || ""}
                 onAll={() =>
-                  handoverItems.forEach((item) => patch("handover", item, true))
+                  requiredHandoverItems.forEach((item) => patch("handover", item, true))
                 }
                 onToggle={(item, value) => patch("handover", item, value)}
                 onTermsAccepted={(accepted) =>
@@ -700,6 +726,8 @@ export default function CommissioningClient({ token }: { token: string }) {
                 session={session}
                 draft={draft}
                 completed={completedStages}
+                total={visibleSteps.length - 1}
+                profile={profile}
               />
             )}
           </div>
@@ -726,7 +754,7 @@ export default function CommissioningClient({ token }: { token: string }) {
               <button
                 type="button"
                 disabled={!canContinue}
-                onClick={() => go(Math.min(7, activeStep + 1))}
+                onClick={() => go(Math.min(visibleSteps.length - 1, activeStep + 1))}
                 className="w-full rounded-2xl bg-cyan-400 px-5 py-4 text-base font-black text-slate-950 disabled:opacity-40"
               >
                 {canContinue ? "CONTINUE" : "COMPLETE THIS STEP TO CONTINUE"}
@@ -764,6 +792,45 @@ function PhotoStep({
         onUploaded={onUploaded}
         onRemove={onRemove}
       />
+    </section>
+  );
+}
+
+function SystemEquipmentEditor({
+  profile,
+  units,
+  token,
+  onChange,
+}: {
+  profile: ReturnType<typeof commissioningProfile>;
+  units: EquipmentUnit[];
+  token: string;
+  onChange: (units: EquipmentUnit[]) => void;
+}) {
+  const update = (id: string, values: Partial<EquipmentUnit>) =>
+    onChange(units.map((unit) => unit.id === id ? { ...unit, ...values } : unit));
+  const add = () => onChange([
+    ...units,
+    { id: crypto.randomUUID(), kind: "custom", label: "Other equipment", brand: "", model: "", capacity: "", serial: "", warrantyYears: "5", labelPhotos: [] },
+  ]);
+  return (
+    <section className="mt-4 space-y-4 rounded-3xl border border-cyan-400/20 bg-slate-900 p-5">
+      <h3 className="text-xl font-black">Installed equipment</h3>
+      <p className="text-sm text-slate-400">Record each installed unit. Brand, model, serial number, warranty and a clear manufacturer-label photo are required for the certificate and warranty.</p>
+      {units.map((unit) => (
+        <article key={unit.id} className="space-y-3 rounded-2xl border border-slate-700 bg-slate-950 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="font-bold">{unit.label || unit.kind || "Equipment"}</h4>
+            {(profile.id === "CUSTOM" || !profile.extraEquipment.some((item) => item.kind === unit.kind)) ? <button type="button" onClick={() => onChange(units.filter((item) => item.id !== unit.id))} className="text-sm font-bold text-rose-300">Remove</button> : null}
+          </div>
+          {profile.id === "CUSTOM" ? <label className="block text-sm">Equipment name<input className={inputClass} value={unit.label || ""} placeholder="Example: Solar controller" onChange={(event) => update(unit.id, { label: event.target.value, kind: event.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "custom" })} /></label> : null}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([['brand', 'Brand'], ['model', 'Model'], ['capacity', 'Capacity / rating'], ['serial', 'Serial number'], ['warrantyYears', 'Warranty (years)']] as const).map(([key, label]) => <label className="block text-sm" key={key}>{label}<input className={inputClass} type={key === "warrantyYears" ? "number" : "text"} min={key === "warrantyYears" ? "0.0833333333" : undefined} max={key === "warrantyYears" ? 50 : undefined} step="any" maxLength={180} value={unit[key] || ""} onChange={(event) => update(unit.id, { [key]: event.target.value })} /></label>)}
+          </div>
+          <PhotoStep title="Manufacturer label photo" note="Take a clear photo showing the model and serial number." items={unit.labelPhotos || []} token={token} onUploaded={(photo) => update(unit.id, { labelPhotos: [...(unit.labelPhotos || []), photo] })} onRemove={(index) => update(unit.id, { labelPhotos: (unit.labelPhotos || []).filter((_, photoIndex) => photoIndex !== index) })} />
+        </article>
+      ))}
+      {profile.id === "CUSTOM" ? <button type="button" onClick={add} className="w-full rounded-xl border border-cyan-400/50 px-4 py-3 font-bold text-cyan-100">+ Add installed equipment</button> : null}
     </section>
   );
 }
@@ -1256,6 +1323,7 @@ function PhotoCapture({
   );
 }
 function Commissioning({
+  checks,
   checklist,
   measurements,
   onChecklist,
@@ -1263,6 +1331,7 @@ function Commissioning({
   onClearChecklist,
   onClearMeasurements,
 }: {
+  checks: readonly string[];
   checklist: Record<string, string>;
   measurements: Record<string, string>;
   onChecklist: (key: string, value: string) => void;
@@ -1525,10 +1594,14 @@ function Review({
   session,
   draft,
   completed,
+  total,
+  profile,
 }: {
   session: Session;
   draft: Draft;
   completed: number;
+  total: number;
+  profile: ReturnType<typeof commissioningProfile>;
 }) {
   const e = draft.equipment || {};
   const q = e.panelQuantity || "Project quantity";
@@ -1542,18 +1615,10 @@ function Review({
         {[
           ["Customer", session.project.customerName],
           ["Location", session.project.location],
-          [
-            "Panels",
-            `${q} · ${e.panelBrand || "Confirmed"} ${e.panelModel || ""}`,
-          ],
-          [
-            "Inverter",
-            `${e.inverterBrand || "Confirmed"} ${e.inverterModel || ""}`,
-          ],
-          [
-            "Battery",
-            `${e.batteryBrand || "Confirmed"} ${e.batteryModel || ""}`,
-          ],
+          ...(profile.panels ? [["Panels", `${q} · ${e.panelBrand || "Confirmed"} ${e.panelModel || ""}`]] : []),
+          ...(profile.inverter ? [["Inverter", `${e.inverterBrand || "Confirmed"} ${e.inverterModel || ""}`]] : []),
+          ...(profile.battery ? [["Battery", `${e.batteryBrand || "Confirmed"} ${e.batteryModel || ""}`]] : []),
+          ...commissioningEquipmentUnits(draft).filter((unit) => !["inverter", "battery"].includes(unit.kind)).map((unit) => [unit.label || unit.kind, `${unit.brand || "Confirmed"} ${unit.model || ""}`]),
           ["Protection evidence", "Complete"],
           ["Commissioning tests", "Complete"],
           ["Customer handover", "Complete"],
@@ -1568,7 +1633,7 @@ function Review({
         ))}
       </div>
       <p className="mt-5 text-sm text-slate-400">
-        {completed}/8 stages completed. Submitting issues the certificates using the configured supervisor signature and stamp once all required checks are complete.
+        {completed}/{total} stages completed. Submitting issues the certificates using the configured supervisor signature and stamp once all required checks are complete.
       </p>
     </section>
   );

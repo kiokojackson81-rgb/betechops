@@ -8,7 +8,7 @@ import { getBranding } from "@/lib/branding";
 import { TERMS_DISPLAY_URL, TERMS_URL } from "@/lib/publicLinks";
 
 export type WarrantyEquipment = {
-  equipment: "Solar Panels" | "Inverter" | "Lithium Battery";
+  equipment: string;
   brand: string;
   modelCapacity: string;
   serialNumbers: string;

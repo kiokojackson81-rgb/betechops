@@ -1,4 +1,5 @@
-import { commissioningEquipmentUnits } from "@/lib/commissioningEquipment";
+import { commissioningEquipmentUnits, type EquipmentUnit } from "@/lib/commissioningEquipment";
+import { profileFromCommissioningData } from "@/lib/commissioningProfiles";
 import { technicalConfiguration } from "@/lib/warrantyRules";
 import { storedProjectDocument } from "@/lib/storedProjectDocument";
 import { readFile } from "fs/promises";
@@ -193,16 +194,22 @@ function getEvidence(data: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Array.isArray(value) ? value.map((entry) => asRecord(entry) as Evidence).filter((entry) => Boolean(text(entry.url))) : []])) as Record<string, Evidence[]>;
 }
 
-function extractEquipment(equipment: Record<string, unknown>, projectItems: string[]): EquipmentRow[] {
+function extractEquipment(equipment: Record<string, unknown>, projectItems: string[], certificateData: Record<string, unknown>): EquipmentRow[] {
+  const profile = profileFromCommissioningData(certificateData);
   const panelQuantity = valueFrom(equipment, ["panelQuantity", "panelQty", "panelCount"]);
   const panelRating = valueFrom(equipment, ["panelRating", "panelWatts", "panelWattage", "panelRatedPower"]);
   const panelWatts = Number((panelRating || projectItems.join(" ")).match(/(\d{3,4})\s*W/i)?.[1] || 0);
   const panelCount = Number(panelQuantity.match(/\d+/)?.[0] || projectItems.join(" ").match(/(\d+)\s*[x]/i)?.[1] || 0);
   const pvCapacity = panelWatts > 0 && panelCount > 0 ? `${((panelWatts * panelCount) / 1000).toFixed(2)} kWp` : "";
+  const systemUnits = commissioningEquipmentUnits(certificateData).filter((unit) => !["inverter", "battery"].includes(unit.kind));
+  const panelGroup: EquipmentRow = { title: "SOLAR ARRAY", rows: [["Brand", valueFrom(equipment, ["panelBrand"])], ["Model", valueFrom(equipment, ["panelModel"])], ["Panel rating", panelRating || (panelWatts ? `${panelWatts}W` : "")], ["Quantity", panelQuantity || (panelCount ? `${panelCount} Panels` : "")], ["Installed PV capacity", pvCapacity], ["Panel serial / reference", valueFrom(equipment, ["panelSerial", "panelReference"])]] };
+  const inverterGroup: EquipmentRow = { title: "INVERTER", rows: [["Brand", valueFrom(equipment, ["inverterBrand"])], ["Model", valueFrom(equipment, ["inverterModel"])], ["Capacity", valueFrom(equipment, ["inverterCapacity", "inverterRating"])], ["Serial number", valueFrom(equipment, ["inverterSerial", "inverterSerialNumber"])]] };
+  const batteryGroup: EquipmentRow = { title: "BATTERY", rows: [["Brand", valueFrom(equipment, ["batteryBrand"])], ["Model", valueFrom(equipment, ["batteryModel"])], ["Capacity", valueFrom(equipment, ["batteryCapacity", "batteryRating"])], ["Serial number", valueFrom(equipment, ["batterySerial", "batterySerialNumber"])], ["Quantity", valueFrom(equipment, ["batteryQuantity", "batteryQty"])]] };
   const groups: EquipmentRow[] = [
-    { title: "SOLAR ARRAY", rows: [["Brand", valueFrom(equipment, ["panelBrand"])], ["Model", valueFrom(equipment, ["panelModel"])], ["Panel rating", panelRating || (panelWatts ? `${panelWatts}W` : "")], ["Quantity", panelQuantity || (panelCount ? `${panelCount} Panels` : "")], ["Installed PV capacity", pvCapacity], ["Panel serial / reference", valueFrom(equipment, ["panelSerial", "panelReference"])]] },
-    { title: "INVERTER", rows: [["Brand", valueFrom(equipment, ["inverterBrand"])], ["Model", valueFrom(equipment, ["inverterModel"])], ["Capacity", valueFrom(equipment, ["inverterCapacity", "inverterRating"])], ["Serial number", valueFrom(equipment, ["inverterSerial", "inverterSerialNumber"])]] },
-    { title: "BATTERY", rows: [["Brand", valueFrom(equipment, ["batteryBrand"])], ["Model", valueFrom(equipment, ["batteryModel"])], ["Capacity", valueFrom(equipment, ["batteryCapacity", "batteryRating"])], ["Serial number", valueFrom(equipment, ["batterySerial", "batterySerialNumber"])], ["Quantity", valueFrom(equipment, ["batteryQuantity", "batteryQty"])]] },
+    ...(profile.panels ? [panelGroup] : []),
+    ...(profile.inverter ? [inverterGroup] : []),
+    ...(profile.battery ? [batteryGroup] : []),
+    ...systemUnits.map<EquipmentRow>((unit: EquipmentUnit) => ({ title: (unit.label || unit.kind).toUpperCase(), rows: [["Brand", unit.brand], ["Model", unit.model], ["Capacity", unit.capacity], ["Serial number", unit.serial], ["Warranty", unit.warrantyYears ? `${unit.warrantyYears} years` : ""]] })),
   ];
   return groups.filter((group) => group.rows.some(([, value]) => Boolean(value)));
 }
@@ -264,6 +271,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
   const certificateData = asRecord(source.data);
+  const profile = profileFromCommissioningData(certificateData);
   const equipment = asRecord(certificateData.equipment);
   const measurements = asRecord(certificateData.measurements);
   const checklist = asRecord(certificateData.checklist);
@@ -318,7 +326,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const storedStamp = text(professionalSnapshot.stampUrl) || (branding.digitalStampEnabled ? branding.digitalStampUrl : null);
   const stampImage = approved && storedStamp ? await embedImage(pdf, storedStamp) : null;
   drawLetterhead(page, letterheadImage);
-  page.drawText("SOLAR PHOTOVOLTAIC SYSTEM", { x: MARGIN, y: 735, size: 16, font: bold, color: INK });
+  page.drawText(profile.label.toUpperCase(), { x: MARGIN, y: 735, size: 16, font: bold, color: INK });
   page.drawText("COMPLETION & COMMISSIONING CERTIFICATE", { x: MARGIN, y: 715, size: 10, font: bold, color: INK });
   if (approved) drawVerifiedBadge(page, bold);
   else page.drawText("PROFESSIONAL APPROVAL NOT RECORDED", { x: 355, y: 707, size: 7, font: bold, color: MAROON });
@@ -339,7 +347,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   ["Residential", "Commercial", "Institutional", "Industrial", "Agricultural", "Other"].forEach((label, index) => drawCheckbox(page, MARGIN + 8 + index * 86, 589, site.premises === label, label === "Other" && text(site.premisesOther) ? `Other: ${text(site.premisesOther).slice(0, 12)}` : label, regular));
 
   panel("2. SYSTEM INSTALLED", MARGIN, 574, fullWidth, 84);
-  const groups = extractEquipment(equipment, []);
+  const groups = extractEquipment(equipment, [], certificateData);
   groups.slice(0, 3).forEach((group, index) => {
     const x = MARGIN + 8 + index * (fullWidth / 3);
     page.drawText(group.title, { x, y: 545, size: 8, font: bold, color: MAROON });
@@ -351,10 +359,10 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   });
   panel("3. INSTALLATION TYPE", MARGIN, 482, fullWidth, 36);
   ["New Installation", "Upgrade", "Modification"].forEach((label, index) => drawCheckbox(page, MARGIN + 8 + index * 88, 455, installation.type === label, label, regular));
-  ["Hybrid", "Off-Grid", "Grid-Tied"].forEach((label, index) => drawCheckbox(page, 330 + index * 77, 455, technicalConfiguration(installation.systemConfiguration) === `${label} Solar PV System`, label, regular));
+  ["Hybrid", "Off-Grid", "Grid-Tied", "Direct DC", "Solar Thermal"].forEach((label, index) => drawCheckbox(page, 300 + index * 53, 455, technicalConfiguration(installation.systemConfiguration).toLowerCase().includes(label.toLowerCase().replace("solar thermal", "thermal")), label, regular));
 
   panel("4. COMMISSIONING RESULTS", MARGIN, 438, 190, 177);
-  const inspectionRows: Array<[string, string]> = [["Visual installation inspection", Object.values(evidence).flat().length ? "PASS" : "N/A"], ["Inverter operation", checklistValue(checklist, ["Inverter powers ON"])], ["PV charging detected", checklistValue(checklist, ["PV charging detected"])], ["Battery charging", checklistValue(checklist, ["Battery charging"])], ["Battery discharging", checklistValue(checklist, ["Battery discharging"])], ["Grid input detected", checklistValue(checklist, ["Grid input detected"])], ["Backup / changeover tested", checklistValue(checklist, ["Backup/changeover tested"])], ["Protection devices installed", checklistValue(checklist, ["Protection devices installed"])], ["Earthing connected", checklistValue(checklist, ["Earthing connected"])], ["Monitoring configured", checklistValue(checklist, ["Monitoring configured"])]];
+  const inspectionRows: Array<[string, string]> = [["Visual installation inspection", Object.values(evidence).flat().length ? "PASS" : "N/A"], ...profile.checklist.slice(0, 9).map((item) => [item, checklistValue(checklist, [item])] as [string, string])];
   inspectionRows.forEach(([label, result], index) => {
     const rowY = 412 - index * 12;
     page.drawRectangle({ x: MARGIN + 6, y: rowY - 3, width: 178, height: 11, color: index % 2 ? GREY : rgb(0.97, 0.98, 0.98) });
@@ -434,7 +442,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
     } catch { /* A certificate remains valid even if QR generation is unavailable. */ }
   }
 
-  if (Array.isArray(certificateData.additionalEquipment) && certificateData.additionalEquipment.length) {
+  if (commissioningEquipmentUnits(certificateData).some((unit) => !["inverter", "battery"].includes(unit.kind)) || (groups.length > 3)) {
     const units = commissioningEquipmentUnits(certificateData);
     for (let offset = 0; offset < units.length; offset += 8) {
       const unitPage = pdf.addPage(A4);
@@ -443,7 +451,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
       unitPage.drawText(`Certificate: ${source.certificateNo || "Pending"}`, { x: MARGIN, y: 714, size: 9, font: regular, color: MUTED });
       units.slice(offset, offset + 8).forEach((unit, index) => {
         const top = 680 - index * 76;
-        drawLines(unitPage, `${offset + index + 1}. ${unit.kind.toUpperCase()} - ${unit.brand} ${unit.model}`, MARGIN, top, 510, bold, 9);
+        drawLines(unitPage, `${offset + index + 1}. ${(unit.label || unit.kind).toUpperCase()} - ${unit.brand} ${unit.model}`, MARGIN, top, 510, bold, 9);
         drawLines(unitPage, `Capacity: ${unit.capacity || "Not recorded"} | Serial: ${unit.serial || "Not recorded"}`, MARGIN, top - 22, 510, regular, 8);
         unitPage.drawText(`Warranty: ${unit.warrantyYears} years`, { x: MARGIN, y: top - 45, size: 8, font: regular, color: INK });
       });
@@ -453,7 +461,7 @@ export async function buildCommissioningCertificatePdf(source: CertificateSource
   const evidenceItems = evidenceOrder.flatMap(([key, label]) => (evidence[key] || []).map((item) => ({ key, label, item }))).filter(({ item }) => Boolean(text(item.url)));
   for (const unit of commissioningEquipmentUnits(certificateData)) {
     if (unit.id === unit.kind) continue;
-    for (const item of unit.labelPhotos || []) if (item.url) evidenceItems.push({ key: `${unit.kind}Label`, label: `${unit.kind} - ${unit.serial}`, item });
+    for (const item of unit.labelPhotos || []) if (item.url) evidenceItems.push({ key: `${unit.kind}Label`, label: `${unit.label || unit.kind} - ${unit.serial}`, item });
   }
   let evidencePage: PDFPage | null = null;
   let evidenceY = 0;
