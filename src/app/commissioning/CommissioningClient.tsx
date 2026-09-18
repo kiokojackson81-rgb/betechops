@@ -91,33 +91,79 @@ const initialDraft: Draft = {
 const inputClass =
   "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-white outline-none focus:border-cyan-400";
 
-async function prepareEvidencePhoto(file: File) {
-  const maxDimension = 2048;
-  const preferredMaximumSize = 3 * 1024 * 1024;
-  const isCompressible = /^image\/(jpeg|jpg|png|webp)$/i.test(file.type);
-  if (file.size <= preferredMaximumSize || !isCompressible || typeof createImageBitmap !== "function") return file;
+const MAX_EVIDENCE_UPLOAD_BYTES = 3 * 1024 * 1024;
+const TARGET_EVIDENCE_UPLOAD_BYTES = Math.floor(2.5 * 1024 * 1024);
 
-  try {
+async function canvasPhoto(file: File) {
+  if (typeof createImageBitmap === "function") {
     const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) return file;
-    context.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
-    if (!blob || blob.size >= file.size) return file;
-    const baseName = file.name.replace(/\.[^.]+$/, "") || "commissioning-photo";
-    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
-  } catch {
-    // HEIC and older devices can fail browser decoding. The server still
-    // accepts the original image and returns a clear size/type error if needed.
-    return file;
+    return {
+      source: bitmap as CanvasImageSource,
+      width: bitmap.width,
+      height: bitmap.height,
+      dispose: () => bitmap.close(),
+    };
   }
+  const source = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new window.Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("This photo could not be prepared."));
+    };
+    image.src = objectUrl;
+  });
+  return {
+    source,
+    width: source.naturalWidth,
+    height: source.naturalHeight,
+    dispose: () => undefined,
+  };
+}
+
+async function prepareEvidencePhoto(file: File) {
+  if (file.size <= MAX_EVIDENCE_UPLOAD_BYTES) return file;
+  try {
+    const image = await canvasPhoto(file);
+    try {
+      let longestSide = 1920;
+      let quality = 0.84;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const scale = Math.min(1, longestSide / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) break;
+        context.drawImage(image.source, 0, 0, width, height);
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", quality),
+        );
+        if (blob && blob.size <= TARGET_EVIDENCE_UPLOAD_BYTES) {
+          const baseName = file.name.replace(/\.[^.]+$/, "") || "commissioning-photo";
+          return new File([blob], `${baseName}.jpg`, {
+            type: "image/jpeg",
+            lastModified: file.lastModified,
+          });
+        }
+        longestSide = Math.round(longestSide * 0.72);
+        quality -= 0.12;
+      }
+    } finally {
+      image.dispose();
+    }
+  } catch {
+    // Large HEIC or device-specific camera formats may not be decodable here.
+  }
+  throw new Error(
+    "This photo is too large for a reliable mobile upload. Retake it as a JPG at a lower resolution, or choose a photo smaller than 3 MB.",
+  );
 }
 const expectedPanel = (items: string[]) => {
   const text = items.find((item) => /panel/i.test(item)) || items[0] || "";
@@ -142,6 +188,8 @@ export default function CommissioningClient({ token }: { token: string }) {
   const [error, setError] = useState("");
   const [gpsMessage, setGpsMessage] = useState("");
   const loaded = useRef(false);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveGeneration = useRef(0);
   const cacheKey = `betech-commissioning-draft:${token}`;
   const evidence = draft.evidence || {};
   const confirmations = draft.confirmations || {};
@@ -298,23 +346,29 @@ export default function CommissioningClient({ token }: { token: string }) {
       setSaveState("offline");
       return;
     }
-    setSaveState("saving");
+    const generation = ++saveGeneration.current;
     const timer = window.setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `/api/commissioning/${encodeURIComponent(token)}`,
-          {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ data: draft, lastStep, progress }),
-          },
-        );
-        if (!response.ok) throw new Error();
-        setSaveState("saved");
-      } catch {
-        setSaveState(navigator.onLine ? "error" : "offline");
-      }
-    }, 500);
+      const body = JSON.stringify({ data: draft, lastStep, progress });
+      if (generation === saveGeneration.current) setSaveState("saving");
+      saveQueue.current = saveQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          const response = await fetch(
+            `/api/commissioning/${encodeURIComponent(token)}`,
+            {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body,
+            },
+          );
+          if (!response.ok) throw new Error("Draft save failed.");
+          if (generation === saveGeneration.current) setSaveState("saved");
+        })
+        .catch(() => {
+          if (generation === saveGeneration.current)
+            setSaveState(navigator.onLine ? "error" : "offline");
+        });
+    }, 900);
     return () => window.clearTimeout(timer);
   }, [cacheKey, draft, lastStep, progress, session?.readOnly, token]);
   const patch = (section: keyof Draft, key: string, value: unknown) =>
@@ -1229,10 +1283,26 @@ function PhotoCapture({
       const uploadFile = await prepareEvidencePhoto(file);
       const form = new FormData();
       form.set("file", uploadFile);
-      const response = await fetch(
-        `/api/commissioning/${encodeURIComponent(token)}/evidence`,
-        { method: "POST", body: form },
-      );
+      let response: Response | null = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          response = await fetch(
+            `/api/commissioning/${encodeURIComponent(token)}/evidence`,
+            { method: "POST", body: form },
+          );
+          break;
+        } catch {
+          if (attempt === 0)
+            await new Promise((resolve) => window.setTimeout(resolve, 750));
+        }
+      }
+      if (!response) {
+        throw new Error(
+          navigator.onLine
+            ? "The photo could not reach the server. Check your connection and retry once the signal is stable."
+            : "You are offline. Reconnect to upload this photo.",
+        );
+      }
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Photo upload failed.");
       if (typeof body.url !== "string" || !body.url) throw new Error("Photo storage did not return a usable image link. Please retry.");
