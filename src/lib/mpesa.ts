@@ -37,6 +37,8 @@ type StkResult = {
   CheckoutRequestID?: string;
   ResponseCode?: string;
   ResponseDescription?: string;
+  ResultCode?: string | number;
+  ResultDesc?: string;
   CustomerMessage?: string;
   errorCode?: string;
   errorMessage?: string;
@@ -366,6 +368,104 @@ export async function initiateStkPush(input: { orderReference: string; phoneNumb
   return initiateStkPushForResource({ resourceType: "ORDER", reference: input.orderReference, phoneNumber: input.phoneNumber });
 }
 
+const STK_STATUS_QUERY_GRACE_MS = 20 * 1000;
+const STK_STATUS_QUERY_RETRY_MS = 30 * 1000;
+
+function statusQueryAt(payload: unknown) {
+  const value = String(readObject(readObject(payload).statusQuery).queriedAt || "");
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function canQueryPendingStk(payment: Pick<MpesaPayment, "status" | "checkoutRequestId" | "createdAt" | "callbackPayload">) {
+  if (payment.status !== "PENDING" || !payment.checkoutRequestId) return false;
+  const now = Date.now();
+  return now - payment.createdAt.getTime() >= STK_STATUS_QUERY_GRACE_MS
+    && now - statusQueryAt(payment.callbackPayload) >= STK_STATUS_QUERY_RETRY_MS;
+}
+
+async function queryStkPaymentStatus(checkoutRequestId: string) {
+  const { shortcode, passkey } = mpesaCredentials();
+  const timestamp = darajaTimestamp();
+  const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
+  const response = await fetch(`${DARAJA_PRODUCTION_BASE_URL}/mpesa/stkpushquery/v1/query`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await darajaAccessToken()}`, "Content-Type": "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+    body: JSON.stringify({
+      BusinessShortCode: shortcode,
+      Password: password,
+      Timestamp: timestamp,
+      CheckoutRequestID: checkoutRequestId,
+    }),
+  });
+  const result = await response.json().catch(() => ({})) as StkResult;
+  return { ok: response.ok, result };
+}
+
+async function finalizeStatusQueryRecovery(payment: Pick<MpesaPayment, "orderId" | "websiteOrderId" | "resourceType" | "resourceId">) {
+  if (payment.orderId) await finalizeConfirmedPosExpressReceipt(payment.orderId);
+  if (payment.websiteOrderId) await notifyConfirmedWebsiteOrder({ websiteOrderId: payment.websiteOrderId, paymentAmount: 0 });
+  if (payment.resourceType === "SITE_VISIT" && payment.resourceId) await notifyConfirmedSiteVisit(payment.resourceId);
+}
+
+/** Uses Daraja's status endpoint only after the normal callback grace period. */
+async function recoverPendingStkFromStatusQuery(paymentId: string) {
+  const payment = await prisma.mpesaPayment.findUnique({ where: { id: paymentId } });
+  if (!payment || !canQueryPendingStk(payment)) return null;
+  let queried: Awaited<ReturnType<typeof queryStkPaymentStatus>>;
+  try {
+    queried = await queryStkPaymentStatus(payment.checkoutRequestId!);
+  } catch (error) {
+    console.warn("[mpesa] STK status query failed", { paymentId, checkoutRequestId: payment.checkoutRequestId, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+  const resultCode = Number(queried.result.ResultCode);
+  const resultDescription = String(queried.result.ResultDesc || queried.result.ResponseDescription || "M-Pesa status query is still processing.").trim();
+  const payload = jsonValue({
+    initiation: payment.callbackPayload ?? {},
+    statusQuery: { queriedAt: new Date().toISOString(), response: queried.result, httpOk: queried.ok },
+  });
+  if (queried.ok && resultCode === 0) {
+    const confirmation = await applyConfirmedPayment(payment.id, {
+      amount: toNumber(payment.requestedAmount),
+      phoneNumber: payment.phoneNumber,
+      transactionAt: new Date(),
+      resultCode: 0,
+      resultDescription: `Confirmed by M-Pesa status query. ${resultDescription}`,
+      payload,
+    });
+    if (confirmation?.application.applied) {
+      console.info("[mpesa] STK status query recovered payment", { paymentId: payment.id, checkoutRequestId: payment.checkoutRequestId, orderId: confirmation.payment.orderId });
+      await finalizeStatusQueryRecovery(confirmation.payment);
+    }
+    return confirmation;
+  }
+  await prisma.mpesaPayment.updateMany({
+    where: { id: payment.id, status: "PENDING" },
+    data: { resultDescription: `Awaiting callback. Last M-Pesa status query: ${resultDescription}`, callbackPayload: payload },
+  });
+  return null;
+}
+
+export async function recoverRecentPendingStkPayments(limit = 6) {
+  const payments = await prisma.mpesaPayment.findMany({
+    where: { channel: "STK", status: "PENDING", createdAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) } },
+    orderBy: { createdAt: "asc" },
+    take: Math.max(1, Math.min(limit, 12)),
+    select: { id: true },
+  });
+  let recovered = 0;
+  for (let index = 0; index < payments.length; index += 2) {
+    const results = await Promise.all(
+      payments.slice(index, index + 2).map((payment) => recoverPendingStkFromStatusQuery(payment.id)),
+    );
+    recovered += results.filter((result) => result?.application.applied).length;
+  }
+  return recovered;
+}
+
 export async function getStkPaymentStatus(checkoutRequestId: string) {
   let payment = await prisma.mpesaPayment.findUnique({
     where: { checkoutRequestId },
@@ -402,6 +502,7 @@ export async function getStkPaymentStatus(checkoutRequestId: string) {
     // exact STK attempt that generated the PayBill payment; this preserves
     // the original callback and cannot create a second account payment.
     await recoverPendingLppStkWithUnmatchedC2b(payment.id);
+    await recoverPendingStkFromStatusQuery(payment.id);
     payment = await prisma.mpesaPayment.findUnique({
       where: { checkoutRequestId },
       select: {
@@ -609,6 +710,17 @@ function parseStkMetadata(callback: Record<string, unknown>) {
   };
 }
 
+/** C2B callbacks include the sender name; STK callbacks usually expose only the payer line. */
+export function payerNameFromMpesaPayload(payload: unknown) {
+  const raw = readObject(payload);
+  const c2b = readObject(raw.c2bCallback);
+  const source = Object.keys(c2b).length ? c2b : raw;
+  const parts = [source.FirstName, source.MiddleName, source.LastName]
+    .map((value) => String(value || "").replace(/[^a-zA-Z .'-]/g, "").trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(" ").slice(0, 120) : null;
+}
+
 function parseDarajaTransactionDate(value: string) {
   const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(value);
   if (!match) return null;
@@ -728,8 +840,8 @@ async function finalizeConfirmedPosExpressReceipt(orderId: string) {
       mpesaPayments: {
         where: { status: "SUCCESS" },
         orderBy: [{ transactionAt: "desc" }, { createdAt: "desc" }],
-        take: 1,
-        select: { receiptNumber: true, transactionId: true },
+        take: 3,
+        select: { receiptNumber: true, transactionId: true, phoneNumber: true, callbackPayload: true },
       },
     },
   });
@@ -737,7 +849,12 @@ async function finalizeConfirmedPosExpressReceipt(orderId: string) {
   const data = paymentMetadata(receipt?.data);
   if (!receipt || !["MPESA_EXPRESS", "MPESA_PAYBILL"].includes(String(data.paymentCollectionMethod || ""))) return;
 
-  const mpesaReceipt = order.mpesaPayments[0]?.receiptNumber || order.mpesaPayments[0]?.transactionId || null;
+  const settledPayment = order.mpesaPayments[0];
+  const mpesaReceipt = settledPayment?.receiptNumber || settledPayment?.transactionId || null;
+  const payerName = order.mpesaPayments
+    .map((payment) => payerNameFromMpesaPayload(payment.callbackPayload))
+    .find(Boolean);
+  const payer = payerName || (settledPayment?.phoneNumber ? `M-Pesa line ${settledPayment.phoneNumber}` : "the M-Pesa payer");
   const paymentBreakdown = paymentMetadata(data.paymentBreakdown);
   const cashPortion = Math.max(0, toNumber(paymentBreakdown.cash));
   const mpesaPortion = Math.max(0, toNumber(paymentBreakdown.mpesa));
@@ -749,7 +866,7 @@ async function finalizeConfirmedPosExpressReceipt(orderId: string) {
   // the cashier's proof that the payment was received.
   await sendTransactionalSms(
     "0722151083",
-    `M-Pesa received: KSh ${(mpesaPortion || toNumber(order.paidAmount)).toLocaleString("en-KE")} from ${order.customerName || "customer"} for receipt ${receipt.receiptNumber || order.orderNumber}.${paymentSummary}${mpesaReceipt ? ` M-Pesa code: ${mpesaReceipt}.` : ""} Method: ${String(data.paymentCollectionMethod) === "MPESA_PAYBILL" ? "Paybill" : "M-Pesa Express"}.`,
+    `M-Pesa received: KSh ${(mpesaPortion || toNumber(order.paidAmount)).toLocaleString("en-KE")} from ${payer} for receipt ${receipt.receiptNumber || order.orderNumber}.${paymentSummary}${mpesaReceipt ? ` M-Pesa code: ${mpesaReceipt}.` : ""} Method: ${String(data.paymentCollectionMethod) === "MPESA_PAYBILL" ? "Paybill" : "M-Pesa Express"}.`,
   ).catch((error) => console.error("[mpesa] POS Express operations SMS failed", error));
 
   await syncPosReceiptToCustomerAccount(receipt.id).catch((error) => console.error("[mpesa] POS Express account sync failed", error));

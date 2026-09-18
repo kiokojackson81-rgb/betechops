@@ -6,6 +6,7 @@ import {
   backfillCompletedPosMpesaPaymentLedger,
   backfillLppMpesaPaymentLedger,
 } from "@/lib/mpesaPaymentLedger";
+import { payerNameFromMpesaPayload, recoverRecentPendingStkPayments } from "@/lib/mpesa";
 import { requireWebsiteOrdersAdmin } from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ function serialize(payment: {
   resultCode: number | null;
   resultDescription: string | null;
   transactionAt: Date | null;
+  callbackPayload: unknown;
   createdAt: Date;
   updatedAt: Date;
   order: { id: string; orderNumber: string; totalAmount: number; paidAmount: number; paymentStatus: string; metadata: unknown } | null;
@@ -59,6 +61,7 @@ function serialize(payment: {
     requestedAmount: payment.requestedAmount == null ? null : number(payment.requestedAmount),
     amount: payment.amount == null ? null : number(payment.amount),
     phoneNumber: payment.phoneNumber,
+    payerName: payerNameFromMpesaPayload(payment.callbackPayload),
     merchantRequestId: payment.merchantRequestId,
     checkoutRequestId: payment.checkoutRequestId,
     receiptNumber: payment.receiptNumber,
@@ -98,6 +101,7 @@ export async function GET(request: NextRequest) {
   await Promise.all([
     backfillLppMpesaPaymentLedger(),
     backfillCompletedPosMpesaPaymentLedger(),
+    recoverRecentPendingStkPayments(),
   ]).catch((error) =>
     console.error("[admin/mpesa-payments] ledger backfill failed", error),
   );
