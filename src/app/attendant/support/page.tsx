@@ -520,7 +520,7 @@ function SupportQuickStats({
         </p>
         <p className="text-xs text-slate-200">
           {mask(
-            `10% of POS receipt profit. Current profit total: KES ${safeLocale(totalProfit)}. Any extra support adjustment appears separately in payroll.`
+            `10% of profit from successful paid POS receipts. Current eligible profit: KES ${safeLocale(totalProfit)}. Any extra support adjustment appears separately in payroll.`
           )}
         </p>
       </div>

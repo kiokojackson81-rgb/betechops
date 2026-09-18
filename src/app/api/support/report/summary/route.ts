@@ -6,7 +6,6 @@ import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import getAttendantCommissionSummary from "@/lib/attendantCommission";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
-import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -40,43 +39,20 @@ export async function GET(req: Request) {
   ]);
   const aggregates = summary.aggregates;
   const usesPosProfit10 = commissionConfig.salesCommissionMode === "POS_PROFIT_10";
-  const posSummary = usesPosProfit10
-    ? null
-    : await summarizePosReceiptsForPeriod({
-        start: period.start,
-        end: period.end,
-        userId: auth.user.id,
-        ownershipMode: "staffOnly",
-        supportPricingScope: "any",
-        profitRecognitionMode: "salesDate",
-        paymentScope: "paidOnly",
-      });
-  const supportReceiptProfitRows = usesPosProfit10
-    ? await prisma.supportReceipt.findMany({
-        where: {
-          dailyEntry: {
-            submittedById: auth.user.id,
-            date: { gte: period.start, lte: period.end },
-          },
-        },
-        select: {
-          sellingTotal: true,
-          buyingTotal: true,
-          items: { select: { buyingPrice: true } },
-        },
-      })
-    : [];
-  const supportReceiptProfitTotal = supportReceiptProfitRows.reduce((sum, row) => {
-    const selling = Number(row.sellingTotal ?? 0);
-    const aggregateBuying = Number(row.buyingTotal ?? 0);
-    const itemBuying = Array.isArray(row.items)
-      ? row.items.reduce((itemSum, item) => itemSum + Number(item.buyingPrice ?? 0), 0)
-      : 0;
-    const buying = aggregateBuying > 0 ? aggregateBuying : itemBuying;
-    return sum + Math.max(0, selling - buying);
-  }, 0);
+  // Support entries are a working record and can be created before a customer
+  // pays. Commission must instead use the POS source of truth: only paid,
+  // non-cancelled receipts assigned to this attendant, with recognised costs.
+  const posSummary = await summarizePosReceiptsForPeriod({
+    start: period.start,
+    end: period.end,
+    userId: auth.user.id,
+    ownershipMode: "staffOnly",
+    supportPricingScope: "any",
+    profitRecognitionMode: "salesDate",
+    paymentScope: "paidOnly",
+  });
   const directCommission = usesPosProfit10
-    ? Math.round(Math.max(0, supportReceiptProfitTotal) * 0.1)
+    ? Math.round(Math.max(0, Number(posSummary.totalProfit ?? 0)) * 0.1)
     : attendantSummary.directSalesCommission;
 
   return NextResponse.json({
@@ -88,10 +64,10 @@ export async function GET(req: Request) {
     },
     aggregates: {
       ...aggregates,
-      totalSales: usesPosProfit10 ? Number(aggregates.totalSales ?? 0) : Number(posSummary?.totalSales ?? aggregates.totalSales),
-      totalProfit: usesPosProfit10 ? supportReceiptProfitTotal : Number(posSummary?.totalProfit ?? aggregates.totalProfit),
-      totalReceipts: usesPosProfit10 ? Number(aggregates.totalReceipts ?? 0) : Number(posSummary?.totalReceipts ?? aggregates.totalReceipts),
-      totalItems: usesPosProfit10 ? Number(aggregates.totalItems ?? 0) : Number(posSummary?.totalItems ?? aggregates.totalItems),
+      totalSales: Number(posSummary.totalSales ?? aggregates.totalSales),
+      totalProfit: Number(posSummary.totalProfit ?? aggregates.totalProfit),
+      totalReceipts: Number(posSummary.totalReceipts ?? aggregates.totalReceipts),
+      totalItems: Number(posSummary.totalItems ?? aggregates.totalItems),
       batteryEarnings: (aggregates.newBatteries + aggregates.changedBatteries) * 70,
       commission: usesPosProfit10 ? directCommission : attendantSummary.totalCommission,
       directCommission,

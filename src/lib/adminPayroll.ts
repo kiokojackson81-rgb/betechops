@@ -654,6 +654,20 @@ async function buildPayrollRowResolved(
     getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
     getUserCommissionConfigLike(attendant.id),
   ]);
+  const usesSupportPosProfitShare =
+    attendant.attendantCategory === "SUPPORT_OPS" &&
+    commissionConfig.salesCommissionMode === "POS_PROFIT_10";
+  const supportPosSummary = usesSupportPosProfitShare
+    ? await summarizePosReceiptsForPeriod({
+        start: period.start,
+        end: period.end,
+        userId: attendant.id,
+        ownershipMode: "staffOnly",
+        supportPricingScope: "any",
+        profitRecognitionMode: "salesDate",
+        paymentScope: "paidOnly",
+      })
+    : null;
   const detail = ledger?.detail as
     | {
         totalSales?: number;
@@ -662,22 +676,27 @@ async function buildPayrollRowResolved(
       }
     | undefined;
   const detailProfitValue = Number(detail?.totalProfit ?? Number.NaN);
-  const resolvedProfit =
-    !Number.isNaN(detailProfitValue) && detailProfitValue !== 0
+  const resolvedProfit = usesSupportPosProfitShare
+    ? Number(supportPosSummary?.totalProfit ?? 0)
+    : !Number.isNaN(detailProfitValue) && detailProfitValue !== 0
       ? detailProfitValue
       : Number(earningsSummary?.totalProfit ?? 0);
   const usesConfiguredCommissionMode =
     commissionConfig.posTotalsMode !== "NONE" || commissionConfig.salesCommissionMode !== "DEFAULT_TIERS";
-  let commissionTotal = usesConfiguredCommissionMode
+  let commissionTotal = usesSupportPosProfitShare
+    ? Math.round(Math.max(0, resolvedProfit) * 0.1)
+    : usesConfiguredCommissionMode
     ? Number(earningsSummary?.commission ?? earningsSummary?.grossCommission ?? earningsSummary?.salesCommission ?? 0)
     : Number(ledger?.commissionTotal ?? 0);
-  if (commissionTotal <= 0) {
+  if (!usesSupportPosProfitShare && commissionTotal <= 0) {
     commissionTotal = Number(earningsSummary?.salesCommission ?? 0);
   }
-  if (commissionTotal <= 0) {
+  if (!usesSupportPosProfitShare && commissionTotal <= 0) {
     commissionTotal = Number(ledger?.netCommission ?? ledger?.grossCommission ?? 0);
   }
-  const resolvedDirectCommission = usesConfiguredCommissionMode
+  const resolvedDirectCommission = usesSupportPosProfitShare
+    ? commissionTotal
+    : usesConfiguredCommissionMode
     ? Number(earningsSummary?.salesCommission ?? commissionTotal)
     : Number(ledger?.commissionDirect ?? 0);
   const supportAdjustment =
@@ -726,10 +745,16 @@ async function buildPayrollRowResolved(
     totalEarnings,
     totalDeductions,
     netPay: totalEarnings - totalDeductions,
-    totalSales: Math.max(Number(detail?.totalSales ?? 0), Number(earningsSummary?.totalSales ?? 0)),
+    totalSales: usesSupportPosProfitShare
+      ? Number(supportPosSummary?.totalSales ?? 0)
+      : Math.max(Number(detail?.totalSales ?? 0), Number(earningsSummary?.totalSales ?? 0)),
     totalProfit: resolvedProfit,
-    totalReceipts: Number(earningsSummary?.totalReceipts ?? 0),
-    totalItems: Number(earningsSummary?.totalItems ?? 0),
+    totalReceipts: usesSupportPosProfitShare
+      ? Number(supportPosSummary?.totalReceipts ?? 0)
+      : Number(earningsSummary?.totalReceipts ?? 0),
+    totalItems: usesSupportPosProfitShare
+      ? Number(supportPosSummary?.totalItems ?? 0)
+      : Number(earningsSummary?.totalItems ?? 0),
     newProducts: Number(earningsSummary?.totalNewProducts ?? 0),
     editedProducts: Number(earningsSummary?.totalEditedProducts ?? 0),
     copiedProducts: Number(earningsSummary?.totalCopiedProducts ?? 0),
