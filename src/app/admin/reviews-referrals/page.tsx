@@ -53,10 +53,10 @@ export default async function AdminReviewsReferralsPage() {
           <StatCard label="Submitted reviews" value={String(summary.reviews.submittedReviews)} tone="text-amber-200" href="/admin/reviews-referrals/submitted-reviews" />
           <StatCard label="Published reviews" value={String(summary.reviews.publishedReviews)} tone="text-emerald-200" href="/admin/reviews-referrals/published-reviews" />
           <StatCard label="Open support alerts" value={String(summary.support.openSupportRequests)} tone="text-rose-200" href="/admin/reviews-referrals/support-alerts" />
-          <StatCard label="Referral links" value={String(summary.referrals.totalReferrals)} tone="text-sky-200" />
-          <StatCard label="Potential commissions" value={money.format(summary.referrals.potentialCommission)} tone="text-cyan-200" />
-          <StatCard label="Pending withdrawals" value={String(summary.withdrawals.pendingWithdrawals)} tone="text-amber-200" />
-          <StatCard label="Paid withdrawals" value={money.format(summary.withdrawals.paidWithdrawalAmount)} tone="text-emerald-200" />
+          <StatCard label="Referral links" value={String(summary.referrals.totalReferrals)} tone="text-sky-200" href="/admin/reviews-referrals/referrals" />
+          <StatCard label="Potential commissions" value={money.format(summary.referrals.potentialCommission)} tone="text-cyan-200" href="/admin/reviews-referrals/referrals" />
+          <StatCard label="Pending withdrawals" value={String(summary.withdrawals.pendingWithdrawals)} tone="text-amber-200" href="/admin/reviews-referrals/withdrawals" />
+          <StatCard label="Paid withdrawals" value={money.format(summary.withdrawals.paidWithdrawalAmount)} tone="text-emerald-200" href="/admin/reviews-referrals/withdrawals" />
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
@@ -89,6 +89,12 @@ export default async function AdminReviewsReferralsPage() {
             className="inline-flex rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:border-rose-300/30"
           >
             Manage referral overrides
+          </Link>
+          <Link
+            href="/admin/reviews-referrals/referrals"
+            className="inline-flex rounded-2xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-100 transition hover:border-sky-300/30"
+          >
+            View referral links
           </Link>
         </div>
       </section>

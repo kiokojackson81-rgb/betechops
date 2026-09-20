@@ -3086,7 +3086,15 @@ export async function getReferralWithdrawalQueue() {
         WHERE LOWER("status") = 'paid'
         GROUP BY "accountId"
       ) paid ON paid."accountId" = ra."id"
-      ORDER BY rwr."createdAt" DESC
+      ORDER BY
+        CASE
+          WHEN LOWER(rwr."status") = 'pending' THEN 0
+          WHEN LOWER(rwr."status") = 'approved' THEN 1
+          WHEN LOWER(rwr."status") = 'held' THEN 2
+          ELSE 3
+        END,
+        rwr."updatedAt" DESC,
+        rwr."createdAt" DESC
     `,
   );
 
@@ -3268,7 +3276,14 @@ export async function getReviewInvitationOperations(args?: {
       SELECT *
       FROM "ReviewInvitation"
       ${whereClause}
-      ORDER BY COALESCE("scheduledSendAt", "createdAt") DESC
+      ORDER BY
+        CASE
+          WHEN "sentAt" IS NULL AND COALESCE("lastSendStatus", '') <> 'FAILED' THEN 0
+          WHEN "sentAt" IS NULL AND COALESCE("lastSendStatus", '') = 'FAILED' THEN 1
+          ELSE 2
+        END,
+        COALESCE("scheduledSendAt", "updatedAt", "createdAt") DESC,
+        "createdAt" DESC
       LIMIT $2
     `,
     now,
@@ -3325,6 +3340,49 @@ export async function getSubmittedReviewOperations(limit = 120) {
     }),
     createdAt: toDate(row.createdAt)?.toISOString() || null,
   })) satisfies SubmittedReviewAdminRow[];
+}
+
+export async function getReferralLinkOperations(limit = 120) {
+  await ensureReviewReferralSchema();
+  await refreshReferralCommissionAvailability();
+  const boundedLimit = Math.min(Math.max(Number(limit || 120), 1), 250);
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `
+      SELECT
+        rl.*,
+        ra."customerName" AS "referrerName",
+        ra."customerPhone" AS "referrerPhone",
+        COALESCE(ri."orderOrReceiptRef", rl."matchedWebsiteOrderId", rl."matchedReceiptId") AS "orderOrReceiptRef"
+      FROM "ReferralLink" rl
+      INNER JOIN "ReferralAccount" ra ON ra."id" = rl."accountId"
+      LEFT JOIN "ProductReviewSubmission" prs ON prs."id" = rl."reviewId"
+      LEFT JOIN "ReviewInvitation" ri ON ri."id" = prs."invitationId"
+      ORDER BY COALESCE(rl."updatedAt", rl."createdAt") DESC, rl."createdAt" DESC
+      LIMIT $1
+    `,
+    boundedLimit,
+  );
+
+  return rows.map((row) => ({
+    id: asString(row.id),
+    referrerName: asString(row.referrerName),
+    referrerPhone: asString(row.referrerPhone),
+    referredName: cleanOptional(row.referredName),
+    referredPhone: asString(row.referredPhone),
+    productName: asString(row.productName),
+    referralCode: asString(row.referralCode),
+    channel: asString(row.channel),
+    status: asString(row.status),
+    commissionStatus: asString(row.commissionStatus),
+    potentialCommission: toNumber(row.potentialCommission),
+    saleAmount: row.saleAmount == null ? null : toNumber(row.saleAmount),
+    orderOrReceiptRef: cleanOptional(row.orderOrReceiptRef),
+    clickedAt: toDate(row.clickedAt)?.toISOString() || null,
+    convertedAt: toDate(row.convertedAt)?.toISOString() || null,
+    commissionAvailableAt: toDate(row.commissionAvailableAt)?.toISOString() || null,
+    createdAt: toDate(row.createdAt)?.toISOString() || null,
+    updatedAt: toDate(row.updatedAt)?.toISOString() || null,
+  }));
 }
 
 export async function getPublishedReviewOperations(limit = 120) {

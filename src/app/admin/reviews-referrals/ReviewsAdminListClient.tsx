@@ -47,6 +47,9 @@ export default function ReviewsAdminListClient({
   const sortedRows = useMemo(
     () =>
       [...rows].sort((a, b) => {
+        const aPending = !a.published && a.moderationStatus.toLowerCase() === "pending" ? 0 : 1;
+        const bPending = !b.published && b.moderationStatus.toLowerCase() === "pending" ? 0 : 1;
+        if (aPending !== bPending) return aPending - bPending;
         const aTime = new Date(a.createdAt || 0).getTime();
         const bTime = new Date(b.createdAt || 0).getTime();
         return bTime - aTime;
