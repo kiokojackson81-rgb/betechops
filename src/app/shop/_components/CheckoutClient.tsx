@@ -38,20 +38,28 @@ import {
   type CheckoutPaymentOption,
 } from "@/lib/checkoutDeliveryPayment";
 import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
+import { useShopProducts } from "@/app/shop/shopProductCache";
 
-type CheckoutClientProps = {
-  products: ShopProduct[];
-  isSignedIn: boolean;
-  initialProfile: {
-    fullName: string;
-    phoneNumber: string;
-    whatsappNumber: string;
-    email: string;
-    county: string;
-    town: string;
-    estateLandmark: string;
-    locationNotes: string;
-  };
+type CheckoutCustomerProfile = {
+  fullName: string;
+  phoneNumber: string;
+  whatsappNumber: string;
+  email: string;
+  county: string;
+  town: string;
+  estateLandmark: string;
+  locationNotes: string;
+};
+
+const emptyCustomerProfile: CheckoutCustomerProfile = {
+  fullName: "",
+  phoneNumber: "",
+  whatsappNumber: "",
+  email: "",
+  county: "",
+  town: "",
+  estateLandmark: "",
+  locationNotes: "",
 };
 
 type CheckoutFieldErrors = {
@@ -110,9 +118,10 @@ function getCheckoutAvailabilityCopy(product: ShopProduct) {
   return getProductAvailabilityMessage(product);
 }
 
-export default function CheckoutClient({ products, isSignedIn, initialProfile }: CheckoutClientProps) {
+export default function CheckoutClient() {
   const router = useRouter();
   const { items, hydrated: cartHydrated } = useShopCart();
+  const { products, loading: catalogueLoading, error: catalogueError, retry: retryCatalogue } = useShopProducts();
   const detailedItems = useMemo(() => buildDetailedCart(items, products), [items, products]);
   const installationRequiredCartItems = useMemo(() => detailedItems.filter((item) => {
     const policy = item.product.catalogueConfiguration;
@@ -134,19 +143,20 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
   const [installationPricing, setInstallationPricing] = useState<InstallationPricing[]>([]);
   const [pricingLoading, setPricingLoading] = useState(false);
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [form, setForm] = useState({
-    fullName: initialProfile.fullName,
-    phoneNumber: initialProfile.phoneNumber,
-    whatsappNumber: initialProfile.whatsappNumber,
-    email: initialProfile.email,
+    fullName: emptyCustomerProfile.fullName,
+    phoneNumber: emptyCustomerProfile.phoneNumber,
+    whatsappNumber: emptyCustomerProfile.whatsappNumber,
+    email: emptyCustomerProfile.email,
     deliveryMethod: "",
     paymentPreference: "",
-    county: initialProfile.county,
-    town: initialProfile.town,
+    county: emptyCustomerProfile.county,
+    town: emptyCustomerProfile.town,
     manualTown: "",
     nearestMajorTown: "",
-    estateLandmark: initialProfile.estateLandmark,
-    locationNotes: initialProfile.locationNotes,
+    estateLandmark: emptyCustomerProfile.estateLandmark,
+    locationNotes: emptyCustomerProfile.locationNotes,
   });
   const [townSearch, setTownSearch] = useState("");
   const isManualTown = isUnlistedTownSelection(form.town);
@@ -204,25 +214,51 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
       .map((value) => value.trim())
       .filter(Boolean);
     setForm((current) => {
-      const county = initialProfile.county || storedCounty || current.county;
-      const storedTownValue = initialProfile.town || storedTown || current.town;
+      const county = storedCounty || current.county;
+      const storedTownValue = storedTown || current.town;
       // Earlier profiles store only the actual town. Treat a value outside the
       // expanded list as a manual area so it remains usable at checkout.
       const storedTownIsKnown = isKnownTownForCounty(county, storedTownValue);
       return {
         ...current,
-        fullName: initialProfile.fullName || profile?.fullName || current.fullName,
-        phoneNumber: initialProfile.phoneNumber || profile?.phone || current.phoneNumber,
-        whatsappNumber: initialProfile.whatsappNumber || profile?.whatsappNumber || profile?.phone || current.whatsappNumber,
-        email: initialProfile.email || profile?.email || current.email,
+        fullName: profile?.fullName || current.fullName,
+        phoneNumber: profile?.phone || current.phoneNumber,
+        whatsappNumber: profile?.whatsappNumber || profile?.phone || current.whatsappNumber,
+        email: profile?.email || current.email,
         county,
         town: storedTownValue && !storedTownIsKnown ? UNLISTED_TOWN_OPTION : storedTownValue,
         manualTown: storedTownValue && !storedTownIsKnown ? storedTownValue : current.manualTown,
-        estateLandmark: initialProfile.estateLandmark || profile?.estateLandmark || current.estateLandmark,
-        locationNotes: initialProfile.locationNotes || profile?.locationNotes || current.locationNotes,
+        estateLandmark: profile?.estateLandmark || current.estateLandmark,
+        locationNotes: profile?.locationNotes || current.locationNotes,
       };
     });
-  }, [initialProfile]);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/account/customer-profile", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload: { signedIn?: boolean; profile?: Partial<CheckoutCustomerProfile> | null }) => {
+        if (!active) return;
+        setIsSignedIn(Boolean(payload.signedIn));
+        if (!payload.profile) return;
+        setForm((current) => ({
+          ...current,
+          fullName: payload.profile?.fullName || current.fullName,
+          phoneNumber: payload.profile?.phoneNumber || current.phoneNumber,
+          whatsappNumber: payload.profile?.whatsappNumber || current.whatsappNumber,
+          email: payload.profile?.email || current.email,
+          county: payload.profile?.county || current.county,
+          town: payload.profile?.town || current.town,
+          estateLandmark: payload.profile?.estateLandmark || current.estateLandmark,
+          locationNotes: payload.profile?.locationNotes || current.locationNotes,
+        }));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // A refresh must resume the same server-issued AWAITING_PAYMENT reservation,
   // not create a second WebsiteOrder or unexpectedly send a fresh STK prompt.
@@ -324,6 +360,24 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     );
   }
 
+  if (items.length && catalogueLoading) {
+    return (
+      <div className="rounded-[20px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
+        <div className={shopStyles.sectionEyebrow}>Checkout</div>
+        <div className="mt-3 text-sm text-slate-600">Loading the latest prices and delivery options...</div>
+      </div>
+    );
+  }
+
+  if (items.length && catalogueError) {
+    return (
+      <div className="rounded-[20px] border border-red-200 bg-red-50 p-5 text-sm text-red-700 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
+        <div>{catalogueError}</div>
+        <button type="button" onClick={retryCatalogue} className="mt-3 rounded-xl bg-[#7a0000] px-4 py-2 font-bold text-white">Try again</button>
+      </div>
+    );
+  }
+
   if (!detailedItems.length) {
     return (
       <div className="rounded-[20px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] p-5 shadow-[0_14px_32px_rgba(15,23,42,0.06)] sm:p-6">
@@ -382,7 +436,9 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
             const countyTownLabel = [form.county.trim(), effectiveTown].filter(Boolean).join(" / ");
             const locationSummary = [effectiveTown, form.county.trim(), form.estateLandmark.trim()].filter(Boolean).join(" - ");
             if (isSignedIn) {
-              await fetch("/api/account/complete-profile", {
+              // Keep profile enrichment useful for signed-in customers, but it
+              // must not delay their order or M-Pesa prompt.
+              void fetch("/api/account/complete-profile", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { applyReferralAttributionToUser, ensureAttributionSchema, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 import { CUSTOMER_REFERRAL_COOKIE_NAME } from "@/lib/referralCookies";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +9,6 @@ import {
   deriveWebsiteOrderType,
   ensureWebsiteOrdersSchema,
   serializeWebsiteOrder,
-  type WebsiteOrderListRow,
   websiteOrderAdminInclude,
   websiteOrderCreateSchema,
 } from "@/lib/websiteOrders";
@@ -96,13 +95,6 @@ async function buildUniqueOrderRef() {
     if (!existing) return orderRef;
   }
   throw new Error("Unable to generate website order reference");
-}
-
-async function loadWebsiteOrderRow(id: string): Promise<WebsiteOrderListRow | null> {
-  return prisma.websiteOrder.findUnique({
-    where: { id },
-    include: websiteOrderAdminInclude,
-  });
 }
 
 export async function POST(request: NextRequest) {
@@ -381,21 +373,21 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const createdRow = await loadWebsiteOrderRow(created.id);
-  if (!createdRow) {
-    return NextResponse.json({ ok: false, error: "Website order was created but could not be loaded." }, { status: 500 });
-  }
-
-  await syncReferralLinkForWebsiteOrder(created.id).catch((error) => {
-    console.error("[referrals] failed to sync customer referral for website order", {
-      orderId: created.id,
-      error: error instanceof Error ? error.message : String(error),
+  // Referral links and future review invitations do not change the order
+  // confirmation or payment amount. Run them after replying so checkout can
+  // immediately continue to the M-Pesa prompt.
+  after(async () => {
+    await syncReferralLinkForWebsiteOrder(created.id).catch((error) => {
+      console.error("[referrals] failed to sync customer referral for website order", {
+        orderId: created.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
-  });
-  await ensureReviewInvitationsForWebsiteOrder(created.id).catch((error) => {
-    console.error("[reviews] failed to provision review invitations for website order", {
-      orderId: created.id,
-      error: error instanceof Error ? error.message : String(error),
+    await ensureReviewInvitationsForWebsiteOrder(created.id).catch((error) => {
+      console.error("[reviews] failed to provision review invitations for website order", {
+        orderId: created.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
   });
 
@@ -406,15 +398,14 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     source: "website",
-    orderRef: createdRow.orderRef,
-    status: createdRow.status,
+    orderRef: created.orderRef,
+    status: created.status,
     requiresImmediatePayment,
     amountDueNow: paymentPlan.amountDueNow,
-    paymentAccessToken: requiresImmediatePayment && createdRow.metadata && typeof createdRow.metadata === "object"
-      ? String((createdRow.metadata as Record<string, unknown>).paymentAccessToken || "") || null
+    paymentAccessToken: requiresImmediatePayment && created.metadata && typeof created.metadata === "object"
+      ? String((created.metadata as Record<string, unknown>).paymentAccessToken || "") || null
       : null,
-    successUrl: getShopOrderSuccessHref(createdRow.orderRef),
-    order: await serializeWebsiteOrder(createdRow),
+    successUrl: getShopOrderSuccessHref(created.orderRef),
   });
 }
 

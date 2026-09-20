@@ -6,7 +6,6 @@ import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
@@ -16,9 +15,7 @@ export const metadata: Metadata = buildShopMetadata({
   description: "Review your selected Betech Solar products, update quantities, and continue to checkout.",
 });
 
-export default async function ShopCartPage() {
-  const products = await getShopProducts();
-
+export default function ShopCartPage() {
   return (
     <div className={shopStyles.page}>
       <ShopHeader navLinks={shopNavLinks} />
@@ -33,7 +30,7 @@ export default async function ShopCartPage() {
             </p>
           </div>
           <div className="mt-4">
-            <CartClient products={products} />
+            <CartClient />
           </div>
           <div className="mt-4">
             <ShopSupportStrip />

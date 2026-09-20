@@ -16,10 +16,7 @@ import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
 import { getShopProductHref, SHOP_CHECKOUT_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
-
-type CartClientProps = {
-  products: ShopProduct[];
-};
+import { useShopProducts } from "@/app/shop/shopProductCache";
 
 function CartProductImage({ product, className = "" }: { product: ShopProduct; className?: string }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -40,8 +37,9 @@ function CartProductImage({ product, className = "" }: { product: ShopProduct; c
   );
 }
 
-export default function CartClient({ products }: CartClientProps) {
+export default function CartClient() {
   const { items, hydrated: cartHydrated } = useShopCart();
+  const { products, loading: catalogueLoading, error: catalogueError, retry: retryCatalogue } = useShopProducts();
   const detailedItems = buildDetailedCart(items, products);
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const hasWarehouseItems = detailedItems.some((item) => item.product.availabilityType === "WAREHOUSE");
@@ -68,6 +66,24 @@ export default function CartClient({ products }: CartClientProps) {
       <div className="rounded-[20px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
         <div className={shopStyles.sectionEyebrow}>Cart</div>
         <div className="mt-3 text-sm text-slate-600">Loading your Betech Solar cart...</div>
+      </div>
+    );
+  }
+
+  if (items.length && catalogueLoading) {
+    return (
+      <div className="rounded-[20px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
+        <div className={shopStyles.sectionEyebrow}>Cart</div>
+        <div className="mt-3 text-sm text-slate-600">Loading the latest prices and availability...</div>
+      </div>
+    );
+  }
+
+  if (items.length && catalogueError) {
+    return (
+      <div className="rounded-[20px] border border-red-200 bg-red-50 p-5 text-sm text-red-700 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
+        <div>{catalogueError}</div>
+        <button type="button" onClick={retryCatalogue} className="mt-3 rounded-xl bg-[#7a0000] px-4 py-2 font-bold text-white">Try again</button>
       </div>
     );
   }
