@@ -71,6 +71,10 @@ function serialize(payment: {
     transactionAt: date(payment.transactionAt),
     createdAt: payment.createdAt.toISOString(),
     updatedAt: payment.updatedAt.toISOString(),
+    // A new STK attempt has no Safaricom settlement timestamp yet.  The
+    // ledger therefore uses its latest recorded activity for a single,
+    // reliable newest-first view across attempts and confirmed payments.
+    activityAt: (payment.updatedAt > payment.createdAt ? payment.updatedAt : payment.createdAt).toISOString(),
     settlementRole: isSettledMpesaPayment(payment) ? "SETTLEMENT" : payment.status === "SUCCESS" ? "CONFIRMATION_EVENT" : "ATTEMPT",
     order: payment.order ? {
       kind: "ORDER" as const,
@@ -145,7 +149,7 @@ export async function GET(request: NextRequest) {
     websiteOrder: { select: { id: true, orderRef: true, total: true, metadata: true, status: true } },
   } satisfies Prisma.MpesaPaymentInclude;
   const [payments, successful, unmatched] = await Promise.all([
-    prisma.mpesaPayment.findMany({ where, include, orderBy: [{ transactionAt: "desc" }, { createdAt: "desc" }], take: 250 }),
+    prisma.mpesaPayment.findMany({ where, include, orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }], take: 250 }),
     prisma.mpesaPayment.findMany({
       where: { status: "SUCCESS" },
       select: { status: true, receiptNumber: true, transactionId: true, amount: true },
