@@ -1878,12 +1878,19 @@ export async function processDueReviewInvitations(input?: { limit?: number; dryR
     results: [] as Array<Record<string, unknown>>,
   };
 
-  for (const row of rows) {
-    const result = await processReviewInvitationSend(row, { dryRun: input?.dryRun });
-    if (String(result.status) === "failed") summary.failed += 1;
-    else if (String(result.status) === "skipped") summary.skipped += 1;
-    else summary.sent += 1;
-    summary.results.push(result);
+  // Keep delivery bounded but concurrent: sequential WhatsApp/SMS/email calls
+  // can exceed a cron invocation before a backlog reaches valid customers.
+  const concurrency = 5;
+  for (let index = 0; index < rows.length; index += concurrency) {
+    const results = await Promise.all(
+      rows.slice(index, index + concurrency).map((row) => processReviewInvitationSend(row, { dryRun: input?.dryRun })),
+    );
+    for (const result of results) {
+      if (String(result.status) === "failed") summary.failed += 1;
+      else if (String(result.status) === "skipped") summary.skipped += 1;
+      else summary.sent += 1;
+      summary.results.push(result);
+    }
   }
 
   return summary;
