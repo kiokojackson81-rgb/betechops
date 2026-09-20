@@ -1,0 +1,1 @@
+export { runtime, dynamic, POST } from "@/app/api/mpesa/c2b/validation/route";

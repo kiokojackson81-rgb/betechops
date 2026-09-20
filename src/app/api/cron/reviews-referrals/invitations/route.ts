@@ -46,7 +46,20 @@ async function handle(request: Request) {
       console.error("[reviews] review invitation backfill failed after due invitations were processed", error);
     }
 
-    return noStoreJson({ ok: true, cron: true, dryRun, summary: dueProcessing, backfill, backfillError });
+    // A recovered receipt can already be more than seven days old.  Run the
+    // due queue once more after backfill so it is delivered in this cron run
+    // rather than waiting for the next hourly schedule.
+    const recoveredDueProcessing = await processDueReviewInvitations({ limit, dryRun });
+
+    return noStoreJson({
+      ok: true,
+      cron: true,
+      dryRun,
+      summary: dueProcessing,
+      recoveredDueProcessing,
+      backfill,
+      backfillError,
+    });
   } catch (error) {
     return noStoreJson(
       { ok: false, error: error instanceof Error ? error.message : "Unable to process due review invitations." },

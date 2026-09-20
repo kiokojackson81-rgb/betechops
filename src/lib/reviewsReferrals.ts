@@ -1859,6 +1859,10 @@ export async function processDueReviewInvitations(input?: { limit?: number; dryR
         AND "sentAt" IS NULL
         AND "usedAt" IS NULL
         AND "expiresAt" > $1
+        -- A cancelled website order is recorded once as skipped.  Leaving it
+        -- in this query made it consume every scheduled batch indefinitely,
+        -- preventing real customer invitations behind it from being sent.
+        AND COALESCE("lastSendStatus", '') <> 'SKIPPED_CANCELLED'
       ORDER BY "scheduledSendAt" ASC
       LIMIT $2
     `,
@@ -3244,6 +3248,7 @@ export async function getReviewInvitationOperations(args?: {
         AND "sentAt" IS NULL
         AND "usedAt" IS NULL
         AND "expiresAt" > $1
+        AND COALESCE("lastSendStatus", '') <> 'SKIPPED_CANCELLED'
     `;
   } else if (status === "sent") {
     whereClause = `WHERE "sentAt" IS NOT NULL`;
