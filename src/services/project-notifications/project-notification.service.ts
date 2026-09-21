@@ -8,7 +8,7 @@ import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { ensureReviewInvitationForReceipt } from "@/lib/reviewsReferrals";
-import { getPublicReceiptUrl } from "@/lib/publicReceiptLinks";
+import { getPublicReceiptDocumentsUrl } from "@/lib/publicReceiptLinks";
 import { resolveProjectStaffPhone } from "@/lib/projectHandlers";
 import {
   formatKenyaDate,
@@ -205,7 +205,7 @@ async function loadProjectNotificationContext(
     paymentTerm === "FULL_AFTER_INSTALLATION" || paymentTerm === "DEPOSIT_AND_BALANCE"
       ? balance
       : balance;
-  const receiptLink = await getPublicReceiptUrl(receipt.id);
+  const receiptLink = await getPublicReceiptDocumentsUrl(receipt.id);
   const reviewLink = input.event === "PROJECT_COMPLETED" ? await ensureProjectReviewLink(receipt.id) : null;
 
   return {

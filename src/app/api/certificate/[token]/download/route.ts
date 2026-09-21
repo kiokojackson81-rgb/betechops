@@ -1,3 +1,4 @@
+import { documentAccessAllowed, documentVerificationPath } from "@/lib/documentAccess";
 import { NextResponse } from "next/server";
 import { findCustomerCertificateSession } from "@/lib/commissioning";
 import { buildCommissioningCertificatePdf } from "@/lib/commissioningCertificate";
@@ -8,6 +9,7 @@ type ParamsContext = { params: Promise<{ token: string }> | { token: string } };
 
 export async function GET(_req: Request, context: ParamsContext) {
   const { token } = await context.params;
+  if (!await documentAccessAllowed("certificate", token)) return NextResponse.json({ error: "Phone verification required.", verificationUrl: documentVerificationPath("certificate", token) }, { status: 401, headers: { "Cache-Control": "no-store" } });
   const session = await findCustomerCertificateSession(token);
   if (!session) return new NextResponse("Certificate unavailable", { status: 404 });
   const pdf = await buildCommissioningCertificatePdf(session);

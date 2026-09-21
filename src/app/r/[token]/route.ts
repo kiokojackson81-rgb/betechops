@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server";
+import { documentAccessAllowed, documentVerificationPath } from "@/lib/documentAccess";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildReceiptPdfResponse } from "@/lib/receiptPdfResponse";
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest, context: ParamsContext) {
     return new Response("Receipt not found.", { status: 404 });
   }
 
+  if (!await documentAccessAllowed("receipt", cleanedToken)) return NextResponse.redirect(new URL(documentVerificationPath("receipt", cleanedToken), req.url));
   const asDownload = req.nextUrl.searchParams.get("download") === "1";
   const fileNamePrefix = `Betech-${receipt.order?.orderNumber || receipt.id}-Receipt`;
   return buildReceiptPdfResponse(receipt.id, { asDownload, allowCached: true, fileNamePrefix });

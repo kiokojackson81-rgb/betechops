@@ -1,3 +1,4 @@
+import { documentAccessAllowed, documentVerificationPath } from "@/lib/documentAccess";
 import { getWarrantyCertificate } from "@/lib/warrantyCertificates";
 import { PROJECT_DOCUMENT_ORDER, PROJECT_DOCUMENT_LABELS } from "@/lib/projectDocumentMessages";
 import { ensureReviewInvitationForReceipt, getReferralRewardPreviewForReceipt } from "@/lib/reviewsReferrals";
@@ -10,6 +11,7 @@ type ParamsContext = { params: Promise<{ token: string }> | { token: string } };
 
 export async function GET(_req: NextRequest, context: ParamsContext) {
   const { token } = await context.params;
+  if (!await documentAccessAllowed("certificate", token)) return NextResponse.json({ error: "Phone verification required.", verificationUrl: documentVerificationPath("certificate", token) }, { status: 401, headers: { "Cache-Control": "no-store" } });
   const session = await findCustomerCertificateSession(token);
   if (!session) return NextResponse.json({ error: "This certificate link is invalid or unavailable." }, { status: 404 });
   const warranty = await getWarrantyCertificate(session.receiptId);
@@ -38,6 +40,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
 
 export async function POST(req: NextRequest, context: ParamsContext) {
   const { token } = await context.params;
+  if (!await documentAccessAllowed("certificate", token)) return NextResponse.json({ error: "Phone verification required.", verificationUrl: documentVerificationPath("certificate", token) }, { status: 401, headers: { "Cache-Control": "no-store" } });
   const session = await findCustomerCertificateSession(token);
   if (!session) return NextResponse.json({ error: "This certificate link is invalid or unavailable." }, { status: 404 });
   const body = await req.json().catch(() => ({}));

@@ -1,4 +1,6 @@
+import { encryptDocument } from "@/lib/documentEncryption";
 import { randomUUID } from 'crypto';
+import { getPublicReceiptDocumentsUrl, getPublicReceiptUrl } from '@/lib/publicReceiptLinks';
 import { prisma } from '@/lib/prisma';
 import { waitForReceiptById } from '@/lib/receiptReadAfterWrite';
 import { Prisma } from '@prisma/client';
@@ -716,11 +718,11 @@ export async function sendReceiptChannels(
         const keyCust = `receipts/${receipt.id}/receipt-customer-${Date.now()}.pdf`;
         const keyFull = `receipts/${receipt.id}/receipt-full-${Date.now()}.pdf`;
         if (pdfCustomerBuffer) {
-          pdfUrlCustomer = await uploadBufferToS3(bucket, keyCust, pdfCustomerBuffer, 'application/pdf', retentionDays);
+          pdfUrlCustomer = await uploadBufferToS3(bucket, keyCust, encryptDocument(pdfCustomerBuffer), 'application/octet-stream', retentionDays);
           pdfKeyCustomer = keyCust;
         }
         if (pdfFullBuffer) {
-          pdfUrlFull = await uploadBufferToS3(bucket, keyFull, pdfFullBuffer, 'application/pdf', retentionDays);
+          pdfUrlFull = await uploadBufferToS3(bucket, keyFull, encryptDocument(pdfFullBuffer), 'application/octet-stream', retentionDays);
           pdfKeyFull = keyFull;
         }
         uploadedAny = Boolean(pdfUrlCustomer || pdfUrlFull);
@@ -776,7 +778,11 @@ export async function sendReceiptChannels(
     retentionDays,
   });
 
-  const candidatePdfUrl = pdfUrlCustomer ?? pdfUrlFull;
+  const securePdfUrl = await getPublicReceiptUrl(receipt.id);
+  const secureDocumentsUrl = await getPublicReceiptDocumentsUrl(receipt.id);
+  const linkedReceipt = await prisma.receipt.findUnique({ where: { id: receipt.id }, select: { data: true } });
+  receipt.data = linkedReceipt?.data ?? receipt.data;
+  const candidatePdfUrl = securePdfUrl;
   const rawCustomerPhone =
     ((receipt.order as any)?.customerPhone ?? (receipt.data as any)?.customerPhone ?? "")
       .toString()
@@ -796,9 +802,10 @@ export async function sendReceiptChannels(
     ? receipt.order.totalAmount
     : 0;
   const getChatraceMetaUpdate = async (updates: Record<string, unknown>) => {
+    const freshReceipt = await prisma.receipt.findUnique({ where: { id: receipt.id }, select: { data: true } });
     const baseData =
-      typeof receipt.data === "object" && receipt.data
-        ? { ...(receipt.data as Record<string, unknown>) }
+      typeof freshReceipt?.data === "object" && freshReceipt.data
+        ? { ...(freshReceipt.data as Record<string, unknown>) }
         : {};
     const existingChatrace =
       typeof baseData.chatrace === "object" && baseData.chatrace
@@ -813,8 +820,8 @@ export async function sendReceiptChannels(
   };
 
   const site = getSiteUrl();
-  const receiptPageLink = `${site.replace(/\/$/, '')}/receipts/${receipt.id}`;
-  const finalChatracePdfUrl = await resolveChatracePdfUrl(site, receipt.id, candidatePdfUrl);
+  const receiptPageLink = secureDocumentsUrl;
+  const finalChatracePdfUrl: { receiptUrl: string; mode: "pdf" | "proxy" | "link" } = { receiptUrl: securePdfUrl, mode: "proxy" };
   const chatracePdfUrl = finalChatracePdfUrl.receiptUrl;
 
   if (normalizedChatracePhone) {
@@ -1109,7 +1116,7 @@ export async function sendReceiptChannels(
         await sendReceiptEmail({
           to: toEmail,
           receiptNumber: receipt.order?.orderNumber ?? receipt.id,
-          receiptLink: pdfUrlCustomer || `${getSiteUrl().replace(/\/$/, '')}/receipts/${receipt.id}`,
+          receiptLink: secureDocumentsUrl,
           customerName: orderAny?.customerName || (receipt.data as any)?.customerName || null,
           customerPhone: orderAny?.customerPhone || (receipt.data as any)?.customerPhone || null,
           customerEmail: toEmail,
@@ -1212,19 +1219,20 @@ export async function sendReceiptChannels(
         const customerName = (orderAny?.customerName || dataAny?.customerName || 'Customer').trim();
         const receiptNumber = receipt.order?.orderNumber ?? receipt.id;
         const amountText = formatCurrencyKes(Number(receipt.totalAmount ?? orderAny?.totalAmount ?? 0));
+        const customerReceiptUrl = secureDocumentsUrl;
         const smsBody = isPodReceipt
           ? [
               `Hello ${customerName}, your Pay on Delivery order has been received and is being dispatched.`,
               `Receipt No: ${receiptNumber}.`,
               `Amount due on delivery: ${amountText}.`,
-              `Login with your phone number at www.betech.co.ke/account to view order details, download your receipt, or track your order.`,
+              `View and download your receipt: ${customerReceiptUrl}`,
               `Call 0722151083 for assistance.`,
             ].join(' ')
           : [
               `Hello ${customerName}, thank you for shopping at BETECH SOLAR SOLUTIONS.`,
               `Your receipt number is ${receiptNumber}.`,
               `Amount: ${amountText}.`,
-              `Login with your phone number at https://www.betech.co.ke/account to view your order details and download your receipt.`,
+              `View and download your receipt: ${customerReceiptUrl}`,
             ].join(' ');
         await sendTransactionalSms(toPhone, smsBody);
         sent.push('sms');
@@ -1263,7 +1271,7 @@ export async function sendReceiptChannels(
     channelStatus: JSON.stringify(channelStatus),
     errors: errors.length,
   });
-  return { ok, sent, errors, channelStatus, pdfUrlCustomer, pdfUrlFull, pdfKeyCustomer, pdfKeyFull };
+  return { ok, sent, errors, channelStatus, pdfUrlCustomer: securePdfUrl, pdfUrlFull: securePdfUrl, pdfKeyCustomer, pdfKeyFull };
 }
 
 type PersistReceiptFilesParams = {
@@ -1340,6 +1348,7 @@ async function persistReceiptFiles(params: PersistReceiptFilesParams) {
 }
 
 async function persistPodDelivery(receipt: any, updates: Record<string, unknown>) {
+  receipt = await prisma.receipt.findUniqueOrThrow({ where: { id: receipt.id }, select: { id: true, data: true } });
   const baseData =
     typeof receipt.data === 'object' && receipt.data
       ? { ...(receipt.data as Record<string, unknown>) }

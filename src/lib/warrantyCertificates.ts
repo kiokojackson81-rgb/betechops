@@ -1,3 +1,4 @@
+import { encryptDocument, decryptDocument } from "@/lib/documentEncryption";
 import { commissioningEquipmentUnits, equipmentValidationErrors } from "@/lib/commissioningEquipment";
 import { profileFromCommissioningData } from "@/lib/commissioningProfiles";
 import "server-only";
@@ -143,7 +144,7 @@ export async function issueWarrantyCertificate(input: { receiptId: string; issue
     const pdf = await buildWarrantyCertificatePdf(snapshot);
     const hash = createHash("sha256").update(pdf).digest("hex");
     if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("Warranty document storage is not configured.");
-    const blob = await put(`warranty-certificates/${session.receipt.id}/${certificateNo}.pdf`, pdf, { access: "public", contentType: "application/pdf", addRandomSuffix: true, token: process.env.BLOB_READ_WRITE_TOKEN });
+    const blob = await put(`warranty-certificates/${session.receipt.id}/${certificateNo}.pdf`, encryptDocument(pdf), { access: "public", contentType: "application/octet-stream", addRandomSuffix: true, token: process.env.BLOB_READ_WRITE_TOKEN });
     try {
       const certificate = await prisma.$transaction(async (tx) => {
         const current = await tx.warrantyCertificate.findFirst({ where: { receiptId: input.receiptId, status: "ISSUED" }, orderBy: { version: "desc" } });
@@ -183,7 +184,7 @@ export async function issueWarrantyCertificate(input: { receiptId: string; issue
 export async function warrantyPdfBytes(certificate: { pdfUrl: string; pdfSha256?: string | null }) {
   const response = await fetch(certificate.pdfUrl, { cache: "no-store" });
   if (!response.ok) throw new Error("The issued warranty PDF could not be retrieved.");
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const bytes = decryptDocument(Buffer.from(await response.arrayBuffer()));
   if (certificate.pdfSha256 && createHash("sha256").update(bytes).digest("hex") !== certificate.pdfSha256) throw new Error("The stored warranty PDF failed its integrity check.");
   return bytes;
 }

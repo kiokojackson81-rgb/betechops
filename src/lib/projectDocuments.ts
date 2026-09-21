@@ -1,3 +1,4 @@
+import { encryptDocument } from "@/lib/documentEncryption";
 import "server-only";
 import { createHash } from "crypto";
 import { put } from "@vercel/blob";
@@ -10,7 +11,7 @@ import { ensureCustomerCertificateToken } from "@/lib/commissioning";
 
 async function storePdf(sessionId: string, kind: string, bytes: Buffer) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("Project document storage is not configured.");
-  const blob = await put(`project-documents/${sessionId}/${kind}.pdf`, bytes, { access: "public", contentType: "application/pdf", addRandomSuffix: true });
+  const blob = await put(`project-documents/${sessionId}/${kind}.pdf`, encryptDocument(bytes), { access: "public", contentType: "application/octet-stream", addRandomSuffix: true });
   return { url: blob.url, sha256: createHash("sha256").update(bytes).digest("hex") };
 }
 

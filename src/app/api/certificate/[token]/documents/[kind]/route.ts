@@ -1,3 +1,4 @@
+import { documentAccessAllowed, documentVerificationPath } from "@/lib/documentAccess";
 import { NextRequest, NextResponse } from "next/server";
 import { findCustomerCertificateSession } from "@/lib/commissioning";
 import { getWarrantyCertificate, warrantyPdfBytes } from "@/lib/warrantyCertificates";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string; kind: string }> }) {
   const { token, kind } = await params;
   if (!["receipt", "completion", "warranty"].includes(kind)) return new NextResponse("Document unavailable", { status: 404 });
+  if (!await documentAccessAllowed("certificate", token)) return NextResponse.json({ error: "Phone verification required.", verificationUrl: documentVerificationPath("certificate", token) }, { status: 401, headers: { "Cache-Control": "no-store" } });
   const session = await findCustomerCertificateSession(token);
   if (!session) return new NextResponse("Document unavailable", { status: 404 });
   try {

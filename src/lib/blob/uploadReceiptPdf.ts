@@ -1,3 +1,4 @@
+import { encryptDocument } from "@/lib/documentEncryption";
 import { put } from "@vercel/blob";
 
 interface UploadReceiptPdfOptions {
@@ -14,9 +15,9 @@ export async function uploadReceiptPdfToBlob(opts: UploadReceiptPdfOptions) {
 
   // include timestamp prefix and keep random suffix to ensure uniqueness
   const pathname = `receipts/${opts.receiptId}/${opts.kind}-${Date.now()}.pdf`;
-  const blob = await put(pathname, opts.buffer, {
+  const blob = await put(pathname, encryptDocument(opts.buffer), {
     access: "public",
-    contentType: "application/pdf",
+    contentType: "application/octet-stream",
     addRandomSuffix: true,
     token,
   });

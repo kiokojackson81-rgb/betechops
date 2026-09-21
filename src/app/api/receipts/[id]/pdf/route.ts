@@ -1,3 +1,4 @@
+import { canDownloadReceiptById } from "@/lib/receiptDownloadAccess";
 import { buildReceiptPdfResponse } from '@/lib/receiptPdfResponse';
 import type { NextRequest } from 'next/server';
 
@@ -23,6 +24,8 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  if (!await canDownloadReceiptById(receiptId)) return new Response("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
 
   try {
     const search = req.nextUrl.searchParams;

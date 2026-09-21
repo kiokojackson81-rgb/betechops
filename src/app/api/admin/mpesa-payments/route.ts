@@ -41,8 +41,8 @@ function serialize(payment: {
   callbackPayload: unknown;
   createdAt: Date;
   updatedAt: Date;
-  order: { id: string; orderNumber: string; totalAmount: number; paidAmount: number; paymentStatus: string; metadata: unknown } | null;
-  websiteOrder: { id: string; orderRef: string; total: unknown; metadata: unknown; status: string } | null;
+  order: { id: string; customerName: string; orderNumber: string; totalAmount: number; paidAmount: number; paymentStatus: string; metadata: unknown } | null;
+  websiteOrder: { id: string; customerName: string; orderRef: string; total: unknown; metadata: unknown; status: string } | null;
 }) {
   const websiteMetadata = payment.websiteOrder?.metadata && typeof payment.websiteOrder.metadata === "object"
     ? payment.websiteOrder.metadata as Record<string, unknown>
@@ -61,7 +61,8 @@ function serialize(payment: {
     requestedAmount: payment.requestedAmount == null ? null : number(payment.requestedAmount),
     amount: payment.amount == null ? null : number(payment.amount),
     phoneNumber: payment.phoneNumber,
-    payerName: payerNameFromMpesaPayload(payment.callbackPayload),
+    payerName: payerNameFromMpesaPayload(payment.callbackPayload) || payment.order?.customerName?.trim() || payment.websiteOrder?.customerName?.trim() || null,
+    payerNameSource: payerNameFromMpesaPayload(payment.callbackPayload) ? "MPESA" : payment.order?.customerName?.trim() || payment.websiteOrder?.customerName?.trim() ? "CUSTOMER" : null,
     merchantRequestId: payment.merchantRequestId,
     checkoutRequestId: payment.checkoutRequestId,
     receiptNumber: payment.receiptNumber,
@@ -132,6 +133,8 @@ export async function GET(request: NextRequest) {
         { merchantRequestId: { contains: query, mode: "insensitive" } },
         { checkoutRequestId: { contains: query, mode: "insensitive" } },
         { resourceType: { contains: query, mode: "insensitive" } },
+        { order: { customerName: { contains: query, mode: "insensitive" } } },
+        { websiteOrder: { customerName: { contains: query, mode: "insensitive" } } },
       ],
     } : {}),
   };
@@ -141,8 +144,8 @@ export async function GET(request: NextRequest) {
   if (Object.keys(createdAt).length) where.createdAt = createdAt;
 
   const include = {
-    order: { select: { id: true, orderNumber: true, totalAmount: true, paidAmount: true, paymentStatus: true, metadata: true } },
-    websiteOrder: { select: { id: true, orderRef: true, total: true, metadata: true, status: true } },
+    order: { select: { id: true, customerName: true, orderNumber: true, totalAmount: true, paidAmount: true, paymentStatus: true, metadata: true } },
+    websiteOrder: { select: { id: true, customerName: true, orderRef: true, total: true, metadata: true, status: true } },
   } satisfies Prisma.MpesaPaymentInclude;
   const [payments, successful, unmatched] = await Promise.all([
     // The Safaricom/M-Pesa transaction time is the accounting date.  Pending

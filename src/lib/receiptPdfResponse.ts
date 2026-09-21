@@ -1,3 +1,4 @@
+import { decryptDocument } from "@/lib/documentEncryption";
 import { storedProjectDocument } from "@/lib/storedProjectDocument";
 import { prisma } from "@/lib/prisma";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
@@ -68,9 +69,8 @@ export async function buildReceiptPdfResponse(receiptId: string, opts?: { asDown
       headers.set("Content-Type", "application/pdf");
       headers.set("Cache-Control", "no-store");
       headers.set("Content-Disposition", `${asDownload ? "attachment" : "inline"}; filename="${fileNamePrefix}.pdf"`);
-      const len = upstream.headers.get("content-length");
-      if (len) headers.set("Content-Length", len);
-      return new Response(upstream.body, { status: 200, headers });
+      const bytes = decryptDocument(Buffer.from(await upstream.arrayBuffer()));
+      return new Response(new Uint8Array(bytes), { status: 200, headers });
     }
   }
 
