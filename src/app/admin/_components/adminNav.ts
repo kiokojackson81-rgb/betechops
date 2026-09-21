@@ -1,5 +1,5 @@
 // src/app/admin/_components/adminNav.ts
-import { Package, Store, Receipt, FileText, Truck, Layers, Settings, BarChart3, LifeBuoy, WalletCards, HeartHandshake, Users, PhoneCall, MessageSquareWarning } from "lucide-react";
+import { Package, Store, Receipt, FileText, Truck, Layers, Settings, BarChart3, LifeBuoy, WalletCards, HeartHandshake, Users, PhoneCall, MessageSquareWarning, BriefcaseBusiness } from "lucide-react";
 
 export type AdminNavItem = {
   href: string;
@@ -16,6 +16,7 @@ export type AdminNavItem = {
 export const NAV: AdminNavItem[] = [
   { href: "/admin", label: "Overview", icon: Receipt },
   { href: "/admin/attendants", label: "Staffs", icon: Store },
+  { href: "/admin/careers", label: "Career applications", icon: BriefcaseBusiness },
   {
     href: "/admin/agents",
     label: "Agents",
