@@ -183,6 +183,35 @@ model EmployeeDocument {
   @@index([documentType, createdAt])
 }
 
+model CareerApplication {
+  id                    String   @id @default(cuid())
+  fullName              String
+  email                 String
+  phone                 String
+  currentLocation       String
+  educationLevel        String
+  courseOfStudy         String
+  graduationStatus      String
+  cvFileUrl             String   @db.Text
+  cvFileKey             String?
+  cvFileName            String
+  cvContentType         String?
+  cvFileSize            Int?
+  coverLetter           String   @db.Text
+  tiktokWorkUrl         String   @db.Text
+  consentedAt           DateTime
+  status                String   @default("SUBMITTED")
+  applicantEmailSentAt  DateTime?
+  hrEmailSentAt         DateTime?
+  emailError            String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([email])
+}
+
 model OtpCode {
   id        String   @id @default(cuid())
   phone     String
