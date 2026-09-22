@@ -20,7 +20,7 @@ describe("summarizePosReceiptsForPeriod", () => {
     prisma.supportSale.findMany.mockResolvedValue([]);
   });
 
-  test("counts completed project receipts assigned via project handler staff id", async () => {
+  test("counts priced, completed project receipts assigned via project handler staff id", async () => {
     prisma.receipt.findMany
       .mockResolvedValueOnce([
         {
@@ -28,7 +28,7 @@ describe("summarizePosReceiptsForPeriod", () => {
           createdAt: new Date("2026-07-25T09:00:00.000Z"),
           generatedAt: new Date("2026-07-25T09:00:00.000Z"),
           receiptNumber: "R-001",
-          totals: { total: 250000, paymentMethod: "MPESA" },
+          totals: { total: 250000, buyingTotal: 150000, buyingPriceMode: "TOTAL", paymentMethod: "MPESA" },
           issuedById: "other-user",
           data: {
             customerType: "project",

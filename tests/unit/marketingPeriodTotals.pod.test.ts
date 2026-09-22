@@ -1,3 +1,5 @@
+jest.mock("server-only", () => ({}), { virtual: true });
+jest.mock("@/lib/prisma", () => ({ prisma: {} }));
 import { summarizeMarketingReportsForPeriod } from '@/lib/marketingPeriodTotals';
 
 describe('marketingPeriodTotals POD exclusion', () => {
@@ -15,7 +17,7 @@ describe('marketingPeriodTotals POD exclusion', () => {
           {
             id: 'm1',
             submittedById: 'u1',
-            date: new Date(),
+            date: new Date("2026-01-15T12:00:00Z"),
             receipts: [
               { receiptNumber: 'BETECH2026013028707', sellingTotal: 1000, paymentMethod: 'MPESA', items: [] },
             ],
@@ -23,6 +25,8 @@ describe('marketingPeriodTotals POD exclusion', () => {
           },
         ]),
       },
+      supportReceipt: { findMany: jest.fn().mockResolvedValue([]) },
+      weeklySale: { findMany: jest.fn().mockResolvedValue([]) },
       dailyReport: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
@@ -39,7 +43,7 @@ describe('marketingPeriodTotals POD exclusion', () => {
           {
             id: 'm2',
             submittedById: 'u1',
-            date: new Date(),
+            date: new Date("2026-01-15T12:00:00Z"),
             receipts: [
               { receiptNumber: 'BETECH2026013028707', sellingTotal: 1500, paymentMethod: 'CASH', items: [] },
             ],
@@ -47,6 +51,8 @@ describe('marketingPeriodTotals POD exclusion', () => {
           },
         ]),
       },
+      supportReceipt: { findMany: jest.fn().mockResolvedValue([]) },
+      weeklySale: { findMany: jest.fn().mockResolvedValue([]) },
       dailyReport: { findMany: jest.fn().mockResolvedValue([]) },
     };
 

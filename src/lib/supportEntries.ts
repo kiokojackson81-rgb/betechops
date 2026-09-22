@@ -1,3 +1,4 @@
+import { ledgerEntriesForRecognitionPeriod } from "@/lib/ledgerRecognition";
 import { prisma } from "@/lib/prisma";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import { normalizePaymentMethod } from "@/lib/receiptKey";
@@ -28,10 +29,9 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     if (cand) excludedCanonicals.add(cand);
   }
 
-  const entries = await prisma.supportDailyEntry.findMany({
+  const rawEntries = await prisma.supportDailyEntry.findMany({
     where: {
       submittedById: userId,
-      date: { gte: period.start, lte: period.end },
     },
     include: {
       receipts: {
@@ -60,6 +60,7 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     },
   });
 
+  const entries = await ledgerEntriesForRecognitionPeriod(rawEntries, period.start, period.end, prisma);
   const allReceiptCanonicals = new Set<string>();
   const saleReceiptCanonicals = new Set<string>();
   for (const entry of entries) {

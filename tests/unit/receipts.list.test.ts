@@ -1,3 +1,6 @@
+jest.mock("@/lib/auth", () => ({ auth: jest.fn().mockResolvedValue({ user: { id: "admin", role: "ADMIN" } }) }));
+jest.mock("@/workers/receiptSender", () => ({ sendReceiptChannels: jest.fn() }));
+jest.mock("server-only", () => ({}), { virtual: true });
 import { jest } from '@jest/globals';
 
 jest.mock('@/lib/prisma', () => ({
@@ -40,6 +43,7 @@ describe('GET /api/receipts', () => {
       OR: [
         { order: { attendantId: 'benjamin-id' } },
         { data: { path: ["attendantId"], equals: 'benjamin-id' } },
+        { data: { path: ["projectFlow", "handlerStaffId"], equals: 'benjamin-id' } },
       ],
     });
   });

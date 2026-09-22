@@ -1,3 +1,5 @@
+import { getReceiptRecognitionDate } from "@/lib/receiptRecognition";
+import { attachReceiptPricingEvidence } from "@/lib/receiptRecognitionData";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import type { Role } from "@prisma/client";
@@ -56,7 +58,7 @@ const posReceiptSelect = {
         select: {
           quantity: true,
           sellingPrice: true,
-          orderCosts: { select: { unitCost: true } },
+          orderCosts: { orderBy: { createdAt: "desc" }, take: 1, select: { unitCost: true, createdAt: true } },
           profitSnapshots: {
             orderBy: { computedAt: "desc" },
             take: 1,
@@ -110,7 +112,7 @@ type PosProductCommissionRow = {
       orderNumber?: string | null;
       totalAmount?: number | null;
       createdAt?: Date | null;
-      receipt?: { receiptNumber?: string | null; generatedAt?: Date | null; createdAt?: Date | null } | null;
+      receipt?: PosReceiptRow | null;
     } | null;
   } | null;
 };
@@ -418,7 +420,7 @@ async function getPosProductCommissionsForPdf(args: {
               orderNumber: true,
               totalAmount: true,
               createdAt: true,
-              receipt: { select: { receiptNumber: true, generatedAt: true, createdAt: true } },
+              receipt: { select: posReceiptSelect },
             },
           },
         },
@@ -426,6 +428,7 @@ async function getPosProductCommissionsForPdf(args: {
     },
   })) as PosProductCommissionRow[];
 
+  await attachReceiptPricingEvidence(rows.map(row => row.orderItem?.order?.receipt).filter(Boolean));
   const byReceipt = new Map<
     string,
     {
@@ -440,7 +443,8 @@ async function getPosProductCommissionsForPdf(args: {
 
   for (const row of rows) {
     if (!isPosProductCommissionEntry(row)) continue;
-    const effectiveAt = getReleasedPosCommissionEffectiveAt(row);
+    const linkedReceipt = row.orderItem?.order?.receipt;
+    const effectiveAt = linkedReceipt ? getReceiptRecognitionDate(linkedReceipt) : getReleasedPosCommissionEffectiveAt(row);
     if (!effectiveAt) continue;
     const effectiveTime = effectiveAt.getTime();
     if (effectiveTime < args.start.getTime() || effectiveTime > args.end.getTime()) continue;
@@ -450,7 +454,7 @@ async function getPosProductCommissionsForPdf(args: {
     const canonical = normalizeReceiptNumber(receiptNumber);
     if (!canonical) continue;
 
-    const sortDate = order?.receipt?.generatedAt ?? order?.receipt?.createdAt ?? order?.createdAt ?? effectiveAt;
+    const sortDate = effectiveAt;
     const productName = row.orderItem?.product?.name || row.orderItem?.product?.sku || "POS product";
     const amount = Number(row.amount ?? 0);
     const existing = byReceipt.get(canonical);
@@ -464,7 +468,7 @@ async function getPosProductCommissionsForPdf(args: {
     byReceipt.set(canonical, {
       receiptNumber,
       sortAt: sortDate.toISOString(),
-      dateIso: sortDate.toISOString().slice(0, 10),
+      dateIso: new Date(sortDate.getTime() + 3 * 3600000).toISOString().slice(0, 10),
       amount,
       orderTotal: Number(order?.totalAmount ?? 0),
       products: [productName],
@@ -809,18 +813,7 @@ export async function GET(req: Request) {
   const receipts = (await prisma.receipt.findMany({
     where: {
       AND: [
-        {
-          OR: [
-            { generatedAt: { gte: period.start, lte: period.end } },
-            { createdAt: { gte: period.start, lte: period.end } },
-            {
-              AND: [
-                { createdAt: { lte: period.end } },
-                { data: { path: ["projectFlow", "isProject"], equals: true } },
-              ],
-            },
-          ],
-        },
+        { createdAt: { lte: period.end } },
         { OR: ownerOr },
         ...(isOnlineCategory
           ? []
@@ -836,9 +829,9 @@ export async function GET(req: Request) {
     },
     select: posReceiptSelect,
     orderBy: { createdAt: "desc" },
-    take: 1200,
   })) as PosReceiptRow[];
 
+  await attachReceiptPricingEvidence(receipts);
   const rows: PerformanceReceiptRow[] = [];
   const seen = new Set<string>();
   const projectEligibilityByCanonical = new Map<string, boolean>();
@@ -854,12 +847,10 @@ export async function GET(req: Request) {
       projectEligibilityByCanonical.set(canonical, isRecognized);
       if (!isRecognized) continue;
     }
-    const date = projectFlow?.isProject
-      ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, undefined, row.generatedAt ?? row.createdAt) ??
-        row.generatedAt ??
-        row.createdAt)
-      : (row.generatedAt ?? row.createdAt);
-    const dateIso = new Date(date).toISOString().slice(0, 10);
+    const date = getReceiptRecognitionDate(row);
+    projectEligibilityByCanonical.set(canonical, Boolean(date && date >= period.start && date <= period.end));
+    if (!date || date < period.start || date > period.end) continue;
+    const dateIso = new Date(date.getTime() + 3 * 3600000).toISOString().slice(0, 10);
     const receiptNumber = row.receiptNumber || row.order?.orderNumber || canonical;
     const amount = extractReceiptAmount(row);
     const profit = extractReceiptProfit(row, amount);
@@ -905,12 +896,7 @@ export async function GET(req: Request) {
     const fallbackReceipts = (await prisma.receipt.findMany({
       where: {
         AND: [
-          {
-            OR: [
-              { generatedAt: { gte: period.start, lte: period.end } },
-              { createdAt: { gte: period.start, lte: period.end } },
-            ],
-          },
+          { createdAt: { lte: period.end } },
           {
             OR: [
               { issuedById: userId },
@@ -922,9 +908,9 @@ export async function GET(req: Request) {
       },
       select: posReceiptSelect,
       orderBy: { createdAt: "desc" },
-      take: 1200,
-    })) as PosReceiptRow[];
+      })) as PosReceiptRow[];
 
+    await attachReceiptPricingEvidence(fallbackReceipts);
     for (const row of fallbackReceipts) {
       const canonical =
         normalizeReceiptNumber(row.receiptNumber) ||
@@ -942,13 +928,11 @@ export async function GET(req: Request) {
       const dedupeKey = `${canonical}|${paymentMethod}`;
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
-      const date = projectFlow?.isProject
-        ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, undefined, row.generatedAt ?? row.createdAt) ??
-          row.generatedAt ??
-          row.createdAt)
-        : (row.generatedAt ?? row.createdAt);
+      const date = getReceiptRecognitionDate(row);
+    projectEligibilityByCanonical.set(canonical, Boolean(date && date >= period.start && date <= period.end));
+    if (!date || date < period.start || date > period.end) continue;
       rows.push({
-        dateIso: new Date(date).toISOString().slice(0, 10),
+        dateIso: new Date(date.getTime() + 3 * 3600000).toISOString().slice(0, 10),
         sortAt: date.toISOString(),
         receiptNumber: row.receiptNumber || row.order?.orderNumber || canonical,
         amount: extractReceiptAmount(row),
@@ -989,8 +973,7 @@ export async function GET(req: Request) {
             items: { select: { buyingPrice: true } },
           },
           orderBy: { createdAt: "desc" },
-          take: 1200,
-        }) as unknown as Promise<LedgerReceiptRow[]>)
+              }) as unknown as Promise<LedgerReceiptRow[]>)
       : Promise.resolve([]),
     includeLedgerRows
       ? (prisma.supportReceipt.findMany({
@@ -1009,8 +992,7 @@ export async function GET(req: Request) {
             items: { select: { buyingPrice: true } },
           },
           orderBy: { createdAt: "desc" },
-          take: 1200,
-        }) as unknown as Promise<LedgerReceiptRow[]>)
+              }) as unknown as Promise<LedgerReceiptRow[]>)
       : Promise.resolve([]),
   ]);
 
@@ -1054,8 +1036,7 @@ export async function GET(req: Request) {
       where: { dailyReport: { userId, date: { gte: period.start, lte: period.end } } },
       select: { receiptNumber: true, price: true, paymentMethod: true, createdAt: true },
       orderBy: { createdAt: "desc" },
-      take: 1200,
-    });
+      });
     const perReceipt = new Map<
       string,
       { amount: number; items: number; method: "MPESA" | "CASH"; dateIso: string; sortAt: string }

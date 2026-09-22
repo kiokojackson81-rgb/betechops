@@ -1,3 +1,5 @@
+import { getReceiptRecognitionDate } from "@/lib/receiptRecognition";
+import { attachReceiptPricingEvidence } from "@/lib/receiptRecognitionData";
 import { prisma } from "@/lib/prisma";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey } from "@/lib/receiptKey";
@@ -187,16 +189,7 @@ const isCompletedProjectReceiptForSales = (receipt: any) => {
   return isReceiptProjectRecognizedForSales(rawData.projectFlow);
 };
 
-const getReceiptSalesRecognitionDate = (receipt: any) => {
-  const rawData =
-    receipt?.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
-      ? (receipt.data as Record<string, unknown>)
-      : {};
-  return (
-    getReceiptProjectCompletionDate(rawData.projectFlow, undefined, receipt?.generatedAt ?? receipt?.createdAt) ??
-    (receipt?.generatedAt instanceof Date ? receipt.generatedAt : receipt?.createdAt instanceof Date ? receipt.createdAt : null)
-  );
-};
+const getReceiptSalesRecognitionDate = getReceiptRecognitionDate;
 
 async function computePosOnlyReceiptSummary({
   start,
@@ -222,21 +215,9 @@ async function computePosOnlyReceiptSummary({
     return undefined;
   })();
 
-  const basePosWhere: Prisma.ReceiptWhereInput = {
-    AND: [
-      {
-        OR: [
-          { generatedAt: { gte: start, lte: end } },
-          {
-            AND: [
-              { createdAt: { lte: end } },
-              { data: { path: ["projectFlow", "isProject"], equals: true } },
-            ],
-          },
-        ],
-      },
-    ],
-  };
+  // Recognition may occur long after creation (pricing, POD delivery or project completion).
+  // Load eligible historical candidates, then apply the shared financial date below.
+  const basePosWhere: Prisma.ReceiptWhereInput = { AND: [{ createdAt: { lte: end } }] };
 
   if (normalizedDocType) {
     (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ docType: normalizedDocType as any });
@@ -266,7 +247,7 @@ async function computePosOnlyReceiptSummary({
           include: {
             items: {
               include: {
-                orderCosts: true,
+                orderCosts: { orderBy: { createdAt: "desc" }, take: 1 },
                 profitSnapshots: {
                   orderBy: { computedAt: "desc" },
                   take: 1,
@@ -329,7 +310,7 @@ async function computePosOnlyReceiptSummary({
               include: {
                 items: {
                   include: {
-                    orderCosts: true,
+                    orderCosts: { orderBy: { createdAt: "desc" }, take: 1 },
                     profitSnapshots: {
                       orderBy: { computedAt: "desc" },
                       take: 1,
@@ -514,6 +495,7 @@ async function computePosOnlyReceiptSummary({
   const profitReceiptIds = new Set<string>();
   const profitContributors = new Map<string, ProfitReceiptContributor>();
 
+  await attachReceiptPricingEvidence(posReceiptsFinal as any[]);
   for (const receipt of posReceiptsFinal as any[]) {
     const salesDate = getReceiptSalesRecognitionDate(receipt);
     const salesIncluded = isDateInRange(salesDate, start, end);
@@ -559,7 +541,7 @@ async function computePosOnlyReceiptSummary({
         : aggregatePricing.buyingTotal;
     const deliveryFee = getPodDeliveryFee(receipt.data);
     const commissionTotal = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
-    const recognized = aggregatePricing.isAuthoritativeTotal
+    const recognized = (aggregatePricing.isAuthoritativeTotal || (supportBuyingTotal > 0 && receipt.financialPricingEvidence?.complete))
       ? {
           recognizedSellingTotal: salesValue,
           recognizedBuyingTotal: resolvedBuyingTotal,
@@ -587,23 +569,18 @@ async function computePosOnlyReceiptSummary({
       ? false
       : supportPending?.hasPendingItems ?? recognized.hasPendingItems;
     const buyingTotalForContributor = recognized.recognizedBuyingTotal;
-    const supportRecognizedAt = supportBuying?.recognizedAt ?? null;
     const useSupportProfit = Boolean(supportProfit) && !aggregatePricing.isAuthoritativeTotal;
-    const hasRecognizableProfit = useSupportProfit || recognized.hasAnyPricedItems;
-    const profitRecognizedAt = useSupportProfit
-      ? start
-      : supportRecognizedAt instanceof Date
-        ? supportRecognizedAt
-        : hasRecognizableProfit && salesDate instanceof Date
-          ? salesDate
-          : null;
+    const hasRecognizableProfit = !hasPendingItems && (useSupportProfit || recognized.hasAnyPricedItems);
+    const profitRecognizedAt = hasRecognizableProfit ? salesDate : null;
 
     let receiptProfit = 0;
-    if (useSupportProfit && supportProfit) {
+    if (useSupportProfit && supportProfit && !hasPendingItems) {
       receiptProfit = supportProfit.profit;
-      totalCost += supportProfit.buyingTotal;
-      totalProfitPriced += receiptProfit;
-    } else if (recognized.hasAnyPricedItems) {
+      if (salesIncluded) {
+        totalCost += supportProfit.buyingTotal;
+        totalProfitPriced += receiptProfit;
+      }
+    } else if (recognized.hasAnyPricedItems && !hasPendingItems) {
       receiptProfit = recognized.recognizedProfit;
       if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
         totalCost += recognized.recognizedBuyingTotal;
@@ -611,7 +588,7 @@ async function computePosOnlyReceiptSummary({
       }
     }
 
-    if (salesIncluded && hasPendingItems) {
+    if ((salesIncluded || isDateInRange(receipt.generatedAt ?? receipt.createdAt, start, end)) && hasPendingItems) {
       awaitingPricingCount += 1;
       hasIncompleteCosts = true;
     }
@@ -767,17 +744,7 @@ export async function computeAdminReceiptSummary({
     return undefined;
   })();
 
-  const posWhere: any = {
-    OR: [
-      { generatedAt: { gte: start, lte: end } },
-      {
-        AND: [
-          { createdAt: { lte: end } },
-          { data: { path: ["projectFlow", "isProject"], equals: true } },
-        ],
-      },
-    ],
-  };
+  const posWhere: any = { createdAt: { lte: end } };
   if (normalizedDocType && includePosReceipts) {
     posWhere.docType = normalizedDocType;
   }
@@ -832,7 +799,7 @@ export async function computeAdminReceiptSummary({
               include: {
                 items: {
                   include: {
-                    orderCosts: true,
+                    orderCosts: { orderBy: { createdAt: "desc" }, take: 1 },
                     profitSnapshots: {
                       orderBy: { computedAt: "desc" },
                       take: 1,
@@ -848,6 +815,7 @@ export async function computeAdminReceiptSummary({
       : [],
   ]);
 
+  await attachReceiptPricingEvidence(posReceipts as any[]);
   const posReceiptsForSalesPeriod = (posReceipts as any[]).filter((receipt) =>
     isDateInRange(getReceiptSalesRecognitionDate(receipt), start, end),
   );
@@ -1250,8 +1218,8 @@ export async function computeAdminReceiptSummary({
     const items = Array.isArray(receipt.items) ? receipt.items : [];
     const supportBuying = Number(receipt.supportBuyingTotal ?? 0);
     const aggregateCostRaw = Number(receipt.buyingTotal ?? 0);
-    const usesAggregateCost = receipt.buyingPriceMode === "TOTAL" && aggregateCostRaw > 0;
-    const aggregateCost = usesAggregateCost ? aggregateCostRaw : supportBuying > 0 ? supportBuying : aggregateCostRaw;
+    const usesAggregateCost = (receipt.buyingPriceMode === "TOTAL" && aggregateCostRaw > 0) || (items.length === 0 && supportBuying > 0);
+    const aggregateCost = receipt.buyingPriceMode === "TOTAL" && aggregateCostRaw > 0 ? aggregateCostRaw : supportBuying > 0 ? supportBuying : aggregateCostRaw;
     const deliveryFee = Number(receipt.deliveryFee ?? 0);
     const commissionTotal = Number(receipt.commissionTotal ?? 0);
     const sell = Number(receipt.sellingTotal ?? 0);
@@ -1282,7 +1250,7 @@ export async function computeAdminReceiptSummary({
     const hasPendingItems = recognized.hasPendingItems;
 
     let receiptProfit = 0;
-    if (recognized.hasAnyPricedItems) {
+    if (recognized.hasAnyPricedItems && !recognized.hasPendingItems) {
       totalCost += recognized.recognizedBuyingTotal;
       receiptProfit = recognized.recognizedProfit;
       totalProfitPriced += receiptProfit;

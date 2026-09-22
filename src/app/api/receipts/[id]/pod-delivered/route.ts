@@ -1,3 +1,5 @@
+import { recognitionDay } from "@/lib/receiptRecognition";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -198,7 +200,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const updatedPodDeliveryBase: Record<string, any> = { ...podDelivery };
   if (desiredStatus === "delivered") {
     updatedPodDeliveryBase.status = "delivered";
-    updatedPodDeliveryBase.deliveredAt = new Date().toISOString();
+    updatedPodDeliveryBase.deliveredAt = podDelivery.deliveredAt || new Date().toISOString();
     updatedPodDeliveryBase.deliveredById = guard?.user?.id ?? null;
     if (finalReason) updatedPodDeliveryBase.deliveredReason = finalReason;
     if (evidenceUrl) updatedPodDeliveryBase.evidenceUrl = evidenceUrl;
@@ -225,9 +227,11 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               include: {
                 items: {
                   include: {
+                    orderCosts: { orderBy: { createdAt: "desc" }, take: 1 },
                     product: {
                       select: {
                         id: true,
+                        lastBuyingPrice: true,
                         commissionEnabled: true,
                         commissionAmount: true,
                         commissionRequiresApproval: true,
@@ -243,7 +247,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
           productName: String(it.title || it.productName || "Item").trim(),
           buyingPrice: Math.max(
             0,
-            Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0)),
+            Math.round(Number(it.orderCosts?.[0]?.unitCost ?? it.product?.lastBuyingPrice ?? it.costPrice ?? it.buyingPrice ?? 0) * Math.max(1, Number(it.quantity ?? 1))),
           ),
         }),
       );
@@ -303,6 +307,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
           data: {
             ...baseData,
             podDelivery: { ...updatedPodDeliveryBase, lockedAt: undefined },
+            ...(desiredStatus === "delivered" ? { financialRecognitionAt: updatedPodDeliveryBase.deliveredAt } : {}),
           } as Prisma.InputJsonValue,
         },
       });
@@ -313,16 +318,13 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       if (desiredStatus === "delivered") {
         try {
           const attendantId = receipt.order?.attendantId ?? null;
-          const entryDate = new Date();
+          const entryDate = new Date(updatedPodDeliveryBase.deliveredAt);
           const dayOfWeek = String(entryDate.getDay());
 
           // Marketing entry/upsert
           if (attendantId && tx.marketingDailyEntry && tx.marketingReceipt) {
             try {
-              const marketingStart = new Date(entryDate);
-              marketingStart.setHours(0, 0, 0, 0);
-              const marketingEnd = new Date(entryDate);
-              marketingEnd.setHours(23, 59, 59, 999);
+              const { start: marketingStart, end: marketingEnd } = recognitionDay(entryDate);
 
               let entry = await tx.marketingDailyEntry.findFirst({
                 where: {
@@ -350,7 +352,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
 
               const orderWithItems = await tx.order.findUnique({
                 where: { id: receipt.orderId },
-                include: { items: { include: { product: true } } },
+                include: { items: { include: { product: true, orderCosts: { orderBy: { createdAt: "desc" }, take: 1 } } } },
               });
               const receiptSellingTotal = Math.round(
                 Number(
@@ -364,7 +366,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
                   productName: resolveOrderItemName(it),
                   buyingPrice: Math.max(
                     0,
-                    Math.round(Number(it.costPrice ?? it.buyingPrice ?? 0)),
+                    Math.round(Number(it.orderCosts?.[0]?.unitCost ?? it.product?.lastBuyingPrice ?? it.costPrice ?? it.buyingPrice ?? 0) * Math.max(1, Number(it.quantity ?? 1))),
                   ),
                 }),
               );
@@ -405,10 +407,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
           // Support entry/upsert
           if (attendantId && tx.supportDailyEntry && tx.supportReceipt) {
             try {
-              const startOfDay = new Date(entryDate);
-              startOfDay.setHours(0, 0, 0, 0);
-              const endOfDay = new Date(entryDate);
-              endOfDay.setHours(23, 59, 59, 999);
+              const { start: startOfDay, end: endOfDay } = recognitionDay(entryDate);
               const receiptNumber =
                 canonicalReceiptNumber(receipt.order?.orderNumber) ??
                 receipt.order?.orderNumber ??
@@ -515,18 +514,11 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               where: { orderId: receipt.orderId },
             });
             const { period, tiers } = await getOrCreateCommissionPeriod(
-              new Date(),
+              new Date(updatedPodDeliveryBase.deliveredAt),
             );
-            const totalsAgg = await tx.order.aggregate({
-              where: {
-                attendantId,
-                createdAt: { gte: period.startDate, lte: period.endDate },
-                status: "COMPLETED",
-              },
-              _sum: { totalAmount: true, paidAmount: true },
-            });
-            const totalSales = Number(totalsAgg._sum.totalAmount ?? 0);
-            const totalProfit = totalSales;
+            const financialTotals = await summarizePosReceiptsForPeriod({ start: period.startDate, end: period.endDate, userId: attendantId, client: tx });
+            const totalSales = financialTotals.totalSales;
+            const totalProfit = financialTotals.totalProfit;
             const salesCommission = computeSalesCommissionFromTiers(
               totalSales,
               totalProfit,
@@ -812,7 +804,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   try {
     const attendantId = receipt.order?.attendantId ?? null;
     if (attendantId) {
-      const period = getTradingPeriodFor(new Date());
+      const period = getTradingPeriodFor(new Date(updatedPodDeliveryBase.deliveredAt || new Date()));
       await recomputeSupportCommissionLedger({ userId: attendantId, period });
     }
   } catch (e) {

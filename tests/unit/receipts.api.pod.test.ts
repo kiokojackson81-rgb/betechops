@@ -1,3 +1,5 @@
+jest.mock("server-only", () => ({}), { virtual: true });
+jest.mock("@/lib/prisma", () => ({ prisma: { receipt: { findMany: jest.fn() }, marketingDailyEntry: { findMany: jest.fn() }, supportDailyEntry: { findMany: jest.fn() }, dailyReport: { findMany: jest.fn() }, supportReceipt: { findMany: jest.fn() }, weeklySale: { findMany: jest.fn() } } }));
 import { jest } from '@jest/globals';
 import { summarizeMarketingReportsForPeriod } from '@/lib/marketingPeriodTotals';
 import { getSupportPeriodAggregates } from '@/lib/supportEntries';
@@ -9,6 +11,8 @@ const period = { start: new Date('2026-01-31T00:00:00.000Z'), end: new Date('202
 
 beforeEach(() => {
   jest.restoreAllMocks();
+  (prisma.supportReceipt.findMany as jest.Mock).mockResolvedValue([] as never);
+  (prisma.weeklySale.findMany as jest.Mock).mockResolvedValue([] as never);
 });
 
 afterEach(() => {

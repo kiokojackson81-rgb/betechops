@@ -1,3 +1,4 @@
+import { syncReceiptRecognition, refreshRecognitionLedgers, type RecognitionLedgerTarget } from "@/lib/syncReceiptRecognition";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActorId, requireRole } from "@/lib/api";
@@ -65,6 +66,7 @@ export async function POST(_req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ error: "Receipt has no order items" }, { status: 400 });
   }
 
+  const recognitionTargets: RecognitionLedgerTarget[] = [];
   const recalculated = await prisma.$transaction(async (tx) => {
     let updatedItems = 0;
     const itemCosts = new Map<string, number>();
@@ -183,10 +185,14 @@ export async function POST(_req: NextRequest, context: ParamsContext) {
       }
     }
 
+    const pricedTotals = { ...itemModeTotals, needsPricing: itemCosts.size !== orderItems.length };
+    await tx.receipt.update({ where: { id }, data: { totals: pricedTotals, data: { ...previousData, totals: pricedTotals, buyingPriceMode: "ITEMS", needsPricing: pricedTotals.needsPricing, buyingPriceUpdatedAt: new Date().toISOString() } } });
+    recognitionTargets.push(...await syncReceiptRecognition(tx, id));
     return { updatedItems };
-  });
+  }, { timeout: 30000 });
 
   await recomputeOrderEconomics(receipt.orderId);
+  await refreshRecognitionLedgers(recognitionTargets);
 
   const refreshedReceipt = await prisma.receipt.findUnique({
     where: { id },

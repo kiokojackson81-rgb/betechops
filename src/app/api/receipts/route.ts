@@ -1,3 +1,5 @@
+import { getReceiptRecognitionDate } from "@/lib/receiptRecognition";
+import { attachReceiptPricingEvidence } from "@/lib/receiptRecognitionData";
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentMethod, Prisma, type SupportReceipt } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -267,17 +269,7 @@ export async function GET(req: NextRequest) {
   const and: Prisma.ReceiptWhereInput[] = [];
   const shouldApplyGeneratedAtWindow = !carryForwardPending && !isProjectOnlyView;
   if (shouldApplyGeneratedAtWindow) {
-    and.push({
-      OR: [
-        { generatedAt: { gte: startDate, lte: endDate } },
-        {
-          AND: [
-            { createdAt: { lte: endDate } },
-            { data: { path: ["projectFlow"], not: Prisma.JsonNull } },
-          ],
-        },
-      ],
-    });
+    and.push({ createdAt: { lte: endDate } });
   }
 
   if (normalizedDocType && !isMarketingDocType && !isSupportDocType) {
@@ -445,7 +437,7 @@ export async function GET(req: NextRequest) {
                 include: {
                   items: {
                     include: {
-                      orderCosts: { select: { unitCost: true } },
+                      orderCosts: { orderBy: { createdAt: "desc" }, take: 1, select: { unitCost: true, createdAt: true } },
                       profitSnapshots: {
                         orderBy: { computedAt: "desc" },
                         take: 1,
@@ -474,7 +466,7 @@ export async function GET(req: NextRequest) {
                 include: {
                   items: {
                     include: {
-                      orderCosts: { select: { unitCost: true } },
+                      orderCosts: { orderBy: { createdAt: "desc" }, take: 1, select: { unitCost: true, createdAt: true } },
                       profitSnapshots: {
                         orderBy: { computedAt: "desc" },
                         take: 1,
@@ -503,36 +495,12 @@ export async function GET(req: NextRequest) {
         posReceipts = await prisma.receipt.findMany({
           where,
           include: {
-            order: includeItems || isProfitSummaryView
-              ? {
-                  include: {
-                    items: {
-                      include: {
-                        orderCosts: { select: { unitCost: true } },
-                        profitSnapshots: {
-                          orderBy: { computedAt: "desc" },
-                          take: 1,
-                          select: { unitCost: true, profit: true, qty: true },
-                        },
-                        product: { select: { lastBuyingPrice: true } },
-                      },
-                    },
-                    attendant: { select: { id: true, name: true } },
-                  },
-                }
-              : {
-                  select: {
-                    orderNumber: true,
-                    customerName: true,
-                    attendantId: true,
-                    customerPhone: true,
-                    metadata: true,
-                    attendant: { select: { id: true, name: true } },
-                    status: true,
-                    paymentStatus: true,
-                    totalAmount: true,
-                  },
-                },
+            order: {
+              include: {
+                items: { include: { orderCosts: { orderBy: { createdAt: "desc" }, take: 1, select: { unitCost: true, createdAt: true } }, product: { select: { lastBuyingPrice: true } } } },
+                attendant: { select: { id: true, name: true } },
+              },
+            },
             issuedBy: { select: { id: true, name: true } },
           },
           orderBy: { generatedAt: "desc" },
@@ -641,6 +609,7 @@ export async function GET(req: NextRequest) {
       }
     }
   }
+  await attachReceiptPricingEvidence(posReceipts);
   const supportBuyingTotalsByReceipt = new Map<string, number>();
   for (const row of supportReceiptProfitRows) {
     const itemsBuyingTotal = Array.isArray(row.items)
@@ -732,7 +701,7 @@ export async function GET(req: NextRequest) {
       ["MPESA_EXPRESS", "MPESA_PAYBILL", "EQUITY_PAYBILL", "DTB_PAYBILL", "ABSA_PAYBILL"].includes(paymentCollectionMethod || "");
 
     const recognitionDate =
-      getReceiptProjectCompletionDate(rawData.projectFlow, undefined, r.generatedAt ?? r.createdAt) ??
+      getReceiptRecognitionDate(r) ??
       r.generatedAt ??
       r.createdAt;
 
@@ -743,6 +712,7 @@ export async function GET(req: NextRequest) {
       receiptNumber: r.receiptNumber ?? null,
       docType: r.docType,
       createdAt: recognitionDate,
+      financialRecognized: Boolean(getReceiptRecognitionDate(r)),
       customerName: r.order?.customerName,
       customerPhone: (r.order as any)?.customerPhone ?? null,
       customerLocation: buildReceiptCustomerLocation(r),
@@ -1096,7 +1066,7 @@ export async function GET(req: NextRequest) {
 
   // Keep cancelled receipts in the read-only audit list, but exclude them from
   // every calculated value returned with that list.
-  const summaryRows = filteredByEffectiveDate.filter((row) => !isReceiptCancelledForSales(row));
+  const summaryRows = filteredByEffectiveDate.filter((row) => !isReceiptCancelledForSales(row) && (row as any).financialRecognized !== false);
 
   filteredByEffectiveDate.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = summaryRows.length;

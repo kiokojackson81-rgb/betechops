@@ -1,3 +1,5 @@
+import { syncReceiptRecognition, refreshRecognitionLedgers, recognitionDay, type RecognitionLedgerTarget } from "@/lib/syncReceiptRecognition";
+import { recognitionDate } from "@/lib/receiptRecognition";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextAuth";
@@ -193,6 +195,7 @@ export async function POST(req: Request) {
   let finalizedPodOrderId: string | null = null;
   let finalizedPodAt: Date | null = null;
   let recognizedSaleValue = sellingPrice;
+  const recognitionTargets: RecognitionLedgerTarget[] = [];
 
   await prisma.$transaction(async (tx) => {
     // update the receipt item
@@ -261,6 +264,9 @@ export async function POST(req: Request) {
       linkedPod?.status &&
       String(linkedPod.status).toLowerCase() === "delivered",
     );
+    const financialAt = isDeliveredPod
+      ? recognitionDate(linkedPod?.deliveredAt) ?? recognitionDate(linkedPod?.paidAt) ?? now
+      : recognitionDate(linkedData.financialRecognitionAt) ?? now;
     const updateLinkedReceiptTotals = async (extraData: Record<string, any> = {}) => {
       if (!linkedReceipt) return;
       const existingTotals =
@@ -282,6 +288,7 @@ export async function POST(req: Request) {
             ...linkedData,
             totals: nextTotals,
             needsPricing: !allItemsPriced,
+            ...(allItemsPriced ? { financialRecognitionAt: financialAt.toISOString() } : {}),
             ...(Object.keys(extraData).length ? extraData : {}),
           } as any,
         },
@@ -316,10 +323,7 @@ export async function POST(req: Request) {
     }
 
     if (allItemsPriced && submitterId) {
-      const startOfToday = new Date(now);
-      startOfToday.setHours(0, 0, 0, 0);
-      const endOfToday = new Date(now);
-      endOfToday.setHours(23, 59, 59, 999);
+      const { start: startOfToday, end: endOfToday } = recognitionDay(financialAt);
       const dayOfWeek = now.toLocaleDateString("en-KE", { weekday: "long" });
 
       const pricingEntry =
@@ -329,7 +333,7 @@ export async function POST(req: Request) {
         }) ??
         await tx.supportDailyEntry.create({
           data: {
-            date: now,
+            date: financialAt,
             dayOfWeek,
             totalSales: 0,
             totalProfit: 0,
@@ -353,7 +357,7 @@ export async function POST(req: Request) {
           receiptNumber: canonicalReceipt ?? refreshedReceipt.receiptNumber ?? null,
           paymentMethod: refreshedReceipt.paymentMethod,
           itemsCount: 1,
-          createdAt: now,
+          createdAt: financialAt,
         };
 
         if (existingSale) {
@@ -365,10 +369,7 @@ export async function POST(req: Request) {
     }
 
     if (isDeliveredPod && allItemsPriced && submitterId) {
-      const startOfToday = new Date(now);
-      startOfToday.setHours(0, 0, 0, 0);
-      const endOfToday = new Date(now);
-      endOfToday.setHours(23, 59, 59, 999);
+      const { start: startOfToday, end: endOfToday } = recognitionDay(financialAt);
       const dayOfWeek = String(now.getDay());
       const oldEntryId = refreshedReceipt.dailyEntryId;
 
@@ -379,7 +380,7 @@ export async function POST(req: Request) {
         }) ??
         await tx.supportDailyEntry.create({
           data: {
-            date: now,
+            date: financialAt,
             dayOfWeek,
             totalSales: 0,
             totalProfit: 0,
@@ -392,14 +393,13 @@ export async function POST(req: Request) {
 
       finalEntryId = todayEntry.id;
       finalizedPodOrderId = linkedReceipt?.orderId ?? null;
-      finalizedPodAt = now;
+      finalizedPodAt = financialAt;
 
       await tx.supportReceipt.update({
         where: { id: refreshedReceipt.id },
         data: {
           dailyEntryId: todayEntry.id,
           buyingTotal: receiptBuyingTotal,
-          createdAt: now,
         },
       });
 
@@ -437,11 +437,13 @@ export async function POST(req: Request) {
       await updateLinkedReceiptTotals();
     }
 
+    if (linkedReceipt && allItemsPriced) recognitionTargets.push(...await syncReceiptRecognition(tx, linkedReceipt.id));
     for (const targetEntryId of entryIdsToRecalc) {
       await recalcSupportEntry(tx as any, targetEntryId);
     }
-  });
+  }, { timeout: 30000 });
 
+  await refreshRecognitionLedgers(recognitionTargets);
   if (submitterId) {
     try {
       const period = getTradingPeriodFor(finalizedPodAt ?? new Date(receiptItem.receipt.dailyEntry.date));

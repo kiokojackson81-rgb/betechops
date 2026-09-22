@@ -1,3 +1,4 @@
+import { ledgerEntriesForRecognitionPeriod } from "@/lib/ledgerRecognition";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
@@ -42,21 +43,20 @@ export async function summarizeSupportEntriesForPeriod(opts: {
 
   // Include receipts and sales so we can validate that aggregated totals are backed
   // by explicit sales/receipts. Ignore rows that have totals but no backing details.
-  const entries = await client.supportDailyEntry.findMany({
+  const rawEntries = await client.supportDailyEntry.findMany({
     where: {
       submittedById: userId,
-      date: {
-        gte: period.start,
-        lte: period.end,
-      },
+
     },
     include: {
-      receipts: true,
+      receipts: { include: { items: true } },
       sales: true,
       // keep basic totals
       // Prisma will still provide totalSales/totalProfit on the root
     },
   });
+
+  const entries = await ledgerEntriesForRecognitionPeriod(rawEntries, period.start, period.end, client);
 
   if (entries.length === 0) {
     return { totals: { ...emptyTotals }, hasEntries: false };
@@ -97,15 +97,7 @@ export async function recomputeSupportCommissionLedger(opts: {
   const period = opts.period ?? getTradingPeriodFor(new Date());
 
   const { totals, hasEntries } = await summarizeSupportEntriesForPeriod({ userId, period, client });
-  if (!hasEntries) {
-    return {
-      updated: false,
-      supportCommission: 0,
-      totals,
-      period,
-      ledgerId: null,
-    };
-  }
+
 
   const fallbackCommission = Math.max(0, Math.round(totals.totalProfit * 0.05));
   const tierInfo = getCommissionSummaryForSales(totals.totalSales ?? 0);

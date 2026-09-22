@@ -1,3 +1,5 @@
+import { getReceiptRecognitionDate } from "@/lib/receiptRecognition";
+import { attachReceiptPricingEvidence } from "@/lib/receiptRecognitionData";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { buildReceiptKey, normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
@@ -155,24 +157,7 @@ const isCompletedProjectReceiptForSales = (receipt: PosReceiptRow) => {
   return isReceiptProjectRecognizedForSales(rawData.projectFlow);
 };
 
-const getReceiptSalesRecognitionDate = (receipt: PosReceiptRow) => {
-  const rawData =
-    receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
-      ? (receipt.data as Record<string, unknown>)
-      : {};
-  return (
-    getReceiptProjectCompletionDate(
-      rawData.projectFlow,
-      undefined,
-      receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt,
-    ) ??
-    (receipt.generatedAt instanceof Date
-      ? receipt.generatedAt
-      : receipt.createdAt instanceof Date
-        ? receipt.createdAt
-        : null)
-  );
-};
+const getReceiptSalesRecognitionDate = getReceiptRecognitionDate;
 
 const matchesOwnershipMode = (
   receipt: PosReceiptRow,
@@ -214,7 +199,9 @@ export async function summarizePosReceiptsForPeriod(period: {
   supportPricingScope?: "user" | "any";
   profitRecognitionMode?: "recognizedDate" | "salesDate";
   paymentScope?: "paidOnly" | "all";
+  client?: Prisma.TransactionClient;
 }) {
+  const client = period.client ?? prisma;
   const ownerOr =
     period.userId && period.userId.length > 0
       ? period.ownershipMode === "issuerOnly"
@@ -249,21 +236,10 @@ export async function summarizePosReceiptsForPeriod(period: {
       : {};
 
   const [baseReceipts, latePricedSupportReceipts] = await Promise.all([
-    prisma.receipt.findMany({
+    client.receipt.findMany({
       where: {
         AND: [
-          {
-            OR: [
-              { generatedAt: { gte: period.start, lte: period.end } },
-              { createdAt: { gte: period.start, lte: period.end } },
-              {
-                AND: [
-                  { createdAt: { lte: period.end } },
-                  { data: { path: ["projectFlow", "isProject"], equals: true } },
-                ],
-              },
-            ],
-          },
+          { createdAt: { lte: period.end } },
           ...(ownerOr ? [{ OR: ownerOr }] : []),
         ],
       },
@@ -279,7 +255,7 @@ export async function summarizePosReceiptsForPeriod(period: {
               select: {
                 productId: true,
                 quantity: true,
-                orderCosts: { select: { unitCost: true } },
+                orderCosts: { orderBy: { createdAt: "desc" }, take: 1, select: { unitCost: true, createdAt: true } },
                 profitSnapshots: {
                   orderBy: { computedAt: "desc" },
                   take: 1,
@@ -292,7 +268,7 @@ export async function summarizePosReceiptsForPeriod(period: {
         },
       },
     }),
-    prisma.supportReceipt.findMany({
+    client.supportReceipt.findMany({
       where: {
         ...(Object.keys(supportDailyEntryWhere).length ? { dailyEntry: supportDailyEntryWhere } : {}),
         items: { some: { pricedAt: { gte: period.start, lte: period.end } } },
@@ -317,7 +293,7 @@ export async function summarizePosReceiptsForPeriod(period: {
 
   const extraReceipts =
     lateReceiptNumbers.length > 0
-      ? await prisma.receipt.findMany({
+      ? await client.receipt.findMany({
           where: {
             AND: [
               ...(ownerOr ? [{ OR: ownerOr }] : []),
@@ -349,6 +325,7 @@ export async function summarizePosReceiptsForPeriod(period: {
       : [];
 
   const receipts = [...baseReceipts, ...extraReceipts] as PosReceiptRow[];
+  await attachReceiptPricingEvidence(receipts, client);
   const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
   const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
   const isPodPaid = (r: any) => Boolean((r?.data as any)?.podDelivery?.paidAt);
@@ -392,7 +369,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     }
     const ids = Array.from(productIds);
     if (ids.length > 0) {
-      const costs = await prisma.productCost.findMany({
+      const costs = await client.productCost.findMany({
         where: { productId: { in: ids } },
         orderBy: [{ productId: "asc" }, { createdAt: "desc" }],
         distinct: ["productId"],
@@ -427,7 +404,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     }
     const candidateArray = Array.from(candidates).filter((v) => v && v.length > 0);
     if (candidateArray.length > 0) {
-      const ledgerEntries = await prisma.supportReceipt.findMany({
+      const ledgerEntries = await client.supportReceipt.findMany({
         where: {
           OR: [{ receiptNumber: { in: candidateArray } }, { receiptKey: { in: candidateArray } }],
         },
@@ -463,6 +440,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   const computeProfitFromCosts = (row: PosReceiptRow) => {
     const selling = extractSales(row);
     const aggregatePricing = readReceiptAggregatePricing(row);
+    if (!aggregatePricing.isAuthoritativeTotal && ((row.data as any)?.needsPricing === true || (row.totals as any)?.needsPricing === true || (row as any).financialPricingEvidence?.complete === false)) return 0;
     const persistedProfit = extractProfit(row, selling);
     if (!aggregatePricing.isAuthoritativeTotal && persistedProfit > 0) {
       return persistedProfit;
@@ -505,7 +483,7 @@ export async function summarizePosReceiptsForPeriod(period: {
         snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : productCost > 0 ? productCost : 0;
       return buyingSum > 0 ? buyingSum : fallbackUnitCost;
     });
-    if (aggregatePricing.isAuthoritativeTotal) {
+    if (aggregatePricing.isAuthoritativeTotal || (supportBuying && (row as any).financialPricingEvidence?.complete)) {
       return calculateAggregateReceiptProfit({
         sellingTotal: selling,
         buyingTotal: aggregateCost,
@@ -513,7 +491,7 @@ export async function summarizePosReceiptsForPeriod(period: {
         deliveryFee,
       });
     }
-    return computeRecognizedReceiptProfit({
+    const recognized = computeRecognizedReceiptProfit({
         items: items.map((item: any, idx: number) => ({
           quantity: item?.quantity,
           sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
@@ -523,7 +501,8 @@ export async function summarizePosReceiptsForPeriod(period: {
         aggregateBuyingTotal: aggregateCost,
         commissionTotal: agentSaleCommission,
         deliveryFee,
-      }).recognizedProfit;
+      });
+    return recognized.hasPendingItems ? 0 : recognized.recognizedProfit;
   };
 
   const seen = new Map<string, string>();
@@ -560,7 +539,7 @@ export async function summarizePosReceiptsForPeriod(period: {
 
   const supportProfitByReceipt = new Map<string, { profit: number; buyingTotal: number; sellingTotal: number }>();
   if (candidateReceiptNumbers.length > 0) {
-    const supportRows = await prisma.supportSale.findMany({
+    const supportRows = await client.supportSale.findMany({
       where: {
         ...(Object.keys(supportDailyEntryWhere).length ? { entry: supportDailyEntryWhere } : {}),
         createdAt: { gte: period.start, lte: period.end },
@@ -645,10 +624,7 @@ export async function summarizePosReceiptsForPeriod(period: {
       }
     }
 
-    const profitIncluded =
-      period.profitRecognitionMode === "salesDate"
-        ? salesIncluded
-        : Boolean(supportContext) || isDateInRange(salesDate, period.start, period.end);
+    const profitIncluded = salesIncluded;
     if (profit && profitIncluded) {
       totalProfit += profit;
     }

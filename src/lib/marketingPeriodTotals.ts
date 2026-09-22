@@ -1,3 +1,4 @@
+import { ledgerEntriesForRecognitionPeriod } from "@/lib/ledgerRecognition";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canonicalReceiptNumber, buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
@@ -139,10 +140,9 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       submittedByEmail: { equals: normalizedEmail, mode: "insensitive" },
     });
   }
-  const [marketingEntries, reports] = await Promise.all([
+  const [rawMarketingEntries, reports] = await Promise.all([
     client.marketingDailyEntry.findMany({
       where: {
-        date: { gte: period.start, lte: period.end },
         OR: submittedByConditions,
       },
       include: {
@@ -158,6 +158,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       include: { sales: true },
     }),
   ]);
+  const marketingEntries = await ledgerEntriesForRecognitionPeriod(rawMarketingEntries, period.start, period.end, client);
   manualMarketplaceProductActivity = summarizeManualMarketplaceProductActivityEntries(
     marketingEntries.map((entry) => ({ payload: entry.payload })),
   );

@@ -8,6 +8,7 @@ jest.mock('@/lib/prisma', () => ({
     supportReceipt: { findMany: jest.fn() },
     marketingSale: { findMany: jest.fn() },
     supportReceiptItem: { findMany: jest.fn() },
+    supportSale: { findMany: jest.fn().mockResolvedValue([]) },
     productCost: { findMany: jest.fn().mockResolvedValue([]) },
     receipt: { findMany: jest.fn().mockResolvedValue([]) },
   },
@@ -20,7 +21,13 @@ import { canonicalReceiptNumber } from '@/lib/receiptGuard';
 import { buildReceiptKey } from '@/lib/receiptKey';
 
 describe('admin receipts summary', () => {
-  afterEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    (prisma as any).receipt.findMany.mockResolvedValue([]);
+    (prisma as any).supportReceipt.findMany.mockResolvedValue([]);
+    (prisma as any).supportSale.findMany.mockResolvedValue([]);
+    (prisma as any).productCost.findMany.mockResolvedValue([]);
+  });
 
   it('computes admin summary using receipt-level UI profit (sellingTotal - sum(buyingPrice))', async () => {
     const start = '2025-12-12T00:00:00+03:00';
@@ -62,7 +69,7 @@ describe('admin receipts summary', () => {
     const orderNumber = 'Betech-20260203-54502';
 
     (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
-    (prisma as any).supportReceipt.findMany.mockResolvedValueOnce([
+    (prisma as any).supportReceipt.findMany.mockResolvedValue([
       { receiptKey: buildReceiptKey(orderNumber), buyingTotal: 2500 },
     ]);
 
@@ -145,15 +152,14 @@ describe('admin receipts summary', () => {
         },
       ]);
     (prisma as any).supportReceipt.findMany
-      .mockResolvedValueOnce([
+      .mockResolvedValue([
         {
           receiptNumber: null,
           receiptKey: `2026-05-03:${canonicalReceiptNumber(orderNumber)}`,
           buyingTotal: 45270,
           items: [{ buyingPrice: 45270, pricedAt }],
         },
-      ])
-      .mockResolvedValueOnce([]);
+      ]);
     (prisma as any).productCost.findMany.mockResolvedValue([]);
 
     const summary = await computeAdminReceiptSummary({
@@ -163,7 +169,7 @@ describe('admin receipts summary', () => {
       scope: 'global',
     });
 
-    expect(summary.totalSales).toBe(0);
+    expect(summary.totalSales).toBe(100000);
     expect(summary.totalProfit).toBe(54730);
     expect(summary.profitContributors).toEqual([
       expect.objectContaining({

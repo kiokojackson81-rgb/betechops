@@ -1,3 +1,4 @@
+import { syncReceiptRecognition, refreshRecognitionLedgers, type RecognitionLedgerTarget } from "@/lib/syncReceiptRecognition";
 import { NextRequest, NextResponse } from "next/server";
 import { getActorId, requireRole } from "@/lib/api";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
@@ -104,6 +105,7 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
   }
   const singleItemCost = orderItems.length === 1 ? resolvedCosts.get(orderItems[0].id) ?? 0 : null;
 
+  const recognitionTargets: RecognitionLedgerTarget[] = [];
   if (mode === "TOTAL") {
     const buyingTotal = Math.round(requestedBuyingTotal);
     const previousTotals =
@@ -121,11 +123,13 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
       ...previousTotals,
       buyingTotal,
       buyingPriceMode: "TOTAL",
+      needsPricing: false,
       profit,
     };
     const nextData = {
       ...previousData,
       buyingPriceMode: "TOTAL",
+      needsPricing: false,
       buyingPriceUpdatedAt: new Date().toISOString(),
       buyingPriceUpdatedById: actorId,
       totals: nextTotals,
@@ -165,6 +169,7 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
         }
       }
 
+      recognitionTargets.push(...await syncReceiptRecognition(tx, id));
       await tx.actionLog.create({
         data: {
           actorId,
@@ -175,8 +180,9 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
           after: { buyingTotal, mode: "TOTAL" },
         },
       });
-    });
+    }, { timeout: 30000 });
 
+    await refreshRecognitionLedgers(recognitionTargets);
     return NextResponse.json({ ok: true, mode, updatedItems: 0, buyingTotal, profit });
   }
 
@@ -189,12 +195,12 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
       receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
         ? (receipt.data as Record<string, unknown>)
         : {};
-    const nextTotals = { ...previousTotals, buyingPriceMode: "ITEMS" };
+    const nextTotals = { ...previousTotals, buyingPriceMode: "ITEMS", needsPricing: orderItems.some(item => !(Number(resolvedCosts.get(item.id)) > 0)) };
     await tx.receipt.update({
       where: { id },
       data: {
         totals: nextTotals,
-        data: { ...previousData, buyingPriceMode: "ITEMS", totals: nextTotals },
+        data: { ...previousData, buyingPriceMode: "ITEMS", needsPricing: nextTotals.needsPricing, buyingPriceUpdatedAt: new Date().toISOString(), totals: nextTotals },
       },
     });
     for (const item of updates) {
@@ -251,6 +257,7 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
       }
     }
 
+    recognitionTargets.push(...await syncReceiptRecognition(tx, id));
     await tx.actionLog.create({
       data: {
         actorId,
@@ -264,9 +271,10 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
         after: updates,
       },
     });
-  });
+  }, { timeout: 30000 });
 
   await recomputeOrderEconomics(receipt.orderId);
+  await refreshRecognitionLedgers(recognitionTargets);
 
   const refreshed = await prisma.receipt.findUnique({ where: { id }, select: { totals: true, data: true } });
   const totals = (refreshed?.totals as Record<string, unknown> | null) ?? {};
