@@ -38,6 +38,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const updateSchema = z.object({
+  confirmBalanceCleared: z.boolean().optional(),
   stage: z.enum(RECEIPT_PROJECT_STAGES).optional(),
   paymentTerm: z.enum(RECEIPT_PROJECT_PAYMENT_TERMS).optional(),
   depositType: z.enum(RECEIPT_PROJECT_DEPOSIT_TYPES).optional(),
@@ -332,6 +333,24 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     );
   }
 
+  const completing = effectiveStage === "COMPLETED_POSTED";
+  const recordedPaid = Number(existing.order?.paidAmount ?? existingProjectFlow?.amountPaidTotal ?? 0);
+  const projectValue = Number(existing.order?.totalAmount ?? existingProjectFlow?.projectValue ?? 0);
+  const confirmingPayment = completing && recordedPaid < projectValue;
+  if (confirmingPayment && guard.role !== "ADMIN" && guard.role !== "SUPERVISOR") {
+    return NextResponse.json({ error: "An administrator must confirm the outstanding payment before completing this project." }, { status: 403 });
+  }
+  if (confirmingPayment && parsed.data.confirmBalanceCleared !== true) {
+    return NextResponse.json({ error: "Confirm that the customer has cleared the balance before completing this project." }, { status: 409 });
+  }
+  const paymentEdited = parsed.data.depositPaidAmount !== undefined || parsed.data.balancePaidAmount !== undefined;
+  const nextPaid = confirmingPayment ? projectValue : paymentEdited
+    ? (parsed.data.depositPaidAmount ?? existingProjectFlow?.depositPaidAmount ?? 0) + (parsed.data.balancePaidAmount ?? existingProjectFlow?.balancePaidAmount ?? 0)
+    : recordedPaid;
+  if (completing && nextPaid < projectValue) {
+    return NextResponse.json({ error: "A completed project must be fully paid." }, { status: 409 });
+  }
+  const certifiedCompletion = completing && existing.commissioningSession?.status === "ISSUED" && (guard.role === "ADMIN" || guard.role === "SUPERVISOR");
   const stageOrder = [
     "RECEIPT_CREATED",
     "PROJECT_SCHEDULED",
@@ -346,7 +365,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const nextStageIndex = stageOrder.indexOf(effectiveStage);
   if (
     parsed.data.stage !== undefined &&
-    nextStageIndex > currentStageIndex + 1
+    nextStageIndex > currentStageIndex + 1 && !certifiedCompletion
   ) {
     return NextResponse.json(
       {
@@ -371,9 +390,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     projectValue: Number(
       existing.order?.totalAmount ?? existingProjectFlow?.projectValue ?? 0,
     ),
-    amountPaidTotal: Number(
-      existing.order?.paidAmount ?? existingProjectFlow?.amountPaidTotal ?? 0,
-    ),
+    amountPaidTotal: nextPaid,
     depositType: parsed.data.depositType ?? existingProjectFlow?.depositType,
     depositValue: parsed.data.depositValue ?? existingProjectFlow?.depositValue,
     depositPercent:
@@ -386,7 +403,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     depositReference:
       parsed.data.depositReference ?? existingProjectFlow?.depositReference,
     balancePaidAmount:
-      parsed.data.balancePaidAmount ?? existingProjectFlow?.balancePaidAmount,
+      confirmingPayment ? Math.max(0, projectValue - (parsed.data.depositPaidAmount ?? existingProjectFlow?.depositPaidAmount ?? 0)) : parsed.data.balancePaidAmount ?? existingProjectFlow?.balancePaidAmount,
     balancePaymentMethod:
       parsed.data.balancePaymentMethod ??
       existingProjectFlow?.balancePaymentMethod,
@@ -435,8 +452,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     const receipt = await tx.receipt.update({
       where: { id },
       data: {
+        totals: { ...(existing.totals && typeof existing.totals === "object" && !Array.isArray(existing.totals) ? existing.totals : {}), balance: nextProjectFlow.remainingAmount },
         data: {
           ...existingData,
+          ...(confirmingPayment ? { adminPaymentConfirmation: { actorId, confirmedAt: new Date().toISOString(), previousPaidAmount: recordedPaid, amountReceived: projectValue - recordedPaid } } : {}),
           customerType: "project",
           projectFlow: nextProjectFlow,
         },

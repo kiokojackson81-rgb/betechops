@@ -1,5 +1,4 @@
 import { decryptDocument } from "@/lib/documentEncryption";
-import { storedProjectDocument } from "@/lib/storedProjectDocument";
 import { prisma } from "@/lib/prisma";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import renderReceiptHtml from "@/lib/receipts/renderReceiptHtml";
@@ -9,11 +8,7 @@ import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 export async function buildReceiptPdfResponse(receiptId: string, opts?: { asDownload?: boolean; allowCached?: boolean; fileNamePrefix?: string }) {
   const asDownload = Boolean(opts?.asDownload);
   const completedProject = await prisma.commissioningSession.findUnique({ where: { receiptId }, select: { status: true, projectReceiptPdfUrl: true, projectReceiptPdfSha256: true } });
-  if (completedProject?.status === "ISSUED" && completedProject.projectReceiptPdfUrl) {
-    const bytes = await storedProjectDocument(completedProject.projectReceiptPdfUrl, completedProject.projectReceiptPdfSha256);
-    return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `${asDownload ? "attachment" : "inline"}; filename="receipt.pdf"`, "Cache-Control": "private, no-store" } });
-  }
-  const allowCached = Boolean(opts?.allowCached);
+  const allowCached = Boolean(opts?.allowCached) && completedProject?.status !== "ISSUED";
   const fileNamePrefix = opts?.fileNamePrefix || "receipt";
   const receiptFreshness = await prisma.receipt.findUnique({
     where: { id: receiptId },

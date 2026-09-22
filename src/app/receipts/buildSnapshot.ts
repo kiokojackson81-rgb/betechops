@@ -52,7 +52,19 @@ export function buildReceiptSnapshot(receipt: any) {
     dataIsObject && dataAny?.projectFlow && typeof dataAny.projectFlow === "object"
       ? (dataAny.projectFlow as Record<string, unknown>)
       : null;
-  const normalizedProjectFlow = readReceiptProjectFlow(projectFlowRaw);
+  const savedProjectFlow = readReceiptProjectFlow(projectFlowRaw);
+  // The order is the payment ledger; project stage and archived PDFs cannot settle it.
+  const hasOrderPayment = order.totalAmount != null && order.paidAmount != null && Number.isFinite(Number(order.totalAmount)) && Number.isFinite(Number(order.paidAmount));
+  const normalizedProjectFlow = savedProjectFlow && hasOrderPayment ? {
+    ...savedProjectFlow,
+    totalPaidAmount: Number(order.paidAmount),
+    amountPaidTotal: Number(order.paidAmount),
+    remainingAmount: Math.max(0, Number(order.totalAmount) - Number(order.paidAmount)),
+    balanceAmount: Math.max(0, Number(order.totalAmount) - Number(order.paidAmount)),
+    balancePendingAmount: Math.max(0, Number(order.totalAmount) - Number(order.paidAmount)),
+    depositPendingAmount: Number(order.paidAmount) >= Number(order.totalAmount) ? 0 : savedProjectFlow.depositPendingAmount,
+    paymentStatus: Number(order.paidAmount) >= Number(order.totalAmount) ? "FULLY_PAID" as const : Number(order.paidAmount) > 0 ? "PARTIALLY_PAID" as const : "UNPAID" as const,
+  } : savedProjectFlow;
   const metadata =
     dataIsObject && dataAny?.metadata && typeof dataAny.metadata === "object"
       ? (dataAny.metadata as Record<string, unknown>)

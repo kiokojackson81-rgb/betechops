@@ -1,3 +1,4 @@
+import { buildReceiptPdfResponse } from "@/lib/receiptPdfResponse";
 import { documentAccessAllowed, documentVerificationPath } from "@/lib/documentAccess";
 import { NextRequest, NextResponse } from "next/server";
 import { findCustomerCertificateSession } from "@/lib/commissioning";
@@ -14,14 +15,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const session = await findCustomerCertificateSession(token);
   if (!session) return new NextResponse("Document unavailable", { status: 404 });
   try {
+    if (kind === "receipt") {
+      const response = await buildReceiptPdfResponse(session.receiptId, { asDownload: request.nextUrl.searchParams.get("download") === "1", allowCached: false });
+      response.headers.set("Referrer-Policy", "no-referrer");
+      response.headers.set("X-Robots-Tag", "noindex, nofollow");
+      return response;
+    }
     let bytes: Buffer;
     if (kind === "warranty") {
       const warranty = await getWarrantyCertificate(session.receiptId);
       if (!warranty) return new NextResponse("This document is still being prepared.", { status: 409 });
       bytes = await warrantyPdfBytes(warranty);
     } else {
-      const url = kind === "receipt" ? session.projectReceiptPdfUrl : session.completionPdfUrl;
-      const hash = kind === "receipt" ? session.projectReceiptPdfSha256 : session.completionPdfSha256;
+      const url = session.completionPdfUrl;
+      const hash = session.completionPdfSha256;
       if (!url) return new NextResponse("This document is still being prepared.", { status: 409 });
       bytes = await storedProjectDocument(url, hash);
     }

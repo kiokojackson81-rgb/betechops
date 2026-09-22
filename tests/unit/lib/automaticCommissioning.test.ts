@@ -1,5 +1,6 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 jest.mock("@/lib/prisma", () => ({ prisma: { commissioningSession: { findUnique: jest.fn(), update: jest.fn() }, user: { findUnique: jest.fn() }, $transaction: jest.fn() } }));
+jest.mock("@/lib/reviewsReferrals", () => ({ ensureReviewInvitationForReceipt: jest.fn().mockResolvedValue({}) }));
 jest.mock("@/lib/branding", () => ({ getBranding: jest.fn() }));
 jest.mock("@/lib/commissioningValidation", () => ({ isReadyToIssue: jest.fn() }));
 jest.mock("@/lib/commissioning", () => ({ certificateNumber: () => "CERT-TEST", projectSummary: () => ({ reference: "TEST", customerName: "Test Customer" }), appendCommissioningAudit: (_: unknown, event: unknown) => [event] }));
@@ -19,7 +20,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   (getBranding as jest.Mock).mockResolvedValue({ licensedProfessional: profile, digitalStampUrl: "https://example.invalid/stamp.png" });
   (isReadyToIssue as jest.Mock).mockReturnValue({ ready: true });
-  (prisma.commissioningSession.findUnique as jest.Mock).mockResolvedValue({ id: "s", receiptId: "r", status: "DRAFT", updatedAt: new Date(), customerTermsAcceptedAt: new Date(), data: { installerName: "Agent Jackson", termsAcceptance: { accepted: true } }, receipt: { order: { customerPhone: "0700000000" } } });
+  (prisma.commissioningSession.findUnique as jest.Mock).mockResolvedValue({ id: "s", receiptId: "r", status: "DRAFT", updatedAt: new Date(), customerTermsAcceptedAt: new Date(), data: { installerName: "Agent Jackson", termsAcceptance: { accepted: true } }, receipt: { order: { totalAmount: 100000, paidAmount: 100000, customerPhone: "0700000000" } } });
   (prisma.commissioningSession.update as jest.Mock).mockResolvedValue({ id: "s", receiptId: "r", status: "ISSUED" });
   (prisma.user.findUnique as jest.Mock).mockResolvedValue({ isActive: true });
   (prisma.$transaction as jest.Mock).mockImplementation(async callback => callback(prisma));
@@ -52,5 +53,19 @@ test("incomplete checks cannot issue automatically", async () => {
 test("requires the configured signature before automatic issuance", async () => {
   (getBranding as jest.Mock).mockResolvedValue({ licensedProfessional: { ...profile, signatureUrl: null }, digitalStampUrl: "https://example.invalid/stamp.png" });
   await expect(issueAutomaticCompletionCertificate({ sessionId: "s", origin: "https://example.invalid", source: "PUBLIC_LINK" })).rejects.toThrow("signature");
+  expect(prisma.$transaction).not.toHaveBeenCalled();
+});
+
+test.each(["CLEARED", "OUTSTANDING"])("issues technical certificates with explicit %s payment decision", async paymentDecision => {
+  const existing = await prisma.commissioningSession.findUnique({ where: { id: "s" } });
+  (prisma.commissioningSession.findUnique as jest.Mock).mockResolvedValue({ ...existing, receipt: { order: { totalAmount: 100000, paidAmount: 30000 } } });
+  await issueAutomaticCompletionCertificate({ sessionId: "s", origin: "https://example.invalid", source: "PUBLIC_LINK", paymentDecision });
+  expect(completeCertifiedProject).toHaveBeenCalledWith(expect.anything(), "r", expect.any(Date), expect.objectContaining({ decision: paymentDecision }));
+  expect(sendCustomerCertificateDelivery).toHaveBeenCalled();
+});
+test("an unpaid receipt requires an explicit payment decision before any issue transaction", async () => {
+  const existing = await prisma.commissioningSession.findUnique({ where: { id: "s" } });
+  (prisma.commissioningSession.findUnique as jest.Mock).mockResolvedValue({ ...existing, receipt: { order: { totalAmount: 100000, paidAmount: 30000 } } });
+  await expect(issueAutomaticCompletionCertificate({ sessionId: "s", origin: "https://example.invalid", source: "PUBLIC_LINK" })).rejects.toThrow("Confirm whether");
   expect(prisma.$transaction).not.toHaveBeenCalled();
 });

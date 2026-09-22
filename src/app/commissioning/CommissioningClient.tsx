@@ -9,6 +9,7 @@ import { COMMISSIONING_PROFILES, commissioningProfile, type CommissioningSystemP
 type Evidence = { url: string; fileName?: string; capturedAt?: string };
 type EquipmentKind = "panel" | "inverter" | "battery";
 type Draft = {
+  paymentDecision?: "CLEARED" | "OUTSTANDING";
   additionalEquipment?: EquipmentUnit[];
   systemEquipment?: EquipmentUnit[];
   systemProfile?: CommissioningSystemProfile;
@@ -31,6 +32,7 @@ type Draft = {
   [key: string]: unknown;
 };
 type Session = {
+  payment: { totalAmount: number; paidAmount: number; balance: number; fullyPaid: boolean };
   isCertifyingProfessional?: boolean;
   professionalReviewComment?: string | null;
   status: "DRAFT" | "TECHNICIAN_COMPLETED" | "AWAITING_PROFESSIONAL_REVIEW" | "RETURNED_FOR_CORRECTION" | "PROFESSIONALLY_APPROVED" | "ISSUED" | "REVOKED";
@@ -447,6 +449,7 @@ export default function CommissioningClient({ token }: { token: string }) {
     setError("");
     setSaveState("saving");
     try {
+      if (!session?.payment.fullyPaid && !draft.paymentDecision) throw new Error("Select whether the customer has cleared the balance.");
       if (!session?.readOnly) {
       const save = await fetch(
         `/api/commissioning/${encodeURIComponent(token)}`,
@@ -467,7 +470,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "issue" }),
+          body: JSON.stringify({ action: "issue", paymentDecision: draft.paymentDecision }),
         },
       );
       const body = await response.json().catch(() => ({}));
@@ -509,7 +512,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         Loading commissioning…
       </main>
     );
-  if (session.readOnly) return session.status === "ISSUED" ? <IssuedView session={session} token={token} /> : <ProfessionalReviewPendingView session={session} busy={saveState === "saving"} error={error} onIssue={() => void issue()} />;
+  if (session.readOnly) return session.status === "ISSUED" ? <IssuedView session={session} token={token} /> : <ProfessionalReviewPendingView paymentDecision={draft.paymentDecision} onPaymentDecision={(value) => setDraft(current => ({ ...current, paymentDecision: value }))} session={session} busy={saveState === "saving"} error={error} onIssue={() => void issue()} />;
   const current = visibleSteps[Math.min(activeStep, Math.max(0, visibleSteps.length - 1))] || visibleSteps[0];
   const canContinue = current.id === "review" || complete(current.id);
   return (
@@ -776,6 +779,8 @@ export default function CommissioningClient({ token }: { token: string }) {
               />
             )}
             {current.id === "review" && (
+              <>
+              <PaymentConfirmation payment={session.payment} value={draft.paymentDecision} onChange={(value) => setDraft(current => ({ ...current, paymentDecision: value }))} />
               <Review
                 session={session}
                 draft={draft}
@@ -783,6 +788,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 total={visibleSteps.length - 1}
                 profile={profile}
               />
+              </>
             )}
           </div>
           {error ? (
@@ -798,7 +804,7 @@ export default function CommissioningClient({ token }: { token: string }) {
             {current.id === "review" ? (
               <button
                 type="button"
-                disabled={saveState === "saving" || !isReadyToIssue(draft).ready}
+                disabled={saveState === "saving" || !isReadyToIssue(draft).ready || (!session.payment.fullyPaid && !draft.paymentDecision)}
                 onClick={() => void issue()}
                 className="w-full rounded-2xl bg-cyan-400 px-5 py-4 text-base font-black text-slate-950 disabled:opacity-40"
               >
@@ -1737,6 +1743,20 @@ function IssuedView({ session, token }: { session: Session; token: string }) {
     </main>
   );
 }
-function ProfessionalReviewPendingView({ session, busy, error, onIssue }: { session: Session; busy: boolean; error: string; onIssue: () => void }) {
-  return <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900"><article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><h1 className="text-2xl font-black">Installation details submitted</h1><p>Generate your certificates using the configured supervisor signature and company stamp. No separate approval or supervisor sign-off is required.</p><p>Project: {session.project.reference}<br />Customer: {session.project.customerName}</p>{error ? <p role="alert">{error}</p> : null}<button disabled={busy} onClick={onIssue} className="w-full rounded-xl bg-[#7a0000] px-4 py-3 font-bold text-white disabled:opacity-50">{busy ? "Generating certificates..." : "Generate certificates"}</button></article></main>;
+function ProfessionalReviewPendingView({ session, busy, error, onIssue, paymentDecision, onPaymentDecision }: { session: Session; busy: boolean; error: string; onIssue: () => void; paymentDecision: Draft["paymentDecision"]; onPaymentDecision: (value: "CLEARED" | "OUTSTANDING") => void }) {
+  return <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900"><article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><h1 className="text-2xl font-black">Installation details submitted</h1><p>Generate your certificates using the configured supervisor signature and company stamp. No separate approval or supervisor sign-off is required.</p><p>Project: {session.project.reference}<br />Customer: {session.project.customerName}</p><PaymentConfirmation payment={session.payment} value={paymentDecision} onChange={onPaymentDecision} />{error ? <p role="alert">{error}</p> : null}<button disabled={busy || (!session.payment.fullyPaid && !paymentDecision)} onClick={onIssue} className="w-full rounded-xl bg-[#7a0000] px-4 py-3 font-bold text-white disabled:opacity-50">{busy ? "Generating certificates..." : "Generate certificates"}</button></article></main>;
+}
+
+function PaymentConfirmation({ payment, value, onChange }: { payment: Session["payment"]; value: Draft["paymentDecision"]; onChange: (value: "CLEARED" | "OUTSTANDING") => void }) {
+  const money = (amount: number) => `KES ${amount.toLocaleString("en-KE")}`;
+  return <fieldset className="mb-5 space-y-3 rounded-2xl border border-slate-500 p-4">
+    <legend className="px-2 font-bold">Customer payment</legend>
+    <p>Receipt total: {money(payment.totalAmount)} · Recorded paid: {money(payment.paidAmount)}</p>
+    {payment.fullyPaid ? <p>Fully paid. Submitting will complete the project and issue the fully paid receipt.</p> : <>
+      <p className="font-bold">Outstanding balance: {money(payment.balance)}</p>
+      <p>Has the customer cleared this balance?</p>
+      <label className="flex items-start gap-3"><input type="radio" name="paymentDecision" value="CLEARED" checked={value === "CLEARED"} onChange={() => onChange("CLEARED")} />Yes — I confirm the balance has been received. Record payment and complete the project.</label>
+      <label className="flex items-start gap-3"><input type="radio" name="paymentDecision" value="OUTSTANDING" checked={value === "OUTSTANDING"} onChange={() => onChange("OUTSTANDING")} />No — issue the current receipt, warranty and completion certificate. Keep the balance and project stage unchanged until admin confirms payment.</label>
+    </>}
+  </fieldset>;
 }

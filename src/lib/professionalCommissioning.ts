@@ -1,3 +1,4 @@
+import { commissioningPaymentState, requireCommissioningPaymentDecision } from "@/lib/commissioningPayment";
 import "server-only";
 
 import { isReadyToIssue } from "@/lib/commissioningValidation";
@@ -47,6 +48,7 @@ export async function submitForProfessionalReview(input: {
     select: { audit: true, status: true, updatedAt: true },
   });
   if (!session) throw new Error("Commissioning session not found.");
+  if (session.status === "ISSUED") throw new Error("The completion certificate has already been issued.");
   if (!["DRAFT", "RETURNED_FOR_CORRECTION"].includes(session.status)) throw new Error("This record has already been submitted.");
   return prisma.commissioningSession.update({
     where: { id: input.sessionId, status: session.status, updatedAt: session.updatedAt },
@@ -77,11 +79,11 @@ async function snapshotImage(url: string | null | undefined, label: string) {
 }
 
 /** Uses the configured supervisor signature and stamp after every required installer check is complete. */
-export async function issueAutomaticCompletionCertificate(input: { sessionId: string; origin: string; actorId?: string | null; source: "PUBLIC_LINK" | "STAFF_ACTION" }) {
+export async function issueAutomaticCompletionCertificate(input: { sessionId: string; origin: string; actorId?: string | null; source: "PUBLIC_LINK" | "STAFF_ACTION"; paymentDecision?: unknown }) {
   const { professional, active } = await activeLicensedProfessional();
   if (!active) throw new Error("Activate the supervisor profile in Company Documents before issuing certificates.");
   if (!professional.name.trim() || !professional.licenceNumber.trim()) throw new Error("Configure the supervisor name and licence number in Company Documents.");
-  return issueProfessionallyApprovedCertificate({ sessionId: input.sessionId, origin: input.origin, professional, approvedById: input.actorId || null, automaticSource: input.source });
+  return issueProfessionallyApprovedCertificate({ sessionId: input.sessionId, origin: input.origin, professional, approvedById: input.actorId || null, automaticSource: input.source, paymentDecision: input.paymentDecision });
 }
 
 /** A linked professional may also authorise a record manually when an exception needs review. */
@@ -92,15 +94,17 @@ export async function issueProfessionallyApprovedCertificate(input: {
   approvedById?: string | null;
   approvedByName?: string | null;
   automaticSource?: "PUBLIC_LINK" | "STAFF_ACTION";
+  paymentDecision?: unknown;
 }) {
   const session = await prisma.commissioningSession.findUnique({
     where: { id: input.sessionId },
     include: {
       technician: { select: { id: true, name: true } },
-      receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, customerName: true, customerPhone: true, customerEmail: true, metadata: true } } } },
+      receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, totalAmount: true, paidAmount: true, customerName: true, customerPhone: true, customerEmail: true, metadata: true } } } },
     },
   });
   if (!session) throw new Error("Commissioning session not found.");
+  if (session.status === "ISSUED") throw new Error("The completion certificate has already been issued.");
   if (!input.automaticSource && session.status !== "AWAITING_PROFESSIONAL_REVIEW") throw new Error("Submit the completed installation for professional review before certification.");
   if (input.automaticSource && !["DRAFT", "RETURNED_FOR_CORRECTION", "AWAITING_PROFESSIONAL_REVIEW"].includes(session.status)) throw new Error("The completion certificate has already been issued.");
   if (!input.automaticSource) {
@@ -111,6 +115,8 @@ export async function issueProfessionallyApprovedCertificate(input: {
   if (!session.customerTermsAcceptedAt || asRecord(asRecord(session.data).termsAcceptance).accepted !== true) throw new Error("Customer terms acceptance is required before certification.");
   if (!input.professional.signatureUrl) throw new Error("Upload the licensed professional signature before certification.");
   if (!isReadyToIssue(asRecord(session.data)).ready) throw new Error("Commissioning evidence, equipment, tests, handover and signatures must be complete and all tests must pass or be marked N/A.");
+  const paymentBefore = commissioningPaymentState(session.receipt.order);
+  const paymentDecision = requireCommissioningPaymentDecision(paymentBefore.fullyPaid, input.paymentDecision ?? asRecord(session.data).paymentDecision);
   const [signatureSnapshot, stampSnapshot] = await Promise.all([snapshotImage(input.professional.signatureUrl, "professional signature"), snapshotImage(input.professional.stampUrl, "company stamp")]);
   const issuedAt = new Date();
   const reference = projectSummary(session.receipt).reference;
@@ -119,6 +125,8 @@ export async function issueProfessionallyApprovedCertificate(input: {
   const data = asRecord(session.data);
   const certificateData = {
     ...data,
+    paymentDecision: paymentDecision || "ALREADY_PAID",
+    paymentAtCertification: paymentBefore,
     certificationMode: input.automaticSource ? "AUTOMATIC_SUPERVISOR_SIGNATURE" : "PROFESSIONAL_REVIEW",
     installerName: String(data.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent"),
     projectSnapshot: { ...projectSummary(session.receipt), customerPhone: session.receipt.order?.customerPhone || "" },
@@ -131,7 +139,7 @@ export async function issueProfessionallyApprovedCertificate(input: {
     accepted_by_customer_name: projectSummary(session.receipt).customerName, customer_name: projectSummary(session.receipt).customerName, certificate_id: certificateNo, project_id: reference,
   };
   const updated = await prisma.$transaction(async tx => {
-  await completeCertifiedProject(tx, session.receiptId, issuedAt);
+  await completeCertifiedProject(tx, session.receiptId, issuedAt, { decision: paymentDecision, actorId: input.approvedById || session.technicianId, sessionId: session.id });
   return tx.commissioningSession.update({
     where: { id: session.id, status: session.status, updatedAt: session.updatedAt },
     data: {
@@ -164,7 +172,7 @@ export async function issueProfessionallyApprovedCertificate(input: {
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Document preparation failed.";
     warranty = { error: detail };
-    delivery = { error: "Project completed. Customer SMS will be available once all documents are ready." };
+    delivery = { error: "Installation certified. Customer SMS will be available once all documents are ready." };
   }
   return { updated, delivery, warranty };
 }

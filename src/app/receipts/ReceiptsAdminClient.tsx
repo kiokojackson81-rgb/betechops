@@ -1292,13 +1292,15 @@ export default function ReceiptsAdminClient({
         paymentNotes?: string | null;
       },
     ) => {
+      const confirmBalanceCleared = body.stage === "COMPLETED_POSTED";
+      if (confirmBalanceCleared && !window.confirm("Confirm the customer has paid the full receipt amount. This will record any outstanding balance as received and mark the project completed.")) return;
       setProjectActionId(receiptId);
       try {
         const res = await fetch(`/api/receipts/${receiptId}/project`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...body, confirmBalanceCleared }),
         });
         const payload = await res.json().catch(() => ({}));
         if (!res.ok) {

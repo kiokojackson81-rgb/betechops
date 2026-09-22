@@ -1,3 +1,4 @@
+import { commissioningPaymentState } from "@/lib/commissioningPayment";
 import { projectEquipmentDefaults } from "@/lib/commissioningEquipment";
 import { isReadyToIssue } from "@/lib/commissioningValidation";
 import { NextRequest, NextResponse } from "next/server";
@@ -42,6 +43,7 @@ async function publicSession(session: NonNullable<Awaited<ReturnType<typeof find
     technicianName: String(sessionData.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent"),
     technicianSignatureUrl: session.technician?.technicalProfile?.signatureUrl || null,
     project: projectSummary(session.receipt),
+    payment: commissioningPaymentState(session.receipt.order),
     data: {
       ...sessionData,
       installerName: String(sessionData.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || ""),
@@ -165,7 +167,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const validation = isReadyToIssue(data);
   if (!validation.ready) return NextResponse.json({ error: "Complete equipment serials, system configuration, evidence, passing tests, handover, terms acceptance and signatures before issuing.", validation }, { status: 400 });
   try {
-    const issued = await issueAutomaticCompletionCertificate({ sessionId: session.id, origin: new URL(req.url).origin, source: "PUBLIC_LINK" });
+    const issued = await issueAutomaticCompletionCertificate({ sessionId: session.id, origin: new URL(req.url).origin, source: "PUBLIC_LINK", paymentDecision: payload.paymentDecision });
     return NextResponse.json({ ok: true, status: issued.updated.status, certificateNo: issued.updated.certificateNo, issuedAt: issued.updated.issuedAt, delivery: issued.delivery, warranty: issued.warranty, message: "Certificates issued using the configured supervisor signature and stamp." });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to issue certificates." }, { status: 409 });

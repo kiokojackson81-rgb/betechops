@@ -1,0 +1,22 @@
+jest.mock("@/lib/prisma", () => ({ prisma: { commissioningSession: { findUnique: jest.fn() }, receipt: { findUnique: jest.fn() }, receiptFile: { findMany: jest.fn() } } }));
+jest.mock("@/lib/receipts/renderReceiptHtml", () => ({ __esModule: true, default: jest.fn(async snapshot => JSON.stringify(snapshot.projectFlow)) }));
+jest.mock("@/lib/pdf/chromium", () => ({ launchChromiumBrowser: jest.fn() }));
+import { prisma } from "@/lib/prisma";
+import { launchChromiumBrowser } from "@/lib/pdf/chromium";
+import { buildReceiptPdfResponse } from "@/lib/receiptPdfResponse";
+import { buildReceiptProjectFlow } from "@/lib/receiptProjects";
+test("issued project downloads reflect later payments instead of the archived partial receipt", async () => {
+  let paid = 30000;
+  let html = "";
+  const page = { emulateMediaType: jest.fn(), setContent: jest.fn(async value => { html = value; }), pdf: jest.fn(async () => Buffer.from(html)) };
+  (launchChromiumBrowser as jest.Mock).mockResolvedValue({ newPage: async () => page, close: jest.fn().mockResolvedValue(undefined) });
+  (prisma.commissioningSession.findUnique as jest.Mock).mockResolvedValue({ status: "ISSUED", projectReceiptPdfUrl: "https://example.invalid/old-receipt" });
+  (prisma.receipt.findUnique as jest.Mock).mockImplementation(async () => ({ id: "r", createdAt: new Date(), order: { totalAmount: 100000, paidAmount: paid }, data: { projectFlow: buildReceiptProjectFlow({ projectValue: 100000, amountPaidTotal: 30000, stage: "PROJECT_IN_PROGRESS" }) }, totals: { total: 100000 } }));
+  const partial = await buildReceiptPdfResponse("r", { allowCached: true });
+  expect(await partial.text()).toContain('"remainingAmount":70000');
+  paid = 100000;
+  const settled = await buildReceiptPdfResponse("r", { allowCached: true });
+  expect(await settled.text()).toContain('"paymentStatus":"FULLY_PAID"');
+  expect(html).toContain('"remainingAmount":0');
+  expect(prisma.receiptFile.findMany).not.toHaveBeenCalled();
+});

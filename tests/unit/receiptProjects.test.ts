@@ -3,7 +3,7 @@ import renderReceiptTemplate from "@/app/templates/receiptTemplate";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 describe("project receipt payment normalization", () => {
-  test("completed project flow is normalized to fully paid", () => {
+  test("completed stage does not fabricate payment", () => {
     const flow = readReceiptProjectFlow({
       isProject: true,
       stage: "COMPLETED_POSTED",
@@ -19,15 +19,17 @@ describe("project receipt payment normalization", () => {
     });
 
     expect(flow).not.toBeNull();
-    expect(flow?.paymentStatus).toBe("FULLY_PAID");
-    expect(flow?.totalPaidAmount).toBe(450000);
-    expect(flow?.remainingAmount).toBe(0);
-    expect(flow?.balanceAmount).toBe(0);
+    expect(flow?.paymentStatus).toBe("PARTIALLY_PAID");
+    expect(flow?.totalPaidAmount).toBe(120000);
+    expect(flow?.remainingAmount).toBe(330000);
+    expect(flow?.balanceAmount).toBe(330000);
   });
 
   test("receipt template does not show future payment instruction after full payment", () => {
     const snapshot = buildReceiptSnapshot({
       order: {
+        totalAmount: 450000,
+        paidAmount: 450000,
         customerName: "Muhammad",
         customerPhone: "0720387975",
       },

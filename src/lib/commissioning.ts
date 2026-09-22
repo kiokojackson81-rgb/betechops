@@ -104,6 +104,9 @@ export async function findAccessibleCommissioningSession(token: string) {
             select: {
               orderNumber: true,
               customerName: true,
+              totalAmount: true,
+              paidAmount: true,
+              paymentStatus: true,
               customerPhone: true,
               customerEmail: true,
               metadata: true,

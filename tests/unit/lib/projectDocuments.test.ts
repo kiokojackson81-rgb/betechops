@@ -18,7 +18,7 @@ import { sendCommissioningSms } from "@/lib/commissioningSms";
 
 let state: Record<string, unknown>;
 beforeEach(() => {
-  jest.clearAllMocks(); process.env.BLOB_READ_WRITE_TOKEN = "test-only";
+  jest.clearAllMocks(); process.env.BLOB_READ_WRITE_TOKEN = "test-only"; process.env.DOCUMENT_ENCRYPTION_SECRET = "unit-test-only";
   state = { id: "s", receiptId: "r", status: "ISSUED", certificateNo: "CERT", receipt: { receiptNumber: "PROJECT", order: { customerName: "Thomas", customerPhone: "0722000000" } } };
   (prisma.commissioningSession.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
   (prisma.commissioningSession.findUniqueOrThrow as jest.Mock).mockImplementation(async () => ({ ...state }));
