@@ -1567,6 +1567,26 @@ export async function getReferralRewardPreviewForReceipt(receiptId: string): Pro
   return productId ? getReferralRewardPreviewForProduct(productId) : null;
 }
 
+/** One offer per purchased product; deposits never determine the reward. */
+export async function getReceiptReferralOffers(receiptId: string) {
+  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, include: { order: { include: { items: { include: { product: true } } } } } });
+  if (!receipt) return [];
+  const products = [...new Map(receipt.order.items.map(item => [item.productId, item])).values()];
+  const offers = await Promise.all(products.map(async item => {
+    const policy = await getReferralPolicyForProduct(item.productId);
+    const purchasePrice = Number(item.sellingPrice);
+    const reward = calculateReferralCommission(purchasePrice, policy);
+    if (!policy.enabled || purchasePrice <= 0 || reward <= 0) return null;
+    return { productId: item.productId, productName: item.product.name, purchasePrice, reward,
+      commissionType: policy.commissionType, commissionRate: policy.commissionRate,
+      maximumAmount: policy.maximumAmount, minimumQualifyingSale: policy.minimumQualifyingSale,
+      requiresFullPayment: policy.requiresFullPayment, holdingDays: policy.holdingDays, trackingDays: REFERRAL_TRACKING_DAYS };
+  }));
+  return offers.filter((offer): offer is NonNullable<typeof offer> => offer !== null);
+}
+
+export type ReceiptReferralOffer = Awaited<ReturnType<typeof getReceiptReferralOffers>>[number];
+
 export async function ensureReviewInvitationForReceipt(
   receiptId: string,
   options?: { completedAt?: Date; deliveryMode?: string | null },
@@ -2220,7 +2240,7 @@ async function getOrCreateReferralAccount(input: {
   };
 }
 
-export async function createReferralFromReview(input: z.infer<typeof createReferralSchema>) {
+export async function createReferralFromReview(input: z.infer<typeof createReferralSchema>, receiptSelection?: { receiptId: string; productId: string }) {
   await ensureReviewReferralSchema();
   await ensureReferralFraudSchema();
   const invitation = await getInvitationRowByToken(input.token);
@@ -2235,7 +2255,18 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
   const referredPhone = normalizeKenyanPhone(input.referredPhone);
   if (!referredPhone) throw new Error("A valid Kenyan phone number is required for the referral.");
 
-  const product = await getProductSummary(asString(invitation.productId));
+  let selectedOffer: ReceiptReferralOffer | undefined;
+  if (receiptSelection) {
+    if (asString(invitation.receiptId) !== receiptSelection.receiptId) {
+      // Older invitations can be linked to the order before its receipt exists.
+      const orderId = cleanOptional(invitation.orderId);
+      const linkedReceipt = orderId ? await prisma.receipt.findUnique({ where: { id: receiptSelection.receiptId }, select: { orderId: true } }) : null;
+      if (!linkedReceipt || linkedReceipt.orderId !== orderId) throw new Error("This invitation does not belong to the receipt.");
+    }
+    selectedOffer = (await getReceiptReferralOffers(receiptSelection.receiptId)).find(offer => offer.productId === receiptSelection.productId);
+    if (!selectedOffer) throw new Error("This item is not eligible for a receipt referral.");
+  }
+  const product = await getProductSummary(selectedOffer?.productId || asString(invitation.productId));
   const policy = await getReferralPolicyForProduct(product.id);
   if (!policy.enabled) {
     throw new Error("Referrals are not enabled for this product.");
@@ -2249,11 +2280,12 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
   const referralCode = buildReferralCode();
   const productSlug = slugifyProductName(product.name);
   const referralUrl = `${buildProductUrl(productSlug)}?ref=${encodeURIComponent(referralCode)}`;
-  const potentialCommission = calculateReferralCommission(Number(product.sellingPrice || 0), policy);
+  const saleAmount = selectedOffer?.purchasePrice ?? Number(product.sellingPrice || 0);
+  const potentialCommission = calculateReferralCommission(saleAmount, policy);
   const linkId = crypto.randomUUID();
   const policySnapshot = {
     ...policy,
-    saleAmount: Number(product.sellingPrice || 0),
+    saleAmount,
     computedCommission: potentialCommission,
   };
 

@@ -1,3 +1,4 @@
+jest.mock("@/lib/prisma", () => ({ prisma: {} }));
 import {
   buildReviewInvitationOutboundMessage,
   calculateReferralCommission,

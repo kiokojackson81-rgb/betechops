@@ -1,0 +1,8 @@
+.page { color: #101827; background: #faf7ef; min-height: 100vh; padding: 24px 16px; font-family: Arial, Helvetica, sans-serif; }
+.page :global(.receipt-primary), .page :global(.receipt-secondary) { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; gap: 10px; border-radius: 10px; padding: 12px 16px; font-weight: 700; text-align: center; line-height: 1.4; cursor: pointer; }
+.page :global(.receipt-primary) { background: #870000; color: #fff; border: 1px solid #870000; }
+.page :global(.receipt-secondary) { background: #fff; color: #870000; border: 1px solid #870000; }
+.page :global(.receipt-primary):hover { background: #650000; }
+.page :global(.receipt-secondary):hover { background: #fff7f1; }
+.page :is(a, button, summary, input, select):focus-visible { outline: 3px solid #b45309; outline-offset: 3px; }
+@media (max-width: 480px) { .page { padding: 0; } }
