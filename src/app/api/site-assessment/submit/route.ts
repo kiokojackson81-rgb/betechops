@@ -105,9 +105,18 @@ export async function POST(request: Request) {
     submittedAt: new Date().toISOString(),
     submittedByName: actor.name,
   };
-  const published = await publishSiteAssessmentReport(visit.id, report, actor, {
-    allowRevision: revision,
-  });
+  let published;
+  try {
+    published = await publishSiteAssessmentReport(visit.id, report, actor, {
+      allowRevision: revision,
+    });
+  } catch (error) {
+    console.error("[site-assessment] publish failed", error);
+    return NextResponse.json({
+      ok: false,
+      error: "The assessment could not be saved right now. Your entered information is still on this page; please retry.",
+    }, { status: 503 });
+  }
   if (!published) {
     return NextResponse.json({ ok: false, error: "This site assessment report has already been published." }, { status: 409 });
   }
