@@ -23,7 +23,7 @@ type EarningsPageProps = {
 
 type PeriodPayroll = {
   period: TradingPeriod;
-  row: Awaited<ReturnType<typeof buildPayrollRow>>;
+  row: Awaited<ReturnType<typeof buildPayrollRows>>[number];
   breakdown: ReturnType<typeof buildEarningsCardBreakdown>;
 };
 
