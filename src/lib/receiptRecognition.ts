@@ -16,9 +16,10 @@ export function getReceiptRecognitionDate(receipt: any): Date | null {
   if (!receipt || isReceiptCancelledForSales(receipt)) return null;
   const data = record(receipt.data);
   const flow = readReceiptProjectFlow(data.projectFlow);
-  if ((receipt.order?.paidAmount != null || receipt.order?.paymentStatus != null) && !receiptIsFullyPaid(receipt)) return null;
+  const historicallyCompleted = Boolean(flow?.isProject && flow.stage === "COMPLETED_POSTED");
+  if (!historicallyCompleted && (receipt.order?.paidAmount != null || receipt.order?.paymentStatus != null) && !receiptIsFullyPaid(receipt)) return null;
   const completedAt = flow?.isProject ? getReceiptProjectCompletionDate(flow, undefined, receipt.generatedAt ?? receipt.createdAt) : null;
-  if (flow?.isProject && !completedAt) return null;
+  if (flow?.isProject && !completedAt && !historicallyCompleted) return null;
   const pod = record(data.podDelivery);
   const aggregate = readReceiptAggregatePricing(receipt);
   const support = receipt.financialPricingEvidence;
@@ -28,9 +29,9 @@ export function getReceiptRecognitionDate(receipt: any): Date | null {
     return Number(costs[0]?.unitCost ?? item.profitSnapshots?.[0]?.unitCost ?? item.product?.lastBuyingPrice ?? 0) > 0;
   });
   if (!aggregate.isAuthoritativeTotal) {
-    if (data.needsPricing === true || receipt.totals?.needsPricing === true) return null;
-    if (support && !support.complete && !costsKnown) return null;
-    if (!support?.complete && !costsKnown && !(aggregate.buyingTotal > 0)) return null;
+    if (!historicallyCompleted && (data.needsPricing === true || receipt.totals?.needsPricing === true)) return null;
+    if (!historicallyCompleted && support && !support.complete && !costsKnown) return null;
+    if (!historicallyCompleted && !support?.complete && !costsKnown && !(aggregate.buyingTotal > 0)) return null;
   }
   if (Object.keys(pod).length || String(data.customerType).toLowerCase() === "pod") {
     if (String(pod.status).toLowerCase() !== "delivered") return null;

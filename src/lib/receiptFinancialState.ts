@@ -23,7 +23,7 @@ export function receiptFinancialExclusion(receipt: any): string | null {
   // as unpaid because older orders lack the newer payment fields.
   const historicallyCompleted = Boolean(flow?.isProject && flow.stage === "COMPLETED_POSTED");
   if (!historicallyCompleted && !receiptIsFullyPaid(receipt)) return "Payment outstanding or refunded";
-  if (flow?.isProject && !isReceiptProjectRecognizedForSales(receipt.data.projectFlow)) return "Project not financially completed";
+  if (flow?.isProject && !historicallyCompleted && !isReceiptProjectRecognizedForSales(receipt.data.projectFlow)) return "Project not financially completed";
   const pod = receipt?.data?.podDelivery;
   if ((pod || receipt?.data?.customerType === "pod") && String(pod?.status).toLowerCase() !== "delivered") return "POD delivery not completed";
   return null;
