@@ -172,7 +172,7 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
   let cursor = selectedPeriod;
   // Keep the initial server render responsive. Older periods are available
   // through the period selector and do not need to block opening the page.
-  for (let index = 0; index < 2; index += 1) {
+  for (let index = 0; index < 1; index += 1) {
     comparisonPeriods.push(cursor);
     cursor = getPreviousTradingPeriod(cursor);
   }
@@ -188,7 +188,9 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
     return { period, row, breakdown: buildEarningsCardBreakdown(row) };
   }));
   const current = payrollPeriods[0];
-  const previous = payrollPeriods[1];
+  // Historical periods are loaded by selecting a period explicitly; never
+  // block the landing page on a second full payroll reconciliation.
+  const previous = payrollPeriods[1] ?? payrollPeriods[0];
   const earningLines = current.breakdown.lines.filter((line) => line.category === "earning");
   const commissionLines = current.breakdown.lines.filter((line) => line.category === "commission");
   const deductionLines = current.breakdown.lines.filter((line) => line.category === "deduction");
