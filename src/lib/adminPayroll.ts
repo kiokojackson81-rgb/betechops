@@ -319,8 +319,13 @@ async function buildPayrollRowResolved(
   ]);
 
   const normalizedPeriodKeys = new Set(periodKeyVariants.map((key) => String(key).replace(/[^0-9]/g, "")));
+  const periodLabelNeedle = period.label.replace(/\s+/g, " ").trim().toLowerCase();
   const adjustmentSummary = summarizeAdjustments(
-    (adjustments as any[]).filter((adjustment) => normalizedPeriodKeys.has(String(adjustment.periodKey ?? "").replace(/[^0-9]/g, ""))),
+    (adjustments as any[]).filter((adjustment) => {
+      const keyMatches = normalizedPeriodKeys.has(String(adjustment.periodKey ?? "").replace(/[^0-9]/g, ""));
+      const labelMatches = String(adjustment.periodLabel ?? "").replace(/\s+/g, " ").trim().toLowerCase() === periodLabelNeedle;
+      return keyMatches || labelMatches;
+    }),
   );
   const penalties = Number(ledger?.penalties ?? 0);
   adjustmentSummary.breakdown.penalties = penalties;
