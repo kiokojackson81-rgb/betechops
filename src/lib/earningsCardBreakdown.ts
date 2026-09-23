@@ -34,6 +34,15 @@ type SummaryLike = {
   totalDeductions?: number;
   netPay?: number;
   adjustmentEntries?: AdjustmentEntryLike[];
+  adjustmentBreakdown?: {
+    bonus?: number;
+    commissionTopUp?: number;
+    chama?: number;
+    lateness?: number;
+    discipline?: number;
+    other?: number;
+    penalties?: number;
+  };
   commissionBreakdown?: unknown | null;
 };
 
@@ -141,6 +150,7 @@ export function buildEarningsCardBreakdown(summary: SummaryLike | null | undefin
   ].filter((line) => line.amount !== 0);
 
   const entries = Array.isArray(summary.adjustmentEntries) ? summary.adjustmentEntries : [];
+  const adjustments = summary.adjustmentBreakdown ?? {};
   const adjustmentLines: EarningsCardLine[] =
     entries.length > 0
       ? entries
@@ -154,13 +164,13 @@ export function buildEarningsCardBreakdown(summary: SummaryLike | null | undefin
           }))
           .filter((line) => line.amount !== 0)
       : [
-          { label: "Bonus", amount: num(summary.bonusTotal), kind: "earning" as const },
-          { label: "Top-up", amount: num(summary.commissionTopUpTotal), kind: "earning" as const },
-          { label: "Chama", amount: num(summary.chamaTotal), kind: "deduction" as const },
-          { label: "Lateness", amount: num(summary.latenessTotal), kind: "deduction" as const },
-          { label: "Discipline", amount: num(summary.disciplineTotal), kind: "deduction" as const },
-          { label: "Other deductions", amount: num(summary.otherDeductionsTotal), kind: "deduction" as const },
-          { label: "Penalties", amount: num(summary.penalties), kind: "deduction" as const },
+          { label: "Bonus", amount: num(summary.bonusTotal ?? adjustments.bonus), kind: "earning" as const },
+          { label: "Top-up", amount: num(summary.commissionTopUpTotal ?? adjustments.commissionTopUp), kind: "earning" as const },
+          { label: "Chama", amount: num(summary.chamaTotal ?? adjustments.chama), kind: "deduction" as const },
+          { label: "Lateness", amount: num(summary.latenessTotal ?? adjustments.lateness), kind: "deduction" as const },
+          { label: "Discipline", amount: num(summary.disciplineTotal ?? adjustments.discipline), kind: "deduction" as const },
+          { label: "Other deductions", amount: num(summary.otherDeductionsTotal ?? adjustments.other), kind: "deduction" as const },
+          { label: "Penalties", amount: num(summary.penalties ?? adjustments.penalties), kind: "deduction" as const },
         ].filter((line) => line.amount !== 0);
 
   const lines = [...baseLines, ...adjustmentLines];
