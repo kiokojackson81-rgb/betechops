@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight, Download, Minus, WalletCards } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { buildPayrollRow } from "@/lib/adminPayroll";
+import { buildPayrollRows } from "@/lib/adminPayroll";
 import { buildEarningsCardBreakdown, type EarningsCardLine } from "@/lib/earningsCardBreakdown";
 import { withImpersonateId } from "@/lib/impersonation";
 import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
@@ -175,12 +175,11 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
     cursor = getPreviousTradingPeriod(cursor);
   }
 
-  const payrollPeriods: PeriodPayroll[] = await Promise.all(
-    comparisonPeriods.map(async (period) => {
-      const row = await applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period);
-      return { period, row, breakdown: buildEarningsCardBreakdown(row) };
-    }),
-  );
+  const payrollRows = await buildPayrollRows(attendant, comparisonPeriods);
+  const payrollPeriods: PeriodPayroll[] = await Promise.all(comparisonPeriods.map(async (period, index) => {
+    const row = await applyCanonicalPayrollOverrides(payrollRows[index], period);
+    return { period, row, breakdown: buildEarningsCardBreakdown(row) };
+  }));
   const current = payrollPeriods[0];
   const previous = payrollPeriods[1];
   const earningLines = current.breakdown.lines.filter((line) => line.category === "earning");

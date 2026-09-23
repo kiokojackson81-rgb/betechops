@@ -784,3 +784,10 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
     carryDepth: 0,
   });
 }
+
+/** Build adjacent payroll periods with one shared cache so carry calculations
+ * and repeated database reads are not duplicated by the earnings page. */
+export async function buildPayrollRows(attendant: AttendantRecord, periods: TradingPeriod[]): Promise<PayrollRow[]> {
+  const cache = new Map<string, Promise<PayrollRow>>();
+  return Promise.all(periods.map((period) => buildPayrollRowInternal(attendant, period, { cache, carryDepth: 0 })));
+}
