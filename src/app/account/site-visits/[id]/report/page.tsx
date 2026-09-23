@@ -44,9 +44,9 @@ export default async function CustomerSiteVisitReportPage({ params }: { params: 
         {report.recommendation.tiktokUrl ? <a href={report.recommendation.tiktokUrl} target="_blank" rel="noreferrer" className="ml-5 mt-4 inline-block font-bold underline">Watch a similar project on TikTok</a> : null}
       </section>
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <Metric label="Daily energy" value={`${report.calculation.dailyKwh.toFixed(2)} kWh`} />
-        <Metric label="Indicative inverter" value={`${report.calculation.inverterKw.toFixed(1)} kW`} />
-        <Metric label="Indicative storage" value={`${report.calculation.batteryKwh.toFixed(2)} kWh`} />
+        <Metric label="Daily energy" value={`${(report.calculation.dailyKwh ?? 0).toFixed(2)} kWh`} />
+        <Metric label="Indicative inverter" value={`${(report.calculation.inverterKw ?? 0).toFixed(1)} kW`} />
+        <Metric label="Indicative storage" value={`${(report.calculation.batteryKwh ?? 0).toFixed(2)} kWh`} />
       </div>
       <div className="mt-6 grid gap-5 md:grid-cols-2">
         <section className="rounded-2xl border border-[#7a0000]/10 bg-white p-5 shadow-sm">
@@ -55,7 +55,7 @@ export default async function CustomerSiteVisitReportPage({ params }: { params: 
         </section>
         <section className="rounded-2xl border border-[#7a0000]/10 bg-white p-5 shadow-sm">
           <h2 className="font-black text-slate-900">Indicative solar array</h2>
-          <p className="mt-3 leading-7 text-slate-700">{report.calculation.pvKw.toFixed(2)} kWp, approximately {report.calculation.panelCount} panels. Final design is confirmed after technical verification and quotation.</p>
+          <p className="mt-3 leading-7 text-slate-700">{(report.calculation.pvKw ?? 0).toFixed(2)} kWp, approximately {report.calculation.panelCount ?? 0} panels. Final design is confirmed after technical verification and quotation.</p>
         </section>
         {list("Recommended next actions", report.aiReview?.recommendations || [])}
         {list("Items to confirm", [...(report.aiReview?.risks || []), ...(report.aiReview?.dataGaps || [])])}

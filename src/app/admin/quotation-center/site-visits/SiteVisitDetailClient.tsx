@@ -110,9 +110,9 @@ function PublishedAssessmentReport({ visit }: { visit: SerializedSiteVisit }) {
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
-        <ReportMetric label="Daily energy" value={`${report.calculation.dailyKwh.toFixed(2)} kWh`} />
-        <ReportMetric label="Indicative inverter" value={`${report.calculation.inverterKw.toFixed(1)} kW`} />
-        <ReportMetric label="Indicative storage" value={`${report.calculation.batteryKwh.toFixed(2)} kWh`} />
+        <ReportMetric label="Daily energy" value={`${(report.calculation.dailyKwh ?? 0).toFixed(2)} kWh`} />
+        <ReportMetric label="Indicative inverter" value={`${(report.calculation.inverterKw ?? 0).toFixed(1)} kW`} />
+        <ReportMetric label="Indicative storage" value={`${(report.calculation.batteryKwh ?? 0).toFixed(2)} kWh`} />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <ReportList title="Assessment summary" items={report.aiReview?.summary ? [report.aiReview.summary] : []} fallback="Technician completed the structured field assessment." />
