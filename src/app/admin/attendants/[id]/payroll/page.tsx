@@ -13,7 +13,6 @@ import Card from "@/app/_components/Card";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
-import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { emptyPayrollAppraisal } from "@/lib/payrollAppraisal";
 
 export const dynamic = "force-dynamic";
@@ -84,8 +83,7 @@ export default async function PayrollPage({
         },
       },
     })) ?? null;
-  const payrollRow = await applyCanonicalPayrollOverrides(
-    await buildPayrollRow(
+  const payrollRow = await buildPayrollRow(
       {
         id: attendant.id,
         name: attendant.name,
@@ -94,9 +92,7 @@ export default async function PayrollPage({
         isActive: attendant.isActive,
       },
       period,
-    ),
-    period,
-  );
+    );
   const summary = {
     sales: payrollRow.totalSales,
     totalProfit: payrollRow.totalProfit,
