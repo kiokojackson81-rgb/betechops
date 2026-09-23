@@ -53,12 +53,15 @@ export const siteAssessmentReportSchema = z
       })
       .optional(),
     calculation: z.object({
-      connectedKw: z.number().finite().nonnegative().max(100000),
-      dailyKwh: z.number().finite().nonnegative().max(100000),
-      inverterKw: z.number().finite().nonnegative().max(100000),
-      batteryKwh: z.number().finite().nonnegative().max(100000),
-      pvKw: z.number().finite().nonnegative().max(100000),
-      panelCount: z.number().int().nonnegative().max(100000),
+      // Older field assessments may not have technical figures yet. Store a
+      // neutral value for calculations and keep the missing-field warning in
+      // the assessment payload instead of blocking submission.
+      connectedKw: z.number().finite().nonnegative().max(100000).optional().nullable().default(0),
+      dailyKwh: z.number().finite().nonnegative().max(100000).optional().nullable().default(0),
+      inverterKw: z.number().finite().nonnegative().max(100000).optional().nullable().default(0),
+      batteryKwh: z.number().finite().nonnegative().max(100000).optional().nullable().default(0),
+      pvKw: z.number().finite().nonnegative().max(100000).optional().nullable().default(0),
+      panelCount: z.number().int().nonnegative().max(100000).optional().nullable().default(0),
     }),
   })
   .strict();

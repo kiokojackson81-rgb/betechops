@@ -44,16 +44,30 @@ export async function POST(request: Request) {
   }
   let reportData = validation.data;
   if (reportData.recommendation.type === "CATALOG_PRODUCT") {
-    const catalog = await searchLiveCatalog({
-      query: reportData.recommendation.productName || "",
-      origin: "https://www.betech.co.ke",
-      limit: 12,
-    });
+    let catalog;
+    try {
+      catalog = await searchLiveCatalog({
+        query: reportData.recommendation.productName || "",
+        origin: "https://www.betech.co.ke",
+        limit: 12,
+      });
+    } catch {
+      // Catalogue/AI availability must not prevent saving a signed field
+      // assessment. The recommendation remains provisional for review.
+      catalog = { products: [] };
+    }
     const selectedUrl = (reportData.recommendation.productUrl || "").replace(/\/+$/, "");
     const matchedProduct = catalog.products.find((product) => product.productUrl.replace(/\/+$/, "") === selectedUrl);
     if (!matchedProduct) {
-      return NextResponse.json({ ok: false, error: "The selected Betech product could not be verified against the live catalogue. Search and select it again, or choose Custom quotation." }, { status: 400 });
-    }
+      reportData = {
+        ...reportData,
+        recommendation: {
+          ...reportData.recommendation,
+          type: "CUSTOM_QUOTATION",
+          notes: `${reportData.recommendation.notes || ""} Catalogue verification unavailable; technical review required.`.trim(),
+        },
+      };
+    } else {
     // Use the live catalogue record, not browser-supplied product facts, when
     // determining whether a standard system can be shown as technically fit.
     reportData = {
@@ -67,6 +81,7 @@ export async function POST(request: Request) {
         productShortDescription: matchedProduct.shortDescription,
       },
     };
+    }
   }
   const photos = form.getAll("photos").filter((entry): entry is File => entry instanceof File).slice(0, MAX_PHOTOS);
   if (photos.some((file) => !file.type.startsWith("image/") || file.size > MAX_PHOTO_BYTES)) {
