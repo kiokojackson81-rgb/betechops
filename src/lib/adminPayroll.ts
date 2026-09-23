@@ -657,13 +657,24 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
 
 /** Build several periods with one request-local cache (used by earnings history). */
 export async function buildPayrollRows(attendant: AttendantRecord, periods: TradingPeriod[]): Promise<PayrollRow[]> {
-  const cache = new Map<string, Promise<PayrollRow>>();
-  return Promise.all(periods.map((period) => buildPayrollRowInternal(attendant, period, { cache, carryDepth: 0 })));
+  return Promise.all(periods.map((period) => calculatePayrollForAttendant(attendant, period)));
 }
 
 /** The single canonical payroll calculation used by employee, admin and PDF reads. */
 export async function calculatePayrollForAttendant(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
   const row = await buildPayrollRow(attendant, period);
   const { applyCanonicalPayrollOverrides } = await import("@/lib/payrollCanonical");
-  return applyCanonicalPayrollOverrides(row, period);
+  const canonical = await applyCanonicalPayrollOverrides(row, period);
+  console.info("[payroll-calculation]", {
+    attendantId: attendant.id,
+    periodKey: period.key,
+    adjustmentCount: canonical.adjustmentEntries.length,
+    adjustmentTotal: canonical.adjustmentEntries.reduce(
+      (total, entry) => total + (entry.kind === "ADDITION" ? Number(entry.amount) : -Number(entry.amount)),
+      0,
+    ),
+    grossEarnings: canonical.totalEarnings,
+    netPay: canonical.netPay,
+  });
+  return canonical;
 }

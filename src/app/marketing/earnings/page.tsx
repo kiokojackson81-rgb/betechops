@@ -5,7 +5,6 @@ import { auth } from "@/lib/auth";
 import { buildPayrollRows } from "@/lib/adminPayroll";
 import { buildEarningsCardBreakdown, type EarningsCardLine } from "@/lib/earningsCardBreakdown";
 import { withImpersonateId } from "@/lib/impersonation";
-import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { prisma } from "@/lib/prisma";
 import {
   getPreviousTradingPeriod,
@@ -178,15 +177,10 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
   }
 
   const payrollRows = await buildPayrollRows(attendant, comparisonPeriods);
-  const payrollPeriods: PeriodPayroll[] = await Promise.all(comparisonPeriods.map(async (period, index) => {
-    // The current period needs the live receipt reconciliation. Historical
-    // cards use their already-built payroll rows so opening the page does not
-    // issue six full receipt/commission scans at once.
-    const row = index === 0
-      ? await applyCanonicalPayrollOverrides(payrollRows[index], period)
-      : payrollRows[index];
+  const payrollPeriods: PeriodPayroll[] = comparisonPeriods.map((period, index) => {
+    const row = payrollRows[index];
     return { period, row, breakdown: buildEarningsCardBreakdown(row) };
-  }));
+  });
   const current = payrollPeriods[0];
   // Historical periods are loaded by selecting a period explicitly; never
   // block the landing page on a second full payroll reconciliation.
