@@ -303,6 +303,7 @@ function StatsCard({
   nextTarget,
 }: StatsCardProps) {
   const hasNextTier = typeof nextTarget === "number" && nextTarget > 0;
+  const reachedCommissionCap = currentSalesForTier >= 10_000_000;
   const { locked, toggle } = useCardLock("marketing:quickstats");
   const mask = (val: React.ReactNode) => (locked ? "..." : val);
 
@@ -366,7 +367,9 @@ function StatsCard({
         <div className="mt-6 space-y-2">
         <p className="text-xs uppercase tracking-wide text-slate-400">To next tier</p>
         <p className="text-xs sm:text-sm text-slate-200">
-          {hasNextTier && remaining > 0
+          {reachedCommissionCap
+            ? "You have hit the maximum commissionable sales for this trading period. No commission is earned beyond KSh 10,000,000; commission resumes next trading period."
+            : hasNextTier && remaining > 0
             ? `KES ${remaining.toLocaleString()} more to hit next tier`
             : "You've reached the top tier for this period!"}
         </p>
