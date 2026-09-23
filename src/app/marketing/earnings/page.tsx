@@ -177,7 +177,12 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
 
   const payrollRows = await buildPayrollRows(attendant, comparisonPeriods);
   const payrollPeriods: PeriodPayroll[] = await Promise.all(comparisonPeriods.map(async (period, index) => {
-    const row = await applyCanonicalPayrollOverrides(payrollRows[index], period);
+    // The current period needs the live receipt reconciliation. Historical
+    // cards use their already-built payroll rows so opening the page does not
+    // issue six full receipt/commission scans at once.
+    const row = index === 0
+      ? await applyCanonicalPayrollOverrides(payrollRows[index], period)
+      : payrollRows[index];
     return { period, row, breakdown: buildEarningsCardBreakdown(row) };
   }));
   const current = payrollPeriods[0];
