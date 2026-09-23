@@ -1,17 +1,24 @@
+import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
+import { nairobiDateKey } from "@/lib/tradingPeriod";
+import type { ReceiptSalesBreakdown } from "@/lib/posReceiptSummary";
 import { prisma } from "@/lib/prisma";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { getReleasedPosProductCommissionForStaffPeriod } from "@/lib/posProductCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
 import { getOrCreateCommissionPeriod, computeProductCommissions, computeSalesCommissionFromTiers, computeJenifferProratedCommission } from "@/lib/commission";
-import { computeOnlinePeriodCommission, resolveDirectCommissionMode, computeBrendahDirectCommission } from "@/lib/onlineCommission";
-import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { computeOnlinePeriodCommission, computeBrendahDirectCommission } from "@/lib/onlineCommission";
+import { type TradingPeriod } from "@/lib/tradingPeriod";
 
 export type AttendantCommissionSummary = {
   attendantId: string;
   period: TradingPeriod;
   receiptsCount: number;
   totalItems: number;
+  recordedSales: number;
+  commissionEligibleSales: number;
+  receiptBreakdown: ReceiptSalesBreakdown[];
   totalSales: number;
   totalProfit: number;
   directSalesCommission: number;
@@ -32,10 +39,7 @@ export type AttendantCommissionSummary = {
 };
 
 function toDateOnlyKey(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return nairobiDateKey(d);
 }
 
 export async function getAttendantCommissionSummary(opts: { attendantId: string; start: Date; end: Date; }) : Promise<AttendantCommissionSummary> {
@@ -60,8 +64,8 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
   // Released per-item POS product commissions for this staff period
   const posProductCommission = await getReleasedPosProductCommissionForStaffPeriod(attendantId, start, end);
 
-  // Marketing totals (new/edited/copied products}
-  const marketing = await summarizeMarketingReportsForPeriod({ userId: attendantId, period });
+  const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
+  const marketing = await summarizeMarketingReportsForPeriod({ userId: attendantId, userEmail: user?.email, period });
   const marketingTotals = marketing.totals || { totalNewProducts: 0, totalCopiedProducts: 0, totalEditedProducts: 0 } as any;
   const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
     newProducts: marketingTotals.totalNewProducts ?? 0,
@@ -70,7 +74,8 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
   });
 
   // Marketplace assignment sales and computed marketplace commission
-  const marketplace = await getAssignedMarketplaceSalesForPeriod(attendantId, period);
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
+  const marketplace = await getAssignedMarketplaceSalesForPeriod(attendantId, marketplaceWindow);
 
   // Commission period and tiers
   const { tiers } = await getOrCreateCommissionPeriod(start);
@@ -78,8 +83,9 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
   // Adjustments (commission top-ups etc.) — find attendantPayrollAdjustment for the period key variants
   const periodKeyDateOnly = period.key;
   const periodKeyIso = `${start.toISOString()}_${end.toISOString()}`;
+  const legacyPeriodKeyIso = `${period.key.split("_")[0]}T00:00:00.000Z_${period.key.split("_")[1]}T23:59:59.999Z`;
   const adjustments = await prisma.attendantPayrollAdjustment.findMany({
-    where: { attendantId, periodKey: { in: [periodKeyDateOnly, periodKeyIso] } },
+    where: { attendantId, periodKey: { in: [periodKeyDateOnly, periodKeyIso, legacyPeriodKeyIso] } },
   });
   let commissionTopUpTotal = 0;
   for (const a of adjustments) {
@@ -92,38 +98,34 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
   }
 
   // Compute direct + marketplace commission using onlineCommission rules, but using STAFF totals
-  const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
-  const directMode = resolveDirectCommissionMode(user?.email ?? null);
-
-  // For PROFIT_10 and combined marketplace handling we use computeOnlinePeriodCommission
-  const periodInputs = {
-    attendantId,
-    periodStart: start,
-    periodEnd: end,
-    directSales: posSummary.totalSales ?? 0,
-    directProfit: posSummary.totalProfit ?? 0,
-    jumiaSales: marketplace.totals?.jumiaSales ?? 0,
-    kilimallSales: marketplace.totals?.kilimallSales ?? 0,
-  } as any;
-
-  const onlinePeriod = computeOnlinePeriodCommission(periodInputs, { directCommissionMode: directMode });
-  let directSalesCommission = onlinePeriod.lines.find((l) => l.channel === "DIRECT")?.commission ?? 0;
-  const marketplaceCommission = (onlinePeriod.lines.find((l) => l.channel === "JUMIA")?.commission ?? 0) + (onlinePeriod.lines.find((l) => l.channel === "KILIMALL")?.commission ?? 0);
-
-  // Special Brendah handling: ensure computed as per Brendah formula
-  if (directMode === "BRENDAH") {
-    directSalesCommission = computeBrendahDirectCommission(posSummary.totalSales ?? 0, posSummary.totalProfit ?? 0).amount;
-  }
-
-  // Fallback: compute sales commission from tiers when appropriate
-  let salesCommissionFromTiers = computeSalesCommissionFromTiers(Number(posSummary.totalSales ?? 0), Number(posSummary.totalProfit ?? 0), tiers as any, 0.05);
-
-  // For Jeniffer prorated mode, compute special progress
-  if (directMode === "DEFAULT") {
-    // Prefer tier-based value
-    // choose the tiered value rounded
-    directSalesCommission = Math.round(salesCommissionFromTiers);
-  }
+  const config = await getUserCommissionConfigLike(attendantId);
+  const calculateDirect = (sales: number, profit: number) => {
+    switch (config.salesCommissionMode) {
+      case "BRENDAH_DIRECT": return computeBrendahDirectCommission(sales, profit).amount;
+      case "POS_PROFIT_10": return Math.round(Math.max(0, profit) * 0.1);
+      case "JENIFFER_PRORATED": return Math.round(computeJenifferProratedCommission(sales, tiers).commission);
+      default: return Math.round(computeSalesCommissionFromTiers(sales, profit, tiers as any, 0.05));
+    }
+  };
+  const directSalesCommission = calculateDirect(posSummary.totalSales, posSummary.totalProfit);
+  const onlinePeriod = computeOnlinePeriodCommission({ attendantId, periodStart: start, periodEnd: end,
+    directSales: 0, directProfit: 0, jumiaSales: marketplace.totals?.jumiaSales ?? 0,
+    kilimallSales: marketplace.totals?.kilimallSales ?? 0 }, { directCommissionMode: config.salesCommissionMode === "POS_PROFIT_10" ? "PROFIT_10" : "DEFAULT" });
+  const marketplaceCommission = onlinePeriod.lines.filter(l => l.channel !== "DIRECT").reduce((sum, l) => sum + l.commission, 0);
+  // Tier commissions are period-based. Show each receipt's incremental contribution
+  // in recognition-date order; these contributions reconcile exactly to the total.
+  let cumulativeSales = 0, cumulativeProfit = 0, previousCommission = calculateDirect(0, 0);
+  const receiptBreakdown = [...posSummary.receiptBreakdown].sort((a, b) =>
+    ((a.salesDate ?? a.createdAt)?.getTime() ?? 0) - ((b.salesDate ?? b.createdAt)?.getTime() ?? 0) || a.receiptId.localeCompare(b.receiptId)
+  ).map(row => {
+    if (!row.eligible) return { ...row, commission: 0 };
+    cumulativeSales += row.eligibleSales;
+    cumulativeProfit += row.profit;
+    const next = calculateDirect(cumulativeSales, cumulativeProfit);
+    const commission = next - previousCommission;
+    previousCommission = next;
+    return { ...row, commission };
+  });
 
   const productUploadTotal = (newProductCommission ?? 0) + (copiedCommission ?? 0) + (editedCommission ?? 0);
 
@@ -134,6 +136,9 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
   return {
     attendantId,
     period,
+    recordedSales: posSummary.recordedSales,
+    commissionEligibleSales: posSummary.totalSales,
+    receiptBreakdown,
     receiptsCount: Number(posSummary.totalReceipts ?? 0),
     totalItems: Number(posSummary.totalItems ?? 0),
     totalSales: Number(posSummary.totalSales ?? 0),

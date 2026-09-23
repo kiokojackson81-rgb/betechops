@@ -77,10 +77,11 @@ describe('admin receipts summary', () => {
       {
         id: 'pos1',
         docType: 'RECEIPT',
-        generatedAt: start,
+        generatedAt: new Date(start),
         totals: { total: 5000 },
         order: {
           orderNumber,
+          attendantId: 'u1',
           totalAmount: 5000,
           paymentStatus: 'PAID',
           items: [],
@@ -136,8 +137,7 @@ describe('admin receipts summary', () => {
     const pricedAt = new Date('2026-05-03T12:00:00+03:00');
 
     (prisma as any).receipt.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
+      .mockResolvedValue([
         {
           id: 'old-pos-1',
           generatedAt: new Date('2026-04-30T10:00:00+03:00'),

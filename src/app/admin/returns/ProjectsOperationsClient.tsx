@@ -45,6 +45,7 @@ type ProjectRow = {
   total?: number | string | null;
   createdAt: string;
   projectStage?: string | null;
+  projectCommissioningStatus?: string | null;
   projectPaymentTerm?:
     | "FULL_BEFORE_INSTALLATION"
     | "DEPOSIT_AND_BALANCE"
@@ -773,10 +774,17 @@ export default function ProjectsOperationsClient({
 
   const saveProject = async (
     receiptId: string,
-    override?: { stage?: ProjectStage; assignments?: boolean },
+    override?: { stage?: ProjectStage; assignments?: boolean; confirmBalanceCleared?: boolean },
   ) => {
     const editor = editors[receiptId];
     if (!editor) return;
+    if (override?.stage === "COMPLETED_POSTED") {
+      const row = rows.find((item) => item.id === receiptId);
+      if (row && Number(row.projectRemainingAmount ?? 0) > 0) {
+        if (!window.confirm(`Confirm that the customer has paid the outstanding ${formatCurrency(Number(row.projectRemainingAmount))} for ${row.orderRef || row.customerName}? Only confirm after verifying payment. This will mark the receipt fully paid.`)) return;
+        override = { ...override, confirmBalanceCleared: true };
+      }
+    }
     setSavingId(receiptId);
     try {
       const res = await fetch(`/api/receipts/${receiptId}/project`, {
@@ -1796,12 +1804,12 @@ export default function ProjectsOperationsClient({
                                         })
                                       }
                                       disabled={
-                                        isSaving ||
-                                        row.projectStage !== "PROJECT_INSTALLED"
+                                        isSaving || (isTechnicalScope && Number(row.projectRemainingAmount ?? 0) > 0) ||
+                                        (row.projectStage !== "PROJECT_INSTALLED" && row.projectCommissioningStatus !== "ISSUED" && commissioningLinks[row.id]?.status !== "ISSUED" && !(row.projectStage === "COMPLETED_POSTED" && Number(row.projectRemainingAmount ?? 0) > 0))
                                       }
                                       className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
-                                      Complete and Post to POS
+                                      {Number(row.projectRemainingAmount ?? 0) > 0 ? "Confirm balance received and complete" : "Complete and Post to POS"}
                                     </button>
                                   </div>
                                 </div>

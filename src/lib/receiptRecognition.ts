@@ -1,6 +1,7 @@
 import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { readReceiptAggregatePricing } from "@/lib/receiptAggregatePricing";
 import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
+import { receiptIsFullyPaid } from "@/lib/receiptFinancialState";
 
 const record = (value: any): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value : {};
 export const recognitionDate = (value: unknown): Date | null => {
@@ -15,13 +16,10 @@ export function getReceiptRecognitionDate(receipt: any): Date | null {
   if (!receipt || isReceiptCancelledForSales(receipt)) return null;
   const data = record(receipt.data);
   const flow = readReceiptProjectFlow(data.projectFlow);
+  if ((receipt.order?.paidAmount != null || receipt.order?.paymentStatus != null) && !receiptIsFullyPaid(receipt)) return null;
   const completedAt = flow?.isProject ? getReceiptProjectCompletionDate(flow, undefined, receipt.generatedAt ?? receipt.createdAt) : null;
   if (flow?.isProject && !completedAt) return null;
   const pod = record(data.podDelivery);
-  if (Object.keys(pod).length || String(data.customerType).toLowerCase() === "pod") {
-    if (String(pod.status).toLowerCase() !== "delivered") return null;
-    return recognitionDate(pod.deliveredAt) ?? recognitionDate(pod.paidAt) ?? recognitionDate(pod.financialFinalizedAt) ?? recognitionDate(receipt.generatedAt ?? receipt.createdAt);
-  }
   const aggregate = readReceiptAggregatePricing(receipt);
   const support = receipt.financialPricingEvidence;
   const items = receipt.order?.items ?? [];
@@ -31,8 +29,12 @@ export function getReceiptRecognitionDate(receipt: any): Date | null {
   });
   if (!aggregate.isAuthoritativeTotal) {
     if (data.needsPricing === true || receipt.totals?.needsPricing === true) return null;
-    if (support && !support.complete) return null;
+    if (support && !support.complete && !costsKnown) return null;
     if (!support?.complete && !costsKnown && !(aggregate.buyingTotal > 0)) return null;
+  }
+  if (Object.keys(pod).length || String(data.customerType).toLowerCase() === "pod") {
+    if (String(pod.status).toLowerCase() !== "delivered") return null;
+    return recognitionDate(pod.deliveredAt) ?? recognitionDate(pod.paidAt) ?? recognitionDate(pod.financialFinalizedAt) ?? recognitionDate(receipt.generatedAt ?? receipt.createdAt);
   }
   const pricedAt = recognitionDate(data.financialRecognitionAt)
     ?? recognitionDate(data.buyingPriceUpdatedAt)

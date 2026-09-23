@@ -1158,12 +1158,13 @@ export async function GET(req: Request) {
     payrollRow,
     onlinePosSummary,
   });
-  const rowsWithCommission = attachReceiptCommissionImpact({
-    rows,
-    attendantEmail: user?.email ?? null,
-    salesCommissionMode: commissionConfig.salesCommissionMode,
-    tiers,
-  }).sort((a, b) => (a.sortAt < b.sortAt ? 1 : -1));
+  const rowsWithCommission: PerformanceReceiptRow[] = attendantCanonical.receiptBreakdown.map(row => ({
+    dateIso: (row.salesDate ?? row.createdAt) ? new Date((row.salesDate ?? row.createdAt)!.getTime() + 3 * 3600000).toISOString().slice(0, 10) : "Pending",
+    sortAt: (row.salesDate ?? row.createdAt)?.toISOString() ?? "",
+    receiptNumber: row.receiptKey, amount: row.eligibleSales, itemCount: row.eligible ? row.itemCount : 0,
+    profit: row.profit, paymentMethod: row.paymentMethod as "CASH" | "MPESA", status: `${row.reason}${row.eligible ? "" : ` (receipt value KSh ${row.sales.toLocaleString("en-KE")})`}`,
+    source: "POS", commissionImpact: row.commission ?? 0, productCommission: 0,
+  })).sort((a, b) => (a.sortAt < b.sortAt ? 1 : -1));
   const renderedReceiptCommission = rowsWithCommission.reduce(
     (sum, row) => sum + Number(row.commissionImpact ?? 0) + Number(row.productCommission ?? 0),
     0,
@@ -1202,14 +1203,10 @@ export async function GET(req: Request) {
     commissionConfig.salesCommissionMode === "POS_PROFIT_10"
       ? renderedReceiptCommission
       : Number(directSummaryCommission ?? renderedReceiptCommission ?? 0);
-  const headerSales = canonicalHeaderSales > 0 ? canonicalHeaderSales : renderedHeaderSales;
-  const headerReceipts = canonicalHeaderReceipts > 0 ? canonicalHeaderReceipts : renderedHeaderReceipts;
-  const headerItems =
-    Number(payrollRow?.totalItems ?? 0) > 0 ? Number(payrollRow?.totalItems ?? 0) : renderedHeaderItems;
-  const headerCommission =
-    canonicalHeaderCommission > 0
-      ? canonicalHeaderCommission
-      : renderedHeaderCommission;
+  const headerSales = canonicalHeaderSales;
+  const headerReceipts = canonicalHeaderReceipts;
+  const headerItems = attendantCanonical.totalItems;
+  const headerCommission = canonicalHeaderCommission;
 
   const html = renderHtml({
     attendantName: user?.name ?? "Attendant",
@@ -1230,7 +1227,13 @@ export async function GET(req: Request) {
     totalCopiedProducts: Number(payrollRow?.copiedProducts ?? reportAgg._sum.copiesUploaded ?? 0),
     walkInsServed: Number(reportAgg._sum.walkInServed ?? 0),
     walkInsPurchased: Number(reportAgg._sum.purchasesMade ?? 0),
-    summaryLines: summaryLinesForRender,
+    summaryLines: [
+      { label: "POS direct sales", sales: attendantCanonical.totalSales, commission: attendantCanonical.directSalesCommission, note: "Only financially eligible receipts; pending values listed below" },
+      { label: "POS product commission", note: "", sales: 0, commission: attendantCanonical.posProductCommission },
+      { label: "Marketplace commission", note: "", sales: 0, commission: attendantCanonical.marketplaceCommission },
+      { label: "Product activity", note: "", sales: 0, commission: attendantCanonical.newProductCommission + attendantCanonical.copiedCommission + attendantCanonical.editedCommission },
+      { label: "Commission adjustments", note: "", sales: 0, commission: attendantCanonical.commissionTopUpTotal },
+    ],
     rows: rowsWithCommission,
     // Attach canonical breakdown for debugging/consistency
     // (not displayed directly but available via PDF rendering if needed)

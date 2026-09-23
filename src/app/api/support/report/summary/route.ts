@@ -51,9 +51,7 @@ export async function GET(req: Request) {
     profitRecognitionMode: "salesDate",
     paymentScope: "paidOnly",
   });
-  const directCommission = usesPosProfit10
-    ? Math.round(Math.max(0, Number(posSummary.totalProfit ?? 0)) * 0.1)
-    : attendantSummary.directSalesCommission;
+  const directCommission = attendantSummary.directSalesCommission;
 
   return NextResponse.json({
     period: {
@@ -69,17 +67,13 @@ export async function GET(req: Request) {
       totalReceipts: Number(posSummary.totalReceipts ?? aggregates.totalReceipts),
       totalItems: Number(posSummary.totalItems ?? aggregates.totalItems),
       batteryEarnings: (aggregates.newBatteries + aggregates.changedBatteries) * 70,
-      commission: usesPosProfit10 ? directCommission : attendantSummary.totalCommission,
+      commission: attendantSummary.totalCommission,
+      recordedSales: attendantSummary.recordedSales,
+      commissionEligibleSales: attendantSummary.commissionEligibleSales,
+      receiptBreakdown: attendantSummary.receiptBreakdown,
       directCommission,
       nextTarget: null,
-      commissionBreakdown: usesPosProfit10
-        ? {
-            ...(attendantSummary.breakdown ?? {}),
-            direct: directCommission,
-            total: directCommission,
-            source: "POS_PROFIT_10",
-          }
-        : attendantSummary.breakdown ?? undefined,
+      commissionBreakdown: attendantSummary.breakdown,
     },
   });
 }

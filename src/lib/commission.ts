@@ -14,7 +14,7 @@ export type CommissionBreakdown = {
   grossCommission: number;
 };
 
-const DEFAULT_TIERS = [
+export const DEFAULT_TIERS = [
   { minSales: 500_000, maxSales: 1_000_000, payoutFlat: 10_000 },
   { minSales: 2_000_000, maxSales: 2_000_000, payoutFlat: 15_000 },
   { minSales: 3_000_000, maxSales: 3_000_000, payoutFlat: 20_000 },
@@ -27,33 +27,6 @@ const DEFAULT_TIERS = [
   { minSales: 10_000_000, maxSales: 10_000_000, payoutFlat: 20_000 },
 ];
 
-type TiersLike = { minSales: number; maxSales?: number | null; payoutFlat: number };
-type NormalizedTier = { minSales: number; maxSales: number | null; payoutFlat: number };
-
-function normalizeTiers<T extends TiersLike>(tiers: T[]): NormalizedTier[] {
-  return tiers
-    .map((tier) => ({
-      minSales: Number(tier.minSales),
-      maxSales: tier.maxSales == null ? null : Number(tier.maxSales),
-      payoutFlat: Number(tier.payoutFlat),
-    }))
-    .sort((a, b) => a.minSales - b.minSales);
-}
-
-function tiersAreEqual(a: NormalizedTier[], b: NormalizedTier[]) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (
-      a[i].minSales !== b[i].minSales ||
-      a[i].maxSales !== b[i].maxSales ||
-      a[i].payoutFlat !== b[i].payoutFlat
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
 export async function getOrCreateCommissionPeriod(date: Date) {
   const tradingPeriod = getTradingPeriodFor(date);
   if (!tradingPeriod) throw new Error("No trading period for given date");
@@ -62,8 +35,7 @@ export async function getOrCreateCommissionPeriod(date: Date) {
 
   let period = await prisma.commissionPeriod.findFirst({
     where: {
-      startDate: start,
-      endDate: end,
+      OR: [{ startDate: start, endDate: end }, { startDate: new Date(`${periodKey.split("_")[0]}T00:00:00.000Z`), endDate: new Date(`${periodKey.split("_")[1]}T23:59:59.999Z`) }],
     },
   });
 
@@ -82,13 +54,9 @@ export async function getOrCreateCommissionPeriod(date: Date) {
     orderBy: { minSales: "asc" },
   });
 
-  const normalizedExisting = normalizeTiers(existingTiers);
-  const normalizedDefaults = normalizeTiers(DEFAULT_TIERS);
-
   let tiers = existingTiers;
   if (
-    normalizedExisting.length === 0 ||
-    !tiersAreEqual(normalizedExisting, normalizedDefaults)
+    existingTiers.length === 0
   ) {
     await prisma.commissionTier.deleteMany({ where: { periodId: period.id } });
     await prisma.commissionTier.createMany({

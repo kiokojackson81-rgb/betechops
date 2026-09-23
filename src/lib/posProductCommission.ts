@@ -1,5 +1,6 @@
 import { getReceiptRecognitionDate } from "@/lib/receiptRecognition";
 import { attachReceiptPricingEvidence } from "@/lib/receiptRecognitionData";
+import { receiptFinancialExclusion } from "@/lib/receiptFinancialState";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
@@ -70,6 +71,7 @@ export async function getReleasedPosProductCommissionForStaffPeriod(
   return rows.reduce((sum, row) => {
     if (!isPosProductCommissionEntry(row)) return sum;
     const receipt = row.orderItem?.order?.receipt;
+    if (receipt && receiptFinancialExclusion(receipt)) return sum;
     const effectiveAt = receipt ? getReceiptRecognitionDate(receipt) : getReleasedPosCommissionEffectiveAt(row);
     if (!effectiveAt) return sum;
     const time = effectiveAt.getTime();

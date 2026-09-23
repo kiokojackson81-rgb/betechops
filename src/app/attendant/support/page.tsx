@@ -1,5 +1,6 @@
 "use client";
 
+import EmployeeSalesAudit from "@/components/EmployeeSalesAudit";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -314,6 +315,7 @@ export default function SupportOpsPage() {
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto max-w-[1400px] space-y-5 sm:space-y-6">
+      <EmployeeSalesAudit periodKey={selectedPeriodKey} impersonateId={impersonateId} />
         <section className="overflow-hidden rounded-[28px] border border-cyan-400/15 bg-gradient-to-br from-[#132235] via-[#0d1929] to-[#07111f] p-5 shadow-2xl shadow-black/20 sm:p-7">
           <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr] xl:items-center">
             <div>

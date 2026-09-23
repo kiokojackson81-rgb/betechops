@@ -46,8 +46,7 @@ export async function GET(req: Request) {
   const isBrendah = commissionConfig.salesCommissionMode === "BRENDAH_DIRECT";
   const isJeniffer = commissionConfig.salesCommissionMode === "JENIFFER_PRORATED";
 
-  const today = nowInNairobi();
-  const { tiers } = await getOrCreateCommissionPeriod(today);
+  const today = new Date();
   const current = await getCurrentTradingPeriodFor(today);
   const periodKeyParam = url.searchParams.get("periodKey");
   const requestedPeriod = parseTradingPeriodKey(periodKeyParam ?? undefined);
@@ -80,6 +79,9 @@ export async function GET(req: Request) {
       label: fallback.label,
     };
   }
+
+  argPeriod = parseTradingPeriodKey(argPeriod.key) ?? argPeriod;
+  const { tiers } = await getOrCreateCommissionPeriod(argPeriod.start);
 
   const [marketingSummary, supportSummary] = await Promise.all([
     summarizeMarketingReportsForPeriod({
@@ -176,6 +178,7 @@ export async function GET(req: Request) {
       salesOnly: true,
     });
     posSummary = {
+      recordedSales: 0, commissionEligibleSales: 0, receiptBreakdown: [],
       totalSales: adminSummary.totalSales,
       totalProfit: adminSummary.totalProfit,
       totalItems: adminSummary.itemsCount,
@@ -317,7 +320,7 @@ export async function GET(req: Request) {
     argPeriod.start,
     argPeriod.end,
   );
-  if (releasedPosCommission > 0) {
+  if (!canonicalCommission && releasedPosCommission > 0) {
     totalProfit -= releasedPosCommission;
     commission += releasedPosCommission;
   }
@@ -343,6 +346,10 @@ export async function GET(req: Request) {
   };
 
   if (canonicalCommission) {
+    payload.aggregates.recordedSales = canonicalCommission.recordedSales;
+    payload.aggregates.commissionEligibleSales = canonicalCommission.commissionEligibleSales;
+    payload.aggregates.receiptBreakdown = canonicalCommission.receiptBreakdown;
+    payload.aggregates.totalProfit = canonicalCommission.totalProfit;
     payload.aggregates.commissionBreakdown = {
       directSalesCommission: Number(canonicalCommission.directSalesCommission ?? 0),
       posProductCommission: Number(canonicalCommission.posProductCommission ?? 0),
