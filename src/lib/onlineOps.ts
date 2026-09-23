@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
-import { getOrCreateCommissionPeriod, computeProductCommissions } from "@/lib/commission";
+import { getCommissionPeriodForRead, computeProductCommissions } from "@/lib/commission";
 import {
   computeBrendahDirectCommission,
   computeOnlinePeriodCommission,
@@ -20,7 +20,6 @@ import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 
 type AssignmentWithAccount = any;
@@ -641,7 +640,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
       end: marketplaceWindow.end,
     }),
     getOnlineEarningsSummary(attendantId, { period }),
-    getOrCreateCommissionPeriod(period.start),
+    getCommissionPeriodForRead(period.start),
   ]);
 
   const ledger = await findPreferredCommissionLedger(attendantId, period);
@@ -707,7 +706,6 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
   const { roles } = await getMarketplaceAssignmentsForUser(attendantId);
 
-  await ensurePayrollAdjustmentStorage();
   const [directStats, marketplaceSalesSummary, plan, adjustments, returns, user] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     getAssignedMarketplaceSalesForPeriod(attendantId, {

@@ -3,10 +3,10 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
-import { buildPayrollRow } from "@/lib/adminPayroll";
-import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
+import { calculatePayrollForAttendant } from "@/lib/adminPayroll";
 import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
+import { startPayrollTiming } from "@/lib/payrollTiming";
 
 // Compatibility route for older clients that call /api/payroll/summary
 // Behaviour:
@@ -21,6 +21,7 @@ function parsePeriod(url: URL) {
 }
 
 export async function GET(req: Request) {
+  const timing = startPayrollTiming("/api/payroll/summary");
   const url = new URL(req.url);
   const session: any = await getServerSession(authOptions as any);
   const actorId = session?.user?.id ?? null;
@@ -47,9 +48,9 @@ export async function GET(req: Request) {
       if (!attendant) {
         return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
       }
-      const row = await applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period);
+      const row = await calculatePayrollForAttendant(attendant, period);
       const payloadRow = { periodLabel: period.label, ...row };
-      return NextResponse.json({ periodLabel: period.label, rows: [payloadRow], row: payloadRow });
+      return timing.finish(NextResponse.json({ periodLabel: period.label, rows: [payloadRow], row: payloadRow }));
     }
 
     const attendants = await prisma.user.findMany({
@@ -59,11 +60,11 @@ export async function GET(req: Request) {
     });
     const builtRows = await Promise.all(
       attendants.map(async (attendant) =>
-        applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period),
+        calculatePayrollForAttendant(attendant, period),
       ),
     );
     const rows = builtRows.map((row) => ({ periodLabel: period.label, ...row }));
-    return NextResponse.json({ periodLabel: period.label ?? "", rows });
+    return timing.finish(NextResponse.json({ periodLabel: period.label ?? "", rows }));
   }
 
   const targetAttendant = actorId;
@@ -78,7 +79,7 @@ export async function GET(req: Request) {
   if (!attendant) {
     return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
   }
-  const row = await applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period);
+  const row = await calculatePayrollForAttendant(attendant, period);
   const payloadRow = { periodLabel: period.label, ...row };
-  return NextResponse.json({ periodLabel: period.label, rows: [payloadRow], row: payloadRow });
+  return timing.finish(NextResponse.json({ periodLabel: period.label, rows: [payloadRow], row: payloadRow }));
 }

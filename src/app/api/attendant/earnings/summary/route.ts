@@ -4,17 +4,17 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import getAttendantCommissionSummary from "@/lib/attendantCommission";
 import type { Role } from "@prisma/client";
-import { buildPayrollRow } from "@/lib/adminPayroll";
+import { calculatePayrollForAttendant } from "@/lib/adminPayroll";
 import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
-import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
+import { startPayrollTiming } from "@/lib/payrollTiming";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const timing = startPayrollTiming("/api/attendant/earnings/summary");
   const identity = await resolveTargetUserId(req, { allowedImpersonationRoles: ["ADMIN" as Role] });
   const meta = identity;
   const userId = identity.resolvedUserId;
@@ -34,7 +34,6 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const periodKeyParam = url.searchParams.get("periodKey");
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
-  await getOrCreateCommissionPeriod(period.start);
 
   const isBrendahTarget = (targetUser.email ?? "").toLowerCase().trim() === "brendah@betech.co.ke";
 
@@ -51,7 +50,7 @@ export async function GET(req: Request) {
         },
       },
     }),
-    applyCanonicalPayrollOverrides(await buildPayrollRow(targetUser, period), period),
+    calculatePayrollForAttendant(targetUser, period),
     isBrendahTarget ? getBrendahCommissionForPeriod(userId, period) : Promise.resolve(null),
   ]);
   const attendantCanonical = await getAttendantCommissionSummary({ attendantId: userId, start: period.start, end: period.end });
@@ -155,5 +154,5 @@ export async function GET(req: Request) {
   payload.totalEarnings = Number(payload.baseSalary) + Number(payload.transportAllowance) + attendantCanonical.totalCommission + Number(payload.bonusTotal);
   payload.netPay = payload.totalEarnings - Number(payload.totalDeductions);
 
-  return NextResponse.json(composeIdentityResponse(meta, payload));
+  return timing.finish(NextResponse.json(composeIdentityResponse(meta, payload)));
 }

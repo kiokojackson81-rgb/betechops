@@ -6,16 +6,10 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getUnpricedDailySalesForRange } from "@/lib/marketingUnpricedSales";
 import { groupMarketingUnpricedSales } from "@/lib/unpricedReceiptGrouping";
 import { getReviewsReferralsAdminSummary } from "@/lib/reviewsReferrals";
-import {
-  ensureQuoteRequestsSchema,
-  listAllQuoteRequests,
-} from "@/lib/quoteRequests";
+import { listAllQuoteRequests } from "@/lib/quoteRequests";
 import { isPendingQuotationStatus } from "@/lib/operationsWorkQueue";
-import { ensureSiteVisitsSchema, listAdminSiteVisits } from "@/lib/siteVisits";
-import {
-  ensureWebsiteOrdersSchema,
-  websiteCheckoutOrderWhere,
-} from "@/lib/websiteOrders";
+import { listAdminSiteVisits } from "@/lib/siteVisits";
+import { websiteCheckoutOrderWhere } from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +23,6 @@ export async function GET() {
       count: (args: { where: { status: string } }) => Promise<number>;
     };
   };
-
-  await Promise.all([
-    ensureQuoteRequestsSchema(),
-    ensureSiteVisitsSchema(),
-    ensureWebsiteOrdersSchema(),
-  ]);
 
   const [
     pendingOrders,

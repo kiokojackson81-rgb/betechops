@@ -4,10 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { getPeriodKeyVariants } from "@/lib/payrollPeriodKey";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import { notifyPayrollAdjustmentApplied } from "@/services/payroll-notifications/payroll-notification.service";
+import { startPayrollTiming } from "@/lib/payrollTiming";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, ctx: any) {
+  const timing = startPayrollTiming("/api/admin/attendants/:id/payroll-adjustments");
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
   const params = (ctx && (ctx.params || ctx)) || {};
@@ -42,7 +44,7 @@ export async function GET(req: Request, ctx: any) {
       where.periodKey = { in: variants.length ? variants : [periodKey] };
     }
     const rows = await prisma.attendantPayrollAdjustment.findMany({ where, orderBy: { createdAt: "desc" } });
-    return NextResponse.json({ rows });
+    return timing.finish(NextResponse.json({ rows }));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to fetch adjustments";
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -92,7 +94,6 @@ export async function POST(req: Request, ctx: any) {
   if (!attendantId) return NextResponse.json({ error: "attendantId required" }, { status: 400 });
 
   try {
-    await ensurePayrollAdjustmentStorage();
     const kindCandidate = String(adjustmentKind ?? "DEDUCTION").toUpperCase();
     const kind = kindCandidate === "ADDITION" ? "ADDITION" : "DEDUCTION";
     const created = await prisma.attendantPayrollAdjustment.create({

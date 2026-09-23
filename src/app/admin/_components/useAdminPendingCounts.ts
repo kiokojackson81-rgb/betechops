@@ -25,6 +25,40 @@ const ZERO_COUNTS: AdminPendingCounts = {
   websiteOrders: 0,
 };
 
+let pendingCountsRequest: Promise<AdminPendingCounts> | null = null;
+let pendingCountsCachedAt = 0;
+let pendingCountsCache: AdminPendingCounts | null = null;
+
+async function fetchPendingCountsOnce(): Promise<AdminPendingCounts> {
+  // AdminTopNav and AdminTopbarBadges mount together. Share their request and
+  // retain the result briefly so focus/navigation cannot create a burst.
+  if (pendingCountsCache && Date.now() - pendingCountsCachedAt < 5_000) return pendingCountsCache;
+  if (pendingCountsRequest) return pendingCountsRequest;
+  pendingCountsRequest = fetch("/api/admin/pending-counts", { cache: "no-store" })
+    .then(async (response) => {
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.counts) return ZERO_COUNTS;
+      return {
+        orders: Number(payload.counts.orders ?? 0),
+        pendingPricing: Number(payload.counts.pendingPricing ?? 0),
+        projects: Number(payload.counts.projects ?? 0),
+        wellness: Number(payload.counts.wellness ?? 0),
+        siteVisits: Number(payload.counts.siteVisits ?? 0),
+        customerReviews: Number(payload.counts.customerReviews ?? 0),
+        quotationCenter: Number(payload.counts.quotationCenter ?? 0),
+        websiteOrders: Number(payload.counts.websiteOrders ?? 0),
+      };
+    })
+    .catch(() => ZERO_COUNTS)
+    .then((counts) => {
+      pendingCountsCache = counts;
+      pendingCountsCachedAt = Date.now();
+      return counts;
+    })
+    .finally(() => { pendingCountsRequest = null; });
+  return pendingCountsRequest;
+}
+
 export function useAdminPendingCounts() {
   const [counts, setCounts] = useState<AdminPendingCounts | null>(null);
   const pathname = usePathname();
@@ -35,27 +69,8 @@ export function useAdminPendingCounts() {
     let ignore = false;
 
     const refreshCounts = async () => {
-      try {
-        const response = await fetch("/api/admin/pending-counts", { cache: "no-store" });
-        const payload = await response.json().catch(() => ({}));
-        if (ignore) return;
-        if (!response.ok || !payload?.counts) {
-          setCounts(ZERO_COUNTS);
-          return;
-        }
-        setCounts({
-          orders: Number(payload.counts.orders ?? 0),
-          pendingPricing: Number(payload.counts.pendingPricing ?? 0),
-          projects: Number(payload.counts.projects ?? 0),
-          wellness: Number(payload.counts.wellness ?? 0),
-          siteVisits: Number(payload.counts.siteVisits ?? 0),
-          customerReviews: Number(payload.counts.customerReviews ?? 0),
-          quotationCenter: Number(payload.counts.quotationCenter ?? 0),
-          websiteOrders: Number(payload.counts.websiteOrders ?? 0),
-        });
-      } catch {
-        if (!ignore) setCounts(ZERO_COUNTS);
-      }
+      const next = await fetchPendingCountsOnce();
+      if (!ignore) setCounts(next);
     };
 
     const refreshWhenVisible = () => {

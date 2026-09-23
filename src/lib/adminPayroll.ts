@@ -14,7 +14,7 @@ import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
 import {
   computeSalesCommissionFromTiers,
   computeJenifferProratedCommission,
-  getOrCreateCommissionPeriod,
+  getCommissionPeriodForRead,
 } from "@/lib/commission";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { getReleasedPosProductCommissionForStaffPeriod } from "@/lib/posProductCommission";
@@ -23,6 +23,8 @@ import {
   TECHNICAL_POS_PROFIT_COMMISSION_RATE,
 } from "@/lib/technicalCompensation";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "@/app/admin/payroll/types";
+import { summarizeAdjustments } from "@/lib/payrollAdjustments";
+export { summarizeAdjustments } from "@/lib/payrollAdjustments";
 
 type AttendantRecord = {
   id: string;
@@ -52,13 +54,19 @@ function datesBetween(start: Date, end: Date): Date[] {
   return out;
 }
 
-export async function ensureRecurringAdjustmentsForPeriod(attendantId: string, period: TradingPeriod) {
+/**
+ * Expand recurring items in memory. Payroll reads must never materialise these
+ * rows: doing so made a GET perform deletes/upserts and caused the employee,
+ * admin and PDF paths to observe different data at different times.
+ */
+async function getRecurringAdjustmentsForPeriod(attendantId: string, period: TradingPeriod) {
   const recurringItems = await prisma.attendantRecurringPayrollItem.findMany({
     where: { attendantId, isActive: true },
   });
-  if (!recurringItems.length) return;
+  if (!recurringItems.length) return [];
 
   const periodDates = datesBetween(period.start, period.end);
+  const entries: Array<{ id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }> = [];
   for (const item of recurringItems) {
     const startGate = item.startDate ? toDateOnly(item.startDate) : null;
     const endGate = item.endDate ? toDateOnly(item.endDate) : null;
@@ -81,158 +89,19 @@ export async function ensureRecurringAdjustmentsForPeriod(attendantId: string, p
       }
     }
 
-    if (!occurrences.length) {
-      await prisma.attendantPayrollAdjustment.deleteMany({
-        where: {
-          attendantId,
-          periodKey: period.key,
-          recurringItemId: item.id,
-        },
-      });
-      continue;
-    }
-
-    const occurrenceIsoSet = new Set(occurrences.map((d) => d.toISOString()));
-
-    await prisma.attendantPayrollAdjustment.deleteMany({
-      where: {
-        attendantId,
-        periodKey: period.key,
-        recurringItemId: item.id,
-        NOT: {
-          occurrenceDate: {
-            in: Array.from(occurrenceIsoSet).map((iso) => new Date(iso)),
-          },
-        },
-      },
-    });
-
     for (const occurrence of occurrences) {
-      await prisma.attendantPayrollAdjustment.upsert({
-        where: {
-          recurringItemId_periodKey_occurrenceDate: {
-            recurringItemId: item.id,
-            periodKey: period.key,
-            occurrenceDate: occurrence,
-          },
-        },
-        update: {
-          periodLabel: period.label,
-          adjustmentType: item.adjustmentType,
-          adjustmentKind: item.adjustmentKind,
-          label: item.label,
-          amount: item.amount,
-        },
-        create: {
-          attendantId,
-          periodKey: period.key,
-          periodLabel: period.label,
-          adjustmentType: item.adjustmentType,
-          adjustmentKind: item.adjustmentKind,
-          label: item.label,
-          amount: item.amount,
-          createdById: item.createdById,
-          recurringItemId: item.id,
-          occurrenceDate: occurrence,
-        },
+      entries.push({
+        id: `recurring:${item.id}:${occurrence.toISOString().slice(0, 10)}`,
+        label: item.label,
+        amount: item.amount,
+        adjustmentType: item.adjustmentType,
+        adjustmentKind: item.adjustmentKind,
       });
     }
   }
+  return entries;
 }
 
-function baseAdjustmentSummary() {
-  return {
-    totalBonus: 0,
-    totalDeduction: 0,
-    breakdown: {
-      chama: 0,
-      lateness: 0,
-      discipline: 0,
-      other: 0,
-      bonus: 0,
-      commissionTopUp: 0,
-      penalties: 0,
-    } satisfies AdjustmentBreakdown,
-    entries: [] as AdjustmentEntry[],
-  };
-}
-
-function summarizeAdjustments(adjustments: Array<{
-  id: string;
-  label: string;
-  amount: number | null;
-  adjustmentType: string;
-  adjustmentKind?: string | null;
-}>) {
-  const summary = baseAdjustmentSummary();
-
-  for (const adjustment of adjustments) {
-    const amount = Number(adjustment.amount ?? 0);
-    const bonusType = adjustment.adjustmentType === "BONUS";
-    const topUpType = adjustment.adjustmentType === "COMMISSION_TOPUP";
-    const deductionType =
-      adjustment.adjustmentType === "CHAMA" ||
-      adjustment.adjustmentType === "LATENESS" ||
-      adjustment.adjustmentType === "DISCIPLINE" ||
-      adjustment.adjustmentType === "OTHER";
-    const kind =
-      (adjustment.adjustmentKind as AdjustmentKind | undefined) ??
-      (bonusType || topUpType ? "ADDITION" : "DEDUCTION");
-
-    summary.entries.push({
-      id: adjustment.id,
-      label: adjustment.label,
-      amount,
-      adjustmentType: adjustment.adjustmentType,
-      kind,
-    });
-
-    if (kind === "ADDITION") {
-      if (bonusType) {
-        summary.totalBonus += amount;
-        summary.breakdown.bonus += amount;
-      } else if (topUpType) {
-        summary.totalBonus += amount;
-        summary.breakdown.commissionTopUp += amount;
-      } else if (adjustment.adjustmentType === "CHAMA") {
-        summary.totalDeduction -= amount;
-        summary.breakdown.chama -= amount;
-      } else if (adjustment.adjustmentType === "LATENESS") {
-        summary.totalDeduction -= amount;
-        summary.breakdown.lateness -= amount;
-      } else if (adjustment.adjustmentType === "DISCIPLINE") {
-        summary.totalDeduction -= amount;
-        summary.breakdown.discipline -= amount;
-      } else if (adjustment.adjustmentType === "OTHER") {
-        summary.totalDeduction -= amount;
-        summary.breakdown.other -= amount;
-      } else {
-        summary.totalBonus += amount;
-        summary.breakdown.bonus += amount;
-      }
-      continue;
-    }
-
-    if (bonusType) {
-      summary.totalBonus -= amount;
-      summary.breakdown.bonus -= amount;
-    } else if (topUpType) {
-      summary.totalBonus -= amount;
-      summary.breakdown.commissionTopUp -= amount;
-    } else if (deductionType) {
-      summary.totalDeduction += amount;
-      if (adjustment.adjustmentType === "CHAMA") summary.breakdown.chama += amount;
-      else if (adjustment.adjustmentType === "LATENESS") summary.breakdown.lateness += amount;
-      else if (adjustment.adjustmentType === "DISCIPLINE") summary.breakdown.discipline += amount;
-      else summary.breakdown.other += amount;
-    } else {
-      summary.totalDeduction += amount;
-      summary.breakdown.other += amount;
-    }
-  }
-
-  return summary;
-}
 
 function isOnlineCategory(category?: string | null) {
   return category === "JUMIA_KILIMALL_OPS" || category === "BETECH_OPS" || category === "GENERAL_OPS";
@@ -298,7 +167,7 @@ async function buildPayrollRowResolved(
   options: PayrollBuildOptions,
 ): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
-  const [plan, ledger, adjustments] = await Promise.all([
+  const [plan, ledger, adjustments, recurringAdjustments] = await Promise.all([
     prisma.attendantCompPlan.findUnique({ where: { attendantId: attendant.id } }),
     prisma.commissionLedger.findUnique({
       where: {
@@ -310,23 +179,16 @@ async function buildPayrollRowResolved(
       },
     }),
     prisma.attendantPayrollAdjustment.findMany({
-      // Load by attendant first, then apply the normalized period-key set
-      // below. Older adjustment rows were saved with legacy key formatting;
-      // filtering only in SQL could silently omit valid bonuses/deductions.
-      where: { attendantId: attendant.id },
+      // Legacy materialised recurring rows are intentionally excluded. Active
+      // recurring definitions are expanded above, while one-off/requested
+      // adjustments remain immutable persisted records.
+      where: { attendantId: attendant.id, periodKey: { in: periodKeyVariants }, recurringItemId: null },
       orderBy: { createdAt: "desc" },
     }),
+    getRecurringAdjustmentsForPeriod(attendant.id, period),
   ]);
 
-  const normalizedPeriodKeys = new Set(periodKeyVariants.map((key) => String(key).replace(/[^0-9]/g, "")));
-  const periodLabelNeedle = period.label.replace(/\s+/g, " ").trim().toLowerCase();
-  const adjustmentSummary = summarizeAdjustments(
-    (adjustments as any[]).filter((adjustment) => {
-      const keyMatches = normalizedPeriodKeys.has(String(adjustment.periodKey ?? "").replace(/[^0-9]/g, ""));
-      const labelMatches = String(adjustment.periodLabel ?? "").replace(/\s+/g, " ").trim().toLowerCase() === periodLabelNeedle;
-      return keyMatches || labelMatches;
-    }),
-  );
+  const adjustmentSummary = summarizeAdjustments([...adjustments, ...recurringAdjustments] as any[]);
   const penalties = Number(ledger?.penalties ?? 0);
   adjustmentSummary.breakdown.penalties = penalties;
 
@@ -424,7 +286,7 @@ async function buildPayrollRowResolved(
         salesOnly: true,
       }),
       getUserCommissionConfigLike(attendant.id),
-      getOrCreateCommissionPeriod(period.start),
+      getCommissionPeriodForRead(period.start),
       getReleasedPosProductCommissionForStaffPeriod(attendant.id, period.start, period.end),
     ]);
 
@@ -510,7 +372,7 @@ async function buildPayrollRowResolved(
         salesOnly: true,
       }),
       getUserCommissionConfigLike(attendant.id),
-      getOrCreateCommissionPeriod(period.start),
+      getCommissionPeriodForRead(period.start),
       getReleasedPosProductCommissionForStaffPeriod(attendant.id, period.start, period.end),
     ]);
 
@@ -793,9 +655,9 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
   });
 }
 
-/** Build adjacent payroll periods with one shared cache so carry calculations
- * and repeated database reads are not duplicated by the earnings page. */
-export async function buildPayrollRows(attendant: AttendantRecord, periods: TradingPeriod[]): Promise<PayrollRow[]> {
-  const cache = new Map<string, Promise<PayrollRow>>();
-  return Promise.all(periods.map((period) => buildPayrollRowInternal(attendant, period, { cache, carryDepth: 0 })));
+/** The single canonical payroll calculation used by employee, admin and PDF reads. */
+export async function calculatePayrollForAttendant(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
+  const row = await buildPayrollRow(attendant, period);
+  const { applyCanonicalPayrollOverrides } = await import("@/lib/payrollCanonical");
+  return applyCanonicalPayrollOverrides(row, period);
 }

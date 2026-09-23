@@ -85,6 +85,22 @@ export async function getOrCreateCommissionPeriod(date: Date) {
   };
 }
 
+/** Read-only commission configuration for payroll/dashboard GET requests. */
+export async function getCommissionPeriodForRead(date: Date) {
+  const tradingPeriod = getTradingPeriodFor(date);
+  const period = await prisma.commissionPeriod.findFirst({
+    where: { startDate: tradingPeriod.start, endDate: tradingPeriod.end },
+  });
+  const tiers = period
+    ? await prisma.commissionTier.findMany({ where: { periodId: period.id }, orderBy: { minSales: "asc" } })
+    : [];
+  return {
+    period,
+    tiers: tiers.length ? tiers : DEFAULT_TIERS,
+    tradingPeriod: { key: tradingPeriod.key, label: tradingPeriod.label, startDate: tradingPeriod.start, endDate: tradingPeriod.end },
+  };
+}
+
 export function computeSalesCommissionFromTiers(
   totalSales: number,
   totalProfit: number,

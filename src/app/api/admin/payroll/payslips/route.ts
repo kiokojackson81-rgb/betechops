@@ -4,8 +4,7 @@ import { requireRole } from "@/lib/api";
 import { getBranding } from "@/lib/branding";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { parseTradingPeriodKey, getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { buildPayrollRow } from "@/lib/adminPayroll";
-import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
+import { calculatePayrollForAttendant } from "@/lib/adminPayroll";
 import { buildPayslipPayload, renderPayslipDocumentHtml, sanitizeFilename } from "@/lib/payrollPayslip";
 import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 
@@ -41,7 +40,7 @@ export async function GET(req: Request) {
 
   const slips = await Promise.all(
     attendants.map(async (attendant) => {
-      const row = await applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period);
+      const row = await calculatePayrollForAttendant(attendant, period);
       return buildPayslipPayload({
         attendant,
         row,

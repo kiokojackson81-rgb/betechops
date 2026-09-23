@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { startPayrollTiming } from "@/lib/payrollTiming";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ function resolveAttendantId(req: Request, ctx: any, body?: any) {
 }
 
 export async function GET(req: Request, ctx: any) {
+  const timing = startPayrollTiming("/api/admin/attendants/:id/payroll-recurring");
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
   const attendantId = resolveAttendantId(req, ctx);
@@ -27,7 +29,7 @@ export async function GET(req: Request, ctx: any) {
     where: { attendantId },
     orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
   });
-  return NextResponse.json({ rows });
+  return timing.finish(NextResponse.json({ rows }));
 }
 
 export async function POST(req: Request, ctx: any) {

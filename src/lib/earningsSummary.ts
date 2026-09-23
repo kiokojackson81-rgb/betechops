@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions, computeJenifferProratedCommission } from "./commission";
+import { getCommissionPeriodForRead, computeSalesCommissionFromTiers, computeProductCommissions, computeJenifferProratedCommission } from "./commission";
 import { computeDirectCommission, computeBrendahDirectCommission } from "./onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -61,7 +60,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   const periodKey = `${tradingPeriod.start.toISOString().split("T")[0]}_${tradingPeriod.end.toISOString().split("T")[0]}`;
   const periodLabel = tradingPeriod.label;
 
-  const { period, tiers, tradingPeriod: periodInfo } = await getOrCreateCommissionPeriod(now);
+  const { tiers, tradingPeriod: periodInfo } = await getCommissionPeriodForRead(now);
   const start = (periodInfo as any).startDate ?? (periodInfo as any).start;
   const end = (periodInfo as any).endDate ?? (periodInfo as any).end;
 
@@ -198,7 +197,6 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   const periodKeyDateOnly = `${startDateOnly}_${endDateOnly}`;
   const periodKeyIso = `${tradingPeriod.start.toISOString()}_${tradingPeriod.end.toISOString()}`;
 
-  await ensurePayrollAdjustmentStorage();
   const adjustments = await prisma.attendantPayrollAdjustment.findMany({
     where: {
       attendantId: opts.userId,
