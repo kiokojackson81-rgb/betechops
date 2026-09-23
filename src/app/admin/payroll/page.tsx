@@ -11,7 +11,6 @@ import { requireRole } from "@/lib/api";
 import PayrollTableClient from "./PayrollTableClient";
 import type { PayrollRow } from "./types";
 import { buildPayrollRow } from "@/lib/adminPayroll";
-import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 
 export const dynamic = "force-dynamic";
@@ -51,8 +50,11 @@ export default async function AdminPayrollPage({
     },
   });
 
+  // Build each row once. Canonical reconciliation is intentionally deferred to
+  // targeted refresh/API actions so the admin table does not run a second full
+  // receipt scan for every attendant during the initial page load.
   const rows: PayrollRow[] = await Promise.all(
-    attendants.map(async (attendant) => applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period)),
+    attendants.map((attendant) => buildPayrollRow(attendant, period)),
   );
 
   return (
