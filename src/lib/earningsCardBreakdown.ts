@@ -173,6 +173,21 @@ export function buildEarningsCardBreakdown(summary: SummaryLike | null | undefin
           { label: "Penalties", amount: num(summary.penalties ?? adjustments.penalties), kind: "deduction" as const },
         ].filter((line) => line.amount !== 0);
 
+  // Some legacy payroll rows contain the categorized totals but no complete
+  // entry list. Include any categorized amount not already represented so the
+  // screen and generated payslip agree with the admin adjustment record.
+  const represented = new Set(adjustmentLines.map((line) => line.label.toLowerCase()));
+  const categorizedFallbacks = [
+    { label: "Bonus", amount: num(summary.bonusTotal ?? adjustments.bonus), kind: "earning" as const },
+    { label: "Top-up", amount: num(summary.commissionTopUpTotal ?? adjustments.commissionTopUp), kind: "earning" as const },
+    { label: "Chama", amount: num(summary.chamaTotal ?? adjustments.chama), kind: "deduction" as const },
+    { label: "Lateness", amount: num(summary.latenessTotal ?? adjustments.lateness), kind: "deduction" as const },
+    { label: "Discipline", amount: num(summary.disciplineTotal ?? adjustments.discipline), kind: "deduction" as const },
+    { label: "Other deductions", amount: num(summary.otherDeductionsTotal ?? adjustments.other), kind: "deduction" as const },
+    { label: "Penalties", amount: num(summary.penalties ?? adjustments.penalties), kind: "deduction" as const },
+  ].filter((line) => line.amount !== 0 && !represented.has(line.label.toLowerCase()));
+  adjustmentLines.push(...categorizedFallbacks);
+
   const lines = [...baseLines, ...adjustmentLines];
   const totalEarningsDerived = lines
     .filter((line) => line.kind === "earning")
