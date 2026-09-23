@@ -47,4 +47,19 @@ describe('GET /api/receipts', () => {
       ],
     });
   });
+
+  it('does not expose profit or completed payment status for an unpaid completed project', async () => {
+    (prisma as any).receipt.findMany.mockResolvedValue([{
+      id: 'project-unpaid', receiptNumber: 'BETECH2026091412548', docType: 'RECEIPT',
+      generatedAt: new Date('2026-09-14T07:16:04.506Z'), totals: { total: 860000, buyingTotal: 500000 },
+      data: { customerType: 'project', projectFlow: { isProject: true, stage: 'COMPLETED_POSTED', projectValue: 860000, totalPaidAmount: 0, paymentStatus: 'UNPAID' } },
+      order: { orderNumber: 'BETECH2026091412548', customerName: 'University of Eastern Africa Baraton', totalAmount: 860000, paidAmount: 0, paymentStatus: 'UNPAID', status: 'COMPLETED', items: [] },
+    }]);
+    (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
+    (prisma as any).supportReceipt.findMany.mockResolvedValue([]);
+    const body = await (await GET(new Request('http://localhost/api/receipts?customerType=project&scope=global'))).json();
+    expect(body.receipts[0]).toMatchObject({ projectStage: 'COMPLETED_POSTED', status: 'PENDING', paymentStatus: 'UNPAID' });
+    expect(body.receipts[0].profit).toBeUndefined();
+    expect(body.summary.totalProfit).toBe(0);
+  });
 });

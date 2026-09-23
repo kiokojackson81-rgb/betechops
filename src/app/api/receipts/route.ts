@@ -688,11 +688,11 @@ export async function GET(req: NextRequest) {
       deliveryFee: podDeliveryFee,
     });
     const baseProfit = contributor?.profit ?? (recognized.hasAnyPricedItems ? recognized.recognizedProfit : null);
-    const profit =
-      typeof baseProfit === "number"
-        ? baseProfit
-        : baseProfit;
     const effectivePaymentStatus = (r.order as any)?.paymentStatus ?? null;
+    const fullyPaid =
+      String(effectivePaymentStatus).toUpperCase() === "PAID" &&
+      Number((r.order as any)?.paidAmount ?? 0) >= Number((r.order as any)?.totalAmount ?? total);
+    const profit = fullyPaid && getReceiptRecognitionDate(r) !== null ? baseProfit : null;
     const effectiveProjectPaymentStatus = projectFlowData?.paymentStatus ?? null;
     const effectiveProjectStage =
       projectFlowData?.isProject && r.order?.status === "CANCELED"
@@ -728,7 +728,11 @@ export async function GET(req: NextRequest) {
       attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
       // Correctly label historical M-Pesa Express records created before the
       // counter-sale completion status was introduced.
-      status: completedCounterSale ? "COMPLETED" : r.order?.status ?? r.order?.paymentStatus ?? null,
+      status: completedCounterSale
+        ? "COMPLETED"
+        : projectFlowData?.isProject && projectFlowData.stage === "COMPLETED_POSTED" && !fullyPaid
+          ? "PENDING"
+          : r.order?.status ?? r.order?.paymentStatus ?? null,
       customerType: String((r.data as any)?.customerType ?? "").trim() || null,
       items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
       paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
@@ -1061,7 +1065,9 @@ export async function GET(req: NextRequest) {
     const total = Number(row.total ?? 0);
     const buying = Number((row as any).buyingTotal ?? 0);
     const explicit = typeof (row as any).profit === 'number' ? (row as any).profit : undefined;
-    if (explicit !== undefined) {
+    if ((row as any).financialRecognized === false || String((row as any).paymentStatus ?? "").toUpperCase() !== "PAID") {
+      (row as any).profit = undefined;
+    } else if (explicit !== undefined) {
       (row as any).profit = explicit;
     } else if (buying > 0) {
       (row as any).profit = total - buying;
