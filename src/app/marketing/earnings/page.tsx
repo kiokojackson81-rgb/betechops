@@ -170,7 +170,9 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
 
   const comparisonPeriods: TradingPeriod[] = [];
   let cursor = selectedPeriod;
-  for (let index = 0; index < 6; index += 1) {
+  // Keep the initial server render responsive. Older periods are available
+  // through the period selector and do not need to block opening the page.
+  for (let index = 0; index < 2; index += 1) {
     comparisonPeriods.push(cursor);
     cursor = getPreviousTradingPeriod(cursor);
   }
@@ -260,8 +262,8 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
       <section id="history" className="scroll-mt-36 rounded-[24px] border border-white/10 bg-[#091223] p-4 sm:scroll-mt-24 sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-white">Six-period comparison</h2>
-            <p className="mt-1 text-sm text-slate-400">Compare net pay, commission, and deductions. Select any period for its complete breakdown.</p>
+            <h2 className="text-xl font-semibold text-white">Recent-period comparison</h2>
+            <p className="mt-1 text-sm text-slate-400">Compare the current and previous payroll periods. Select any period above for its complete breakdown.</p>
           </div>
           <div className="text-xs text-slate-500">Latest period first</div>
         </div>
