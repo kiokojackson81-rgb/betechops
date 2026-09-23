@@ -298,10 +298,9 @@ async function buildPayrollRowResolved(
   options: PayrollBuildOptions,
 ): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
-  // Read paths must remain read-only and fast. Storage setup and recurring
-  // materialization are handled by adjustment mutation/maintenance flows;
-  // running schema checks and writes for every payroll row caused multi-minute
-  // admin and employee payroll loads.
+  // Recurring items must be materialized before reading the period. The schema
+  // itself is initialized by mutation/maintenance flows, never here.
+  await ensureRecurringAdjustmentsForPeriod(attendant.id, period);
   const [plan, ledger, adjustments] = await Promise.all([
     prisma.attendantCompPlan.findUnique({ where: { attendantId: attendant.id } }),
     prisma.commissionLedger.findUnique({
