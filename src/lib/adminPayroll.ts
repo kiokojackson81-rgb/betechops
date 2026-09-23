@@ -52,7 +52,7 @@ function datesBetween(start: Date, end: Date): Date[] {
   return out;
 }
 
-async function ensureRecurringAdjustmentsForPeriod(attendantId: string, period: TradingPeriod) {
+export async function ensureRecurringAdjustmentsForPeriod(attendantId: string, period: TradingPeriod) {
   const recurringItems = await prisma.attendantRecurringPayrollItem.findMany({
     where: { attendantId, isActive: true },
   });
@@ -298,9 +298,6 @@ async function buildPayrollRowResolved(
   options: PayrollBuildOptions,
 ): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
-  // Recurring items must be materialized before reading the period. The schema
-  // itself is initialized by mutation/maintenance flows, never here.
-  await ensureRecurringAdjustmentsForPeriod(attendant.id, period);
   const [plan, ledger, adjustments] = await Promise.all([
     prisma.attendantCompPlan.findUnique({ where: { attendantId: attendant.id } }),
     prisma.commissionLedger.findUnique({

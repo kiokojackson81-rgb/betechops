@@ -11,7 +11,7 @@ import {
 import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
 import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
-import { buildPayrollRow } from "@/lib/adminPayroll";
+import { buildPayrollRow, ensureRecurringAdjustmentsForPeriod } from "@/lib/adminPayroll";
 import { emptyPayrollAppraisal } from "@/lib/payrollAppraisal";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +71,7 @@ export default async function PayrollPage({
   const period = requestedPeriod ?? currentPeriod;
   const periodKey = period.key;
   const periodLabel = period.label;
+  await ensureRecurringAdjustmentsForPeriod(attendantId, period);
 
   const currentLedgerRaw =
     (await prisma.commissionLedger.findUnique({
