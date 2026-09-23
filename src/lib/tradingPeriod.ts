@@ -47,43 +47,19 @@ const formatLabel = (date: Date) =>
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: "Africa/Nairobi",
   });
 
+export function nairobiDateKey(date: Date): string {
+  return new Date(date.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export function getTradingPeriodFor(date: Date): TradingPeriod {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const year = d.getFullYear();
-  const month = d.getMonth(); // 0-indexed
-  const day = d.getDate();
-
-  let startYear: number;
-  let startMonth: number;
-  let endYear: number;
-  let endMonth: number;
-
-  if (day >= 25) {
-    startYear = year;
-    startMonth = month;
-    // next month
-    const next = new Date(year, month + 1, 1);
-    endYear = next.getFullYear();
-    endMonth = next.getMonth();
-  } else {
-    // current period started last month
-    const prev = new Date(year, month - 1, 1);
-    startYear = prev.getFullYear();
-    startMonth = prev.getMonth();
-    endYear = year;
-    endMonth = month;
-  }
-
-  const start = new Date(startYear, startMonth, 25, 0, 0, 0, 0);
-  const end = new Date(endYear, endMonth, 24, 23, 59, 59, 999);
-
-  const label = `${formatLabel(start)} – ${formatLabel(end)}`;
-  const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}_${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
-
-  return { start, end, label, key };
+  const local = new Date(date.getTime() + 3 * 60 * 60 * 1000);
+  const month = local.getUTCMonth() - (local.getUTCDate() < 25 ? 1 : 0);
+  const startKey = new Date(Date.UTC(local.getUTCFullYear(), month, 25)).toISOString().slice(0, 10);
+  const endKey = new Date(Date.UTC(local.getUTCFullYear(), month + 1, 24)).toISOString().slice(0, 10);
+  return parseTradingPeriodKey(`${startKey}_${endKey}`)!;
 }
 
 export function getRecentTradingPeriods(n: number): TradingPeriod[] {
@@ -124,8 +100,8 @@ export function parseTradingPeriodKey(periodKey?: string): TradingPeriod | null 
   if (!startSegments || !endSegments) {
     return null;
   }
-  const start = new Date(startSegments.year, startSegments.month - 1, startSegments.day, 0, 0, 0, 0);
-  const end = new Date(endSegments.year, endSegments.month - 1, endSegments.day, 23, 59, 59, 999);
+  const start = new Date(`${startPart}T00:00:00.000+03:00`);
+  const end = new Date(`${endPart}T23:59:59.999+03:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return null;
   }

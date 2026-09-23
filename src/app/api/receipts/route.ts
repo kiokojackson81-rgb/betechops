@@ -1,3 +1,4 @@
+import { receiptFinancialExclusion, receiptSalesOwner } from "@/lib/receiptFinancialState";
 import { getReceiptRecognitionDate } from "@/lib/receiptRecognition";
 import { attachReceiptPricingEvidence } from "@/lib/receiptRecognitionData";
 import { NextRequest, NextResponse } from "next/server";
@@ -450,6 +451,7 @@ export async function GET(req: NextRequest) {
                 },
               },
               issuedBy: { select: { id: true, name: true } },
+            commissioningSession: { select: { status: true } },
             },
             orderBy: { generatedAt: "desc" },
           });
@@ -479,6 +481,7 @@ export async function GET(req: NextRequest) {
                 },
               },
               issuedBy: { select: { id: true, name: true } },
+            commissioningSession: { select: { status: true } },
             },
             orderBy: { generatedAt: "desc" },
           });
@@ -502,6 +505,7 @@ export async function GET(req: NextRequest) {
               },
             },
             issuedBy: { select: { id: true, name: true } },
+            commissioningSession: { select: { status: true } },
           },
           orderBy: { generatedAt: "desc" },
         });
@@ -542,11 +546,12 @@ export async function GET(req: NextRequest) {
       ? posReceipts.filter((row: any) => {
           const dataAttendantId =
             row?.data && typeof row.data === "object" ? String((row.data as any).attendantId ?? "").trim() : "";
-          return row?.order?.attendantId === attendantFilterParam || dataAttendantId === attendantFilterParam;
+          return receiptSalesOwner(row) === attendantFilterParam;
         })
       : posReceipts;
   const filteredPosReceipts = paidOnly
     ? issuerLockedPosReceipts.filter((row: any) => {
+        if (receiptFinancialExclusion(row)) return false;
         if (isPodReceipt(row)) {
           return isPodSettledForSales(row);
         }
@@ -737,6 +742,7 @@ export async function GET(req: NextRequest) {
       podDeliveryFee: podDeliveryFee > 0 ? podDeliveryFee : null,
       isProjectReceipt: Boolean(projectFlowData?.isProject),
       projectStage: effectiveProjectStage,
+      projectCommissioningStatus: (r as any).commissioningSession?.status ?? null,
       projectPaymentTerm: projectFlowData?.paymentTerm ?? null,
       projectPaymentStatus: effectiveProjectPaymentStatus,
       projectDepositType: projectFlowData?.depositType ?? null,
@@ -751,8 +757,8 @@ export async function GET(req: NextRequest) {
       projectBalancePendingAmount: projectFlowData?.balancePendingAmount ?? null,
       projectBalancePaymentMethod: projectFlowData?.balancePaymentMethod ?? null,
       projectBalanceReference: projectFlowData?.balanceReference ?? null,
-      projectTotalPaidAmount: projectFlowData?.totalPaidAmount ?? null,
-      projectRemainingAmount: projectFlowData?.remainingAmount ?? null,
+      projectTotalPaidAmount: projectFlowData ? Number(r.order?.paidAmount ?? projectFlowData.totalPaidAmount) : null,
+      projectRemainingAmount: projectFlowData ? Math.max(0, Number(r.order?.totalAmount ?? projectFlowData.projectValue) - Number(r.order?.paidAmount ?? projectFlowData.totalPaidAmount)) : null,
       projectPaymentNotes: projectFlowData?.paymentNotes ?? null,
       projectScheduledDate: projectFlowData?.scheduledDate ?? null,
       projectHandlerType: projectFlowData?.handlerType ?? null,

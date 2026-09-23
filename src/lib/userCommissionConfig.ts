@@ -43,18 +43,10 @@ export function deriveDefaultCommissionConfigFromUser(user: {
 }
 
 export async function getUserCommissionConfigLike(userId: string): Promise<UserCommissionConfigLike> {
-  try {
-    return await getOrCreateUserCommissionConfig(userId);
-  } catch (err: any) {
-    if (err?.code === "P2021") {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true, attendantCategory: true },
-      });
-      return deriveDefaultCommissionConfigFromUser(user ?? { email: null, attendantCategory: null });
-    }
-    throw err;
-  }
+  const existing = await (prisma as any).userCommissionConfig?.findUnique({ where: { userId } });
+  if (existing) return existing;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, attendantCategory: true } });
+  return deriveDefaultCommissionConfigFromUser(user ?? {});
 }
 
 export async function getOrCreateUserCommissionConfig(userId: string): Promise<UserCommissionConfigLike> {
@@ -71,33 +63,6 @@ export async function getOrCreateUserCommissionConfig(userId: string): Promise<U
 
   const existing = await prismaAny.userCommissionConfig.findUnique({ where: { userId } });
   if (existing) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, attendantCategory: true },
-    });
-    const derived = deriveDefaultCommissionConfigFromUser(user ?? { email: null, attendantCategory: null });
-    const normalizedEmail = (user?.email ?? "").toLowerCase().trim();
-    const shouldAutoHealBrendah =
-      normalizedEmail === "brendah@betech.co.ke" &&
-      (existing.posTotalsMode !== derived.posTotalsMode ||
-        existing.salesCommissionMode !== derived.salesCommissionMode);
-
-    if (shouldAutoHealBrendah) {
-      const updated = await prismaAny.userCommissionConfig.update({
-        where: { userId },
-        data: {
-          posTotalsMode: derived.posTotalsMode,
-          salesCommissionMode: derived.salesCommissionMode,
-        },
-      });
-      return {
-        id: updated.id,
-        userId: updated.userId,
-        posTotalsMode: updated.posTotalsMode,
-        salesCommissionMode: updated.salesCommissionMode,
-      };
-    }
-
     return {
       id: existing.id,
       userId: existing.userId,

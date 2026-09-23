@@ -1,3 +1,5 @@
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { receiptFinancialExclusion, receiptSalesOwner } from "@/lib/receiptFinancialState";
 import { getReceiptRecognitionDate } from "@/lib/receiptRecognition";
 import { attachReceiptPricingEvidence } from "@/lib/receiptRecognitionData";
 import { prisma } from "@/lib/prisma";
@@ -142,7 +144,7 @@ const buildPosStaffOwnerCondition = (userId?: string | null): Prisma.ReceiptWher
   return [
     { order: { attendantId: userId } },
     { data: { path: ["attendantId"], equals: userId } },
-    { data: { path: ["projectFlow", "handlerStaffId"], equals: userId } },
+    { issuedById: userId },
   ];
 };
 
@@ -191,457 +193,25 @@ const isCompletedProjectReceiptForSales = (receipt: any) => {
 
 const getReceiptSalesRecognitionDate = getReceiptRecognitionDate;
 
-async function computePosOnlyReceiptSummary({
-  start,
-  end,
-  attendantId,
-  paymentMethod,
-  search,
-  docType,
-  includeLedger = false,
-  salesOnly = true,
-  scope = "global",
-  currentUserId,
-  customerType,
-  podStatus,
-}: SummaryOptions): Promise<PosOnlySummaryResult> {
-  const normalizedDocType = docType ? docType.toUpperCase() : undefined;
-  const normalizedCustomerType = customerType ? customerType.toLowerCase().trim() : undefined;
-  const normalizedPodStatus = (() => {
-    const value = podStatus ? podStatus.toLowerCase().trim() : undefined;
-    if (!value) return undefined;
-    if (value === "failed") return "delivery_failed";
-    if (value === "delivery_failed" || value === "pending" || value === "delivered") return value;
-    return undefined;
-  })();
-
-  // Recognition may occur long after creation (pricing, POD delivery or project completion).
-  // Load eligible historical candidates, then apply the shared financial date below.
-  const basePosWhere: Prisma.ReceiptWhereInput = { AND: [{ createdAt: { lte: end } }] };
-
-  if (normalizedDocType) {
-    (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ docType: normalizedDocType as any });
-  }
-  if (paymentMethod) {
-    (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ data: { path: ["paymentMethod"], equals: paymentMethod } });
-  }
-  if (search) {
-    (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: buildPosSearchOr(search) });
-  }
-  const ownerId = attendantId ?? (scope === "mine" ? currentUserId : null);
-  const ownerOr = buildPosStaffOwnerCondition(ownerId);
-  if (ownerOr.length) {
-    (basePosWhere.AND as Prisma.ReceiptWhereInput[]).push({ OR: ownerOr });
-  }
-
-  const supportDailyEntryWhere: Prisma.SupportDailyEntryWhereInput = {};
-  if (ownerId) {
-    supportDailyEntryWhere.submittedById = ownerId;
-  }
-
-  const [basePosReceipts, latePricedSupportReceipts] = await Promise.all([
-    prisma.receipt.findMany({
-      where: basePosWhere,
-      include: {
-        order: {
-          include: {
-            items: {
-              include: {
-                orderCosts: { orderBy: { createdAt: "desc" }, take: 1 },
-                profitSnapshots: {
-                  orderBy: { computedAt: "desc" },
-                  take: 1,
-                  select: { unitCost: true },
-                },
-                product: { select: { lastBuyingPrice: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
-    prisma.supportReceipt.findMany({
-      where: {
-        ...(Object.keys(supportDailyEntryWhere).length ? { dailyEntry: supportDailyEntryWhere } : {}),
-        items: { some: { pricedAt: { gte: start, lte: end } } },
-        ...(search ? { OR: buildSupportSearchOr(search) } : {}),
-      },
-      select: {
-        receiptNumber: true,
-        receiptKey: true,
-        buyingTotal: true,
-        items: {
-          select: {
-            buyingPrice: true,
-            pricedAt: true,
-          },
-        },
-      },
-    }),
-  ]);
-
-  const lateReceiptNumbers = Array.from(
-    new Set(
-      latePricedSupportReceipts.flatMap((row) => {
-        return [
-          ...collectReceiptVariants(row.receiptNumber ?? undefined),
-          ...extractReceiptKeyTailVariants(row.receiptKey),
-        ];
-      }),
-    ),
-  );
-
-  const extraPosReceipts =
-    lateReceiptNumbers.length > 0
-      ? await prisma.receipt.findMany({
-          where: {
-            AND: [
-              ...(basePosWhere.AND as Prisma.ReceiptWhereInput[]).filter((clause) => !("generatedAt" in clause)),
-              {
-                OR: [
-                  { order: { orderNumber: { in: lateReceiptNumbers } } },
-                  { receiptNumber: { in: lateReceiptNumbers } },
-                ],
-              },
-            ],
-          },
-          include: {
-            order: {
-              include: {
-                items: {
-                  include: {
-                    orderCosts: { orderBy: { createdAt: "desc" }, take: 1 },
-                    profitSnapshots: {
-                      orderBy: { computedAt: "desc" },
-                      take: 1,
-                      select: { unitCost: true },
-                    },
-                    product: { select: { lastBuyingPrice: true } },
-                  },
-                },
-              },
-            },
-          },
-        })
-      : [];
-
-  const receiptsById = new Map<string, any>();
-  for (const receipt of [...basePosReceipts, ...extraPosReceipts]) {
-    receiptsById.set(receipt.id, receipt);
-  }
-
-  const mergedReceipts = Array.from(receiptsById.values());
-
-  const posReceiptsFinal = (() => {
-    const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
-    const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
-
-    if (normalizedCustomerType === "pod") {
-      const onlyPods = mergedReceipts.filter((receipt) => !isReceiptCancelledForSales(receipt)).filter(isPodReceipt);
-      if (normalizedPodStatus) {
-        return onlyPods.filter((r) => podStatusOf(r) === normalizedPodStatus);
-      }
-      return onlyPods;
-    }
-
-    return mergedReceipts.filter((receipt) => !isReceiptCancelledForSales(receipt));
-  })();
-
-  const productCostMap = new Map<string, number>();
-  try {
-    const productIds = new Set<string>();
-    for (const receipt of posReceiptsFinal) {
-      const items = (receipt?.order?.items ?? []) as any[];
-      for (const item of items) {
-        if (item?.productId) productIds.add(String(item.productId));
-      }
-    }
-    const ids = Array.from(productIds);
-    if (ids.length > 0) {
-      const costs = await prisma.productCost.findMany({
-        where: { productId: { in: ids } },
-        orderBy: [{ productId: "asc" }, { createdAt: "desc" }],
-        distinct: ["productId"],
-        select: { productId: true, price: true },
-      });
-      for (const row of costs) {
-        const value = Number(row.price ?? 0);
-        if (row.productId && Number.isFinite(value) && value > 0) {
-          productCostMap.set(String(row.productId), value);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("[adminReceiptsSummary] failed to load ProductCost fallbacks", err);
-  }
-
-  const candidateReceiptNumbers = Array.from(
-    new Set(
-      posReceiptsFinal.flatMap((receipt: any) => {
-        return collectReceiptVariants(receipt.order?.orderNumber, receipt.receiptNumber);
-      }),
-    ),
-  );
-
-  const supportPendingByReceipt = new Map<string, { hasPendingItems: boolean }>();
-  const supportBuyingByReceipt = new Map<string, { buyingTotal: number; recognizedAt: Date | null }>();
-  const supportProfitByReceipt = new Map<string, { buyingTotal: number; profit: number; sellingTotal: number }>();
-  if (candidateReceiptNumbers.length > 0) {
-    const [supportRows, supportSales] = await Promise.all([
-      prisma.supportReceipt.findMany({
-        where: {
-          OR: [
-            { receiptNumber: { in: candidateReceiptNumbers } },
-            { receiptKey: { in: candidateReceiptNumbers } },
-          ],
-        },
-        select: {
-          receiptNumber: true,
-          receiptKey: true,
-          buyingTotal: true,
-          items: {
-            select: {
-              buyingPrice: true,
-              pricedAt: true,
-            },
-          },
-        },
-      }),
-      prisma.supportSale.findMany({
-        where: {
-          ...(Object.keys(supportDailyEntryWhere).length ? { entry: supportDailyEntryWhere } : {}),
-          createdAt: { gte: start, lte: end },
-          receiptNumber: { in: candidateReceiptNumbers },
-        },
-        select: {
-          receiptNumber: true,
-          sellingPrice: true,
-          buyingPrice: true,
-        },
-      }),
-    ]);
-
-    const supportRowsWithLatePricing = [...supportRows, ...latePricedSupportReceipts];
-    for (const row of supportRowsWithLatePricing) {
-      const items = Array.isArray(row.items) ? row.items : [];
-      const itemsBuyingTotal = items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
-      const aggregateBuyingTotal = Number(row.buyingTotal ?? 0);
-      const buyingTotal = aggregateBuyingTotal > 0 ? aggregateBuyingTotal : itemsBuyingTotal;
-      const hasPendingItems = items.length > 0 && items.some((item) => Number(item.buyingPrice ?? 0) <= 0);
-      const latestPricedAt = items.reduce<Date | null>((latest, item) => {
-        if (!(item.pricedAt instanceof Date)) return latest;
-        if (!latest || item.pricedAt.getTime() > latest.getTime()) return item.pricedAt;
-        return latest;
-      }, null);
-
-      for (const rawKey of [...collectReceiptVariants(row.receiptNumber ?? undefined), ...extractReceiptKeyTailVariants(row.receiptKey)]) {
-        const canonical = canonicalReceiptNumber(rawKey);
-        if (!canonical) continue;
-        const existing = supportPendingByReceipt.get(canonical);
-        supportPendingByReceipt.set(canonical, {
-          hasPendingItems: Boolean(existing?.hasPendingItems || hasPendingItems),
-        });
-        const existingBuying = supportBuyingByReceipt.get(canonical);
-        const shouldReplaceBuying =
-          !existingBuying ||
-          buyingTotal > existingBuying.buyingTotal ||
-          ((latestPricedAt?.getTime() ?? 0) > (existingBuying.recognizedAt?.getTime() ?? 0));
-        if (buyingTotal > 0 && shouldReplaceBuying) {
-          supportBuyingByReceipt.set(canonical, {
-            buyingTotal,
-            recognizedAt: latestPricedAt,
-          });
-        }
-      }
-    }
-
-    for (const sale of supportSales) {
-      for (const rawKey of collectReceiptVariants(sale.receiptNumber ?? undefined)) {
-        const canonical = canonicalReceiptNumber(rawKey);
-        if (!canonical) continue;
-        const existing = supportProfitByReceipt.get(canonical);
-        if (!existing) {
-          supportProfitByReceipt.set(canonical, {
-            buyingTotal: Number(sale.buyingPrice ?? 0),
-            profit: Number(sale.sellingPrice ?? 0) - Number(sale.buyingPrice ?? 0),
-            sellingTotal: Number(sale.sellingPrice ?? 0),
-          });
-          continue;
-        }
-        supportProfitByReceipt.set(canonical, {
-          buyingTotal: existing.buyingTotal + Number(sale.buyingPrice ?? 0),
-          profit: existing.profit + (Number(sale.sellingPrice ?? 0) - Number(sale.buyingPrice ?? 0)),
-          sellingTotal: existing.sellingTotal + Number(sale.sellingPrice ?? 0),
-        });
-      }
-    }
-  }
-
-  const paymentTotals = {
-    mpesa: { totalSales: 0, count: 0 },
-    cash: { totalSales: 0, count: 0 },
-  } as PaymentTotals;
-
-  let totalSales = 0;
-  let totalCost = 0;
-  let totalProfitPriced = 0;
-  let totalProfitInclusive = 0;
-  let receiptsCount = 0;
-  let posReceiptsCount = 0;
-  let posTotalSales = 0;
-  let itemsCount = 0;
-  let awaitingPricingCount = 0;
-  let hasIncompleteCosts = false;
-  const profitReceiptIds = new Set<string>();
-  const profitContributors = new Map<string, ProfitReceiptContributor>();
-
-  await attachReceiptPricingEvidence(posReceiptsFinal as any[]);
-  for (const receipt of posReceiptsFinal as any[]) {
-    const salesDate = getReceiptSalesRecognitionDate(receipt);
-    const salesIncluded = isDateInRange(salesDate, start, end);
-    const salesValue = Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0);
-    const payment = normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null;
-    const canonicalOrderNumber =
-      canonicalReceiptNumber(receipt.order?.orderNumber) ??
-      canonicalReceiptNumber(receipt.receiptNumber) ??
-      null;
-    const supportPending = canonicalOrderNumber ? supportPendingByReceipt.get(canonicalOrderNumber) : undefined;
-    const supportBuying = canonicalOrderNumber ? supportBuyingByReceipt.get(canonicalOrderNumber) : undefined;
-    const supportProfitCandidate = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
-    const supportProfit =
-      supportProfitCandidate && Math.round(supportProfitCandidate.sellingTotal) === Math.round(salesValue)
-        ? supportProfitCandidate
-        : undefined;
-
-    const items = (receipt.order?.items ?? []).map((item: any) => {
-      const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
-      const buyingSum = costs.reduce((sum: number, cost: any) => sum + Number(cost.unitCost ?? 0), 0);
-      const snapUnitCost = (() => {
-        const snapshot = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
-        const value = snapshot ? Number(snapshot.unitCost ?? 0) : 0;
-        return Number.isFinite(value) ? value : 0;
-      })();
-      const productLastBuying = Number(item?.product?.lastBuyingPrice ?? 0) || 0;
-      const productCost = productCostMap.get(String(item?.productId ?? "")) ?? 0;
-      const fallbackUnitCost =
-        snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : productCost > 0 ? productCost : 0;
-      return {
-        quantity: item?.quantity,
-        sellingPrice: Number(item?.sellingPrice ?? item?.unitPrice ?? 0),
-        buyingPrice: buyingSum > 0 ? buyingSum : fallbackUnitCost,
-      };
-    });
-
-    const supportBuyingTotal = Number(supportProfit?.buyingTotal ?? supportBuying?.buyingTotal ?? 0);
-    const aggregatePricing = readReceiptAggregatePricing(receipt);
-    const resolvedBuyingTotal = aggregatePricing.isAuthoritativeTotal
-      ? aggregatePricing.buyingTotal
-      : supportBuyingTotal > 0
-        ? supportBuyingTotal
-        : aggregatePricing.buyingTotal;
-    const deliveryFee = getPodDeliveryFee(receipt.data);
-    const commissionTotal = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
-    const recognized = (aggregatePricing.isAuthoritativeTotal || (supportBuyingTotal > 0 && receipt.financialPricingEvidence?.complete))
-      ? {
-          recognizedSellingTotal: salesValue,
-          recognizedBuyingTotal: resolvedBuyingTotal,
-          recognizedProfit: calculateAggregateReceiptProfit({
-            sellingTotal: salesValue,
-            buyingTotal: resolvedBuyingTotal,
-            commissionTotal,
-            deliveryFee,
-          }),
-          hasAnyPricedItems: true,
-          hasPendingItems: false,
-        }
-      : computeRecognizedReceiptProfit({
-          items: items.map((item: any) => ({
-            quantity: item?.quantity,
-            sellingPrice: item?.sellingPrice ?? 0,
-            buyingPrice: item?.buyingPrice ?? 0,
-          })),
-          aggregateSellingTotal: salesValue,
-          aggregateBuyingTotal: resolvedBuyingTotal,
-          commissionTotal,
-          deliveryFee,
-        });
-    const hasPendingItems = aggregatePricing.isAuthoritativeTotal
-      ? false
-      : supportPending?.hasPendingItems ?? recognized.hasPendingItems;
-    const buyingTotalForContributor = recognized.recognizedBuyingTotal;
-    const useSupportProfit = Boolean(supportProfit) && !aggregatePricing.isAuthoritativeTotal;
-    const hasRecognizableProfit = !hasPendingItems && (useSupportProfit || recognized.hasAnyPricedItems);
-    const profitRecognizedAt = hasRecognizableProfit ? salesDate : null;
-
-    let receiptProfit = 0;
-    if (useSupportProfit && supportProfit && !hasPendingItems) {
-      receiptProfit = supportProfit.profit;
-      if (salesIncluded) {
-        totalCost += supportProfit.buyingTotal;
-        totalProfitPriced += receiptProfit;
-      }
-    } else if (recognized.hasAnyPricedItems && !hasPendingItems) {
-      receiptProfit = recognized.recognizedProfit;
-      if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
-        totalCost += recognized.recognizedBuyingTotal;
-        totalProfitPriced += receiptProfit;
-      }
-    }
-
-    if ((salesIncluded || isDateInRange(receipt.generatedAt ?? receipt.createdAt, start, end)) && hasPendingItems) {
-      awaitingPricingCount += 1;
-      hasIncompleteCosts = true;
-    }
-
-    if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
-      totalProfitInclusive += receiptProfit;
-      profitReceiptIds.add(receipt.id);
-      profitContributors.set(`pos:${receipt.id}`, {
-        source: "pos",
-        id: receipt.id,
-        key: buildReceiptKey(canonicalOrderNumber ?? receipt.receiptNumber ?? null, receipt.id),
-        receiptNumber: receipt.receiptNumber ?? receipt.order?.orderNumber ?? null,
-        sellingTotal: salesValue,
-        buyingTotal: Number.isFinite(buyingTotalForContributor) ? buyingTotalForContributor : 0,
-        profit: receiptProfit,
-      });
-    }
-
-    if (!salesIncluded) {
-      continue;
-    }
-
-    totalSales += salesValue;
-    receiptsCount += 1;
-    posReceiptsCount += 1;
-    posTotalSales += salesValue;
-    itemsCount += sumItemQuantities(items);
-
-    const normalizedPayment = normalizePaymentMethod(payment);
-    if (normalizedPayment === "CASH") {
-      paymentTotals.cash.totalSales += salesValue;
-      paymentTotals.cash.count += 1;
-    } else if (normalizedPayment === "MPESA") {
-      paymentTotals.mpesa.totalSales += salesValue;
-      paymentTotals.mpesa.count += 1;
-    }
-  }
-
-  return {
-    totalSales,
-    totalCost,
-    totalProfit: totalProfitInclusive,
-    totalProfitPriced,
-    totalProfitInclusive,
-    receiptsCount,
-    posReceiptsCount,
-    posTotalSales,
-    itemsCount,
-    hasCompleteCosts: receiptsCount === 0 ? true : !hasIncompleteCosts,
-    awaitingPricingCount,
-    paymentTotals,
-    profitReceiptIds: Array.from(profitReceiptIds),
-    profitContributors: Array.from(profitContributors.values()),
+async function computePosOnlyReceiptSummary(options: SummaryOptions): Promise<PosOnlySummaryResult> {
+  const summary = await summarizePosReceiptsForPeriod({
+    start: options.start, end: options.end,
+    userId: options.attendantId ?? (options.scope === "mine" ? options.currentUserId : null),
+    ownershipMode: "staffOnly", supportPricingScope: "any", paymentScope: "paidOnly",
+    docType: options.docType, paymentMethod: options.paymentMethod, search: options.search,
+    customerType: options.customerType, podStatus: options.podStatus,
+  });
+  const contributors: ProfitReceiptContributor[] = summary.receiptBreakdown.filter(row => row.eligible).map(row => ({
+    source: "pos", id: row.receiptId, key: buildReceiptKey(row.receiptKey, row.receiptId), receiptNumber: row.receiptKey,
+    sellingTotal: row.eligibleSales, buyingTotal: row.buyingTotal ?? 0, profit: row.profit,
+  }));
+  const awaitingPricingCount = summary.receiptBreakdown.filter(row => row.reason === "Awaiting complete buying prices").length;
+  return { totalSales: summary.totalSales, totalCost: contributors.reduce((sum, row) => sum + row.buyingTotal, 0),
+    totalProfit: summary.totalProfit, totalProfitPriced: summary.totalProfit, totalProfitInclusive: summary.totalProfit,
+    receiptsCount: summary.totalReceipts, posReceiptsCount: summary.totalReceipts, posTotalSales: summary.totalSales,
+    itemsCount: summary.totalItems, hasCompleteCosts: awaitingPricingCount === 0, awaitingPricingCount,
+    paymentTotals: { mpesa: { totalSales: summary.paymentStats.totalSalesMpesa, count: summary.paymentStats.countMpesaReceipts }, cash: { totalSales: summary.paymentStats.totalSalesCash, count: summary.paymentStats.countCashReceipts } },
+    profitReceiptIds: contributors.map(row => row.id!), profitContributors: contributors,
   };
 }
 
@@ -698,7 +268,7 @@ export async function computeAdminReceiptSummary({
   debug = false,
   onlyPos = false,
 }: SummaryOptions) {
-  if (onlyPos) {
+  if (onlyPos || (!includeLedger && salesOnly && !["MARKETING", "SUPPORT"].includes(docType?.toUpperCase() ?? ""))) {
     const posOnly = await computePosOnlyReceiptSummary({
       start,
       end,
@@ -902,9 +472,10 @@ export async function computeAdminReceiptSummary({
   let excludedTotalSales = 0;
 
   const applySalesOnly = (rows: any[]) => {
-    const activeRows = rows.filter((receipt) => !isReceiptCancelledForSales(receipt));
+    const activeRows = rows.filter((receipt) => !isReceiptCancelledForSales(receipt) && (!posOwnerId || receiptSalesOwner(receipt) === posOwnerId));
     if (!salesOnly) return activeRows;
     return activeRows.filter((r) => {
+      if (receiptFinancialExclusion(r)) return false;
       const sale = Number((r?.totals as any)?.total ?? r?.order?.totalAmount ?? 0);
       if (!isCompletedProjectReceiptForSales(r)) {
         excludedUnpaidPos += 1;

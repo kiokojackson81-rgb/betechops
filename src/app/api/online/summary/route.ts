@@ -1,3 +1,4 @@
+import { getAttendantCommissionSummary } from "@/lib/attendantCommission";
 import { NextResponse } from "next/server";
 import { requireAttendant } from "@/lib/auth";
 import { getAssignedMarketplaceSalesForPeriod, getMarketplaceAssignmentsForUser } from "@/lib/onlineOps";
@@ -188,6 +189,7 @@ export async function GET(req: Request) {
   await getOrCreateCommissionPeriod(period.start);
   const start = period.start;
   const end = period.end;
+  const canonical = await getAttendantCommissionSummary({ attendantId: targetUserId, start, end });
   const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
   const periodLabel = `${start.toLocaleDateString("en-KE", {
     day: "2-digit",
@@ -220,7 +222,8 @@ export async function GET(req: Request) {
   if (!accountIds.length) {
     const emptyData = {
       period: { key: period.key, label: periodLabel, start: start.toISOString(), end: end.toISOString() },
-      totals: { orders: 0, sales: 0, commission: 0, marketplaceSales: 0, remainingToNextTier: 2000000 },
+      totals: { orders: 0, sales: 0, commission: canonical.totalCommission, marketplaceSales: 0, remainingToNextTier: 2000000 },
+      commissions: { direct: canonical.directSalesCommission, marketplaceCombined: canonical.marketplaceCommission, total: canonical.totalCommission, directCommissionMode },
       platforms: [],
       assignedAccounts: assignments.map((a) => ({
         id: a.accountId,
@@ -244,10 +247,10 @@ export async function GET(req: Request) {
         },
       },
       directReceipts: {
-        totalSales: Number(directPosSummary.totalSales ?? 0),
-        totalProfit: Number(directPosSummary.totalProfit ?? 0),
-        totalReceipts: Number(directPosSummary.totalReceipts ?? 0),
-        totalItems: Number(directPosSummary.totalItems ?? 0),
+        totalSales: canonical.totalSales,
+        totalProfit: canonical.totalProfit,
+        totalReceipts: canonical.receiptsCount,
+        totalItems: canonical.totalItems,
       },
     };
     return NextResponse.json(composeIdentityResponse(meta, emptyData));
@@ -273,15 +276,8 @@ export async function GET(req: Request) {
   const payoutSales = marketplaceSalesSummary.rows.reduce((sum, row) => sum + Number(row.payoutSales ?? 0), 0);
   const weeklyManualSales = marketplaceSalesSummary.rows.reduce((sum, row) => sum + Number(row.manualSales ?? 0), 0);
   const marketplaceSalesOnly = marketplaceSalesSummary.totals.sales;
-  const fallbackDirectProfit =
-    directCommissionMode === "PROFIT_10"
-      ? await computeProfit10DirectProfitFallback({ userId: targetUserId, start, end })
-      : 0;
-  const effectiveDirectSales = Number(directPosSummary.totalSales ?? 0);
-  const effectiveDirectProfit =
-    directCommissionMode === "PROFIT_10"
-      ? Math.max(Number(directPosSummary.totalProfit ?? 0), Number(fallbackDirectProfit ?? 0))
-      : Number(directPosSummary.totalProfit ?? 0);
+  const effectiveDirectSales = canonical.totalSales;
+  const effectiveDirectProfit = canonical.totalProfit;
 
   const commissionBreakdown = computeOnlinePeriodCommission(
     {
@@ -314,7 +310,7 @@ export async function GET(req: Request) {
     totals: {
       orders: marketplaceSalesSummary.totals.orders,
       sales: marketplaceSalesSummary.totals.sales,
-      commission: Number(commissionBreakdown.totalCommission ?? 0),
+      commission: canonical.totalCommission,
     },
     platforms,
     assignedAccounts: assignments.map((a) => ({
@@ -339,15 +335,15 @@ export async function GET(req: Request) {
       },
     },
     directReceipts: {
-      totalSales: Number(directPosSummary.totalSales ?? 0),
+      totalSales: canonical.totalSales,
       totalProfit: effectiveDirectProfit,
-      totalReceipts: Number(directPosSummary.totalReceipts ?? 0),
-      totalItems: Number(directPosSummary.totalItems ?? 0),
+      totalReceipts: canonical.receiptsCount,
+      totalItems: canonical.totalItems,
     },
     commissions: {
-      direct: directCommission,
-      marketplaceCombined: marketplaceCommission,
-      total: Number(commissionBreakdown.totalCommission ?? 0),
+      direct: canonical.directSalesCommission,
+      marketplaceCombined: canonical.marketplaceCommission,
+      total: canonical.totalCommission,
       directCommissionMode,
     },
   };

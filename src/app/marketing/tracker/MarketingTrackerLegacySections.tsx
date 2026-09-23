@@ -1,5 +1,6 @@
 "use client";
 
+import EmployeeSalesAudit from "@/components/EmployeeSalesAudit";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Card from "@/app/_components/Card";
@@ -2460,6 +2461,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
         onSubmit={handleSubmit}
         className="flex w-full flex-col gap-6 text-slate-100"
       >
+        <EmployeeSalesAudit periodKey={selectedPeriodKey} impersonateId={trackerImpersonateId} />
         <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>

@@ -1,5 +1,6 @@
 "use client";
 
+import EmployeeSalesAudit from "@/components/EmployeeSalesAudit";
 import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
@@ -1068,6 +1069,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <EmployeeSalesAudit periodKey={selectedPeriodKey} impersonateId={impersonateId} />
         <ImpersonationBanner />
 
         <section className="rounded-[22px] border border-white/10 bg-gradient-to-br from-white/8 via-white/4 to-transparent p-4 shadow-2xl shadow-black/20 sm:rounded-[28px] sm:p-6">

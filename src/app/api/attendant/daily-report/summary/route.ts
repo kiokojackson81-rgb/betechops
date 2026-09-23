@@ -85,7 +85,7 @@ export async function GET(req: Request) {
   const usePosTotals =
     isJeniffer ||
     isDirectSalesOps ||
-    (isBrendah && Number(posSummary?.totalSales ?? 0) > 0);
+    isBrendah;
 
   const basePayload: any = {
     ...dailySummary,
@@ -103,6 +103,12 @@ export async function GET(req: Request) {
   // Attach canonical commission summary to ensure UI uses authoritative totals.
   try {
     const attendantCanonical = await getAttendantCommissionSummary({ attendantId: userId, start: period.start, end: period.end });
+    basePayload.totalSales = attendantCanonical.totalSales;
+    basePayload.totalProfit = attendantCanonical.totalProfit;
+    basePayload.receiptBreakdown = attendantCanonical.receiptBreakdown;
+    basePayload.recordedSales = attendantCanonical.recordedSales;
+    basePayload.commissionEligibleSales = attendantCanonical.commissionEligibleSales;
+    if (basePayload.usePosTotals) basePayload.pos = { totalSales: attendantCanonical.totalSales, totalProfit: attendantCanonical.totalProfit, totalItems: attendantCanonical.totalItems, totalReceipts: attendantCanonical.receiptsCount };
     basePayload.commission = Number(attendantCanonical.totalCommission ?? 0);
     basePayload.commissionBreakdown = attendantCanonical.breakdown ?? undefined;
     basePayload.directSalesCommission = Number(attendantCanonical.directSalesCommission ?? 0);

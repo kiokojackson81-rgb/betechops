@@ -1,19 +1,10 @@
+import { getAttendantCommissionSummary } from "@/lib/attendantCommission";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { getBranding } from "@/lib/branding";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
-import { getOrCreateCommissionPeriod, computeJenifferProratedCommission, computeSalesCommissionFromTiers } from "@/lib/commission";
-import { deriveDefaultCommissionConfigFromUser, getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
-import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
-import { canonicalReceiptNumber } from "@/lib/receiptGuard";
-import { buildReceiptKey } from "@/lib/receiptKey";
-import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
-import { calculateAggregateReceiptProfit, readReceiptAggregatePricing } from "@/lib/receiptAggregatePricing";
-import { isReceiptProjectRecognizedForSales, readReceiptProjectFlow } from "@/lib/receiptProjects";
-import { getPodDeliveryFee } from "@/lib/podDeliveryFee";
-import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,11 +15,7 @@ const currency = new Intl.NumberFormat("en-KE", {
   maximumFractionDigits: 0,
 });
 
-const toNumber = (value: unknown): number => {
-  if (value === null || typeof value === "undefined") return 0;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-};
+const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 
 function sanitizeFilename(value: string) {
   return value
@@ -44,41 +31,6 @@ function parseDateParam(value: string | null) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function extractSales(receipt: { totals?: any; data?: any; order?: any }) {
-  const totals = receipt.totals ?? {};
-  const data = receipt.data ?? {};
-  return (
-    toNumber(totals.sellingTotal) ||
-    toNumber(totals.grandTotal) ||
-    toNumber(totals.total) ||
-    toNumber(totals.amount) ||
-    toNumber(totals.subtotal) ||
-    toNumber(data.total) ||
-    toNumber(data.amount) ||
-    toNumber(receipt.order?.totalAmount) ||
-    0
-  );
-}
-
-function extractProfit(receipt: { totals?: any; data?: any }, sales: number) {
-  const totals = receipt.totals ?? {};
-  const data = receipt.data ?? {};
-  const buying = toNumber(totals.buyingTotal) || toNumber(data.buyingTotal);
-  if (buying > 0) return sales - buying;
-  return 0;
-}
-const FALLBACK_TIERS = [
-  { minSales: 500_000, maxSales: 1_000_000, payoutFlat: 10_000 },
-  { minSales: 2_000_000, maxSales: 2_000_000, payoutFlat: 15_000 },
-  { minSales: 3_000_000, maxSales: 3_000_000, payoutFlat: 20_000 },
-  { minSales: 4_000_000, maxSales: 4_000_000, payoutFlat: 20_000 },
-  { minSales: 5_000_000, maxSales: 5_000_000, payoutFlat: 20_000 },
-  { minSales: 6_000_000, maxSales: 6_000_000, payoutFlat: 20_000 },
-  { minSales: 7_000_000, maxSales: 7_000_000, payoutFlat: 20_000 },
-  { minSales: 8_000_000, maxSales: 8_000_000, payoutFlat: 20_000 },
-  { minSales: 9_000_000, maxSales: 9_000_000, payoutFlat: 20_000 },
-  { minSales: 10_000_000, maxSales: 10_000_000, payoutFlat: 20_000 },
-];
 function renderHtml(opts: {
   title: string;
   attendantName: string;
@@ -87,6 +39,7 @@ function renderHtml(opts: {
   endIso: string;
   letterheadUrl: string | null;
   totalSales: number;
+  recordedSales: number;
   receiptCount: number;
   commissionKes: number;
   rows: Array<{
@@ -96,6 +49,7 @@ function renderHtml(opts: {
     total: number;
     paymentMethod: string;
     docType: string;
+    reason: string; profit: number; commission: number;
   }>;
 }) {
   const letterheadBlock = opts.letterheadUrl
@@ -107,11 +61,12 @@ function renderHtml(opts: {
       (r) => `
       <tr>
         <td>${r.createdAt}</td>
-        <td>${r.receiptNumber}</td>
-        <td>${r.docType}</td>
-        <td>${r.customerName}</td>
+        <td>${escapeHtml(r.receiptNumber)}</td>
+        <td>${r.docType}<br/>${r.reason}</td>
+        <td>${escapeHtml(r.customerName)}</td>
         <td>${r.paymentMethod}</td>
         <td style="text-align:right">${currency.format(r.total)}</td>
+        <td>${currency.format(r.profit)}</td><td>${currency.format(r.commission)}</td>
       </tr>`,
     )
     .join("\n");
@@ -120,7 +75,7 @@ function renderHtml(opts: {
   <html>
     <head>
       <meta charset="utf-8" />
-      <title>${opts.title}</title>
+      <title>${escapeHtml(opts.title)}</title>
       <style>
         @page { size: A4; margin: 22mm 14mm; }
         body { font-family: Inter, system-ui, -apple-system, sans-serif; color: #0f172a; }
@@ -138,16 +93,17 @@ function renderHtml(opts: {
     <body>
       ${letterheadBlock}
       <div class="muted">Generated: ${new Date().toISOString()}</div>
-      <h1>${opts.title}</h1>
+      <h1>${escapeHtml(opts.title)}</h1>
       <div class="muted">Direct sales (POS receipts)</div>
       <div class="muted">Range: ${opts.startIso} – ${opts.endIso}</div>
 
       <div class="summary">
         <div class="summary-grid">
-          <div><strong>Attendant:</strong> ${opts.attendantName}</div>
-          <div><strong>Email:</strong> ${opts.attendantEmail ?? "-"}</div>
-          <div><strong>Receipts:</strong> ${opts.receiptCount}</div>
-          <div><strong>Total sales:</strong> ${currency.format(opts.totalSales)}</div>
+          <div><strong>Attendant:</strong> ${escapeHtml(opts.attendantName)}</div>
+          <div><strong>Email:</strong> ${escapeHtml(opts.attendantEmail ?? "-")}</div>
+          <div><strong>Recorded receipt value (excluding cancellations):</strong> ${currency.format(opts.recordedSales)}</div>
+          <div><strong>Eligible receipts:</strong> ${opts.receiptCount}</div>
+          <div><strong>Commission-eligible sales:</strong> ${currency.format(opts.totalSales)}</div>
           <div><strong>Commission (KES):</strong> ${currency.format(opts.commissionKes)}</div>
         </div>
       </div>
@@ -161,12 +117,14 @@ function renderHtml(opts: {
             <th>Customer</th>
             <th style="width: 80px">Pay</th>
             <th style="width: 120px; text-align:right">Amount</th>
+            <th>Profit</th><th>Direct commission contribution</th>
           </tr>
         </thead>
         <tbody>
-          ${rowsHtml || `<tr><td colspan="6" class="muted">No POS receipts found for this range.</td></tr>`}
+          ${rowsHtml || `<tr><td colspan="8" class="muted">No POS receipts found for this range.</td></tr>`}
         </tbody>
       </table>
+      <p class="muted">Direct commission contributions follow reporting-date order and configured period rules. Pending receipts contribute zero. Other commission channels and payroll adjustments are shown in the employee performance report.</p>
     </body>
   </html>
   `;
@@ -181,8 +139,8 @@ export async function GET(req: Request) {
   const attendantId = (url.searchParams.get("attendantId") || "").trim();
   const rawStart = url.searchParams.get("start");
   const rawEnd = url.searchParams.get("end");
-  const startParam = parseDateParam(rawStart);
-  const endParam = parseDateParam(rawEnd);
+  const startParam = parseDateParam(rawStart && /^\d{4}-\d{2}-\d{2}$/.test(rawStart) ? `${rawStart}T00:00:00+03:00` : rawStart);
+  const endParam = parseDateParam(rawEnd && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) ? `${rawEnd}T23:59:59.999+03:00` : rawEnd);
   const docTypeParam = (url.searchParams.get("docType") || "").trim();
   const docType = docTypeParam ? docTypeParam.toUpperCase() : null;
 
@@ -200,333 +158,18 @@ export async function GET(req: Request) {
   const attendantName = (attendant?.name ?? attendant?.email ?? attendantId).toString();
   const attendantEmail = attendant?.email ?? null;
 
-  const ownerOr: Prisma.ReceiptWhereInput[] = [
-    { order: { attendantId } },
-    { data: { path: ["attendantId"], equals: attendantId } as any },
-  ];
-
-  // Load receipts directly from POS Receipt table.
-  const receiptWhere = {
-    generatedAt: { gte: startParam, lte: endParam },
-    ...(docType ? { docType: docType as any } : {}),
-    AND: [
-      {
-        OR: ownerOr,
-      },
-    ],
-  } as any;
-
-  const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
-  const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
-  const isPodPaid = (r: any) => Boolean((r?.data as any)?.podDelivery?.paidAt);
-  const isPosPaid = (r: any) => {
-    const rawData =
-      r?.data && typeof r.data === "object" && !Array.isArray(r.data)
-        ? (r.data as Record<string, unknown>)
-        : {};
-    const projectFlow = readReceiptProjectFlow(rawData.projectFlow);
-    if (projectFlow?.isProject) {
-      return isReceiptProjectRecognizedForSales(rawData.projectFlow);
-    }
-    const paymentStatus = (r?.order?.paymentStatus ?? "").toString().toUpperCase().trim();
-    if (!paymentStatus) return false;
-    return paymentStatus === "PAID";
-  };
-  const isPodSettledForSales = (r: any) => {
-    if (!isPodReceipt(r)) return false;
-    if (podStatusOf(r) === "pending") return false;
-    return isPodPaid(r) || isPosPaid(r);
-  };
-  const shouldIncludeForSales = (r: any) => {
-    // Mirror the admin summary logic: only include paid receipts by default.
-    if (isReceiptCancelledForSales(r)) return false;
-    if (isPodReceipt(r)) return isPodSettledForSales(r);
-    return isPosPaid(r);
-  };
-
-  if (debug) {
-    const [rawCount, rawSample] = await Promise.all([
-      prisma.receipt.count({ where: receiptWhere }),
-      prisma.receipt.findMany({
-        where: receiptWhere,
-        orderBy: { generatedAt: "asc" },
-        take: 20,
-        select: {
-          id: true,
-          docType: true,
-          generatedAt: true,
-          receiptNumber: true,
-          issuedById: true,
-          data: true,
-          order: { select: { orderNumber: true, attendantId: true, paymentStatus: true, totalAmount: true } },
-        },
-      }),
-    ]);
-    const filteredSample = rawSample.filter(shouldIncludeForSales);
-    return NextResponse.json({
-      ok: true,
-      attendant: { id: attendantId, name: attendantName, email: attendantEmail },
-      range: { start: startParam.toISOString(), end: endParam.toISOString() },
-      docType,
-      rawCount,
-      filteredCountInSample: filteredSample.length,
-      sample: rawSample,
-      filteredSample,
-      sampleBreakdown: {
-        pod: rawSample.filter(isPodReceipt).length,
-        podPending: rawSample.filter((r) => isPodReceipt(r) && podStatusOf(r) === "pending").length,
-        podPaid: rawSample.filter((r) => isPodReceipt(r) && isPodPaid(r)).length,
-        nonPod: rawSample.filter((r) => !isPodReceipt(r)).length,
-        nonPodPaid: rawSample.filter((r) => !isPodReceipt(r) && isPosPaid(r)).length,
-      },
-    });
-  }
-
-  const receipts = await prisma.receipt.findMany({
-    where: {
-      ...receiptWhere,
-    } as any,
-    include: {
-      order: {
-        select: {
-          orderNumber: true,
-          customerName: true,
-          totalAmount: true,
-          paymentStatus: true,
-          items: {
-            select: {
-              productId: true,
-              quantity: true,
-              orderCosts: { select: { unitCost: true } },
-              profitSnapshots: {
-                orderBy: { computedAt: "desc" },
-                take: 1,
-                select: { unitCost: true, profit: true, qty: true },
-              },
-              product: { select: { lastBuyingPrice: true } },
-            },
-          },
-        },
-      },
-    },
-    orderBy: { generatedAt: "asc" },
-  });
-
-  const filteredReceipts = receipts.filter(shouldIncludeForSales);
-
-  // Optional fallback costs: latest ProductCost per productId (for receipts missing orderCosts/profitSnapshots).
-  const productCostMap = new Map<string, number>();
-  try {
-    const productIds = new Set<string>();
-    for (const r of filteredReceipts as any[]) {
-      const items = (r?.order?.items ?? []) as any[];
-      for (const it of items) {
-        if (it?.productId) productIds.add(String(it.productId));
-      }
-    }
-    const ids = Array.from(productIds);
-    if (ids.length > 0) {
-      const costs = await prisma.productCost.findMany({
-        where: { productId: { in: ids } },
-        orderBy: [{ productId: "asc" }, { createdAt: "desc" }],
-        distinct: ["productId"],
-        select: { productId: true, price: true },
-      });
-      for (const c of costs) {
-        const n = Number(c.price ?? 0);
-        if (c.productId && Number.isFinite(n) && n > 0) {
-          productCostMap.set(String(c.productId), n);
-        }
-      }
-    }
-  } catch {
-    // Best-effort: ignore productCost lookup failures.
-  }
-
-  // Optional fallback costs: support ledger buying totals (for receipts lacking order costs).
-  const supportBuyingTotals = new Map<string, number>();
-  try {
-    const candidates = new Set<string>();
-    for (const r of filteredReceipts as any[]) {
-      const orderRef = String(r?.order?.orderNumber ?? "");
-      const receiptNumber = String(r?.receiptNumber ?? "");
-      const key = buildReceiptKey(orderRef || receiptNumber, r.id);
-      const normalizedOrder = canonicalReceiptNumber(orderRef);
-      const normalizedReceipt = canonicalReceiptNumber(receiptNumber);
-      if (orderRef) candidates.add(orderRef);
-      if (receiptNumber) candidates.add(receiptNumber);
-      if (key) candidates.add(key);
-      if (normalizedOrder) candidates.add(normalizedOrder);
-      if (normalizedReceipt) candidates.add(normalizedReceipt);
-    }
-    const candidateArray = Array.from(candidates).filter((v) => v && v.length > 0);
-    if (candidateArray.length > 0) {
-      const ledgerEntries = await prisma.supportReceipt.findMany({
-        where: {
-          OR: [{ receiptNumber: { in: candidateArray } }, { receiptKey: { in: candidateArray } }],
-        },
-        select: {
-          receiptNumber: true,
-          receiptKey: true,
-          buyingTotal: true,
-          items: { select: { buyingPrice: true } },
-        },
-      });
-      for (const entry of ledgerEntries as any[]) {
-        const explicitBuyingTotal = Number(entry.buyingTotal ?? 0);
-        const itemsSum = Array.isArray(entry.items)
-          ? entry.items.reduce((sum: number, it: any) => sum + Number(it?.buyingPrice ?? 0), 0)
-          : 0;
-        const buyingTotal = explicitBuyingTotal > 0 ? explicitBuyingTotal : itemsSum;
-        if (!(Number.isFinite(buyingTotal) && buyingTotal > 0)) continue;
-
-        const keys = [entry.receiptNumber, entry.receiptKey]
-          .map((k: any) => (typeof k === "string" ? k : ""))
-          .filter((k) => k);
-        for (const k of keys) {
-          if (!supportBuyingTotals.has(k)) supportBuyingTotals.set(k, buyingTotal);
-          const normalized = canonicalReceiptNumber(k);
-          if (normalized && !supportBuyingTotals.has(normalized)) supportBuyingTotals.set(normalized, buyingTotal);
-        }
-      }
-    }
-  } catch {
-    // Best-effort: ignore support ledger lookup failures.
-  }
-
-  const computeReceiptProfitFromCosts = (receipt: any) => {
-    const selling = extractSales(receipt);
-    const orderRef = String(receipt?.order?.orderNumber ?? "");
-    const receiptNumber = String(receipt?.receiptNumber ?? "");
-    const keyCandidates = [
-      orderRef,
-      receiptNumber,
-      buildReceiptKey(orderRef || receiptNumber, receipt.id),
-      canonicalReceiptNumber(orderRef),
-      canonicalReceiptNumber(receiptNumber),
-    ].filter((v): v is string => Boolean(v));
-    let supportBuying: number | undefined;
-    for (const k of keyCandidates) {
-      const v = supportBuyingTotals.get(k);
-      if (typeof v === "number" && v > 0) {
-        supportBuying = v;
-        break;
-      }
-    }
-
-    const aggregatePricing = readReceiptAggregatePricing(receipt);
-    const aggregateCost = aggregatePricing.isAuthoritativeTotal
-      ? aggregatePricing.buyingTotal
-      : supportBuying && supportBuying > 0
-        ? supportBuying
-        : aggregatePricing.buyingTotal;
-
-    const items = (receipt?.order?.items ?? []) as any[];
-    const perItemUnitCosts = items.map((item: any) => {
-      const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
-      const buyingSum = costs.reduce((sum: number, c: any) => sum + Number(c?.unitCost ?? 0), 0);
-      const snap = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
-      const snapUnitCost = snap ? Number(snap?.unitCost ?? 0) : 0;
-      const productLastBuying = Number(item?.product?.lastBuyingPrice ?? 0) || 0;
-      const productCost = productCostMap.get(String(item?.productId ?? "")) ?? 0;
-      const fallbackUnitCost =
-        snapUnitCost > 0
-          ? snapUnitCost
-          : productLastBuying > 0
-            ? productLastBuying
-            : productCost > 0
-              ? productCost
-              : 0;
-      return buyingSum > 0 ? buyingSum : fallbackUnitCost;
-    });
-
-    const deliveryFee = getPodDeliveryFee(receipt.data);
-    const commissionTotal = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
-    const recognized = aggregatePricing.isAuthoritativeTotal
-      ? {
-          recognizedProfit: calculateAggregateReceiptProfit({
-            sellingTotal: selling,
-            buyingTotal: aggregateCost,
-            commissionTotal,
-            deliveryFee,
-          }),
-          hasAnyPricedItems: true,
-        }
-      : computeRecognizedReceiptProfit({
-          items: items.map((item: any, idx: number) => ({
-            quantity: item?.quantity,
-            sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
-            buyingPrice: Number(perItemUnitCosts[idx] ?? 0),
-          })),
-          aggregateSellingTotal: selling,
-          aggregateBuyingTotal: aggregateCost,
-          commissionTotal,
-          deliveryFee,
-        });
-    return { profit: recognized.recognizedProfit, hasCost: recognized.hasAnyPricedItems };
-  };
-
-  const rows = filteredReceipts.map((r: any) => {
-    const total = extractSales(r);
-    const receiptNumber = (r.receiptNumber ?? r.order?.orderNumber ?? r.id).toString();
-    const customerName = (r.order?.customerName ?? r.data?.customerName ?? "").toString() || "—";
-    const paymentMethod = (r.data?.paymentMethod ?? r.totals?.paymentMethod ?? "MPESA").toString().toUpperCase();
-    const createdAt = new Date(r.generatedAt ?? r.createdAt ?? new Date()).toISOString().slice(0, 10);
-    return {
-      receiptNumber,
-      createdAt,
-      customerName,
-      total,
-      paymentMethod: paymentMethod === "CASH" ? "CASH" : "MPESA",
-      docType: String(r.docType ?? "RECEIPT"),
-    };
-  });
-
-  const receiptCount = rows.length;
-  const totalSales = rows.reduce((sum, r) => sum + Number(r.total ?? 0), 0);
-  const totalProfit = filteredReceipts.reduce((sum: number, r: any) => sum + computeReceiptProfitFromCosts(r).profit, 0);
-
-  // `UserCommissionConfig` may not exist yet on some production databases.
-  // Fall back to derived defaults if the table is missing.
-  let commissionConfig: { salesCommissionMode: string } = { salesCommissionMode: "DEFAULT_TIERS" };
-  try {
-    commissionConfig = await getOrCreateUserCommissionConfig(attendantId);
-  } catch (err: any) {
-    if (err?.code === "P2021") {
-      commissionConfig = deriveDefaultCommissionConfigFromUser({
-        email: attendantEmail,
-        attendantCategory: (attendant as any)?.attendantCategory ?? null,
-      }) as any;
-    } else {
-      throw err;
-    }
-  }
-
-  let tiers: Array<{ minSales: number; maxSales: number | null; payoutFlat: number }> = FALLBACK_TIERS;
-  try {
-    const res = await getOrCreateCommissionPeriod(startParam);
-    tiers = res.tiers.map((t) => ({
-      minSales: Number(t.minSales),
-      maxSales: t.maxSales == null ? null : Number(t.maxSales),
-      payoutFlat: Number(t.payoutFlat),
-    }));
-  } catch (err: any) {
-    if (err?.code !== "P2021") throw err;
-  }
-
-  let commissionKes = 0;
-  if (commissionConfig.salesCommissionMode === "BRENDAH_DIRECT") {
-    commissionKes = computeBrendahDirectCommission(totalSales, totalProfit).amount;
-  } else if (commissionConfig.salesCommissionMode === "JENIFFER_PRORATED") {
-    const res = computeJenifferProratedCommission(
-      totalSales,
-      tiers,
-    );
-    commissionKes = Math.round(Number(res.commission ?? 0));
-  } else {
-    const fallbackPercent = totalProfit > 0 ? 0.05 : 0;
-    commissionKes = Math.round(computeSalesCommissionFromTiers(totalSales, totalProfit, tiers as any, fallbackPercent));
-  }
+  const summary = await getAttendantCommissionSummary({ attendantId, start: startParam, end: endParam });
+  const breakdown = summary.receiptBreakdown.filter(row => !docType || row.docType === docType);
+  const totalSales = breakdown.reduce((sum, row) => sum + row.eligibleSales, 0);
+  const receiptCount = breakdown.filter(row => row.eligible).length;
+  const commissionKes = breakdown.reduce((sum, row) => sum + (row.commission ?? 0), 0);
+  const rows = breakdown.map(row => ({ receiptNumber: row.receiptKey,
+    createdAt: (row.salesDate ?? row.createdAt)?.toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi" }) ?? "Pending",
+    customerName: row.customerName, total: row.sales, paymentMethod: row.paymentMethod,
+    docType: row.docType, reason: row.reason, profit: row.profit, commission: row.commission ?? 0 }));
+  if (debug) return NextResponse.json({ attendant: { id: attendantId, name: attendantName },
+    totalSales, recordedSales: breakdown.reduce((sum, row) => sum + row.sales, 0), receiptCount, commissionKes, rows,
+    commissionBasis: "Incremental period commission in reporting-date order" }, { headers: { "Cache-Control": "no-store" } });
 
   const branding = await getBranding();
   const rawLetterhead = (branding as any)?.letterheadUrl ?? null;
@@ -548,6 +191,7 @@ export async function GET(req: Request) {
     endIso,
     letterheadUrl,
     totalSales,
+    recordedSales: breakdown.filter(row => row.reason !== "Cancelled").reduce((sum, row) => sum + row.sales, 0),
     receiptCount,
     commissionKes,
     rows,

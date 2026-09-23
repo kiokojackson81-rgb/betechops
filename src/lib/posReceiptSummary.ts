@@ -14,8 +14,10 @@ import {
   readReceiptProjectFlow,
 } from "@/lib/receiptProjects";
 import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
+import { receiptFinancialExclusion, receiptSalesOwner } from "@/lib/receiptFinancialState";
 
 type OrderItemCandidate = {
+  sellingPrice?: number;
   quantity?: number | null;
   productId?: string | null;
   orderCosts?: Array<{ unitCost?: unknown } | null> | null;
@@ -31,9 +33,12 @@ type PosReceiptRow = {
   totals: Record<string, unknown> | null;
   data: Record<string, unknown> | null;
   issuedById?: string | null;
+  docType?: string;
   order?: {
     orderNumber?: string | null;
     totalAmount?: number | null;
+    paidAmount?: number | null;
+    customerName?: string | null;
     attendantId?: string | null;
     paymentStatus?: string | null;
     status?: string | null;
@@ -42,6 +47,9 @@ type PosReceiptRow = {
 };
 
 export type PosReceiptSummary = {
+  recordedSales: number;
+  commissionEligibleSales: number;
+  receiptBreakdown: ReceiptSalesBreakdown[];
   totalSales: number;
   totalProfit: number;
   totalItems: number;
@@ -53,6 +61,13 @@ export type PosReceiptSummary = {
     countMpesaReceipts: number;
     countCashReceipts: number;
   };
+};
+
+export type ReceiptSalesBreakdown = {
+  receiptId: string; receiptKey: string; customerName: string; source: string; docType: string;
+  salesDate: Date | null; createdAt: Date | null; sales: number; eligibleSales: number;
+  profit: number; buyingTotal?: number; itemCount: number; paymentMethod: string; paymentStatus: string;
+  reason: string; eligible: boolean; commission?: number;
 };
 
 const toNumber = (value: unknown): number => {
@@ -165,30 +180,8 @@ const matchesOwnershipMode = (
   ownershipMode: "hybrid" | "issuerOnly" | "staffOnly" | "staffDisplay" = "hybrid",
 ) => {
   if (!userId) return true;
-  const dataAttendantId = normalizeOptionalId(receipt.data?.attendantId);
-  const orderAttendantId = normalizeOptionalId(receipt.order?.attendantId);
-  const issuedById = normalizeOptionalId(receipt.issuedById);
-  const projectHandlerStaffId = getProjectHandlerStaffId(receipt);
-  const hasExplicitStaff = Boolean(orderAttendantId || dataAttendantId);
-
-  if (ownershipMode === "issuerOnly") {
-    return issuedById === userId;
-  }
-  if (ownershipMode === "staffOnly") {
-    return orderAttendantId === userId || dataAttendantId === userId || projectHandlerStaffId === userId;
-  }
-  if (ownershipMode === "staffDisplay") {
-    if (orderAttendantId === userId || dataAttendantId === userId || projectHandlerStaffId === userId) return true;
-    if (!hasExplicitStaff && issuedById === userId) return true;
-    return false;
-  }
-
-  return (
-    issuedById === userId ||
-    orderAttendantId === userId ||
-    dataAttendantId === userId ||
-    projectHandlerStaffId === userId
-  );
+  if (ownershipMode === "issuerOnly") return receipt.issuedById === userId;
+  return receiptSalesOwner(receipt) === userId;
 };
 
 export async function summarizePosReceiptsForPeriod(period: {
@@ -199,6 +192,11 @@ export async function summarizePosReceiptsForPeriod(period: {
   supportPricingScope?: "user" | "any";
   profitRecognitionMode?: "recognizedDate" | "salesDate";
   paymentScope?: "paidOnly" | "all";
+  docType?: string | null;
+  paymentMethod?: "MPESA" | "CASH" | null;
+  search?: string;
+  customerType?: string;
+  podStatus?: string;
   client?: Prisma.TransactionClient;
 }) {
   const client = period.client ?? prisma;
@@ -210,20 +208,20 @@ export async function summarizePosReceiptsForPeriod(period: {
           ? [
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
-              { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
+              { issuedById: period.userId },
             ]
         : period.ownershipMode === "staffDisplay"
           ? [
               { issuedById: period.userId },
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
-              { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
+              { issuedById: period.userId },
             ]
         : [
             { issuedById: period.userId },
             { order: { attendantId: period.userId } },
             { data: { path: ["attendantId"], equals: period.userId } },
-            { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
+            { issuedById: period.userId },
           ]
       : null;
 
@@ -235,12 +233,24 @@ export async function summarizePosReceiptsForPeriod(period: {
       ? { submittedById: period.userId }
       : {};
 
-  const [baseReceipts, latePricedSupportReceipts] = await Promise.all([
-    client.receipt.findMany({
+  const baseReceipts = await client.receipt.findMany({
       where: {
         AND: [
           { createdAt: { lte: period.end } },
+          ...(period.docType ? [{ docType: period.docType as any }] : []),
           ...(ownerOr ? [{ OR: ownerOr }] : []),
+          ...(period.paymentMethod ? [{ data: { path: ["paymentMethod"], equals: period.paymentMethod } }] : []),
+          ...(period.customerType === "pod" ? [{ data: { path: ["customerType"], equals: "pod" } }] : []),
+          ...(period.podStatus ? [{ data: { path: ["podDelivery", "status"], equals: period.podStatus === "failed" ? "delivery_failed" : period.podStatus } }] : []),
+          ...(period.search ? [{ OR: [
+            { receiptNumber: { contains: period.search, mode: "insensitive" as const } },
+            { order: { orderNumber: { contains: period.search, mode: "insensitive" as const } } },
+            { order: { customerName: { contains: period.search, mode: "insensitive" as const } } },
+            { order: { customerPhone: { contains: period.search, mode: "insensitive" as const } } },
+            { order: { customerEmail: { contains: period.search, mode: "insensitive" as const } } },
+            { order: { attendant: { name: { contains: period.search, mode: "insensitive" as const } } } },
+            { issuedBy: { name: { contains: period.search, mode: "insensitive" as const } } },
+          ] }] : []),
         ],
       },
       include: {
@@ -248,6 +258,8 @@ export async function summarizePosReceiptsForPeriod(period: {
           select: {
             orderNumber: true,
             totalAmount: true,
+            paidAmount: true,
+            customerName: true,
             attendantId: true,
             paymentStatus: true,
             status: true,
@@ -255,6 +267,7 @@ export async function summarizePosReceiptsForPeriod(period: {
               select: {
                 productId: true,
                 quantity: true,
+                sellingPrice: true,
                 orderCosts: { orderBy: { createdAt: "desc" }, take: 1, select: { unitCost: true, createdAt: true } },
                 profitSnapshots: {
                   orderBy: { computedAt: "desc" },
@@ -267,64 +280,8 @@ export async function summarizePosReceiptsForPeriod(period: {
           },
         },
       },
-    }),
-    client.supportReceipt.findMany({
-      where: {
-        ...(Object.keys(supportDailyEntryWhere).length ? { dailyEntry: supportDailyEntryWhere } : {}),
-        items: { some: { pricedAt: { gte: period.start, lte: period.end } } },
-      },
-      select: {
-        receiptNumber: true,
-        receiptKey: true,
-      },
-    }),
-  ]);
-
-  const lateReceiptNumbers = Array.from(
-    new Set(
-      latePricedSupportReceipts.flatMap((row) => {
-        return [
-          ...collectReceiptVariants(row.receiptNumber ?? undefined),
-          ...extractReceiptKeyTailVariants(row.receiptKey),
-        ];
-      }),
-    ),
-  );
-
-  const extraReceipts =
-    lateReceiptNumbers.length > 0
-      ? await client.receipt.findMany({
-          where: {
-            AND: [
-              ...(ownerOr ? [{ OR: ownerOr }] : []),
-              {
-                OR: [
-                  { order: { orderNumber: { in: lateReceiptNumbers } } },
-                  { receiptNumber: { in: lateReceiptNumbers } },
-                ],
-              },
-            ],
-          },
-          include: {
-            order: {
-              select: {
-                orderNumber: true,
-                totalAmount: true,
-                attendantId: true,
-                paymentStatus: true,
-                status: true,
-                items: {
-                  select: {
-                    quantity: true,
-                  },
-                },
-              },
-            },
-          },
-        })
-      : [];
-
-  const receipts = [...baseReceipts, ...extraReceipts] as PosReceiptRow[];
+    });
+  const receipts = [...new Map(baseReceipts.map(row => [row.id, row])).values()] as PosReceiptRow[];
   await attachReceiptPricingEvidence(receipts, client);
   const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
   const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
@@ -347,13 +304,8 @@ export async function summarizePosReceiptsForPeriod(period: {
   //   the separate POD `paidAt` marker has not been set yet.
   const filteredReceipts = receipts
     .filter((r: any) => {
-      if (isReceiptCancelledForSales(r)) return false;
-      if (!isCompletedProjectReceiptForSales(r)) return false;
-      if (period.paymentScope === "all") return true;
-      if (isPodReceipt(r)) {
-        return isPodSettledForSales(r);
-      }
-      return isPosPaid(r);
+      if (period.paymentScope === "all") return !isReceiptCancelledForSales(r) && isCompletedProjectReceiptForSales(r);
+      return receiptFinancialExclusion(r) === null;
     })
     .filter((receipt) => matchesOwnershipMode(receipt, period.userId, period.ownershipMode));
 
@@ -406,7 +358,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     if (candidateArray.length > 0) {
       const ledgerEntries = await client.supportReceipt.findMany({
         where: {
-          OR: [{ receiptNumber: { in: candidateArray } }, { receiptKey: { in: candidateArray } }],
+          OR: [{ receiptNumber: { in: candidateArray } }, { receiptKey: { in: candidateArray } }, ...candidateArray.map(key => ({ receiptKey: { endsWith: `:${canonicalReceiptNumber(key)}` } }))],
         },
         select: {
           receiptNumber: true,
@@ -423,7 +375,7 @@ export async function summarizePosReceiptsForPeriod(period: {
         const buyingTotal = explicitBuyingTotal > 0 ? explicitBuyingTotal : itemsSum;
         if (!(Number.isFinite(buyingTotal) && buyingTotal > 0)) continue;
 
-        const keys = [entry.receiptNumber, entry.receiptKey]
+        const keys = [entry.receiptNumber, entry.receiptKey, String(entry.receiptKey ?? "").split(":").pop()]
           .map((k: any) => (typeof k === "string" ? k : ""))
           .filter((k) => k);
         for (const k of keys) {
@@ -440,11 +392,8 @@ export async function summarizePosReceiptsForPeriod(period: {
   const computeProfitFromCosts = (row: PosReceiptRow) => {
     const selling = extractSales(row);
     const aggregatePricing = readReceiptAggregatePricing(row);
-    if (!aggregatePricing.isAuthoritativeTotal && ((row.data as any)?.needsPricing === true || (row.totals as any)?.needsPricing === true || (row as any).financialPricingEvidence?.complete === false)) return 0;
-    const persistedProfit = extractProfit(row, selling);
-    if (!aggregatePricing.isAuthoritativeTotal && persistedProfit > 0) {
-      return persistedProfit;
-    }
+    if (!aggregatePricing.isAuthoritativeTotal && ((row.data as any)?.needsPricing === true || (row.totals as any)?.needsPricing === true)) return 0;
+
     const agentSaleCommission = Number((row?.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
     const deliveryFee = getPodDeliveryFee(row.data);
     const orderRef = String(row?.order?.orderNumber ?? "");
@@ -555,7 +504,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     for (const row of supportRows) {
       const selling = Number(row.sellingPrice ?? 0);
       const buying = Number(row.buyingPrice ?? 0);
-      for (const rawKey of collectReceiptVariants(row.receiptNumber ?? undefined)) {
+      for (const rawKey of new Set(collectReceiptVariants(row.receiptNumber ?? undefined).map(value => canonicalReceiptNumber(value)))) {
         const canonical = canonicalReceiptNumber(rawKey);
         if (!canonical) continue;
         const existing = supportProfitByReceipt.get(canonical);
@@ -597,12 +546,12 @@ export async function summarizePosReceiptsForPeriod(period: {
       null;
     const supportContextCandidate = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
     const supportContext =
-      supportContextCandidate && Math.round(supportContextCandidate.sellingTotal) === Math.round(sales)
+      supportContextCandidate && supportContextCandidate.buyingTotal > 0 && Math.round(supportContextCandidate.sellingTotal) === Math.round(sales)
         ? supportContextCandidate
         : undefined;
     const profit =
       supportContext
-        ? supportContext.profit - (Number((receipt?.data as any)?.agentSale?.commissionAmount ?? 0) || 0)
+        ? adjustProfitForPodDeliveryFee(supportContext.profit - (Number((receipt?.data as any)?.agentSale?.commissionAmount ?? 0) || 0), getPodDeliveryFee(receipt.data))
         : computeProfitFromCosts(receipt);
 
     if (salesIncluded && sales > 0) {
@@ -630,7 +579,34 @@ export async function summarizePosReceiptsForPeriod(period: {
     }
   }
 
+  const receiptBreakdown: ReceiptSalesBreakdown[] = [];
+  const breakdownSeen = new Set<string>();
+  for (const receipt of receipts) {
+    if (!matchesOwnershipMode(receipt, period.userId, period.ownershipMode)) continue;
+    if (period.docType && receipt.docType !== period.docType) continue;
+    const key = canonicalKeyForRow(receipt);
+    if (breakdownSeen.has(key)) continue;
+    breakdownSeen.add(key);
+    const date = getReceiptSalesRecognitionDate(receipt);
+    const created = receipt.createdAt ?? receipt.generatedAt ?? null;
+    if (!isDateInRange(date, period.start, period.end) && !isDateInRange(created, period.start, period.end)) continue;
+    const reason = receiptFinancialExclusion(receipt) || (!date ? "Awaiting complete buying prices" : !isDateInRange(date, period.start, period.end) ? "Recognized in another period" : "Eligible");
+    const eligible = reason === "Eligible";
+    const sales = extractSales(receipt);
+    const support = supportProfitByReceipt.get(key);
+    const profit = eligible ? (support && support.buyingTotal > 0 && Math.round(support.sellingTotal) === Math.round(sales)
+      ? adjustProfitForPodDeliveryFee(support.profit - (Number(receipt.data?.agentSale && (receipt.data.agentSale as any).commissionAmount) || 0), getPodDeliveryFee(receipt.data))
+      : computeProfitFromCosts(receipt)) : 0;
+    receiptBreakdown.push({ receiptId: receipt.id, receiptKey: receipt.receiptNumber || receipt.order?.orderNumber || receipt.id,
+      customerName: receipt.order?.customerName || "", source: "POS", docType: receipt.docType || "RECEIPT",
+      salesDate: date, createdAt: created, sales, eligibleSales: eligible ? sales : 0, profit, buyingTotal: eligible ? sales - profit - getPodDeliveryFee(receipt.data) - (Number((receipt.data as any)?.agentSale?.commissionAmount) || 0) : 0, itemCount: countItems(receipt),
+      paymentMethod: normalizePaymentMethod(receipt.data?.paymentMethod ?? receipt.totals?.paymentMethod) || "MPESA",
+      paymentStatus: receipt.order?.paymentStatus || "", reason, eligible });
+  }
   return {
+    recordedSales: receiptBreakdown.filter(row => row.reason !== "Cancelled").reduce((sum, row) => sum + row.sales, 0),
+    commissionEligibleSales: totalSales,
+    receiptBreakdown: receiptBreakdown.sort((a, b) => ((b.salesDate ?? b.createdAt)?.getTime() ?? 0) - ((a.salesDate ?? a.createdAt)?.getTime() ?? 0)),
     totalSales,
     totalProfit,
     totalItems,

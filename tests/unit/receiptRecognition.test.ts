@@ -80,3 +80,42 @@ test("projects need completion and pricing; whichever happens later determines r
   receipt.data.projectFlow.stage = "PROJECT_INSTALLED";
   expect(getReceiptRecognitionDate(receipt)).toBeNull();
 });
+
+ test("refunds override stale paid project and POD markers", async () => {
+  receipt.order.paidAmount = 5000;
+  receipt.data.podDelivery = { status: "delivered", deliveredAt: today.toISOString(), paidAt: today.toISOString() };
+  expect(getReceiptRecognitionDate(receipt)).toBeNull();
+  for (const summarize of [computeAdminReceiptSummary, summarizePosReceiptsForPeriod]) {
+    const result = await summarize({ ...range("2026-09-22"), onlyPos: true } as any);
+    expect(result.totalSales).toBe(0); expect(result.totalProfit).toBe(0);
+  }
+  (prisma.commissionEarning.findMany as jest.Mock).mockResolvedValue([{ amount: 200, basis: "product_flat", orderItem: { order: { receipt } } }]);
+  expect(await getReleasedPosProductCommissionForStaffPeriod("staff", range("2026-09-22").start, range("2026-09-22").end)).toBe(0);
+});
+ test("a fully paid mixed receipt with an unpriced line is visible but not commission eligible", async () => {
+  receipt.totals = { total: 25000, buyingTotal: 15550, needsPricing: false };
+  receipt.order.totalAmount = receipt.order.paidAmount = 25000;
+  receipt.order.items = [{ quantity: 2, sellingPrice: 1500, orderCosts: [], product: {} }, { quantity: 1, sellingPrice: 22000, orderCosts: [{ unitCost: 15550, createdAt: today }] }];
+  (prisma.supportReceipt.findMany as jest.Mock).mockResolvedValue([{ receiptNumber: receipt.receiptNumber, buyingTotal: 15550, items: [{ buyingPrice: 0 }, { buyingPrice: 15550 }] }]);
+  const result = await summarizePosReceiptsForPeriod(range("2026-09-22"));
+  expect(result.totalSales).toBe(0);
+  // Created yesterday: visible in the full trading period audit, not falsely recognized today.
+  const period = await summarizePosReceiptsForPeriod({ start: yesterday, end: tomorrow });
+  expect(period.receiptBreakdown[0]).toMatchObject({ sales: 25000, eligibleSales: 0, reason: "Awaiting complete buying prices" });
+});
+ test("profit is recomputed from costs rather than stale persisted profit", async () => {
+  receipt.totals = { total: 10000, profit: 9999 };
+  const result = await summarizePosReceiptsForPeriod(range("2026-09-22"));
+  expect(result.totalProfit).toBe(4000);
+  receipt.order.items[0].orderCosts[0].unitCost = 11000;
+  expect((await summarizePosReceiptsForPeriod(range("2026-09-22"))).totalProfit).toBe(-1000);
+});
+ test("POD support pricing deducts delivery costs once and canonical aliases do not duplicate profit", async () => {
+  receipt.totals = { total: 10000 };
+  receipt.data.podDelivery = { status: "delivered", deliveredAt: today.toISOString(), deliveryFee: 500 };
+  (prisma.supportReceipt.findMany as jest.Mock).mockResolvedValue([{ receiptNumber: receipt.receiptNumber, receiptKey: "2026-09-22:BETECH202609211", sellingTotal: 10000, buyingTotal: 6000, items: [{ buyingPrice: 6000, pricedAt: today }] }]);
+  for (const summarize of [computeAdminReceiptSummary, summarizePosReceiptsForPeriod]) {
+    const result = await summarize({ ...range("2026-09-22"), onlyPos: true } as any);
+    expect(result.totalProfit).toBe(3500); expect(result.totalSales).toBe(10000);
+  }
+});
