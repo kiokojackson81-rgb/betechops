@@ -17,7 +17,6 @@ import {
   getOrCreateCommissionPeriod,
 } from "@/lib/commission";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import { getReleasedPosProductCommissionForStaffPeriod } from "@/lib/posProductCommission";
 import {
   getTechnicalProjectCommissionSummary,
@@ -299,8 +298,10 @@ async function buildPayrollRowResolved(
   options: PayrollBuildOptions,
 ): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
-  await ensurePayrollAdjustmentStorage();
-  await ensureRecurringAdjustmentsForPeriod(attendant.id, period);
+  // Read paths must remain read-only and fast. Storage setup and recurring
+  // materialization are handled by adjustment mutation/maintenance flows;
+  // running schema checks and writes for every payroll row caused multi-minute
+  // admin and employee payroll loads.
   const [plan, ledger, adjustments] = await Promise.all([
     prisma.attendantCompPlan.findUnique({ where: { attendantId: attendant.id } }),
     prisma.commissionLedger.findUnique({
