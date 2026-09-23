@@ -310,12 +310,18 @@ async function buildPayrollRowResolved(
       },
     }),
     prisma.attendantPayrollAdjustment.findMany({
-      where: { attendantId: attendant.id, periodKey: { in: periodKeyVariants } },
+      // Load by attendant first, then apply the normalized period-key set
+      // below. Older adjustment rows were saved with legacy key formatting;
+      // filtering only in SQL could silently omit valid bonuses/deductions.
+      where: { attendantId: attendant.id },
       orderBy: { createdAt: "desc" },
     }),
   ]);
 
-  const adjustmentSummary = summarizeAdjustments(adjustments as any[]);
+  const normalizedPeriodKeys = new Set(periodKeyVariants.map((key) => String(key).replace(/[^0-9]/g, "")));
+  const adjustmentSummary = summarizeAdjustments(
+    (adjustments as any[]).filter((adjustment) => normalizedPeriodKeys.has(String(adjustment.periodKey ?? "").replace(/[^0-9]/g, ""))),
+  );
   const penalties = Number(ledger?.penalties ?? 0);
   adjustmentSummary.breakdown.penalties = penalties;
 
