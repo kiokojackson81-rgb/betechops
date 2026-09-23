@@ -655,6 +655,12 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
   });
 }
 
+/** Build several periods with one request-local cache (used by earnings history). */
+export async function buildPayrollRows(attendant: AttendantRecord, periods: TradingPeriod[]): Promise<PayrollRow[]> {
+  const cache = new Map<string, Promise<PayrollRow>>();
+  return Promise.all(periods.map((period) => buildPayrollRowInternal(attendant, period, { cache, carryDepth: 0 })));
+}
+
 /** The single canonical payroll calculation used by employee, admin and PDF reads. */
 export async function calculatePayrollForAttendant(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
   const row = await buildPayrollRow(attendant, period);

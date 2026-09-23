@@ -46,6 +46,15 @@ type SupportSummaryResponse = {
     commission: number;
     directCommission?: number;
   };
+  receiptBreakdown?: Array<{
+    receiptKey: string;
+    salesDate: string | null;
+    sales: number;
+    profit: number;
+    itemCount: number;
+    paymentMethod: "MPESA" | "CASH";
+    commission: number | null;
+  }>;
 };
 
 type SupportEarningsSummary = {
@@ -359,6 +368,8 @@ export default function SupportOpsPage() {
           />
         </section>
 
+        <ReceiptCommissionBreakdown rows={serverSummary?.receiptBreakdown ?? []} />
+
         <div className="grid gap-6 lg:grid-cols-12">
           <section id="daily-report" className="scroll-mt-36 space-y-5 rounded-3xl border border-white/10 bg-[#0d1828] p-4 sm:p-6 lg:col-span-7">
               <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
@@ -422,6 +433,37 @@ export default function SupportOpsPage() {
           </section>
         </div>
       </form>
+  );
+}
+
+function ReceiptCommissionBreakdown({ rows }: { rows: NonNullable<SupportSummaryResponse["receiptBreakdown"]> }) {
+  if (!rows.length) return null;
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-white/10 bg-[#0d1828]">
+      <div className="border-b border-white/10 px-5 py-4 sm:px-6">
+        <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Commission audit</p>
+        <h2 className="mt-1 text-xl font-semibold text-white">Paid POS receipts behind this commission</h2>
+        <p className="mt-1 text-sm text-slate-400">Each row shows the recognised profit and its 10% POS commission contribution.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[760px] w-full text-sm">
+          <thead className="bg-slate-950/50 text-left text-xs uppercase tracking-wide text-slate-400">
+            <tr>{["Receipt", "Sale date", "Payment", "Sales", "Recognised profit", "10% commission"].map((heading) => <th key={heading} className="px-5 py-3 font-medium">{heading}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => <tr key={row.receiptKey} className="border-t border-white/5">
+              <td className="px-5 py-3 font-semibold text-white">{row.receiptKey}</td>
+              <td className="px-5 py-3 text-slate-300">{row.salesDate ? new Date(row.salesDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—"}</td>
+              <td className="px-5 py-3 text-slate-300">{row.paymentMethod}</td>
+              <td className="px-5 py-3 text-slate-100">KES {safeLocale(row.sales)}</td>
+              <td className="px-5 py-3 text-emerald-300">KES {safeLocale(row.profit)}</td>
+              <td className="px-5 py-3 font-semibold text-emerald-300">KES {safeLocale(row.commission ?? 0)}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
