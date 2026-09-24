@@ -150,41 +150,16 @@ export function buildEarningsCardBreakdown(summary: SummaryLike | null | undefin
   ].filter((line) => line.amount !== 0);
 
   const entries = Array.isArray(summary.adjustmentEntries) ? summary.adjustmentEntries : [];
-  const adjustments = summary.adjustmentBreakdown ?? {};
-  const adjustmentLines: EarningsCardLine[] =
-    entries.length > 0
-      ? entries
-          .map((entry) => ({
-            label: String(entry.label || entry.adjustmentType || "Adjustment"),
-            amount: num(entry.amount),
-            kind:
-              String(entry.adjustmentKind ?? entry.kind ?? "DEDUCTION").toUpperCase() === "ADDITION"
-                ? ("earning" as const)
-                : ("deduction" as const),
-          }))
-          .filter((line) => line.amount !== 0)
-      : [
-          { label: "Bonus", amount: num(summary.bonusTotal ?? adjustments.bonus), kind: "earning" as const },
-          { label: "Top-up", amount: num(summary.commissionTopUpTotal ?? adjustments.commissionTopUp), kind: "earning" as const },
-          { label: "Chama", amount: num(summary.chamaTotal ?? adjustments.chama), kind: "deduction" as const },
-          { label: "Lateness", amount: num(summary.latenessTotal ?? adjustments.lateness), kind: "deduction" as const },
-          { label: "Discipline", amount: num(summary.disciplineTotal ?? adjustments.discipline), kind: "deduction" as const },
-          { label: "Other deductions", amount: num(summary.otherDeductionsTotal ?? adjustments.other), kind: "deduction" as const },
-          { label: "Penalties", amount: num(summary.penalties ?? adjustments.penalties), kind: "deduction" as const },
-        ].filter((line) => line.amount !== 0);
-
-  // A non-empty entry list is authoritative. Appending aggregate values in
-  // that case double-counts an addition such as "11 Powerstations".
-  const categorizedFallbacks = entries.length === 0 ? [
-    { label: "Bonus", amount: num(summary.bonusTotal ?? adjustments.bonus), kind: "earning" as const },
-    { label: "Top-up", amount: num(summary.commissionTopUpTotal ?? adjustments.commissionTopUp), kind: "earning" as const },
-    { label: "Chama", amount: num(summary.chamaTotal ?? adjustments.chama), kind: "deduction" as const },
-    { label: "Lateness", amount: num(summary.latenessTotal ?? adjustments.lateness), kind: "deduction" as const },
-    { label: "Discipline", amount: num(summary.disciplineTotal ?? adjustments.discipline), kind: "deduction" as const },
-    { label: "Other deductions", amount: num(summary.otherDeductionsTotal ?? adjustments.other), kind: "deduction" as const },
-    { label: "Penalties", amount: num(summary.penalties ?? adjustments.penalties), kind: "deduction" as const },
-  ].filter((line) => line.amount !== 0) : [];
-  adjustmentLines.push(...categorizedFallbacks);
+  // Adjustment lines are canonical payroll data. Never infer aggregate fallback lines.
+  const adjustmentLines: EarningsCardLine[] = entries
+    .map((entry) => ({
+      label: String(entry.label || entry.adjustmentType || "Adjustment"),
+      amount: num(entry.amount),
+      kind: String(entry.adjustmentKind ?? entry.kind ?? "DEDUCTION").toUpperCase() === "ADDITION"
+        ? ("earning" as const)
+        : ("deduction" as const),
+    }))
+    .filter((line) => line.amount !== 0);
 
   const lines = [...baseLines, ...adjustmentLines];
   const totalEarningsDerived = lines
@@ -194,13 +169,9 @@ export function buildEarningsCardBreakdown(summary: SummaryLike | null | undefin
     .filter((line) => line.kind === "deduction")
     .reduce((sum, line) => sum + line.amount, 0);
 
-  const totalEarnings = entries.length > 0 ? totalEarningsDerived : num(summary.totalEarnings ?? totalEarningsDerived);
-  const totalDeductions =
-    entries.length > 0 ? totalDeductionsDerived : num(summary.totalDeductions ?? totalDeductionsDerived);
-  const netPay =
-    entries.length > 0
-      ? totalEarningsDerived - totalDeductionsDerived
-      : num(summary.netPay ?? totalEarnings - totalDeductions);
+  const totalEarnings = num(summary.totalEarnings ?? totalEarningsDerived);
+  const totalDeductions = num(summary.totalDeductions ?? totalDeductionsDerived);
+  const netPay = num(summary.netPay ?? totalEarnings - totalDeductions);
 
   const classifiedLines = lines.map((line) => ({
     ...line,

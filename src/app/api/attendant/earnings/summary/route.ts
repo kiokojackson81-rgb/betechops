@@ -8,7 +8,6 @@ import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTarge
 import getAttendantCommissionSummary from "@/lib/attendantCommission";
 import type { Role } from "@prisma/client";
 import { calculatePayrollForAttendant } from "@/lib/adminPayroll";
-import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
 import { startPayrollTiming } from "@/lib/payrollTiming";
 
 export const dynamic = "force-dynamic";
@@ -35,9 +34,7 @@ export async function GET(req: Request) {
   const periodKeyParam = url.searchParams.get("periodKey");
   const period = parseTradingPeriodKey(periodKeyParam ?? undefined) ?? getTradingPeriodFor(now);
 
-  const isBrendahTarget = (targetUser.email ?? "").toLowerCase().trim() === "brendah@betech.co.ke";
-
-  const [summary, marketingSummary, supportSummary, ledger, payrollRow, brendahCommission] = await Promise.all([
+  const [summary, marketingSummary, supportSummary, ledger, payrollRow] = await Promise.all([
     getEarningsSummaryForUser({ userId, asOf: period.start }),
     summarizeMarketingReportsForPeriod({ userId, userEmail: targetUser?.email ?? null, period }),
     getSupportPeriodAggregates({ userId, period }),
@@ -51,7 +48,6 @@ export async function GET(req: Request) {
       },
     }),
     calculatePayrollForAttendant(targetUser, period),
-    isBrendahTarget ? getBrendahCommissionForPeriod(userId, period) : Promise.resolve(null),
   ]);
   const attendantCanonical = await getAttendantCommissionSummary({ attendantId: userId, start: period.start, end: period.end });
   // Merge per-receipt maps from marketing and support to expose canonical keys
@@ -65,38 +61,6 @@ export async function GET(req: Request) {
     if (merged.has(k)) continue;
     merged.set(k, v);
   }
-
-  const detail = ledger?.detail as Record<string, any> | undefined;
-  const marketingCommission = detail && typeof detail === "object" ? Number(detail.marketing?.commission ?? 0) : 0;
-  const supportCommission = detail && typeof detail === "object" ? Number(detail.support?.commission ?? 0) : 0;
-  const normalizedEmail =
-    (summary.attendantEmail ?? targetUser?.email ?? "").toLowerCase().trim();
-  const usesSpecialComputedCommission =
-    normalizedEmail === "brendah@betech.co.ke" || normalizedEmail === "jeniffer@betech.co.ke";
-
-  let salesCommission = Number(summary.salesCommission ?? 0);
-  const ledgerPersisted = Number((ledger as any)?.commissionTotal ?? (ledger as any)?.commission_total ?? 0);
-  if (!usesSpecialComputedCommission) {
-    // Prefer canonical server-side computed commission for consistency.
-    salesCommission = Number(attendantCanonical.directSalesCommission ?? marketingCommission + supportCommission);
-    if (ledgerPersisted > 0) {
-      salesCommission = ledgerPersisted;
-    }
-  }
-
-  const grossCommission = usesSpecialComputedCommission
-    ? Number(summary.grossCommission ?? salesCommission)
-    : ledgerPersisted > 0
-      ? ledgerPersisted
-      : Number(attendantCanonical.totalCommission ?? (salesCommission + summary.newProductCommission + summary.copiedCommission + summary.editedCommission + summary.commissionTopUpTotal));
-
-  const totalEarnings = usesSpecialComputedCommission
-    ? Number(summary.totalEarnings ?? 0)
-    : payrollRow.baseSalary + payrollRow.transportAllowance + Number(attendantCanonical.totalCommission ?? grossCommission) + payrollRow.adjustmentBreakdown.bonus;
-  const totalDeductions = usesSpecialComputedCommission
-    ? Number(summary.totalDeductions ?? 0)
-    : payrollRow.adjustmentBreakdown.chama + payrollRow.adjustmentBreakdown.lateness + payrollRow.adjustmentBreakdown.discipline + payrollRow.adjustmentBreakdown.other;
-  const netPay = usesSpecialComputedCommission ? Number(summary.netPay ?? 0) : totalEarnings - totalDeductions;
 
   const payload = {
     // expose canonical per-receipt keys for clients to dedupe local receipts
@@ -112,10 +76,10 @@ export async function GET(req: Request) {
     commissionDirect: payrollRow.commissionDirect,
     commissionMarketplaceJumia: payrollRow.commissionMarketplaceJumia,
     commissionMarketplaceKilimall: payrollRow.commissionMarketplaceKilimall,
-    grossCommission: Number(attendantCanonical.totalCommission ?? payrollRow.commissionGross),
-    commission: Number(attendantCanonical.totalCommission ?? payrollRow.commissionTotal),
-    bonusTotal: payrollRow.adjustmentBreakdown.bonus,
-    commissionTopUpTotal: attendantCanonical.commissionTopUpTotal ?? payrollRow.adjustmentBreakdown.commissionTopUp,
+    grossCommission: payrollRow.commissionGross,
+    commission: payrollRow.commissionTotal,
+    bonusTotal: payrollRow.totalAdditions,
+    commissionTopUpTotal: payrollRow.totalAdditions,
     chamaTotal: payrollRow.adjustmentBreakdown.chama,
     latenessTotal: payrollRow.adjustmentBreakdown.lateness,
     disciplineTotal: payrollRow.adjustmentBreakdown.discipline,
@@ -146,13 +110,8 @@ export async function GET(req: Request) {
   Object.assign(payload, {
     totalSales: attendantCanonical.totalSales, totalProfit: attendantCanonical.totalProfit,
     totalReceipts: attendantCanonical.receiptsCount, totalItems: attendantCanonical.totalItems,
-    salesCommission: attendantCanonical.directSalesCommission, commissionDirect: attendantCanonical.directSalesCommission,
-    grossCommission: attendantCanonical.totalCommission, commission: attendantCanonical.totalCommission,
-    commissionTotal: attendantCanonical.totalCommission, receiptBreakdown: attendantCanonical.receiptBreakdown,
+    receiptBreakdown: attendantCanonical.receiptBreakdown,
     recordedSales: attendantCanonical.recordedSales, commissionEligibleSales: attendantCanonical.commissionEligibleSales,
   });
-  payload.totalEarnings = Number(payload.baseSalary) + Number(payload.transportAllowance) + attendantCanonical.totalCommission + Number(payload.bonusTotal);
-  payload.netPay = payload.totalEarnings - Number(payload.totalDeductions);
-
   return timing.finish(NextResponse.json(composeIdentityResponse(meta, payload)));
 }

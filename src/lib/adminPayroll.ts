@@ -23,7 +23,7 @@ import {
   TECHNICAL_POS_PROFIT_COMMISSION_RATE,
 } from "@/lib/technicalCompensation";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "@/app/admin/payroll/types";
-import { summarizeAdjustments } from "@/lib/payrollAdjustments";
+import { calculateAdjustmentTotals, summarizeAdjustments } from "@/lib/payrollAdjustments";
 export { summarizeAdjustments } from "@/lib/payrollAdjustments";
 
 type AttendantRecord = {
@@ -256,6 +256,7 @@ async function buildPayrollRowResolved(
           kilimall: kilimallCommission,
           total: commissionTotal,
         },
+      totalAdditions: adjustmentSummary.totalBonus,
       bonusTotal,
       deductionTotal: totalDeductions,
       totalEarnings,
@@ -342,6 +343,7 @@ async function buildPayrollRowResolved(
         productWork: productWorkCommission,
         total: commissionTotal,
       },
+      totalAdditions: adjustmentSummary.totalBonus,
       bonusTotal: adjustmentSummary.totalBonus,
       deductionTotal: totalDeductions,
       totalEarnings,
@@ -430,6 +432,7 @@ async function buildPayrollRowResolved(
         productWork: productWorkCommission,
         total: commissionTotal,
       },
+      totalAdditions: adjustmentSummary.totalBonus,
       bonusTotal: adjustmentSummary.totalBonus,
       deductionTotal: totalDeductions,
       totalEarnings,
@@ -502,6 +505,7 @@ async function buildPayrollRowResolved(
         projectPendingCount: Number(projectCommission.pendingCount ?? 0),
         total: commissionTotal,
       },
+      totalAdditions: adjustmentSummary.totalBonus,
       bonusTotal: adjustmentSummary.totalBonus,
       deductionTotal: totalDeductions,
       totalEarnings,
@@ -610,6 +614,7 @@ async function buildPayrollRowResolved(
             source: commissionConfig.salesCommissionMode,
           }
         : ledger?.commissionBreakdown ?? null,
+    totalAdditions: adjustmentSummary.totalBonus,
     bonusTotal: adjustmentSummary.totalBonus,
     deductionTotal: totalDeductions,
     totalEarnings,
@@ -664,7 +669,24 @@ export async function buildPayrollRows(attendant: AttendantRecord, periods: Trad
 export async function calculatePayrollForAttendant(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
   const row = await buildPayrollRow(attendant, period);
   const { applyCanonicalPayrollOverrides } = await import("@/lib/payrollCanonical");
-  const canonical = await applyCanonicalPayrollOverrides(row, period);
+  const overridden = await applyCanonicalPayrollOverrides(row, period);
+  const adjustments = calculateAdjustmentTotals(overridden.adjustmentEntries);
+  const totalDeductions = adjustments.totalDeductions + Number(overridden.adjustmentBreakdown.penalties ?? 0);
+  // Sum exact component values before formatting for display.
+  const totalEarnings =
+    Number(overridden.baseSalary ?? 0) +
+    Number(overridden.transportAllowance ?? 0) +
+    Number(overridden.commissionTotal ?? 0) +
+    adjustments.totalAdditions;
+  const canonical: PayrollRow = {
+    ...overridden,
+    totalAdditions: adjustments.totalAdditions,
+    bonusTotal: adjustments.totalAdditions,
+    deductionTotal: totalDeductions,
+    totalEarnings,
+    totalDeductions,
+    netPay: totalEarnings - totalDeductions,
+  };
   console.info("[payroll-calculation]", {
     attendantId: attendant.id,
     periodKey: period.key,

@@ -1,7 +1,5 @@
 import type { Branding } from "@prisma/client";
 import { getPayrollCategoryLabel } from "@/lib/getLandingPage";
-import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
-import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 
@@ -34,11 +32,7 @@ export type PayslipPayload = {
   netPay: number;
 };
 
-const currency = new Intl.NumberFormat("en-KE", {
-  style: "currency",
-  currency: "KES",
-  maximumFractionDigits: 0,
-});
+const currency = { format: (value: number) => `KES ${Math.round(Number(value ?? 0)).toLocaleString("en-KE")}` };
 
 export function sanitizeFilename(value: string) {
   return value
@@ -70,21 +64,6 @@ function payslipNumber(attendantId: string, periodKey: string) {
   return `PS-${periodKey.replace(/[^0-9A-Za-z]/g, "")}-${attendantId.slice(-6).toUpperCase()}`;
 }
 
-function resolveAdjustmentLabel(entry: { label?: string | null; adjustmentType?: string | null }, kind: "ADDITION" | "DEDUCTION") {
-  const explicit = String(entry.label ?? "").trim();
-  if (explicit) return explicit;
-
-  const type = String(entry.adjustmentType ?? "").trim().toUpperCase();
-  if (type === "CHAMA") return "Chama";
-  if (type === "LATENESS") return "Lateness";
-  if (type === "DISCIPLINE") return "Discipline";
-  if (type === "OTHER") return kind === "ADDITION" ? "Additional" : "Deduction";
-  if (type === "BONUS" || type === "COMMISSION_TOPUP") {
-    return kind === "ADDITION" ? "Additional" : "Deduction";
-  }
-  return kind === "ADDITION" ? "Additional" : "Deduction";
-}
-
 function buildCommissionLines(row: PayrollRow) {
   switch (row.attendantCategory) {
     case "DIRECT_SALES_OPS":
@@ -109,56 +88,6 @@ function buildCommissionLines(row: PayrollRow) {
     default:
       return [{ label: "Commission", amount: row.commissionTotal }];
   }
-}
-
-function buildAdjustmentLines(row: PayrollRow) {
-  const entries = Array.isArray(row.adjustmentEntries) ? row.adjustmentEntries : [];
-  const additionLines = entries
-    .filter((entry) => entry.kind === "ADDITION")
-    .map((entry) => ({
-      label: resolveAdjustmentLabel(entry, "ADDITION"),
-      amount: Math.abs(Number(entry.amount ?? 0)),
-    }));
-  const deductionLines = entries
-    .filter((entry) => entry.kind === "DEDUCTION")
-    .map((entry) => ({
-      label: resolveAdjustmentLabel(entry, "DEDUCTION"),
-      amount: Math.abs(Number(entry.amount ?? 0)),
-    }));
-
-  const fallbackAdditions =
-    additionLines.length > 0
-      ? []
-      : [
-          { label: "Additional", amount: Math.max(0, Number(row.adjustmentBreakdown.bonus ?? 0)) },
-          { label: "Additional", amount: Math.max(0, Number(row.adjustmentBreakdown.commissionTopUp ?? 0)) },
-          { label: "Additional", amount: Math.max(0, -Number(row.adjustmentBreakdown.chama ?? 0)) },
-          { label: "Additional", amount: Math.max(0, -Number(row.adjustmentBreakdown.lateness ?? 0)) },
-          { label: "Additional", amount: Math.max(0, -Number(row.adjustmentBreakdown.discipline ?? 0)) },
-          { label: "Additional", amount: Math.max(0, -Number(row.adjustmentBreakdown.other ?? 0)) },
-        ].filter((line) => Number(line.amount ?? 0) > 0);
-
-  const fallbackDeductions =
-    deductionLines.length > 0
-      ? []
-      : [
-          { label: "Deduction", amount: Math.max(0, -Number(row.adjustmentBreakdown.bonus ?? 0)) },
-          { label: "Deduction", amount: Math.max(0, -Number(row.adjustmentBreakdown.commissionTopUp ?? 0)) },
-          { label: "Chama", amount: Math.max(0, Number(row.adjustmentBreakdown.chama ?? 0)) },
-          { label: "Lateness", amount: Math.max(0, Number(row.adjustmentBreakdown.lateness ?? 0)) },
-          { label: "Discipline", amount: Math.max(0, Number(row.adjustmentBreakdown.discipline ?? 0)) },
-          { label: "Other deductions", amount: Math.max(0, Number(row.adjustmentBreakdown.other ?? 0)) },
-        ].filter((line) => Number(line.amount ?? 0) > 0);
-
-  const penaltiesLine =
-    Number(row.adjustmentBreakdown.penalties ?? 0) !== 0
-      ? [{ label: "Penalties", amount: Math.abs(Number(row.adjustmentBreakdown.penalties ?? 0)) }]
-      : [];
-
-  return {
-    additionLines: additionLines.length > 0 ? additionLines : fallbackAdditions,
-    deductionLines: [...(deductionLines.length > 0 ? deductionLines : fallbackDeductions), ...penaltiesLine],
-  };
 }
 
 function buildWorkSummary(row: PayrollRow) {
@@ -204,57 +133,26 @@ function buildWorkSummary(row: PayrollRow) {
 }
 
 function buildPayslipBreakdown(row: PayrollRow) {
-  const summary = mapPayrollToEarningsSummary(
-    {
-      periodLabel: "",
-      attendantCategory: row.attendantCategory,
-      baseSalary: row.baseSalary,
-      transportAllowance: row.transportAllowance,
-      totalSales: row.totalSales,
-      totalProfit: row.totalProfit,
-      totalItems: row.totalItems,
-      totalReceipts: row.totalReceipts,
-      newProducts: row.newProducts,
-      editedProducts: row.editedProducts,
-      copiedProducts: row.copiedProducts,
-      commissionDirect: row.commissionDirect,
-      commissionMarketplaceJumia: row.commissionMarketplaceJumia,
-      commissionMarketplaceKilimall: row.commissionMarketplaceKilimall,
-      commissionTotal: row.commissionTotal,
-      grossCommission: row.commissionGross,
-      bonusTotal: row.adjustmentBreakdown.bonus,
-      commissionTopUpTotal: row.adjustmentBreakdown.commissionTopUp,
-      chamaTotal: row.adjustmentBreakdown.chama,
-      latenessTotal: row.adjustmentBreakdown.lateness,
-      disciplineTotal: row.adjustmentBreakdown.discipline,
-      otherDeductionsTotal: row.adjustmentBreakdown.other,
-      penalties: row.adjustmentBreakdown.penalties,
-      totalEarnings: row.totalEarnings,
-      totalDeductions: row.totalDeductions,
-      netPay: row.netPay,
-      adjustmentEntries: row.adjustmentEntries.map((entry) => ({
-        id: entry.id,
-        label: entry.label,
-        amount: entry.amount,
-        adjustmentType: entry.adjustmentType,
-        adjustmentKind: entry.kind,
-      })),
-      commissionBreakdown: row.commissionBreakdown,
-    },
-    row.totalReceipts,
-  );
-  const breakdown = buildEarningsCardBreakdown(summary);
-
+  const entries = Array.isArray(row.adjustmentEntries) ? row.adjustmentEntries : [];
+  const adjustmentLines = (kind: "ADDITION" | "DEDUCTION") => entries
+    .filter((entry) => entry.kind === kind)
+    .map((entry) => ({ label: entry.label || entry.adjustmentType || "Adjustment", amount: Math.abs(Number(entry.amount ?? 0)) }));
   return {
-    earningsLines: breakdown.lines
-      .filter((line) => line.kind === "earning")
-      .map((line) => ({ label: line.label, amount: line.amount })),
-    deductionLines: breakdown.lines
-      .filter((line) => line.kind === "deduction")
-      .map((line) => ({ label: line.label, amount: line.amount })),
-    totalEarnings: breakdown.totalEarnings,
-    totalDeductions: breakdown.totalDeductions,
-    netPay: breakdown.netPay,
+    earningsLines: [
+      { label: "Base salary", amount: row.baseSalary },
+      ...(row.transportAllowance ? [{ label: "Transport allowance", amount: row.transportAllowance }] : []),
+      ...buildCommissionLines(row).filter((line) => line.amount !== 0),
+      ...adjustmentLines("ADDITION"),
+    ].filter((line) => line.amount !== 0),
+    deductionLines: [
+      ...adjustmentLines("DEDUCTION"),
+      ...(Number(row.adjustmentBreakdown.penalties ?? 0) !== 0
+        ? [{ label: "Penalties", amount: Math.abs(Number(row.adjustmentBreakdown.penalties)) }]
+        : []),
+    ],
+    totalEarnings: row.totalEarnings,
+    totalDeductions: row.totalDeductions,
+    netPay: row.netPay,
   };
 }
 

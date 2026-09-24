@@ -1,5 +1,17 @@
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind } from "@/app/admin/payroll/types";
 
+export function calculateAdjustmentTotals(entries: AdjustmentEntry[]) {
+  return entries.reduce(
+    (totals, entry) => {
+      const amount = Math.abs(Number(entry.amount ?? 0));
+      if (entry.kind === "ADDITION") totals.totalAdditions += amount;
+      else totals.totalDeductions += amount;
+      return totals;
+    },
+    { totalAdditions: 0, totalDeductions: 0 },
+  );
+}
+
 export function summarizeAdjustments(adjustments: Array<{
   id: string; label: string; amount: number | null; adjustmentType: string; adjustmentKind?: string | null;
 }>) {

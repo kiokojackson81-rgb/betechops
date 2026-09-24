@@ -33,6 +33,8 @@ export type PayrollRow = {
   commissionMarketplaceKilimall: number;
   commissionTotal: number;
   commissionBreakdown: unknown | null;
+  /** Sum of all individual ADDITION adjustment lines. */
+  totalAdditions: number;
   bonusTotal: number;
   deductionTotal: number;
   totalEarnings: number;

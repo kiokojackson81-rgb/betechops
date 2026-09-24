@@ -178,6 +178,7 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
     commissionMarketplaceKilimall: marketplaceKilimall,
     commissionTotal: totalCommission,
     commissionBreakdown: p?.commissionBreakdown ?? null,
+    totalAdditions: bonus + commissionTopUp,
     bonusTotal: bonus + commissionTopUp,
     deductionTotal: totalDeductions,
     totalEarnings,
