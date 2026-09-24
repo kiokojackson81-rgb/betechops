@@ -3,6 +3,7 @@ import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { nairobiDateKey } from "@/lib/tradingPeriod";
 import type { ReceiptSalesBreakdown } from "@/lib/posReceiptSummary";
 import { prisma } from "@/lib/prisma";
+import { listPayrollAdjustmentEntries } from "@/lib/payrollAdjustmentRepository";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { getReleasedPosProductCommissionForStaffPeriod } from "@/lib/posProductCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
@@ -81,17 +82,11 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
   const { tiers } = await getOrCreateCommissionPeriod(start);
 
   // Adjustments (commission top-ups etc.) — find attendantPayrollAdjustment for the period key variants
-  const periodKeyDateOnly = period.key;
-  const periodKeyIso = `${start.toISOString()}_${end.toISOString()}`;
-  const legacyPeriodKeyIso = `${period.key.split("_")[0]}T00:00:00.000Z_${period.key.split("_")[1]}T23:59:59.999Z`;
-  const adjustments = await prisma.attendantPayrollAdjustment.findMany({
-    where: { attendantId, periodKey: { in: [periodKeyDateOnly, periodKeyIso, legacyPeriodKeyIso] } },
-  });
+  const adjustments = await listPayrollAdjustmentEntries({ attendantId, periodKey: period.key });
   let commissionTopUpTotal = 0;
   for (const a of adjustments) {
     const amt = Number(a.amount ?? 0);
-    const kind = String(a.adjustmentKind ?? "DEDUCTION").toUpperCase();
-    const isAddition = kind === "ADDITION";
+    const isAddition = a.kind === "ADDITION";
     if (a.adjustmentType === "COMMISSION_TOPUP") {
       commissionTopUpTotal += isAddition ? amt : -amt;
     }
@@ -129,8 +124,11 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
 
   const productUploadTotal = (newProductCommission ?? 0) + (copiedCommission ?? 0) + (editedCommission ?? 0);
 
+  // Payroll applies all adjustment entries (including COMMISSION_TOPUP) in
+  // totalAdditions. Keeping adjustments out of commission prevents a top-up
+  // being added once here and once again by the canonical payroll formula.
   const totalCommission = Math.round(
-    Number(directSalesCommission ?? 0) + Number(marketplaceCommission ?? 0) + Number(posProductCommission ?? 0) + Number(productUploadTotal ?? 0) + Number(commissionTopUpTotal ?? 0),
+    Number(directSalesCommission ?? 0) + Number(marketplaceCommission ?? 0) + Number(posProductCommission ?? 0) + Number(productUploadTotal ?? 0),
   );
 
   return {

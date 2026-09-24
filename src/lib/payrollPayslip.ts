@@ -78,6 +78,10 @@ function buildCommissionLines(row: PayrollRow) {
       ];
     case "SUPPORT_OPS":
       return [{ label: "Support commission", amount: row.commissionDirect || row.commissionTotal }];
+    case "TECHNICAL_TEAM":
+      // Project/technical commission is part of gross earnings and must be
+      // shown separately from project adjustment additions on every payslip.
+      return [{ label: "Technical project commission", amount: row.commissionTotal }];
     case "BETECH_OPS":
     case "GENERAL_OPS":
       return [

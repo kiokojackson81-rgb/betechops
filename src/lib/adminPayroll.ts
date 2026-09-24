@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { getPreviousTradingPeriod, type TradingPeriod } from "@/lib/tradingPeriod";
-import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { getOnlineEarningsSummary } from "@/lib/onlineOps";
 import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
@@ -24,6 +23,7 @@ import {
 } from "@/lib/technicalCompensation";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "@/app/admin/payroll/types";
 import { calculateAdjustmentTotals, summarizeAdjustments } from "@/lib/payrollAdjustments";
+import { listPayrollAdjustmentEntries } from "@/lib/payrollAdjustmentRepository";
 export { summarizeAdjustments } from "@/lib/payrollAdjustments";
 
 type AttendantRecord = {
@@ -166,7 +166,6 @@ async function buildPayrollRowResolved(
   period: TradingPeriod,
   options: PayrollBuildOptions,
 ): Promise<PayrollRow> {
-  const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
   const [plan, ledger, adjustments, recurringAdjustments] = await Promise.all([
     prisma.attendantCompPlan.findUnique({ where: { attendantId: attendant.id } }),
     prisma.commissionLedger.findUnique({
@@ -178,17 +177,16 @@ async function buildPayrollRowResolved(
         },
       },
     }),
-    prisma.attendantPayrollAdjustment.findMany({
-      // Legacy materialised recurring rows are intentionally excluded. Active
-      // recurring definitions are expanded above, while one-off/requested
-      // adjustments remain immutable persisted records.
-      where: { attendantId: attendant.id, periodKey: { in: periodKeyVariants }, recurringItemId: null },
-      orderBy: { createdAt: "desc" },
-    }),
+    listPayrollAdjustmentEntries({ attendantId: attendant.id, periodKey: period.key }),
     getRecurringAdjustmentsForPeriod(attendant.id, period),
   ]);
 
-  const adjustmentSummary = summarizeAdjustments([...adjustments, ...recurringAdjustments] as any[]);
+  // Recurring rules are expanded read-only for every employee. They are never
+  // materialised, deleted, or upserted during a payroll read.
+  const adjustmentSummary = summarizeAdjustments([
+    ...adjustments.map((entry) => ({ ...entry, adjustmentKind: entry.kind })),
+    ...recurringAdjustments,
+  ]);
   const penalties = Number(ledger?.penalties ?? 0);
   adjustmentSummary.breakdown.penalties = penalties;
 
@@ -654,10 +652,7 @@ function buildPayrollRowInternal(
 }
 
 export async function buildPayrollRow(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
-  return buildPayrollRowInternal(attendant, period, {
-    cache: new Map<string, Promise<PayrollRow>>(),
-    carryDepth: 0,
-  });
+  return calculatePayrollForAttendant(attendant, period);
 }
 
 /** Build several periods with one request-local cache (used by earnings history). */
@@ -667,7 +662,10 @@ export async function buildPayrollRows(attendant: AttendantRecord, periods: Trad
 
 /** The single canonical payroll calculation used by employee, admin and PDF reads. */
 export async function calculatePayrollForAttendant(attendant: AttendantRecord, period: TradingPeriod): Promise<PayrollRow> {
-  const row = await buildPayrollRow(attendant, period);
+  const row = await buildPayrollRowInternal(attendant, period, {
+    cache: new Map<string, Promise<PayrollRow>>(),
+    carryDepth: 0,
+  });
   const { applyCanonicalPayrollOverrides } = await import("@/lib/payrollCanonical");
   const overridden = await applyCanonicalPayrollOverrides(row, period);
   const adjustments = calculateAdjustmentTotals(overridden.adjustmentEntries);

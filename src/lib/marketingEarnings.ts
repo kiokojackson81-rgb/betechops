@@ -4,8 +4,7 @@ import { getMarketingReport } from "./marketingReport";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "./supportEntries";
 import { getTradingPeriodFor, getRecentTradingPeriods } from "./tradingPeriod";
-import { getPeriodKeyVariants } from "./payrollPeriodKey";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
+import { listPayrollAdjustmentEntries } from "@/lib/payrollAdjustmentRepository";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -96,19 +95,14 @@ export async function getEarningsSummaryForAttendant(opts: {
   const transportAllowance = plan?.defaultTransportAllowance ?? 0;
 
   // 4) All adjustments for this period
-  const variants = getPeriodKeyVariants(periodKey);
-  const adjustmentFilterKeys = variants.length ? variants : [periodKey];
-  await ensurePayrollAdjustmentStorage();
-  const adjustments = await prisma.attendantPayrollAdjustment.findMany({
-    where: { attendantId, periodKey: { in: adjustmentFilterKeys } },
-  });
+  const adjustments = await listPayrollAdjustmentEntries({ attendantId, periodKey });
 
   const sumSigned = (filterFn: (a: any) => boolean, defaultKind: "ADDITION" | "DEDUCTION") =>
     adjustments
       .filter(filterFn)
       .reduce((acc, a) => {
         const amount = Number(a.amount ?? 0);
-        const kind = String(a.adjustmentKind ?? defaultKind).toUpperCase();
+        const kind = a.kind;
         return acc + (kind === "ADDITION" ? amount : -amount);
       }, 0);
   const sumDeduction = (filterFn: (a: any) => boolean) =>
@@ -116,7 +110,7 @@ export async function getEarningsSummaryForAttendant(opts: {
       .filter(filterFn)
       .reduce((acc, a) => {
         const amount = Number(a.amount ?? 0);
-        const kind = String(a.adjustmentKind ?? "DEDUCTION").toUpperCase();
+        const kind = a.kind;
         return acc + (kind === "ADDITION" ? -amount : amount);
       }, 0);
 
@@ -139,7 +133,7 @@ export async function getEarningsSummaryForAttendant(opts: {
     label: a.label,
     amount: a.amount ?? 0,
     adjustmentType: a.adjustmentType,
-    adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
+    adjustmentKind: a.kind,
   }));
 
   return {

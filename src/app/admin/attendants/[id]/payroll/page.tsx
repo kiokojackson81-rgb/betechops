@@ -10,7 +10,7 @@ import {
 } from "@/lib/tradingPeriod";
 import { requireRole } from "@/lib/api";
 import Card from "@/app/_components/Card";
-import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
+import { listPayrollAdjustmentEntries } from "@/lib/payrollAdjustmentRepository";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { emptyPayrollAppraisal } from "@/lib/payrollAppraisal";
 
@@ -115,12 +115,7 @@ export default async function PayrollPage({
     adjustmentEntries: payrollRow.adjustmentEntries,
   };
 
-  const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
-  const adjustmentKeys = periodKeyVariants.length ? periodKeyVariants : [periodKey];
-  const adjustments = await prisma.attendantPayrollAdjustment.findMany({
-    where: { attendantId, periodKey: { in: adjustmentKeys } },
-    orderBy: { createdAt: "desc" },
-  });
+  const adjustments = await listPayrollAdjustmentEntries({ attendantId, periodKey });
   const recurringItems = await prisma.attendantRecurringPayrollItem.findMany({
     where: { attendantId },
     orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],

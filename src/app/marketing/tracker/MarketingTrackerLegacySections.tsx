@@ -511,6 +511,10 @@ function BrendahLegacyEarningsCard(props: { summary: EarningsSummary | null; dow
   const netPay = Number(summary.netPay ?? 0);
   const baseSalary = Number(summary.baseSalary ?? 0);
   const marketingCommission = Number((summary as any).salesCommission ?? (summary as any).commission ?? 0);
+  const adjustments = Array.isArray((summary as any).adjustmentEntries) ? (summary as any).adjustmentEntries : [];
+  const additions = adjustments.filter((entry: any) => entry.adjustmentKind === "ADDITION");
+  const deductions = adjustments.filter((entry: any) => entry.adjustmentKind === "DEDUCTION");
+  const totalDeductions = Number((summary as any).totalDeductions ?? 0);
 
   return (
     <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -536,6 +540,24 @@ function BrendahLegacyEarningsCard(props: { summary: EarningsSummary | null; dow
           <span className="text-slate-300">Marketing commission</span>
           <span className="font-semibold text-slate-100">{mask(formatKES(marketingCommission))}</span>
         </div>
+        {additions.map((entry: any) => (
+          <div key={entry.id} className="flex items-center justify-between rounded-xl bg-emerald-950/30 px-3 py-2">
+            <span className="text-emerald-100">{entry.label}</span>
+            <span className="font-semibold text-emerald-300">+{mask(formatKES(Number(entry.amount ?? 0)))}</span>
+          </div>
+        ))}
+        {deductions.map((entry: any) => (
+          <div key={entry.id} className="flex items-center justify-between rounded-xl bg-rose-950/30 px-3 py-2">
+            <span className="text-rose-100">{entry.label}</span>
+            <span className="font-semibold text-rose-300">−{mask(formatKES(Number(entry.amount ?? 0)))}</span>
+          </div>
+        ))}
+        {totalDeductions > 0 ? (
+          <div className="flex items-center justify-between rounded-xl border border-rose-500/20 bg-rose-950/20 px-3 py-2">
+            <span className="text-rose-100">Total deductions</span>
+            <span className="font-semibold text-rose-300">−{mask(formatKES(totalDeductions))}</span>
+          </div>
+        ) : null}
       </div>
 
       {downloadHref ? (

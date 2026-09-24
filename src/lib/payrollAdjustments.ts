@@ -27,15 +27,20 @@ export function summarizeAdjustments(adjustments: Array<{
     const topUp = type === "COMMISSION_TOPUP";
     const kind = (adjustment.adjustmentKind as AdjustmentKind | undefined) ?? (bonus || topUp ? "ADDITION" : "DEDUCTION");
     summary.entries.push({ id: adjustment.id, label: adjustment.label, amount, adjustmentType: type, kind });
-    const signed = kind === "ADDITION" ? amount : -amount;
-    if (bonus) summary.breakdown.bonus += signed;
-    else if (topUp) summary.breakdown.commissionTopUp += signed;
-    else if (type === "CHAMA") summary.breakdown.chama -= signed;
-    else if (type === "LATENESS") summary.breakdown.lateness -= signed;
-    else if (type === "DISCIPLINE") summary.breakdown.discipline -= signed;
-    else summary.breakdown.other -= signed;
-    if (signed >= 0) summary.totalBonus += signed;
-    else summary.totalDeduction += -signed;
+    if (kind === "ADDITION") {
+      if (bonus) summary.breakdown.bonus += amount;
+      else if (topUp) summary.breakdown.commissionTopUp += amount;
+      else summary.breakdown.bonus += amount;
+      summary.totalBonus += amount;
+    } else {
+      // A deduction remains a deduction even if a historic row carries the
+      // BONUS type (as in Brendah's lateness record). `kind` is authoritative.
+      if (type === "CHAMA") summary.breakdown.chama += amount;
+      else if (type === "LATENESS") summary.breakdown.lateness += amount;
+      else if (type === "DISCIPLINE") summary.breakdown.discipline += amount;
+      else summary.breakdown.other += amount;
+      summary.totalDeduction += amount;
+    }
   }
   return summary;
 }

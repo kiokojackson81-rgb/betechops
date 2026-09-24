@@ -121,11 +121,10 @@ function replaceZipEntry(cfb: any, entryPath: string, content: Buffer) {
 }
 
 export async function buildOpenfloatReviewRows(period: TradingPeriod) {
-  const [{ prisma }, { buildPayrollRow }, { applyCanonicalPayrollOverrides }, { payrollEligibleUserWhere }] =
+  const [{ prisma }, { calculatePayrollForAttendant }, { payrollEligibleUserWhere }] =
     await Promise.all([
       import("@/lib/prisma"),
       import("@/lib/adminPayroll"),
-      import("@/lib/payrollCanonical"),
       import("@/lib/payrollEligibility"),
     ]);
 
@@ -152,7 +151,10 @@ export async function buildOpenfloatReviewRows(period: TradingPeriod) {
 
   const rows = await Promise.all(
     attendants.map(async (attendant) => {
-      const payrollRow = await applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period);
+      // calculatePayrollForAttendant is already canonical. Applying the
+      // override again doubled the expensive receipt/commission reconciliation
+      // for every Openfloat employee.
+      const payrollRow = await calculatePayrollForAttendant(attendant, period);
       return buildOpenfloatReviewRow(attendant, payrollRow.netPay, period);
     }),
   );

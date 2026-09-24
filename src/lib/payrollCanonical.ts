@@ -5,6 +5,11 @@ import { resolveDirectCommissionMode } from "@/lib/onlineCommission";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 
 export async function applyCanonicalPayrollOverrides(row: PayrollRow, period: TradingPeriod): Promise<PayrollRow> {
+  // Technical payroll has its own completed-project commission source. The
+  // generic receipt reconciler has no project rows and would overwrite that
+  // commission with zero, which previously made Openfloat/PDF omit it.
+  if (row.attendantCategory === "TECHNICAL_TEAM") return row;
+
   const summary = await getAttendantCommissionSummary({ attendantId: row.attendantId, start: period.start, end: period.end });
   const totalEarnings = Number(row.baseSalary ?? 0) + Number(row.transportAllowance ?? 0) + summary.totalCommission + Number(row.bonusTotal ?? 0);
   return { ...row, totalSales: summary.totalSales, totalProfit: summary.totalProfit,

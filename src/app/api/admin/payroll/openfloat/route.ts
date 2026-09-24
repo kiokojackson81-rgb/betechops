@@ -12,6 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const startedAt = performance.now();
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
 
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
   const periodKey = (url.searchParams.get("periodKey") || "").trim();
   const period = parseTradingPeriodKey(periodKey) ?? getTradingPeriodFor(new Date());
   const rows = await buildOpenfloatReviewRows(period);
+  const payrollRowsMs = performance.now() - startedAt;
   const invalidRows = rows.filter((row) => !row.isValid && !row.isSkipped);
 
   if (invalidRows.length > 0) {
@@ -33,6 +35,12 @@ export async function GET(req: Request) {
 
   const workbook = buildOpenfloatWorkbook(rows);
   const buffer = workbookToBuffer(workbook);
+  console.info("[payroll-openfloat]", {
+    periodKey: period.key,
+    employeeCount: rows.length,
+    payrollRowsMs: Number(payrollRowsMs.toFixed(1)),
+    totalMs: Number((performance.now() - startedAt).toFixed(1)),
+  });
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

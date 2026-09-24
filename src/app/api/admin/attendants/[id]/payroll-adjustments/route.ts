@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { getPeriodKeyVariants } from "@/lib/payrollPeriodKey";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
+import { listPayrollAdjustmentEntries } from "@/lib/payrollAdjustmentRepository";
 import { notifyPayrollAdjustmentApplied } from "@/services/payroll-notifications/payroll-notification.service";
 import { startPayrollTiming } from "@/lib/payrollTiming";
 
@@ -37,13 +36,10 @@ export async function GET(req: Request, ctx: any) {
     });
   } catch {}
   try {
-    await ensurePayrollAdjustmentStorage();
-    const where: any = { attendantId };
-    if (periodKey) {
-      const variants = getPeriodKeyVariants(periodKey);
-      where.periodKey = { in: variants.length ? variants : [periodKey] };
-    }
-    const rows = await prisma.attendantPayrollAdjustment.findMany({ where, orderBy: { createdAt: "desc" } });
+    if (!attendantId || !periodKey) return NextResponse.json({ error: "attendantId and periodKey required" }, { status: 400 });
+    const entries = await listPayrollAdjustmentEntries({ attendantId, periodKey });
+    // Preserve the established admin response contract.
+    const rows = entries.map((entry) => ({ ...entry, adjustmentKind: entry.kind }));
     return timing.finish(NextResponse.json({ rows }));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to fetch adjustments";
@@ -179,7 +175,6 @@ export async function DELETE(req: Request, ctx: any) {
     });
   } catch {}
   try {
-    await ensurePayrollAdjustmentStorage();
     const row = await prisma.attendantPayrollAdjustment.findUnique({ where: { id: adjustmentId } as any });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (row.attendantId !== attendantId) return NextResponse.json({ error: "Mismatched attendant" }, { status: 403 });

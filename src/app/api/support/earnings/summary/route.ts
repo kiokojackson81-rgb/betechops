@@ -4,8 +4,7 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 import { requireAttendant } from "@/lib/auth";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
-import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
-import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
+import { listPayrollAdjustmentEntries } from "@/lib/payrollAdjustmentRepository";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
@@ -26,16 +25,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
   }
 
-  await ensurePayrollAdjustmentStorage();
   const [{ aggregates }, compPlan, adjustments, ledger, payrollRow] = await Promise.all([
     getSupportPeriodAggregates({ userId: auth.user.id, period }),
     prisma.attendantCompPlan.findUnique({ where: { attendantId: auth.user.id } }),
-    prisma.attendantPayrollAdjustment.findMany({
-      where: {
-        attendantId: auth.user.id,
-        periodKey: { in: getPeriodKeyVariantsFromDates(period.start, period.end) },
-      },
-    }),
+    listPayrollAdjustmentEntries({ attendantId: auth.user.id, periodKey }),
     prisma.commissionLedger.findUnique({
       where: {
         userId_periodStart_periodEnd: {
@@ -78,7 +71,7 @@ export async function GET(req: Request) {
       .filter((adj) => types.includes(adj.adjustmentType))
       .reduce((sum, adj) => {
         const amount = Number(adj.amount ?? 0);
-        const kind = String(adj.adjustmentKind ?? defaultKind).toUpperCase();
+        const kind = adj.kind;
         return sum + (kind === "ADDITION" ? amount : -amount);
       }, 0);
   const sumDeduction = (types: string[]) =>
@@ -86,7 +79,7 @@ export async function GET(req: Request) {
       .filter((adj) => types.includes(adj.adjustmentType))
       .reduce((sum, adj) => {
         const amount = Number(adj.amount ?? 0);
-        const kind = String(adj.adjustmentKind ?? "DEDUCTION").toUpperCase();
+        const kind = adj.kind;
         return sum + (kind === "ADDITION" ? -amount : amount);
       }, 0);
 
@@ -111,7 +104,7 @@ export async function GET(req: Request) {
     label: a.label,
     amount: a.amount ?? 0,
     adjustmentType: a.adjustmentType,
-    adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
+    adjustmentKind: a.kind,
   }));
 
   return NextResponse.json({

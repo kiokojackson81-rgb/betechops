@@ -5,7 +5,7 @@ import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateUserCommissionConfig } from "@/lib/userCommissionConfig";
-import { buildPayrollRow } from "@/lib/adminPayroll";
+import { calculatePayrollForAttendant } from "@/lib/adminPayroll";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
 
     const [userSummary, payrollRow] = await Promise.all([
       getEarningsSummaryForUser({ userId: attendantId }),
-      buildPayrollRow(attendant, period),
+      calculatePayrollForAttendant(attendant, period),
     ]);
 
     const commissionConfig = await getOrCreateUserCommissionConfig(attendantId);

@@ -1,6 +1,7 @@
 "use server";
 
 import type { AttendantPayrollAdjustment, PayrollAdjustmentType } from "@prisma/client";
+import { listPayrollAdjustmentEntries } from "@/lib/payrollAdjustmentRepository";
 import { Prisma, WeeklySaleStatus } from "@prisma/client";
 import type { MarketplaceAssignmentRole } from "@/lib/marketplaceAssignment";
 import { prisma } from "@/lib/prisma";
@@ -715,9 +716,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
       end: marketplaceWindow.end,
     }),
     prisma.attendantCompPlan.findUnique({ where: { attendantId } }),
-    prisma.attendantPayrollAdjustment.findMany({
-      where: { attendantId, periodKey: { in: getPeriodKeyVariantsFromDates(period.start, period.end) } },
-    }),
+    listPayrollAdjustmentEntries({ attendantId, periodKey: period.key }),
     prisma.marketplaceReturn.findMany({
       where: {
         attendantId,
@@ -735,7 +734,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const isSupervisor = roles.includes("SUPERVISOR");
   const returnsDeduction = returns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
 
-  const summed = sumAdjustments(adjustments);
+  const summed = sumAdjustments(adjustments.map((entry) => ({ ...entry, adjustmentKind: entry.kind })) as any);
   const directCommissionMode = await resolveStoredDirectCommissionMode(attendantId, user?.email);
   const isBrendah = directCommissionMode === "BRENDAH";
   const fallbackDirectReceiptSummary =

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { listPayrollAdjustmentEntries } from "@/lib/payrollAdjustmentRepository";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCommissionPeriodForRead, computeSalesCommissionFromTiers, computeProductCommissions, computeJenifferProratedCommission } from "./commission";
 import { computeDirectCommission, computeBrendahDirectCommission } from "./onlineCommission";
@@ -192,18 +193,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // can find adjustments regardless of which format was used when creating them.
   // 1) YYYY-MM-DD_YYYY-MM-DD (used by some endpoints)
   // 2) <ISO_WITH_TZ>_<ISO_WITH_TZ> (used by admin/check scripts)
-  const startDateOnly = tradingPeriod.start.toISOString().split("T")[0];
-  const endDateOnly = tradingPeriod.end.toISOString().split("T")[0];
-  const periodKeyDateOnly = `${startDateOnly}_${endDateOnly}`;
-  const periodKeyIso = `${tradingPeriod.start.toISOString()}_${tradingPeriod.end.toISOString()}`;
-
-  const adjustments = await prisma.attendantPayrollAdjustment.findMany({
-    where: {
-      attendantId: opts.userId,
-      OR: [{ periodKey: periodKeyDateOnly }, { periodKey: periodKeyIso }],
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const adjustments = await listPayrollAdjustmentEntries({ attendantId: opts.userId, periodKey: tradingPeriod.key });
 
   // Respect the adjustmentKind (ADDITION | DEDUCTION) when computing totals.
   // Some adjustment types (e.g., BONUS, COMMISSION_TOPUP) are meaningful as additions,
@@ -221,11 +211,11 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     label: a.label,
     amount: a.amount ?? 0,
     adjustmentType: a.adjustmentType,
-    adjustmentKind: String(a.adjustmentKind ?? "DEDUCTION").toUpperCase(),
+    adjustmentKind: a.kind,
   }));
 
   for (const a of adjustments) {
-    const kind = String(a.adjustmentKind ?? "DEDUCTION").toUpperCase();
+    const kind = a.kind;
     const amt = Number(a.amount ?? 0);
     const isAddition = kind === "ADDITION";
     const t = a.adjustmentType;
