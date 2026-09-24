@@ -1,7 +1,6 @@
 import { del, put } from "@vercel/blob";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { describeEmailError, sendGeneralCustomerNotificationEmail } from "@/lib/email";
+import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 
 const MAX_CV_BYTES = 8 * 1024 * 1024;
 const allowedExtensions = new Set(["pdf", "doc", "docx"]);
@@ -131,56 +130,14 @@ export async function submitCareerApplication(form: FormData) {
   if (!(file instanceof File)) throw new Error("Please upload your CV as a PDF, DOC, or DOCX file.");
 
   const cv = await uploadCv(file);
-  let application: { id: string };
-  try {
-    application = await prisma.careerApplication.create({
-      data: {
-        fullName: input.fullName,
-        email: input.email.toLowerCase(),
-        phone: input.phone,
-        currentLocation: input.currentLocation,
-        educationLevel: input.educationLevel,
-        courseOfStudy: input.courseOfStudy,
-        graduationStatus: input.graduationStatus,
-        cvFileUrl: cv.url,
-        cvFileKey: cv.pathname,
-        cvFileName: cv.fileName,
-        cvContentType: cv.contentType,
-        cvFileSize: cv.size,
-        coverLetter: input.coverLetter,
-        tiktokWorkUrl: input.tiktokWorkUrl,
-        consentedAt: new Date(),
-      },
-      select: { id: true },
-    });
-  } catch (error) {
-    try {
-      await del(cv.pathname, { token: process.env.BLOB_READ_WRITE_TOKEN });
-    } catch {
-      // A failed clean-up must not hide the application error.
-    }
-    throw error;
-  }
-
   const [applicantResult, hrResult] = await Promise.allSettled([
     sendGeneralCustomerNotificationEmail(applicantEmail(input)),
     sendGeneralCustomerNotificationEmail(hrEmail(input, cv)),
   ]);
-  const emailError = [applicantResult, hrResult]
-    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-    .map((result) => describeEmailError(result.reason))
-    .join(" | ")
-    .slice(0, 4000) || null;
-
-  await prisma.careerApplication.update({
-    where: { id: application.id },
-    data: {
-      applicantEmailSentAt: applicantResult.status === "fulfilled" ? new Date() : null,
-      hrEmailSentAt: hrResult.status === "fulfilled" ? new Date() : null,
-      emailError,
-    },
-  });
-
-  if (emailError) console.error("[career] application emails failed", { applicationId: application.id, emailError });
-  return { id: application.id };
+  if (hrResult.status === "rejected") {
+    await del(cv.pathname, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
+    console.error("[career] HR application email delivery failed");
+    throw new Error("We could not submit your application. Please try again.");
+  }
+  if (applicantResult.status === "rejected") console.error("[career] applicant confirmation email delivery failed");
 }

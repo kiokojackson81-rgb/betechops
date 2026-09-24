@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Too many application attempts. Please wait and try again later." }, { status: 429 });
     }
 
-    const submitted = await submitCareerApplication(form);
-    return NextResponse.json({ ok: true, applicationId: submitted.id }, { status: 201 });
+    await submitCareerApplication(form);
+    return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
     console.error("[career] application submission failed", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
