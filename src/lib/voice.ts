@@ -93,6 +93,54 @@ export function safeNumber(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * Claims the short, agent-specific recovery window after a customer call ends.
+ * A claim is deliberately recorded as an event on the old call so two rapid
+ * calls from the same agent cannot reconnect the customer twice.
+ */
+export async function claimQuickCallRecovery(input: {
+  agentPhone: string;
+  now?: Date;
+  windowSeconds?: number;
+}) {
+  const agentPhones = getKenyanPhoneVariants(input.agentPhone);
+  if (!agentPhones.length) return null;
+
+  const agent = await prisma.user.findFirst({
+    where: { isActive: true, phone: { in: agentPhones } },
+    select: { id: true, name: true },
+  });
+  if (!agent) return null;
+
+  const now = input.now ?? new Date();
+  const cutoff = new Date(now.getTime() - (input.windowSeconds ?? 30) * 1000);
+  return prisma.$transaction(async (tx) => {
+    const previous = await tx.voiceCall.findFirst({
+      where: {
+        direction: "INBOUND",
+        isActive: false,
+        endedAt: { gte: cutoff, lte: now },
+        callerNumber: { notIn: agentPhones },
+        OR: [{ assignedToId: agent.id }, { answeredById: agent.id }],
+        events: { none: { eventType: "QUICK_CALL_RECOVERY_CLAIMED" } },
+      },
+      orderBy: [{ endedAt: "desc" }, { updatedAt: "desc" }],
+      select: { id: true, sessionId: true, callerNumber: true, endedAt: true },
+    });
+    if (!previous) return null;
+
+    await tx.voiceEvent.create({
+      data: {
+        voiceCallId: previous.id,
+        sessionId: previous.sessionId,
+        eventType: "QUICK_CALL_RECOVERY_CLAIMED",
+        payloadJson: { agentId: agent.id, claimedAt: now.toISOString() },
+      },
+    });
+    return { ...previous, agentId: agent.id, agentName: agent.name || "agent" };
+  });
+}
+
 export function isVoiceCallActive(payload: VoicePayload) {
   const rawIsActive = safeString(payload.isActive).toLowerCase();
   if (["1", "true", "yes"].includes(rawIsActive)) return true;

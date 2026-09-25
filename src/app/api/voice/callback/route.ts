@@ -2,6 +2,7 @@ import {
   buildEmptyVoiceXmlResponse,
   buildVoiceMessageXmlResponse,
   buildVoiceXmlResponse,
+  claimQuickCallRecovery,
   createVoiceEventFromPayload,
   ensureVoiceLeadForCaller,
   getVoiceRouteTargets,
@@ -146,6 +147,39 @@ export async function POST(request: Request) {
           phoneNumbers: [browserDialedNumber],
         }),
       );
+    }
+
+    // A staff member calling the public number shortly after their customer
+    // call ends is a deliberate recovery action, not a new inbound customer
+    // call. This is checked before ordinary routing and is scoped to that
+    // staff member, so agents can never receive each other's last customer.
+    if (!routePlanFromQuery && hopIndex === 0) {
+      const recovery = await claimQuickCallRecovery({
+        agentPhone:
+          normalizedPayload.callerNumber ||
+          normalizedPayload.caller ||
+          normalizedPayload.from ||
+          "",
+      });
+      if (recovery) {
+        const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload, {
+          routeType: "QUICK_CALL_RECOVERY",
+          routedTo: recovery.callerNumber,
+          assignedToId: recovery.agentId,
+        });
+        await createVoiceEventFromPayload(
+          {
+            ...normalizedPayload,
+            eventType: "QUICK_CALL_RECOVERY_STARTED",
+            recoveredCallId: recovery.id,
+            recoveredCustomer: recovery.callerNumber,
+          },
+          voiceCall.id,
+        );
+        return xmlResponse(
+          buildDialAttemptXml({ phoneNumber: recovery.callerNumber }),
+        );
+      }
     }
 
     const effectiveRoutePlan: VoiceRoutePlan =
