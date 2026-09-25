@@ -22,6 +22,7 @@ import {
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
 const CALLBACK_REQUEST_TOKEN_EXPIRY_DAYS = 14;
+const DEFAULT_QUICK_CALL_RECOVERY_WINDOW_SECONDS = 30;
 
 type VoicePayload = Record<string, string>;
 type VoiceRouteLabel =
@@ -103,25 +104,50 @@ export async function claimQuickCallRecovery(input: {
   now?: Date;
   windowSeconds?: number;
 }) {
-  const agentPhones = getKenyanPhoneVariants(input.agentPhone);
-  if (!agentPhones.length) return null;
+  const agentPhone = normalizeVoiceNumber(input.agentPhone);
+  if (!agentPhone) return null;
 
-  const agent = await prisma.user.findFirst({
-    where: { isActive: true, phone: { in: agentPhones } },
-    select: { id: true, name: true },
-  });
-  if (!agent) return null;
+  // The public routing configuration is authoritative.  In particular, do
+  // not infer an agent from User.phone: that field is also used by HR/payroll.
+  const targets = await buildVoiceTargets();
+  const matchingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN]
+    .filter((target) =>
+      target.userId &&
+      target.routingEnabled &&
+      normalizeVoiceNumber(target.phoneNumber) === agentPhone,
+    );
+  if (matchingTargets.length !== 1) {
+    if (matchingTargets.length > 1) {
+      console.error("[voice.quick_recovery.ambiguous_agent_phone]", { agentPhone });
+    }
+    return null;
+  }
+  const target = matchingTargets[0];
+  const agentId = target.userId!;
 
   const now = input.now ?? new Date();
-  const cutoff = new Date(now.getTime() - (input.windowSeconds ?? 30) * 1000);
+  const configuredWindow = Number.parseInt(
+    String(process.env.BETECH_VOICE_QUICK_RECOVERY_SECONDS || ""),
+    10,
+  );
+  const windowSeconds = input.windowSeconds ??
+    (Number.isFinite(configuredWindow) && configuredWindow > 0
+      ? configuredWindow
+      : DEFAULT_QUICK_CALL_RECOVERY_WINDOW_SECONDS);
+  const cutoff = new Date(now.getTime() - windowSeconds * 1000);
   return prisma.$transaction(async (tx) => {
     const previous = await tx.voiceCall.findFirst({
       where: {
         direction: "INBOUND",
         isActive: false,
         endedAt: { gte: cutoff, lte: now },
-        callerNumber: { notIn: agentPhones },
-        OR: [{ assignedToId: agent.id }, { answeredById: agent.id }],
+        callerNumber: { not: agentPhone },
+        // A completed record is not enough: recovery is only for a genuine
+        // bridge to this configured voice-routing number.
+        answeredAt: { not: null },
+        answeredNumber: agentPhone,
+        status: { in: ["completed", "complete", "success", "successful", "bridged"] },
+        OR: [{ assignedToId: agentId }, { answeredById: agentId }],
         events: { none: { eventType: "QUICK_CALL_RECOVERY_CLAIMED" } },
       },
       orderBy: [{ endedAt: "desc" }, { updatedAt: "desc" }],
@@ -134,10 +160,30 @@ export async function claimQuickCallRecovery(input: {
         voiceCallId: previous.id,
         sessionId: previous.sessionId,
         eventType: "QUICK_CALL_RECOVERY_CLAIMED",
-        payloadJson: { agentId: agent.id, claimedAt: now.toISOString() },
+        payloadJson: { agentId, claimedAt: now.toISOString() },
       },
     });
-    return { ...previous, agentId: agent.id, agentName: agent.name || "agent" };
+    return { ...previous, agentId, agentName: target.label.toLowerCase() };
+  });
+}
+
+export async function recordQuickCallRecoveryAvailability(input: {
+  voiceCallId: string;
+  sessionId: string;
+  bridged: boolean;
+}) {
+  if (!input.bridged) return;
+  const existing = await prisma.voiceEvent.findFirst({
+    where: { voiceCallId: input.voiceCallId, eventType: "QUICK_RECOVERY_AVAILABLE" },
+    select: { id: true },
+  });
+  if (existing) return;
+  await prisma.voiceEvent.create({
+    data: {
+      voiceCallId: input.voiceCallId,
+      sessionId: input.sessionId,
+      eventType: "QUICK_RECOVERY_AVAILABLE",
+    },
   });
 }
 

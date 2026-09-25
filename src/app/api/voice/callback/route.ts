@@ -3,6 +3,7 @@ import {
   buildVoiceMessageXmlResponse,
   buildVoiceXmlResponse,
   claimQuickCallRecovery,
+  recordQuickCallRecoveryAvailability,
   createVoiceEventFromPayload,
   ensureVoiceLeadForCaller,
   getVoiceRouteTargets,
@@ -284,6 +285,11 @@ export async function POST(request: Request) {
     await safelyProcessInboundCallCentreHealth(voiceCall);
 
     if (!isActive) {
+      await recordQuickCallRecoveryAvailability({
+        voiceCallId: voiceCall.id,
+        sessionId: voiceCall.sessionId,
+        bridged: Boolean(answeredHop),
+      });
       await createVoiceEventFromPayload(
         {
           ...routeAnnotatedPayload,
