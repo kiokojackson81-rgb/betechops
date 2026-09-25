@@ -497,7 +497,7 @@ async function buildVoiceTargets(): Promise<
     BRENDAH: toTarget("BRENDAH", brendahPhone, brendahUserId),
     JENNIFER: toTarget("JENNIFER", jenniferPhone, jenniferUserId),
     ADMIN: toTarget("ADMIN", adminPhone, adminUserId),
-    OVERFLOW: toTarget("OVERFLOW", overflowPhone, overflowUserId, {
+    OVERFLOW: toTarget("OVERFLOW", overflowPhone || "", overflowUserId, {
       alwaysDial: true,
       defaultAllowAfterHoursCalls: true,
     }),
