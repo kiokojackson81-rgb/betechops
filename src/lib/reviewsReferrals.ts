@@ -12,6 +12,8 @@ import { hasWhatsAppConfig, sendWhatsAppTextMessage } from "@/lib/notifications/
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { createOtpCodeForChannel, createDirectVerifiedAuthToken, readVerifiedAuthToken, verifyOtpCodeForChannel } from "@/lib/phoneOtpAuth";
 import { prisma } from "@/lib/prisma";
+import { receiptIsFullyPaid } from "@/lib/receiptFinancialState";
+import { isReceiptProjectRecognizedForSales, readReceiptProjectFlow } from "@/lib/receiptProjects";
 import {
   CUSTOMER_REFERRAL_COOKIE_NAME,
   CUSTOMER_REFERRAL_COOKIE_TTL_SECONDS,
@@ -1562,15 +1564,36 @@ async function getReviewUrlForExistingInvitation(row: Record<string, unknown>) {
 }
 
 export async function getReferralRewardPreviewForReceipt(receiptId: string): Promise<ReferralRewardPreview | null> {
+  if (!await isReceiptEligibleForReferral(receiptId)) return null;
   const invitation = await getExistingReviewInvitationForPurchase({ receiptId });
   const productId = cleanOptional(invitation?.productId);
   return productId ? getReferralRewardPreviewForProduct(productId) : null;
 }
 
+/**
+ * A project cannot create or display referral rewards until it has both been
+ * paid in full and completed/posted to POS. Non-project receipts retain their
+ * existing referral rules.
+ */
+export function receiptIsEligibleForReferral(receipt: any): boolean {
+  const data = receipt?.data && typeof receipt.data === "object" ? receipt.data : {};
+  const projectFlow = readReceiptProjectFlow(data.projectFlow);
+  const isProject = data.customerType === "project" || Boolean(projectFlow?.isProject);
+  return !isProject || (receiptIsFullyPaid(receipt) && isReceiptProjectRecognizedForSales(data.projectFlow));
+}
+
+export async function isReceiptEligibleForReferral(receiptId: string): Promise<boolean> {
+  const receipt = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    select: { data: true, order: { select: { totalAmount: true, paidAmount: true, paymentStatus: true } } },
+  });
+  return Boolean(receipt && receiptIsEligibleForReferral(receipt));
+}
+
 /** One offer per purchased product; deposits never determine the reward. */
 export async function getReceiptReferralOffers(receiptId: string) {
   const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, include: { order: { include: { items: { include: { product: true } } } } } });
-  if (!receipt) return [];
+  if (!receipt || !receiptIsEligibleForReferral(receipt)) return [];
   const products = [...new Map(receipt.order.items.map(item => [item.productId, item])).values()];
   const offers = await Promise.all(products.map(async item => {
     const policy = await getReferralPolicyForProduct(item.productId);
@@ -2245,6 +2268,24 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
   await ensureReferralFraudSchema();
   const invitation = await getInvitationRowByToken(input.token);
   if (!invitation) throw new Error("Review invitation not found.");
+
+  const invitationReceiptId = cleanOptional(invitation.receiptId);
+  const invitationOrderId = cleanOptional(invitation.orderId);
+  const linkedReceiptId = receiptSelection?.receiptId || invitationReceiptId;
+  if (linkedReceiptId || invitationOrderId) {
+    const linkedReceipt = await prisma.receipt.findFirst({
+      where: {
+        OR: [
+          ...(linkedReceiptId ? [{ id: linkedReceiptId }] : []),
+          ...(invitationOrderId ? [{ orderId: invitationOrderId }] : []),
+        ],
+      },
+      select: { data: true, order: { select: { totalAmount: true, paidAmount: true, paymentStatus: true } } },
+    });
+    if (linkedReceipt && !receiptIsEligibleForReferral(linkedReceipt)) {
+      throw new Error("Project referral links are available only after the project is fully paid and posted to POS.");
+    }
+  }
 
   const reviewRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
     `SELECT * FROM "ProductReviewSubmission" WHERE "invitationId" = $1 LIMIT 1`,
