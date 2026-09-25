@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { resolveVoiceCustomerLinkByPhone } from "@/lib/voiceCustomerContext";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
-import { buildVoiceWebrtcIdentity } from "@/lib/voiceOperations";
+import { buildVoiceWebrtcIdentity, isVoiceOverflowStaff } from "@/lib/voiceOperations";
 import { toSpeechText } from "@/lib/voiceSpeech";
 import { isVoiceWebrtcClientReady } from "@/lib/voiceWebrtc/registry";
 import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
@@ -276,27 +276,23 @@ async function buildVoiceTargets(): Promise<
         select: {
           id: true,
           phone: true,
+          role: true,
+          attendantCategory: true,
+          agentProfile: { select: { id: true } },
         },
       },
     },
   });
-  const overflowPhone = normalizeVoiceNumber(
-    voiceRoutingConfig?.overflowPhone ||
-      voiceRoutingConfig?.overflowUser?.phone ||
-      "",
-  );
-  const overflowPhoneUser =
-    !voiceRoutingConfig?.overflowUserId && overflowPhone
-      ? await prisma.user.findFirst({
-          where: {
-            isActive: true,
-            phone: { in: getKenyanPhoneVariants(overflowPhone) },
-          },
-          select: { id: true },
-        })
-      : null;
-  const overflowUserId =
-    voiceRoutingConfig?.overflowUserId ?? overflowPhoneUser?.id ?? null;
+  const overflowUser = voiceRoutingConfig?.overflowUser;
+  const overflowUserId = overflowUser && isVoiceOverflowStaff({
+    ...overflowUser,
+    hasAgentProfile: Boolean(overflowUser.agentProfile),
+  })
+    ? overflowUser.id
+    : null;
+  const overflowPhone = overflowUserId
+    ? normalizeVoiceNumber(overflowUser?.phone || "")
+    : null;
 
   const userIds = [
     brendahUserId,

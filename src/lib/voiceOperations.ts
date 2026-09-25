@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
+import { buildStaffAttendantWhere, isStaffAttendantLike } from "@/lib/staffUsers";
 import { summarizeVoiceQueueItems } from "@/lib/operationsWorkQueue";
 import { prisma } from "@/lib/prisma";
 import {
@@ -83,6 +84,16 @@ export function canAccessVoiceDesk(
       ) as (typeof VOICE_ALLOWED_ATTENDANT_CATEGORIES)[number],
     )
   );
+}
+
+/** Overflow calls must remain inside the internal staff team. */
+export function isVoiceOverflowStaff(user: {
+  role?: string | null;
+  attendantCategory?: string | null;
+  hasAgentProfile?: boolean;
+}) {
+  const role = String(user.role || "").toUpperCase();
+  return role === "ADMIN" || role === "SUPERVISOR" || isStaffAttendantLike(user);
 }
 
 function normalizeStatus(value: string | null | undefined) {
@@ -1158,6 +1169,10 @@ async function listVoiceRoutingCandidates() {
     where: {
       isActive: true,
       phone: { not: null },
+      OR: [
+        { role: { in: ["ADMIN", "SUPERVISOR"] } },
+        buildStaffAttendantWhere(),
+      ],
     },
     select: {
       id: true,
@@ -1181,6 +1196,9 @@ async function getVoiceRoutingConfig() {
           name: true,
           email: true,
           phone: true,
+          role: true,
+          attendantCategory: true,
+          agentProfile: { select: { id: true } },
         },
       },
     },
@@ -2266,6 +2284,13 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       })
     : null;
 
+  const validOverflowUser = voiceRoutingConfigRaw?.overflowUser && isVoiceOverflowStaff({
+    ...voiceRoutingConfigRaw.overflowUser,
+    hasAgentProfile: Boolean(voiceRoutingConfigRaw.overflowUser.agentProfile),
+  })
+    ? voiceRoutingConfigRaw.overflowUser
+    : null;
+
   return {
     generatedAt: new Date().toISOString(),
     viewer: {
@@ -2283,12 +2308,12 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           ?.dismissedPopupCallId ?? null,
     },
     routingConfig: {
-      overflowUserId: voiceRoutingConfigRaw?.overflowUserId ?? null,
-      overflowPhone: voiceRoutingConfigRaw?.overflowPhone ?? null,
+      overflowUserId: validOverflowUser?.id ?? null,
+      overflowPhone: validOverflowUser?.phone ?? null,
       overflowUserLabel:
-        voiceRoutingConfigRaw?.overflowUser?.name ||
-        voiceRoutingConfigRaw?.overflowUser?.email ||
-        voiceRoutingConfigRaw?.overflowUser?.phone ||
+        validOverflowUser?.name ||
+        validOverflowUser?.email ||
+        validOverflowUser?.phone ||
         null,
       updatedAt: toIso(voiceRoutingConfigRaw?.updatedAt),
     },
@@ -2582,18 +2607,24 @@ export async function updateVoiceAgentRoutingPreference(input: {
 
 export async function updateVoiceRoutingConfig(input: {
   overflowUserId?: string | null;
-  overflowPhone?: string | null;
 }) {
   const overflowUserId = String(input.overflowUserId || "").trim() || null;
-  const overflowPhone =
-    normalizeKenyanPhone(String(input.overflowPhone || "").trim()) || null;
 
   if (overflowUserId) {
     const overflowUser = await prisma.user.findUnique({
       where: { id: overflowUserId },
-      select: { id: true, isActive: true },
+      select: {
+        id: true,
+        isActive: true,
+        role: true,
+        attendantCategory: true,
+        agentProfile: { select: { id: true } },
+      },
     });
-    if (!overflowUser?.isActive) {
+    if (!overflowUser?.isActive || !isVoiceOverflowStaff({
+      ...overflowUser,
+      hasAgentProfile: Boolean(overflowUser.agentProfile),
+    })) {
       throw new Error("voice_overflow_user_not_found");
     }
   }
@@ -2603,11 +2634,11 @@ export async function updateVoiceRoutingConfig(input: {
     create: {
       key: "default",
       overflowUserId,
-      overflowPhone,
+      overflowPhone: null,
     },
     update: {
       overflowUserId,
-      overflowPhone,
+      overflowPhone: null,
     },
     include: {
       overflowUser: {

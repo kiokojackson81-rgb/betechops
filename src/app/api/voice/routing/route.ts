@@ -28,7 +28,6 @@ export async function POST(request: Request) {
       routingEnabled?: boolean | null;
       allowAfterHoursCalls?: boolean | null;
       overflowUserId?: string | null;
-      overflowPhone?: string | null;
     };
 
     if (body.userId) {
@@ -42,7 +41,6 @@ export async function POST(request: Request) {
 
     const config = await updateVoiceRoutingConfig({
       overflowUserId: body.overflowUserId,
-      overflowPhone: body.overflowPhone,
     });
 
     return NextResponse.json(

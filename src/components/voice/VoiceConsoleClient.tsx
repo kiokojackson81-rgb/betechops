@@ -610,9 +610,6 @@ export default function VoiceConsoleClient({
   const [overflowUserIdDraft, setOverflowUserIdDraft] = useState(
     initialData.routingConfig?.overflowUserId ?? "",
   );
-  const [overflowPhoneDraft, setOverflowPhoneDraft] = useState(
-    initialData.routingConfig?.overflowPhone ?? "",
-  );
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const liveStatusTimeoutRef = useRef<number | null>(null);
 
@@ -936,8 +933,7 @@ export default function VoiceConsoleClient({
 
   useEffect(() => {
     setOverflowUserIdDraft(data.routingConfig?.overflowUserId ?? "");
-    setOverflowPhoneDraft(data.routingConfig?.overflowPhone ?? "");
-  }, [data.routingConfig?.overflowPhone, data.routingConfig?.overflowUserId]);
+  }, [data.routingConfig?.overflowUserId]);
 
   const groupedRecentCalls = useMemo(() => {
     const groups = new Map<string, typeof filteredRecentCalls>();
@@ -1481,7 +1477,6 @@ export default function VoiceConsoleClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             overflowUserId: overflowUserIdDraft || null,
-            overflowPhone: overflowPhoneDraft || null,
           }),
         },
       );
@@ -4225,7 +4220,7 @@ export default function VoiceConsoleClient({
                             "Not configured"}
                         </span>
                       </div>
-                      <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                      <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
                         <select
                           value={overflowUserIdDraft}
                           onChange={(event) =>
@@ -4242,14 +4237,6 @@ export default function VoiceConsoleClient({
                               </option>
                             ))}
                         </select>
-                        <input
-                          value={overflowPhoneDraft}
-                          onChange={(event) =>
-                            setOverflowPhoneDraft(event.target.value)
-                          }
-                          placeholder="Optional direct fallback number"
-                          className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-                        />
                         <button
                           type="button"
                           disabled={routingConfigPending}
