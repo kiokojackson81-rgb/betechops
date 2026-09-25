@@ -181,6 +181,7 @@ export default function CommissioningClient({ token }: { token: string }) {
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [lastStep, setLastStep] = useState("panels");
   const [activeStep, setActiveStep] = useState(0);
+  const [returnStep, setReturnStep] = useState<number | null>(null);
   const [resumePrompt, setResumePrompt] = useState(false);
   const [manual, setManual] = useState<EquipmentKind | null>(null);
   const [differentQuantity, setDifferentQuantity] = useState(false);
@@ -580,6 +581,26 @@ export default function CommissioningClient({ token }: { token: string }) {
             STEP {Math.min(activeStep + 1, visibleSteps.length)} OF {visibleSteps.length}
           </p>
           <h2 className="mt-2 text-2xl font-black">{current.id === "panels" && !profile.panels ? "System equipment" : current.label}</h2>
+          {activeStep > 0 ? (
+            <section className="mt-4 rounded-2xl border border-cyan-400/20 bg-slate-900/70 p-3">
+              <p className="text-xs font-bold uppercase tracking-[.14em] text-cyan-200">Need to correct an earlier step?</p>
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                {visibleSteps.slice(0, activeStep).map((step, index) => (
+                  <button
+                    type="button"
+                    key={step.id}
+                    onClick={() => {
+                      setReturnStep(activeStep);
+                      go(index);
+                    }}
+                    className="shrink-0 rounded-xl border border-slate-600 px-3 py-2 text-left text-xs font-bold text-slate-100 hover:border-cyan-300 hover:text-cyan-200"
+                  >
+                    Edit {index + 1}: {step.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
           {session.professionalReviewComment && session.status === "RETURNED_FOR_CORRECTION" ? <p role="alert" className="my-4 rounded-xl bg-amber-100 p-4 text-amber-950">Correction requested: {session.professionalReviewComment}</p> : null}
           {current.id === "panels" ? <section className="my-4 space-y-4 rounded-2xl border border-slate-700 p-4">
             <h3 className="font-bold">Customer &amp; site details</h3>
@@ -801,6 +822,19 @@ export default function CommissioningClient({ token }: { token: string }) {
       {!resumePrompt && (
         <div className="fixed inset-x-0 bottom-0 border-t border-slate-700 bg-slate-950/95 p-3 backdrop-blur">
           <div className="mx-auto max-w-xl">
+            {returnStep !== null && returnStep > activeStep ? (
+              <button
+                type="button"
+                disabled={saveState === "saving"}
+                onClick={() => {
+                  go(returnStep);
+                  setReturnStep(null);
+                }}
+                className="mb-2 w-full rounded-2xl border border-cyan-300 bg-slate-900 px-5 py-3 text-sm font-black text-cyan-200 disabled:opacity-40"
+              >
+                RETURN TO STEP {returnStep + 1}: {visibleSteps[returnStep]?.label}
+              </button>
+            ) : null}
             {current.id === "review" ? (
               <button
                 type="button"
