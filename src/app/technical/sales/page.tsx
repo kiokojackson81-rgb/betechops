@@ -249,7 +249,6 @@ export default async function TechnicalSalesPage() {
         <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">POS commission</div>
           <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{formatCurrency(payrollRow.commissionDirect)}</div>
-          <div className="mt-1 text-sm text-slate-500">10% profit share plus released POS product commission</div>
         </div>
         <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">Project commission</div>
