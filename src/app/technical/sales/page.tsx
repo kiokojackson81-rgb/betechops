@@ -216,7 +216,7 @@ export default async function TechnicalSalesPage() {
             <div className="text-xs uppercase tracking-[0.26em] text-emerald-300/80">Technical sales monitor</div>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">POS sales and commission tracking</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-300">
-              Watch the receipts you created, the profit already recognized after pricing, and the commission that will flow into payroll. Technical POS commission defaults to 10% of priced profit only.
+              Review the receipts you created and the commission you have earned from your sales. Confirmed commission flows into payroll.
             </p>
             <p className="mt-3 max-w-3xl text-sm text-amber-100/85">
               Project receipts do not count in POS sales while they are still at receipt created or in progress. They only start counting after completion and POS posting.
@@ -249,6 +249,7 @@ export default async function TechnicalSalesPage() {
         <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">POS commission</div>
           <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{formatCurrency(payrollRow.commissionDirect)}</div>
+          <div className="mt-1 text-sm text-slate-500">Commission earned from your sales</div>
         </div>
         <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">Project commission</div>
@@ -324,7 +325,7 @@ export default async function TechnicalSalesPage() {
                           ? "Project workflow is not yet completed and posted to POS, so this receipt is still excluded from sales and commission totals."
                           : profit > 0
                             ? "Pricing completed. This receipt already contributes to your POS commission."
-                            : "Awaiting pricing or buying-cost confirmation before commission can be recognized."}
+                            : "Awaiting confirmation before the commission amount can be included."}
                       </div>
                       <div className="pt-1">
                         <Link href={`/receipts/${encodeURIComponent(receipt.id)}`} target="_blank" rel="noreferrer" className="inline-flex rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/5">

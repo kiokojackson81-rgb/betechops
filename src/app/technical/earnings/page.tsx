@@ -163,7 +163,7 @@ export default async function TechnicalEarningsPage() {
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">Commission</div>
           <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(payrollRow.commissionTotal)}</div>
-          <div className="mt-1 text-sm text-slate-500">POS profit share and completed project commission</div>
+          <div className="mt-1 text-sm text-slate-500">Commission earned from your sales and completed projects</div>
         </div>
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">Total deductions</div>

@@ -483,7 +483,7 @@ export default async function TechnicalDashboardPage({
               <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">
                 {formatCurrency(payrollRow.commission).replace("Ksh", "KES")}
               </div>
-              <div className="mt-1 text-sm text-slate-500">10% of priced POS profit plus completed projects</div>
+              <div className="mt-1 text-sm text-slate-500">Commission earned from your sales and completed projects</div>
             </div>
             <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="text-sm text-slate-400">Items sold</div>
