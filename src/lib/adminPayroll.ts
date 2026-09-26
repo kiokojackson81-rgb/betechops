@@ -456,7 +456,7 @@ async function buildPayrollRowResolved(
         start: period.start,
         end: period.end,
         userId: attendant.id,
-        ownershipMode: "issuerOnly",
+        ownershipMode: "hybrid",
         profitRecognitionMode: "salesDate",
       }),
       getReleasedPosProductCommissionForStaffPeriod(attendant.id, period.start, period.end),

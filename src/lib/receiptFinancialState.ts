@@ -3,6 +3,13 @@ import { readReceiptProjectFlow, isReceiptProjectRecognizedForSales } from "@/li
 
 /** Sales belong to the recorded seller, not every technician or document issuer. */
 export function receiptSalesOwner(receipt: any): string | null {
+  const projectFlow = readReceiptProjectFlow(receipt?.data?.projectFlow);
+  // Once a project is completed and posted, its assigned handler owns the
+  // sale for POS attribution. The project-completion allowance is calculated
+  // separately, so this preserves both earnings components.
+  if (projectFlow?.isProject && projectFlow.stage === "COMPLETED_POSTED" && projectFlow.handlerStaffId) {
+    return projectFlow.handlerStaffId;
+  }
   return receipt?.order?.attendantId || receipt?.data?.attendantId || receipt?.issuedById || null;
 }
 

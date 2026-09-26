@@ -133,14 +133,17 @@ export default async function TechnicalSalesPage() {
       start: period.start,
       end: period.end,
       userId: viewer.id,
-      ownershipMode: "issuerOnly",
+      ownershipMode: "hybrid",
       profitRecognitionMode: "salesDate",
     }),
     getTechnicalProjectCommissionSummary(viewer.id, period),
     prisma.receipt.findMany({
       where: {
         createdAt: { gte: period.start, lte: period.end },
-        issuedById: viewer.id,
+        OR: [
+          { issuedById: viewer.id },
+          { data: { path: ["projectFlow", "handlerStaffId"], equals: viewer.id } },
+        ],
       },
       orderBy: { createdAt: "desc" },
       take: 40,
@@ -260,9 +263,9 @@ export default async function TechnicalSalesPage() {
       <section className="rounded-[28px] border border-white/10 bg-[#091223] p-5">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="text-lg font-semibold text-white">Receipt sales created by you</div>
+            <div className="text-lg font-semibold text-white">Your receipt sales and assigned projects</div>
             <div className="text-sm text-slate-400">
-              Commission only starts after buying price has been entered. For project receipts, sales recognition also waits until the project is completed and posted to POS.
+              This includes receipts you created and projects assigned to you. Completed and posted projects show their KSh 2,000 completion commission here.
             </div>
           </div>
           <Link href="/receipts" target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5">
@@ -279,10 +282,12 @@ export default async function TechnicalSalesPage() {
                   : null,
               );
               const isProjectPendingForSales = Boolean(projectFlow?.isProject && projectFlow.stage !== "COMPLETED_POSTED");
+              const isCompletedProject = Boolean(projectFlow?.isProject && projectFlow.stage === "COMPLETED_POSTED");
               const supportProfit =
                 supportProfitByReceipt.get(canonicalReceiptNumber(receipt.order?.orderNumber || receipt.receiptNumber || undefined) || "") ?? null;
               const profit = extractProfit(receipt, supportProfit);
               const commission = !isProjectPendingForSales && profit > 0 ? Math.round(profit * TECHNICAL_POS_PROFIT_COMMISSION_RATE) : 0;
+              const projectCompletionCommission = isCompletedProject && projectFlow?.handlerStaffId === viewer.id ? 2000 : 0;
               return (
                 <div key={receipt.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -310,11 +315,13 @@ export default async function TechnicalSalesPage() {
                         <span className="break-words text-right font-semibold text-white">{formatCurrency(Number(receipt.order?.totalAmount ?? 0))}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>Commission on receipt</span>
-                        <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(commission)}</span>
+                        <span>{isCompletedProject ? "Completed project commission" : "Commission on receipt"}</span>
+                        <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(isCompletedProject ? projectCompletionCommission : commission)}</span>
                       </div>
                       <div className="text-xs text-slate-500">
-                        {isProjectPendingForSales
+                        {isCompletedProject
+                          ? "Completed and posted project assigned to you. KSh 2,000 completion commission is included in this period."
+                          : isProjectPendingForSales
                           ? "Project workflow is not yet completed and posted to POS, so this receipt is still excluded from sales and commission totals."
                           : profit > 0
                             ? "Pricing completed. This receipt already contributes to your POS commission."

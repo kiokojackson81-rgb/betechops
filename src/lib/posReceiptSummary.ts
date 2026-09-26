@@ -208,6 +208,7 @@ export async function summarizePosReceiptsForPeriod(period: {
           ? [
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
+              { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
               { issuedById: period.userId },
             ]
         : period.ownershipMode === "staffDisplay"
@@ -215,12 +216,14 @@ export async function summarizePosReceiptsForPeriod(period: {
               { issuedById: period.userId },
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
+              { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
               { issuedById: period.userId },
             ]
         : [
             { issuedById: period.userId },
             { order: { attendantId: period.userId } },
             { data: { path: ["attendantId"], equals: period.userId } },
+            { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
             { issuedById: period.userId },
           ]
       : null;
