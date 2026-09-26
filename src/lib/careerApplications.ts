@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 
 const MAX_CV_BYTES = 8 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const allowedExtensions = new Set(["pdf", "doc", "docx"]);
 const allowedMimeTypes = new Set([
   "application/pdf",
@@ -19,9 +20,9 @@ const applicationSchema = z.object({
   currentLocation: z.string().trim().min(2).max(120),
   educationLevel: z.string().trim().min(2).max(100),
   courseOfStudy: z.string().trim().min(2).max(180),
-  graduationStatus: z.enum(["Graduated in 2025", "Graduated in 2026", "Final-year student awaiting graduation"]),
+  graduationStatus: z.enum(["Graduated in 2024", "Graduated in 2025", "Final-year student awaiting graduation"]),
   coverLetter: z.string().trim().min(40, "Please add a short cover letter of at least 40 characters.").max(6000),
-  tiktokWorkUrl: z.string().trim().url("Enter a valid link to previous TikTok content work.").max(2000),
+  tiktokWorkUrl: z.string().trim().max(2000),
   consent: z.literal("true"),
 });
 
@@ -34,6 +35,8 @@ type UploadedCv = {
   contentType: string;
   size: number;
 };
+
+type UploadedVideo = UploadedCv;
 
 function escapeHtml(value: string) {
   return value
@@ -89,6 +92,16 @@ async function uploadCv(file: File): Promise<UploadedCv> {
   return { url: upload.url, pathname: upload.pathname, fileName: file.name.slice(0, 180), contentType: file.type || "application/octet-stream", size: file.size };
 }
 
+async function uploadExplainerVideo(file: File): Promise<UploadedVideo> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error("Application file storage is not configured. Please try again later.");
+  const extension = extensionFor(file);
+  if (!["mp4", "mov", "webm"].includes(extension) || !["video/mp4", "video/quicktime", "video/webm", "application/octet-stream", ""].includes(file.type)) throw new Error("Upload your explainer video as MP4, MOV, or WebM.");
+  if (file.size < 1 || file.size > MAX_VIDEO_BYTES) throw new Error("Your explainer video must be smaller than 50 MB.");
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || `explainer.${extension}`;
+  const upload = await put(`career-applications/${crypto.randomUUID()}/${safeName}`, Buffer.from(await file.arrayBuffer()), { access: "public", contentType: file.type || "application/octet-stream", token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: true });
+  return { url: upload.url, pathname: upload.pathname, fileName: file.name.slice(0, 180), contentType: file.type || "application/octet-stream", size: file.size };
+}
+
 function applicantEmail(input: CareerApplicationInput) {
   return {
     to: input.email,
@@ -101,7 +114,7 @@ function applicantEmail(input: CareerApplicationInput) {
   };
 }
 
-function hrEmail(input: CareerApplicationInput, cv: UploadedCv) {
+function hrEmail(input: CareerApplicationInput, cv: UploadedCv, video: UploadedVideo | null) {
   const details = [
     ["Name", input.fullName],
     ["Email", input.email],
@@ -110,7 +123,7 @@ function hrEmail(input: CareerApplicationInput, cv: UploadedCv) {
     ["Education", input.educationLevel],
     ["Course", input.courseOfStudy],
     ["Graduation", input.graduationStatus],
-    ["TikTok work", input.tiktokWorkUrl],
+    ["Explainer video", video?.url || input.tiktokWorkUrl],
   ];
   return {
     to: "hr@betech.co.ke",
@@ -129,13 +142,21 @@ export async function submitCareerApplication(form: FormData) {
   const file = form.get("cv");
   if (!(file instanceof File)) throw new Error("Please upload your CV as a PDF, DOC, or DOCX file.");
 
+  const videoFile = form.get("explainerVideo");
+  const videoLink = input.tiktokWorkUrl.trim();
+  if (videoLink) {
+    try { new URL(videoLink); } catch { throw new Error("Enter a valid public link to your short explainer video."); }
+  }
+  if (!videoLink && !(videoFile instanceof File) || (videoFile instanceof File && !videoFile.size && !videoLink)) throw new Error("Provide a short explainer video link or upload a video.");
   const cv = await uploadCv(file);
+  const video = videoFile instanceof File && videoFile.size ? await uploadExplainerVideo(videoFile) : null;
   const [applicantResult, hrResult] = await Promise.allSettled([
     sendGeneralCustomerNotificationEmail(applicantEmail(input)),
-    sendGeneralCustomerNotificationEmail(hrEmail(input, cv)),
+    sendGeneralCustomerNotificationEmail(hrEmail(input, cv, video)),
   ]);
   if (hrResult.status === "rejected") {
     await del(cv.pathname, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
+    if (video) await del(video.pathname, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
     console.error("[career] HR application email delivery failed");
     throw new Error("We could not submit your application. Please try again.");
   }

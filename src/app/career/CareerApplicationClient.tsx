@@ -14,16 +14,19 @@ const roleHighlights = [
 
 const responsibilities = [
   "Respond to customers through WhatsApp, calls, social media, email, and website channels.",
+  "Explain solar panels, batteries, inverters, solar water heaters, pumps, and accessories in clear, simple language.",
   "Follow up on leads, quotations, orders, deliveries, and after-sales requests.",
-  "Create product photos, captions, short videos, project posts, and customer updates.",
+  "Create product photos, captions, short videos, project posts, and customer education content, including the weekly Wednesday video shoot.",
   "Appear in product videos, demonstrations, live sessions, and social-media content.",
+  "Attend selected installations, deliveries, demonstrations, and projects to capture photos and video.",
   "Upload and update product photos, videos, descriptions, prices, promotions, and other content on the Betech website.",
   "Support Facebook, Instagram, TikTok, WhatsApp Status, and other social-media channels.",
 ];
 
 const candidateRequirements = [
-  "Recent graduate from 2025 or 2026, or finalist awaiting graduation.",
-  "Diploma or degree in Customer Service, Business, Marketing, Communications, Media, Public Relations, or a related field.",
+  "Graduate from 2024 or 2025, or a final-year student awaiting graduation.",
+  "Diploma or degree in Renewable Energy, Electrical/Electronic Engineering, Solar PV Technology, Electrical Installation, or a closely related technical field.",
+  "Basic understanding of solar PV systems, batteries, inverters, panels, electrical safety, and renewable-energy products.",
   "Very confident, talkative, presentable, persuasive, and customer-focused.",
   "Comfortable appearing on camera.",
   "Canva, CapCut, social-media, content-writing, and website-upload skills are an advantage.",
@@ -39,6 +42,7 @@ export default function CareerApplicationClient() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [cvName, setCvName] = useState("");
+  const [videoName, setVideoName] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
 
   async function submitApplication(event: React.FormEvent<HTMLFormElement>) {
@@ -55,6 +59,7 @@ export default function CareerApplicationClient() {
       setSuccess(true);
       formRef.current?.reset();
       setCvName("");
+      setVideoName("");
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : "We could not submit your application. Please try again.");
     } finally {
@@ -94,7 +99,7 @@ export default function CareerApplicationClient() {
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div className="flex items-center gap-3 rounded-2xl border border-white bg-white/80 p-3.5 shadow-sm">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f9df91] text-[#7a0000]"><FileText className="h-5 w-5" /></span>
-                    <span className="text-sm font-bold leading-tight">3-Month Paid Internship</span>
+                    <span className="text-sm font-bold leading-tight">3-Month Paid Traineeship</span>
                   </div>
                   <div className="flex items-center gap-3 rounded-2xl border border-white bg-white/80 p-3.5 shadow-sm">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f9df91] text-[#7a0000]"><span className="text-lg font-black">K</span></span>
@@ -162,6 +167,24 @@ export default function CareerApplicationClient() {
           </div>
         </section>
 
+        <section className="px-5 py-16 sm:px-8 sm:py-20">
+          <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-2">
+            <DetailList title="Terms & benefits" items={[
+              "Three-month, full-time Graduate Trainee contract with a monthly stipend of KSh 20,000.",
+              "Lunch allowance of KSh 150 and transport allowance of KSh 150 for each working day.",
+              "Commission for successful sales, subject to the company commission structure.",
+              "Working hours: Monday–Friday, 9:00am–5:30pm; Saturday, 9:00am–1:00pm.",
+              "One off day per month may be requested with prior approval; sick leave requires timely communication.",
+            ]} />
+            <div className="rounded-2xl border border-[#d7c7b9] bg-[#fffdfa] p-6 shadow-[0_12px_30px_rgba(57,38,32,0.06)] sm:p-8">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-[#8d141d]">What happens next</p>
+              <h2 className="mt-3 font-serif text-4xl font-black tracking-tight text-[#81131a]">Learn, contribute, grow</h2>
+              <p className="mt-5 text-[15px] leading-7 text-slate-700">At the end of the traineeship, Betech will assess your performance, reliability, communication, technical understanding, learning ability, and contribution. Depending on that assessment and business needs, we may offer employment, extend the contract, or conclude the engagement.</p>
+              <p className="mt-4 text-[15px] leading-7 text-slate-700">You must be available full time in Nairobi throughout the three-month traineeship, including occasional field assignments.</p>
+            </div>
+          </div>
+        </section>
+
         <section id="application" className="scroll-mt-24 bg-[radial-gradient(circle_at_88%_10%,rgba(233,181,48,0.18),transparent_23%),#f8f6f3] px-5 py-16 sm:px-8 sm:py-24">
           <div className="mx-auto max-w-4xl">
             {success ? (
@@ -184,11 +207,12 @@ export default function CareerApplicationClient() {
                   <Field label="Phone number" name="phone" type="tel" placeholder="07... or +254..." required />
                   <Field label="Current location" name="currentLocation" placeholder="Nairobi, Kenya" required />
                   <label className="block text-sm font-bold text-slate-800">Education level<select name="educationLevel" required defaultValue="" className={inputClass}><option value="" disabled>Select education level</option><option>Diploma</option><option>Degree</option><option>Other relevant qualification</option></select></label>
-                  <Field label="Course / area of study" name="courseOfStudy" placeholder="e.g. Marketing" required />
-                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Graduation status<select name="graduationStatus" required defaultValue="" className={inputClass}><option value="" disabled>Select your status</option><option>Graduated in 2025</option><option>Graduated in 2026</option><option>Final-year student awaiting graduation</option></select></label>
+                  <Field label="Course / area of study" name="courseOfStudy" placeholder="e.g. Renewable Energy or Electrical Engineering" required />
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Graduation status<select name="graduationStatus" required defaultValue="" className={inputClass}><option value="" disabled>Select your status</option><option>Graduated in 2024</option><option>Graduated in 2025</option><option>Final-year student awaiting graduation</option></select></label>
                   <label className="block text-sm font-bold text-slate-800 sm:col-span-2">CV upload<span className="mt-2 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#8d141d]/35 bg-[#fffaf5] px-4 text-sm font-semibold text-slate-600 transition hover:border-[#8d141d] hover:bg-[#fff5f5]"><Upload className="h-5 w-5 shrink-0 text-[#8d141d]" /><span className="min-w-0 truncate">{cvName || "Choose a PDF, DOC, or DOCX file (max 8 MB)"}</span><input name="cv" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required className="sr-only" onChange={(event) => setCvName(event.target.files?.[0]?.name || "")} /></span></label>
                   <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Cover letter<textarea name="coverLetter" required minLength={40} maxLength={6000} rows={6} placeholder="Tell us why you are a great fit for this opportunity." className={inputClass} /></label>
-                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Link to previous TikTok content work<input name="tiktokWorkUrl" type="url" required placeholder="https://www.tiktok.com/..." className={inputClass} /><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">Share a link to a TikTok video showing previous content-creation work, a content assignment, presentation, promotional video, or similar work. This does not have to be your personal TikTok account.</span></label>
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Short explainer video link <span className="font-normal text-slate-500">(or upload below)</span><input name="tiktokWorkUrl" type="url" placeholder="https://www.tiktok.com/... or a shareable Google Drive, YouTube, Instagram, or Facebook link" className={inputClass} /><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">Share a short video where you explain a product, technical topic, service, or presentation in your own words. A solar-product explanation is preferred.</span></label>
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Or upload your short explainer video<span className="mt-2 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#8d141d]/35 bg-[#fffaf5] px-4 text-sm font-semibold text-slate-600 transition hover:border-[#8d141d] hover:bg-[#fff5f5]"><Video className="h-5 w-5 shrink-0 text-[#8d141d]" /><span className="min-w-0 truncate">{videoName || "Choose MP4, MOV, or WebM video (max 50 MB)"}</span><input name="explainerVideo" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" className="sr-only" onChange={(event) => setVideoName(event.target.files?.[0]?.name || "")} /></span><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">A video link or uploaded video is required.</span></label>
                 </div>
                 <label className="mt-7 flex cursor-pointer items-start gap-3 rounded-xl bg-[#faf6f1] p-4 text-sm leading-6 text-slate-700"><input name="consent" value="true" type="checkbox" required className="mt-1 h-4 w-4 rounded border-slate-400 text-[#8d141d] focus:ring-[#8d141d]" /><span>I confirm that the information I have provided is accurate and that Betech Solar Solutions may contact me regarding this application.</span></label>
                 {error ? <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{error}</p> : null}
