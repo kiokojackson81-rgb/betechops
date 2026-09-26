@@ -33,7 +33,7 @@ const candidateRequirements = [
   "Able to work from Nairobi.",
 ];
 
-const applicationSteps = ["Apply online", "Shortlist review", "One-minute video assessment"];
+const applicationSteps = ["Apply with your CV, cover letter & short explainer video", "Shortlist review", "Interviews for selected candidates"];
 
 const inputClass = "mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-[15px] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#8d141d] focus:ring-4 focus:ring-[#8d141d]/10 disabled:cursor-not-allowed disabled:bg-slate-100";
 
@@ -118,16 +118,16 @@ export default function CareerApplicationClient() {
           </div>
         </section>
 
-        <section className="border-y border-[#7a0000]/8 bg-[#fffdfa] px-5 py-16 sm:px-8 sm:py-20">
-          <div className="mx-auto max-w-7xl">
+        <section className="border-y border-[#7a0000]/8 bg-[#fffdfa] px-5 py-12 sm:px-8 sm:py-16">
+          <div className="mx-auto max-w-6xl">
             <div className="mx-auto max-w-3xl text-center">
               <p className="text-xs font-black uppercase tracking-[0.25em] text-[#8d141d]">The opportunity</p>
               <h2 className="mt-3 font-serif text-4xl font-black tracking-tight text-[#81131a] sm:text-5xl">A role for confident communicators and creators</h2>
               <span className="mx-auto mt-5 block h-1 w-14 rounded-full bg-[#e9b530]" />
             </div>
-            <div className="mt-11 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {roleHighlights.map(({ icon: Icon, title, text }) => (
-                <article key={title} className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-[0_12px_30px_rgba(57,38,32,0.06)]">
+                <article key={title} className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-[0_12px_30px_rgba(57,38,32,0.06)]">
                   <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#f9edf0] text-[#8d141d]"><Icon className="h-6 w-6" /></span>
                   <h3 className="mt-5 text-lg font-black text-slate-950">{title}</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
@@ -137,15 +137,15 @@ export default function CareerApplicationClient() {
           </div>
         </section>
 
-        <section className="px-5 py-16 sm:px-8 sm:py-20">
-          <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-2 lg:gap-20">
+        <section className="px-5 py-12 sm:px-8 sm:py-16">
+          <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2 lg:gap-14">
             <DetailList title="What you will do" items={responsibilities} />
             <DetailList title="Who should apply" items={candidateRequirements} />
           </div>
         </section>
 
-        <section className="border-y border-[#7a0000]/8 bg-[#f0ece7] px-5 py-16 sm:px-8 sm:py-20">
-          <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.84fr_1.16fr] lg:items-center">
+        <section className="border-y border-[#7a0000]/8 bg-[#f0ece7] px-5 py-12 sm:px-8 sm:py-16">
+          <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.84fr_1.16fr] lg:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.25em] text-[#8d141d]">Next steps</p>
               <h2 className="mt-3 font-serif text-4xl font-black tracking-tight text-[#81131a] sm:text-5xl">How the application works</h2>
@@ -161,14 +161,14 @@ export default function CareerApplicationClient() {
             </div>
             <aside className="rounded-2xl border border-[#d7c7b9] bg-[#fffdfa] p-6 shadow-[0_20px_45px_rgba(66,37,30,0.09)] sm:p-8">
               <Video className="h-8 w-8 text-[#8d141d]" />
-              <h3 className="mt-4 text-2xl font-black text-slate-950">A short video comes later</h3>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-slate-650">Shortlisted candidates will later be invited to submit a one-minute introduction video. This helps us assess communication skills, confidence, presentation ability, and comfort in front of the camera.</p>
+              <h3 className="mt-4 text-2xl font-black text-slate-950">Your short explainer video is required</h3>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-slate-650">Include a short explainer or presentation video with your application. It helps us assess your communication skills, confidence, technical understanding, presentation ability, and comfort in front of the camera.</p>
             </aside>
           </div>
         </section>
 
-        <section className="px-5 py-16 sm:px-8 sm:py-20">
-          <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-2">
+        <section className="px-5 py-12 sm:px-8 sm:py-16">
+          <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-2">
             <DetailList title="Terms & benefits" items={[
               "Three-month, full-time Graduate Trainee contract with a monthly stipend of KSh 20,000.",
               "Lunch allowance of KSh 150 and transport allowance of KSh 150 for each working day.",
@@ -185,7 +185,7 @@ export default function CareerApplicationClient() {
           </div>
         </section>
 
-        <section id="application" className="scroll-mt-24 bg-[radial-gradient(circle_at_88%_10%,rgba(233,181,48,0.18),transparent_23%),#f8f6f3] px-5 py-16 sm:px-8 sm:py-24">
+        <section id="application" className="scroll-mt-24 bg-[radial-gradient(circle_at_88%_10%,rgba(233,181,48,0.18),transparent_23%),#f8f6f3] px-5 py-12 sm:px-8 sm:py-16">
           <div className="mx-auto max-w-4xl">
             {success ? (
               <div className="rounded-3xl border border-[#e2c874] bg-[#fffdfa] px-6 py-16 text-center shadow-[0_22px_60px_rgba(75,46,35,0.12)] sm:px-14">
@@ -211,7 +211,7 @@ export default function CareerApplicationClient() {
                   <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Graduation status<select name="graduationStatus" required defaultValue="" className={inputClass}><option value="" disabled>Select your status</option><option>Graduated in 2024</option><option>Graduated in 2025</option><option>Final-year student awaiting graduation</option></select></label>
                   <label className="block text-sm font-bold text-slate-800 sm:col-span-2">CV upload<span className="mt-2 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#8d141d]/35 bg-[#fffaf5] px-4 text-sm font-semibold text-slate-600 transition hover:border-[#8d141d] hover:bg-[#fff5f5]"><Upload className="h-5 w-5 shrink-0 text-[#8d141d]" /><span className="min-w-0 truncate">{cvName || "Choose a PDF, DOC, or DOCX file (max 8 MB)"}</span><input name="cv" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required className="sr-only" onChange={(event) => setCvName(event.target.files?.[0]?.name || "")} /></span></label>
                   <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Cover letter<textarea name="coverLetter" required minLength={40} maxLength={6000} rows={6} placeholder="Tell us why you are a great fit for this opportunity." className={inputClass} /></label>
-                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Short explainer video link <span className="font-normal text-slate-500">(or upload below)</span><input name="tiktokWorkUrl" type="url" placeholder="https://www.tiktok.com/... or a shareable Google Drive, YouTube, Instagram, or Facebook link" className={inputClass} /><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">Share a short video where you explain a product, technical topic, service, or presentation in your own words. A solar-product explanation is preferred.</span></label>
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Short explainer video link <span className="font-normal text-slate-500">(choose this or upload a video below)</span><input name="tiktokWorkUrl" type="url" placeholder="https://www.tiktok.com/... or a shareable Google Drive, YouTube, Instagram, or Facebook link" className={inputClass} /><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">Choose one option: share a link or upload a short video below. Explain a product, technical topic, service, or presentation in your own words; a solar-product explanation is preferred.</span></label>
                   <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Or upload your short explainer video<span className="mt-2 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#8d141d]/35 bg-[#fffaf5] px-4 text-sm font-semibold text-slate-600 transition hover:border-[#8d141d] hover:bg-[#fff5f5]"><Video className="h-5 w-5 shrink-0 text-[#8d141d]" /><span className="min-w-0 truncate">{videoName || "Choose MP4, MOV, or WebM video (max 50 MB)"}</span><input name="explainerVideo" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" className="sr-only" onChange={(event) => setVideoName(event.target.files?.[0]?.name || "")} /></span><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">A video link or uploaded video is required.</span></label>
                 </div>
                 <label className="mt-7 flex cursor-pointer items-start gap-3 rounded-xl bg-[#faf6f1] p-4 text-sm leading-6 text-slate-700"><input name="consent" value="true" type="checkbox" required className="mt-1 h-4 w-4 rounded border-slate-400 text-[#8d141d] focus:ring-[#8d141d]" /><span>I confirm that the information I have provided is accurate and that Betech Solar Solutions may contact me regarding this application.</span></label>
