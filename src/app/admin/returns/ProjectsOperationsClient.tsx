@@ -106,6 +106,14 @@ type CommissioningLinkState = {
   progress?: number;
 };
 
+type ProjectBalancePromptState = {
+  checkoutRequestId: string | null;
+  amount: number;
+  phone: string;
+  status: "AWAITING_PIN" | "FAILED" | "SUCCESS";
+  message: string;
+};
+
 type ProjectsOperationsClientProps = {
   scope?: "admin" | "technical";
   viewerId?: string | null;
@@ -437,6 +445,9 @@ export default function ProjectsOperationsClient({
   const [assignmentModal, setAssignmentModal] =
     useState<AssignmentModalState>(null);
   const [assignmentSearch, setAssignmentSearch] = useState("");
+  const [balancePrompts, setBalancePrompts] = useState<
+    Record<string, ProjectBalancePromptState>
+  >({});
 
   const load = async () => {
     setLoading(true);
@@ -847,6 +858,85 @@ export default function ProjectsOperationsClient({
         error instanceof Error ? error.message : "Failed to update project",
         "error",
       );
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const promptProjectBalance = async (row: ProjectRow) => {
+    const outstanding = Math.max(0, Number(row.projectRemainingAmount ?? 0));
+    if (outstanding < 1) {
+      showToast("This project has no outstanding balance to collect.", "error");
+      return;
+    }
+    const phone = window.prompt(
+      `Send an M-Pesa Express prompt for ${formatCurrency(outstanding)}. Confirm the customer's M-Pesa number:`,
+      balancePrompts[row.id]?.phone || row.customerPhone || "",
+    );
+    if (phone === null) return;
+    if (!phone.trim()) {
+      showToast("Enter the customer's M-Pesa number before sending the prompt.", "error");
+      return;
+    }
+
+    setSavingId(row.id);
+    setBalancePrompts((current) => ({
+      ...current,
+      [row.id]: {
+        checkoutRequestId: null,
+        amount: outstanding,
+        phone: phone.trim(),
+        status: "AWAITING_PIN",
+        message: "Sending M-Pesa Express prompt…",
+      },
+    }));
+    try {
+      const response = await fetch(`/api/receipts/${encodeURIComponent(row.id)}/project/mpesa-balance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ phoneNumber: phone.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.checkoutRequestId) {
+        throw new Error(payload?.error || "Unable to send the M-Pesa Express prompt.");
+      }
+      const checkoutRequestId = String(payload.checkoutRequestId);
+      setBalancePrompts((current) => ({
+        ...current,
+        [row.id]: {
+          checkoutRequestId,
+          amount: Number(payload.amount || outstanding),
+          phone: phone.trim(),
+          status: "AWAITING_PIN",
+          message: payload.alreadyPending
+            ? "An M-Pesa prompt is already open on this number. Waiting for confirmation."
+            : "Prompt sent. Ask the customer to enter their M-Pesa PIN.",
+        },
+      }));
+      showToast("M-Pesa Express prompt sent. Waiting for the customer PIN.", "success");
+
+      const poll = async (): Promise<void> => {
+        const statusResponse = await fetch(`/api/payments/mpesa/stk/status?checkoutRequestId=${encodeURIComponent(checkoutRequestId)}`, { cache: "no-store", credentials: "same-origin" });
+        const statusPayload = await statusResponse.json().catch(() => ({}));
+        const status = String(statusPayload?.payment?.status || "").toUpperCase();
+        if (status === "SUCCESS") {
+          setBalancePrompts((current) => ({ ...current, [row.id]: { checkoutRequestId, amount: Number(payload.amount || outstanding), phone: phone.trim(), status: "SUCCESS", message: "M-Pesa payment confirmed and applied to the project balance." } }));
+          showToast("Project balance payment confirmed.", "success");
+          await load();
+          return;
+        }
+        if (status === "FAILED" || status === "CANCELLED") {
+          setBalancePrompts((current) => ({ ...current, [row.id]: { checkoutRequestId, amount: Number(payload.amount || outstanding), phone: phone.trim(), status: "FAILED", message: statusPayload?.payment?.resultDescription || "The M-Pesa prompt was not completed. You can retry it." } }));
+          return;
+        }
+        window.setTimeout(() => void poll().catch(() => undefined), 3000);
+      };
+      window.setTimeout(() => void poll().catch(() => undefined), 2500);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to send the M-Pesa Express prompt.";
+      setBalancePrompts((current) => ({ ...current, [row.id]: { checkoutRequestId: null, amount: outstanding, phone: phone.trim(), status: "FAILED", message } }));
+      showToast(message, "error");
     } finally {
       setSavingId(null);
     }
@@ -1420,6 +1510,7 @@ export default function ProjectsOperationsClient({
                   const isSaving = savingId === row.id;
                   const assignedHandlers = getAssignedHandlers(row);
                   const displayStatus = getDisplayStatus(row);
+                  const balancePrompt = balancePrompts[row.id];
                   const percentagePaid = Math.max(
                     0,
                     Math.min(
@@ -2057,6 +2148,25 @@ export default function ProjectsOperationsClient({
                                         placeholder="Optional balance reference"
                                       />
                                     </label>
+                                    {Number(row.projectRemainingAmount ?? 0) > 0 ? (
+                                      <div className="sm:col-span-2 rounded-2xl border border-emerald-400/25 bg-emerald-400/5 p-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                          <div>
+                                            <p className="text-sm font-semibold text-emerald-100">Collect outstanding balance by M-Pesa Express</p>
+                                            <p className="mt-1 text-xs leading-5 text-slate-400">Sends a PIN prompt for {formatCurrency(Number(row.projectRemainingAmount))} to the customer. Only Safaricom&apos;s confirmed callback updates the balance.</p>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => void promptProjectBalance(row)}
+                                            disabled={isSaving || balancePrompt?.status === "AWAITING_PIN"}
+                                            className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                                          >
+                                            {balancePrompt?.status === "AWAITING_PIN" ? "Prompt sent" : balancePrompt?.status === "FAILED" ? "Retry M-Pesa prompt" : "Prompt customer"}
+                                          </button>
+                                        </div>
+                                        {balancePrompt ? <p className={`mt-3 text-xs ${balancePrompt.status === "FAILED" ? "text-amber-200" : balancePrompt.status === "SUCCESS" ? "text-emerald-200" : "text-sky-200"}`}>{balancePrompt.message}{balancePrompt.checkoutRequestId ? ` · Request ${balancePrompt.checkoutRequestId}` : ""}</p> : null}
+                                      </div>
+                                    ) : null}
                                   </div>
                                 </div>
 

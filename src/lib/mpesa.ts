@@ -8,7 +8,7 @@ import { ensureSiteVisitsSchema } from "@/lib/siteVisits";
 import { getLppAccountSummary, recordLppPayment } from "@/lib/lipaPolePoleService";
 import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import { dispatchSiteVisitCreated } from "@/lib/siteVisitNotifications";
-import { buildReceiptProjectFlow } from "@/lib/receiptProjects";
+import { buildReceiptProjectFlow, readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { sendTransactionalSms } from "@/lib/africasTalking";
 import { sendReceiptChannels } from "@/workers/receiptSender";
@@ -250,7 +250,9 @@ async function findInstallationProjectPaymentTarget(reference: string): Promise<
   const due = Math.max(0, toNumber(metadata.installationPaymentDue));
   const expiresAt = new Date(String(metadata.installationPaymentExpiresAt || ""));
   if (!["AWAITING_PAYMENT", "PAYMENT_FAILED"].includes(state) || !due || (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() < Date.now())) return null;
-  return { kind: "INSTALLATION_PROJECT", id: order.id, reference: order.orderNumber, total: due, paid: Math.max(0, toNumber(order.paidAmount)), customerPhone: order.customerPhone, purpose: "ORDER_DEPOSIT" };
+  // `total` must represent the project total, not just this prompt's amount:
+  // the shared STK amount helper derives the amount due as total minus paid.
+  return { kind: "INSTALLATION_PROJECT", id: order.id, reference: order.orderNumber, total: Math.max(0, toNumber(order.paidAmount)) + due, paid: Math.max(0, toNumber(order.paidAmount)), customerPhone: order.customerPhone, purpose: "ORDER_DEPOSIT" };
 }
 
 async function findStkTarget(resourceType: MpesaStkResourceType, reference: string) {
@@ -1014,18 +1016,28 @@ async function applyConfirmedPaymentInTransaction(
     paidBefore = Math.max(0, toNumber(order.paidAmount));
     paidAfter = Math.min(projectValue, paidBefore + amount);
     total = projectValue;
-    const paymentTerm = String(metadata.installationPaymentTerm || receiptData.installationPaymentTerm || "FULL_BEFORE_INSTALLATION");
+    const existingFlow = readReceiptProjectFlow(receiptData.projectFlow ?? metadata.projectFlow);
+    const paymentTerm = String(existingFlow?.paymentTerm || metadata.installationPaymentTerm || receiptData.installationPaymentTerm || "FULL_BEFORE_INSTALLATION");
+    const isBalancePrompt = String(metadata.installationPaymentKind || "").toUpperCase() === "BALANCE";
+    const existingDepositPaid = Math.max(0, Number(existingFlow?.depositPaidAmount ?? 0));
+    const existingBalancePaid = Math.max(0, Number(existingFlow?.balancePaidAmount ?? 0));
     const flow = buildReceiptProjectFlow({
-      stage: "RECEIPT_CREATED", paymentTerm, projectValue,
-      depositPercent: toNumber(metadata.installationDepositPercent || receiptData.installationDepositPercent),
-      depositPaidAmount: paidAfter, amountPaidTotal: paidAfter,
-      depositPaymentMethod: "MPESA", depositReference: input.receiptNumber || payment.receiptNumber,
-      scheduledDate: null, postedReceiptNumber: order.orderNumber,
-      internalNotes: "Installation booking confirmed by M-Pesa STK payment.",
-      paymentNotes: paymentTerm === "DEPOSIT_AND_BALANCE" ? "Deposit received by M-Pesa; balance remains due after installation." : "Full payment received by M-Pesa.",
+      existing: existingFlow as unknown as Record<string, unknown> | null,
+      stage: existingFlow?.stage || "RECEIPT_CREATED", paymentTerm, projectValue,
+      depositPercent: existingFlow?.depositPercent ?? toNumber(metadata.installationDepositPercent || receiptData.installationDepositPercent),
+      depositPaidAmount: isBalancePrompt ? existingDepositPaid : paidAfter,
+      depositPaymentMethod: isBalancePrompt ? existingFlow?.depositPaymentMethod : "MPESA",
+      depositReference: isBalancePrompt ? existingFlow?.depositReference : input.receiptNumber || payment.receiptNumber,
+      balancePaidAmount: isBalancePrompt ? existingBalancePaid + amount : existingBalancePaid,
+      balancePaymentMethod: isBalancePrompt ? "MPESA" : existingFlow?.balancePaymentMethod,
+      balanceReference: isBalancePrompt ? input.receiptNumber || payment.receiptNumber : existingFlow?.balanceReference,
+      amountPaidTotal: paidAfter,
+      scheduledDate: existingFlow?.scheduledDate ?? null, postedReceiptNumber: order.orderNumber,
+      internalNotes: isBalancePrompt ? "Project balance confirmed by M-Pesa Express." : "Installation booking confirmed by M-Pesa STK payment.",
+      paymentNotes: isBalancePrompt ? "Project balance received by M-Pesa Express." : paymentTerm === "DEPOSIT_AND_BALANCE" ? "Deposit received by M-Pesa; balance remains due after installation." : "Full payment received by M-Pesa.",
     });
-    await tx.order.update({ where: { id: order.id }, data: { paidAmount: paidAfter, paymentStatus: paidAfter >= projectValue ? "PAID" : "PARTIAL", status: "PENDING", metadata: { ...metadata, customerType: "project", installationPaymentState: "CONFIRMED", installationPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(), lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null, lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null, projectFlow: flow } } });
-    await tx.receipt.update({ where: { id: receipt.id }, data: { data: { ...receiptData, customerType: "project", installationPaymentState: "CONFIRMED", installationPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(), lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null, lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null, projectFlow: flow } } });
+    await tx.order.update({ where: { id: order.id }, data: { paidAmount: paidAfter, paymentStatus: paidAfter >= projectValue ? "PAID" : "PARTIAL", status: "PENDING", metadata: { ...metadata, customerType: "project", installationPaymentState: "CONFIRMED", installationPaymentKind: null, installationPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(), lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null, lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null, projectFlow: flow } } });
+    await tx.receipt.update({ where: { id: receipt.id }, data: { data: { ...receiptData, customerType: "project", installationPaymentState: "CONFIRMED", installationPaymentKind: null, installationPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(), lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null, lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null, projectFlow: flow } } });
   }
   await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "SUCCESS" } });
   return { applied: true, paidBefore, paidAfter, total };
