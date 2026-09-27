@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ error: "A reprint reason is required." }, { status: 400 });
   }
 
-  const actorId = (guard.session.user as { id?: string } | undefined)?.id ?? null;
+  const actorId = (guard.session?.user as { id?: string } | undefined)?.id ?? null;
   if (!actorId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const receipt = await prisma.receipt.findUnique({
