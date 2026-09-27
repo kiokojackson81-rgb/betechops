@@ -208,9 +208,11 @@ function compactUnique(values: Array<string | null | undefined>) {
 async function queryOpsCatalogueProducts(
   whereClause = "",
   params: unknown[] = [],
+  options: { detail?: boolean } = {},
 ) {
   const capabilities = await getProductTableCapabilities(prisma);
   const available = capabilities.available;
+  const includeDetail = options.detail !== false;
 
   if (capabilities.schemaMode === "modern") {
     return prisma.$queryRawUnsafe<OpsCatalogueProduct[]>(
@@ -229,15 +231,15 @@ async function queryOpsCatalogueProducts(
         COALESCE("isActive", true) AS "isActive",
         ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
         ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
-        ${available.has("description") ? `"description"` : `NULL::text`} AS "description",
+        ${includeDetail && available.has("description") ? `"description"` : `NULL::text`} AS "description",
         ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
         ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
         ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
         ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
-        ${available.has("imageExtractedText") ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
-        ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
-        ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
-        ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
+        ${includeDetail && available.has("imageExtractedText") ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
+        ${includeDetail && available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+        ${includeDetail && available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+        ${includeDetail && available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
         ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
         ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
         ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
@@ -263,7 +265,7 @@ async function queryOpsCatalogueProducts(
         ${available.has("lipaPolePoleDefaultDays") ? `"lipaPolePoleDefaultDays"` : `NULL::int`} AS "lipaPolePoleDefaultDays",
         ${available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
         ${available.has("productType") ? `, "productType"` : `, NULL::text`} AS "productType",
-        ${available.has("catalogueConfiguration") ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration"
+        ${includeDetail && available.has("catalogueConfiguration") ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration"
       FROM "Product"
       WHERE COALESCE("isActive", true) = true
       ${whereClause}
@@ -290,15 +292,15 @@ async function queryOpsCatalogueProducts(
         COALESCE("active", true) AS "isActive",
         ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
         ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
-        ${available.has("description") ? `"description"` : `NULL::text`} AS "description",
+        ${includeDetail && available.has("description") ? `"description"` : `NULL::text`} AS "description",
         ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
         ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
         ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
         ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
-        ${available.has("imageExtractedText") ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
-        ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
-        ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
-        ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
+        ${includeDetail && available.has("imageExtractedText") ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
+        ${includeDetail && available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+        ${includeDetail && available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+        ${includeDetail && available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
         ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
         ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
         ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
@@ -324,7 +326,7 @@ async function queryOpsCatalogueProducts(
         ${available.has("lipaPolePoleDefaultDays") ? `"lipaPolePoleDefaultDays"` : `NULL::int`} AS "lipaPolePoleDefaultDays",
         ${available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
         ${available.has("productType") ? `, "productType"` : `, NULL::text`} AS "productType",
-        ${available.has("catalogueConfiguration") ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration"
+        ${includeDetail && available.has("catalogueConfiguration") ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration"
       FROM "Product"
       WHERE COALESCE("active", true) = true
       ${whereClause}
@@ -983,7 +985,10 @@ export async function getOpsCatalogueProductMappedBySlug(slug: string) {
 
 const getCachedOpsCatalogueProductsReadOnly = unstable_cache(
   async () => {
-    const products = await queryOpsCatalogueProducts();
+    // Catalogue cards do not need rich descriptions, gallery media, OCR text or
+    // full checkout policy. Keeping those out of the shared data cache avoids
+    // Next.js' 2 MB cache-entry limit; detail routes load the full product below.
+    const products = await queryOpsCatalogueProducts("", [], { detail: false });
     const autoEnableLipaPolePole = !products.some(
       (product) => product.lipaPolePoleEnabled === true,
     );
@@ -991,7 +996,7 @@ const getCachedOpsCatalogueProductsReadOnly = unstable_cache(
       .map((product) => mapOpsProduct(product, { autoEnableLipaPolePole }))
       .filter((entry): entry is ShopProductMappingPreview => Boolean(entry));
   },
-  ["shop:ops-catalogue:readonly:v1"],
+  ["shop:ops-catalogue:listing:v2"],
   {
     revalidate: SHOP_CATALOGUE_REVALIDATE_SECONDS,
     tags: ["shop-products"],

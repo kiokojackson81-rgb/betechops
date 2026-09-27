@@ -37,27 +37,16 @@ Recommended workflow
 
 Cron jobs (sync + cleanup)
 
-- This repo defines Vercel Cron Jobs in `vercel.json`.
-    - Incremental Jumia orders sync: `/api/jumia/jobs/sync-incremental` (per schedule in vercel.json)
-    - Full pending reconciliation: `/api/jumia/sync-pending` (per schedule in vercel.json)
-    - You can adjust schedules in `vercel.json` or Vercel dashboard under Project > Settings > Cron Jobs.
+- This repo defines Vercel Cron Jobs in `vercel.json` for operational reminders and maintenance. Jumia order synchronisation is intentionally not scheduled.
 
-Manual triggers (use CRON_SECRET)
+Manual Jumia refresh
 
-- Set `CRON_SECRET` in Vercel Environment Variables. You can then manually trigger the incremental job:
-
-   - via query string:
-
-      - GET `https://<your-app>/api/jumia/jobs/sync-incremental?cronSecret=<CRON_SECRET>`
-
-   - or with a header:
-
-      - `x-cron-secret: <CRON_SECRET>` on the request
+- An authenticated administrator can trigger the bounded incremental job from the Orders screen. It refreshes a three-day window by default, with a maximum seven-day window.
 
 Notes:
 
-- `/api/jumia/sync-pending` does not require the secret (designed for Vercel Cron or manual GET).
-- The KPIs endpoint `/api/metrics/kpis` will auto-fire a background pending sweep if it detects stale DB data.
+- `/api/jumia/sync-pending` is retired and returns `410 Gone`; it cannot start the former broad pending sweep.
+- The KPIs endpoint reports database and live availability without starting a background Jumia sync.
 - To periodically purge old orders (>60 days), a GitHub Actions workflow is provided:
    - `.github/workflows/nightly-cleanup.yml` runs daily at 02:00 UTC
    - Requires the following repository secrets:

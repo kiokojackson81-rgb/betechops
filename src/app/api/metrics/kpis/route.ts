@@ -159,7 +159,6 @@ export async function GET(request: Request) {
               // Live aggregation did not return in time or returned empty pages; fall back to snapshot logic.
               const snapshotMaxAgeMs = Math.max(30_000, Number(process.env.JUMIA_PENDING_SNAPSHOT_MAX_AGE_MS ?? 5 * 60_000));
               const snapshotCandidate = await readPendingSnapshot().catch(() => null);
-              let usedSnapshot = false;
               if (snapshotCandidate && isPendingSnapshotFresh(snapshotCandidate, snapshotMaxAgeMs)) {
                 // Snapshot window may differ from KPI expected window. We only accept snapshot when its
                 // window equals the KPI configured lookback (JUMIA_PENDING_WINDOW_DAYS defaults to 7 for KPI use).
@@ -176,7 +175,6 @@ export async function GET(request: Request) {
                   }
                   if (snapshotCandidate.ok === false) approxFlag = true;
                   pendingSource = snapshotCandidate.ok ? 'snapshot' : 'snapshot-partial';
-                  usedSnapshot = true;
                   pendingSnapshotWindowDays = snapshotWindowDays;
                 }
               }
@@ -185,34 +183,6 @@ export async function GET(request: Request) {
     } catch {
       // ignore network/vendor errors and keep DB-based value
     }
-
-    // If DB looks stale, kick off a background pending sweep to reconcile.
-    // Non-blocking and time-limited; safe to fire-and-forget.
-    try {
-      if (isStale && process.env.NODE_ENV !== 'test') {
-        Promise.resolve().then(async () => {
-          const urlSync = await absUrl('/api/jumia/sync-pending');
-          const controller = new AbortController();
-          const t = setTimeout(() => controller.abort(), 5000);
-          try { await fetch(urlSync, { cache: 'no-store', signal: controller.signal }); } finally { clearTimeout(t); }
-        }).catch(() => undefined);
-      }
-    } catch {}
-
-    // If vendor live total differs substantially from DB, trigger a quick incremental sync in the background
-    // with a small lookback window to align downstream views faster.
-    try {
-      const diff = Math.abs((pendingAllOut || 0) - (queued || 0));
-      const allowKick = diff >= 1; // any difference
-      if (allowKick && process.env.NODE_ENV !== 'test') {
-        Promise.resolve().then(async () => {
-          const urlInc = await absUrl('/api/jumia/jobs/sync-incremental?lookbackDays=3');
-          const controller = new AbortController();
-          const t = setTimeout(() => controller.abort(), 4000);
-          try { await fetch(urlInc, { cache: 'no-store', signal: controller.signal, headers: { 'x-vercel-cron': '1' } }); } finally { clearTimeout(t); }
-        }).catch(() => undefined);
-      }
-    } catch {}
 
     const dbNowTs = Date.now();
     const res = NextResponse.json({

@@ -9,34 +9,11 @@ export default function SyncNowButton({ className }: { className?: string }) {
   const run = async () => {
     if (busy) return;
     setBusy(true);
-    setMsg("Running cached pending sync…");
+    setMsg("Running incremental sync…");
     try {
-      const pendingRes = await fetch("/api/jumia/sync-pending", { method: "POST" });
-      if (!pendingRes.ok) throw new Error(`pending sync failed: ${pendingRes.status}`);
-
-      let syncedShops = 0;
-      try {
-        const payload = (await pendingRes.json()) as { results?: Array<{ shopId: string }> };
-        syncedShops = Array.isArray(payload?.results) ? payload.results.length : 0;
-      } catch {
-        // Ignore parse errors; message below covers success.
-      }
-
-      setMsg(
-        syncedShops > 0
-          ? `Pending orders synced for ${syncedShops} shop${syncedShops === 1 ? "" : "s"}. Refreshing KPIs…`
-          : "Pending orders sync completed. Refreshing KPIs…"
-      );
-
-      // Best-effort legacy incremental sync to keep other statuses warm.
-      try {
-        const incrementalRes = await fetch("/api/jumia/jobs/sync-incremental", { method: "POST" });
-        if (!incrementalRes.ok) {
-          console.warn("Incremental sync failed", incrementalRes.status);
-        }
-      } catch (err) {
-        console.warn("Incremental sync error", err);
-      }
+      const incrementalRes = await fetch("/api/jumia/jobs/sync-incremental?lookbackDays=3", { method: "POST" });
+      if (!incrementalRes.ok) throw new Error(`incremental sync failed: ${incrementalRes.status}`);
+      setMsg("Incremental sync completed. Refreshing KPIs…");
 
       try {
         await fetch("/api/metrics/kpis/refresh", { method: "POST" });

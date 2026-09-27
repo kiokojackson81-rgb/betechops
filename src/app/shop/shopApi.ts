@@ -93,9 +93,8 @@ export async function getShopProducts(input?: ShopProductQuery): Promise<ShopPro
 
 export async function getShopProductBySlug(slug: string): Promise<ShopProduct | null> {
   if (typeof window === "undefined") {
-    const cachedProduct = (await getServerShopProducts()).find((product) => product.slug === slug) ?? null;
-    if (cachedProduct || !isShopOpsApiEnabled()) return cachedProduct;
-    return getOpsCatalogueProductMappedBySlug(slug);
+    if (isShopOpsApiEnabled()) return getOpsCatalogueProductMappedBySlug(slug);
+    return (await getServerShopProducts()).find((product) => product.slug === slug) ?? null;
   }
 
   const response = await fetchJson<{ product: ShopProduct | null }>(getApiUrl(`/api/shop/products/${slug}`)).catch(() => null);
@@ -108,22 +107,12 @@ export async function getShopProductBySlugOrOpsProductId(slug: string, opsProduc
   const normalizedOpsProductId = String(opsProductId || "").trim();
 
   if (typeof window === "undefined") {
-    const products = await getServerShopProducts();
     if (normalizedOpsProductId) {
-      const byOpsProductId = products.find((product) => product.opsProductId === normalizedOpsProductId) ?? null;
+      if (isShopOpsApiEnabled()) return getOpsCatalogueProductMappedById(normalizedOpsProductId);
+      const byOpsProductId = (await getServerShopProducts()).find((product) => product.opsProductId === normalizedOpsProductId) ?? null;
       if (byOpsProductId) return byOpsProductId;
-
-      const fallbackByOpsProductId = await getOpsCatalogueProductMappedById(normalizedOpsProductId);
-      if (fallbackByOpsProductId) return fallbackByOpsProductId;
     }
-
-    const bySlug = products.find((product) => product.slug === slug) ?? null;
-    if (bySlug) return bySlug;
-
-    // Canonical storefront URLs intentionally omit the internal Ops ID. A
-    // freshly published contributor product may not be in the cached listing
-    // yet, so resolve its slug directly before treating the page as missing.
-    return getOpsCatalogueProductMappedBySlug(slug);
+    return getShopProductBySlug(slug);
   }
 
   if (normalizedOpsProductId) {

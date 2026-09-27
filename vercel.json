@@ -6,14 +6,6 @@
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/jumia/jobs/sync-incremental",
-      "schedule": "0 */3 * * *"
-    },
-    {
-      "path": "/api/jumia/sync-pending",
-      "schedule": "*/1 * * * *"
-    },
-    {
       "path": "/api/cron/daily-summary",
       "schedule": "0 17 * * *"
     },

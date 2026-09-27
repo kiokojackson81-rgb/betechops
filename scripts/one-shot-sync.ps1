@@ -40,15 +40,6 @@ try {
   Write-Warning "sync-incremental failed: $_"
 }
 
-Write-Host "Triggering pending snapshot sync..."
-try {
-  $snap = PostJson "/api/jumia/sync-pending"
-  $snap | ConvertTo-Json -Depth 10 | Out-File sync-pending-response.json -Encoding utf8
-  Write-Host "sync-pending response saved to sync-pending-response.json"
-} catch {
-  Write-Warning "sync-pending failed: $_"
-}
-
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 Write-Host "Polling KPI endpoints until fresh or timeout ($TimeoutSeconds seconds)"
 while ((Get-Date) -lt $deadline) {
@@ -89,5 +80,5 @@ while ((Get-Date) -lt $deadline) {
   Start-Sleep -Seconds $PollIntervalSeconds
 }
 
-Write-Host "Done. Saved files: sync-incremental-response.json, sync-pending-response.json, pending-diff.json, kpis.json"
+Write-Host "Done. Saved files: sync-incremental-response.json, pending-diff.json, kpis.json"
 Write-Host "Open those files or paste their contents here if you want me to analyze them further."
