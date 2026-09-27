@@ -108,8 +108,8 @@ function applicantEmail(input: CareerApplicationInput) {
     subject: "We received your Betech Solar career application",
     title: "Your application has been received",
     intro: `Hello ${input.fullName},`,
-    bodyHtml: "<p>Thank you for applying for the <strong>Customer Service &amp; Content Creation Graduate Trainee</strong> opportunity at Betech Solar Solutions.</p><p>Your application has been received. Only shortlisted candidates will be contacted.</p>",
-    bodyText: "Thank you for applying for the Customer Service & Content Creation Graduate Trainee opportunity at Betech Solar Solutions. Your application has been received. Only shortlisted candidates will be contacted.",
+    bodyHtml: "<p>Thank you for applying for the <strong>Renewable Energy / Electrical Engineering Graduate Trainee – Customer Service &amp; Content Creation</strong> opportunity at Betech Solar Solutions.</p><p>Your application has been received. Only shortlisted candidates will be contacted.</p>",
+    bodyText: "Thank you for applying for the Renewable Energy / Electrical Engineering Graduate Trainee – Customer Service & Content Creation opportunity at Betech Solar Solutions. Your application has been received. Only shortlisted candidates will be contacted.",
     outro: "Betech Solar Solutions",
   };
 }
@@ -129,7 +129,7 @@ function hrEmail(input: CareerApplicationInput, cv: UploadedCv, video: UploadedV
     to: "hr@betech.co.ke",
     subject: `New career application — ${input.fullName}`,
     title: "New graduate trainee application",
-    intro: `${input.fullName} has applied for Customer Service & Content Creation Graduate Trainee.`,
+    intro: `${input.fullName} has applied for Renewable Energy / Electrical Engineering Graduate Trainee – Customer Service & Content Creation.`,
     bodyHtml: `<p><strong>CV:</strong> <a href="${escapeHtml(cv.url)}">${escapeHtml(cv.fileName)}</a></p><table role="presentation" style="border-collapse:collapse;width:100%">${details.map(([label, value]) => `<tr><td style="padding:7px 10px 7px 0;font-weight:700;color:#7a0000;vertical-align:top">${escapeHtml(label)}</td><td style="padding:7px 0;color:#334155;vertical-align:top">${escapeHtml(value)}</td></tr>`).join("")}</table><p><strong>Cover letter</strong></p><p>${escapeHtml(input.coverLetter).replace(/\n/g, "<br />")}</p>`,
     bodyText: `${details.map(([label, value]) => `${label}: ${value}`).join("\n")}\nCV: ${cv.url}\n\nCover letter:\n${input.coverLetter}`,
     ctaLabel: "Open CV",
@@ -147,7 +147,7 @@ export async function submitCareerApplication(form: FormData) {
   if (videoLink) {
     try { new URL(videoLink); } catch { throw new Error("Enter a valid public link to your short explainer video."); }
   }
-  if (!videoLink && !(videoFile instanceof File) || (videoFile instanceof File && !videoFile.size && !videoLink)) throw new Error("Provide a short explainer video link or upload a video.");
+  if (!videoLink && (!(videoFile instanceof File) || !videoFile.size)) throw new Error("A video link or uploaded video is required.");
   const cv = await uploadCv(file);
   const video = videoFile instanceof File && videoFile.size ? await uploadExplainerVideo(videoFile) : null;
   const [applicantResult, hrResult] = await Promise.allSettled([

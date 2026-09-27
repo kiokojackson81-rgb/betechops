@@ -26,14 +26,14 @@ const responsibilities = [
 const candidateRequirements = [
   "Graduate from 2024 or 2025, or a final-year student awaiting graduation.",
   "Diploma or degree in Renewable Energy, Electrical/Electronic Engineering, Solar PV Technology, Electrical Installation, or a closely related technical field.",
-  "Basic understanding of solar PV systems, batteries, inverters, panels, electrical safety, and renewable-energy products.",
+  "Basic understanding of solar PV systems, batteries, hybrid inverters, solar panels, electrical safety, and renewable-energy products.",
   "Very confident, talkative, presentable, persuasive, and customer-focused.",
   "Comfortable appearing on camera.",
   "Canva, CapCut, social-media, content-writing, and website-upload skills are an advantage.",
   "Able to work from Nairobi.",
 ];
 
-const applicationSteps = ["Apply with your CV, cover letter & short explainer video", "Shortlist review", "Interviews for selected candidates"];
+const applicationSteps = ["Apply with your CV, cover letter, and short explainer or presentation video", "Shortlist review", "Interviews for selected candidates"];
 
 const inputClass = "mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-[15px] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#8d141d] focus:ring-4 focus:ring-[#8d141d]/10 disabled:cursor-not-allowed disabled:bg-slate-100";
 
@@ -94,7 +94,7 @@ export default function CareerApplicationClient() {
                 <p className="flex items-center gap-3 text-xs font-black tracking-[0.28em] text-[#8d141d]"><span className="h-px w-9 bg-[#e9b530]" /> CAREERS AT BETECH</p>
                 <h1 className="mt-5 font-serif text-5xl font-black leading-[0.98] tracking-tight text-[#86131b] sm:text-6xl lg:text-7xl">Build your career in clean energy.</h1>
                 <div className="mt-7 rounded-2xl border border-white bg-white/80 p-5 shadow-[0_18px_40px_rgba(78,30,27,0.09)] backdrop-blur sm:p-6">
-                  <p className="text-xl font-black leading-tight text-slate-950 sm:text-2xl">Customer Service &amp; Content Creation Graduate Trainee</p>
+                  <p className="text-xl font-black leading-tight text-slate-950 sm:text-2xl">Renewable Energy / Electrical Engineering Graduate Trainee – Customer Service &amp; Content Creation</p>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div className="flex items-center gap-3 rounded-2xl border border-white bg-white/80 p-3.5 shadow-sm">
@@ -163,6 +163,14 @@ export default function CareerApplicationClient() {
               <Video className="h-8 w-8 text-[#8d141d]" />
               <h3 className="mt-4 text-2xl font-black text-slate-950">Your short explainer video is required</h3>
               <p className="mt-3 max-w-2xl text-base leading-7 text-slate-650">Include a short explainer or presentation video with your application. It helps us assess your communication skills, confidence, technical understanding, presentation ability, and comfort in front of the camera.</p>
+              <div className="mt-6 rounded-xl border border-[#8d141d]/15 bg-[#fff7f7] p-5 text-sm leading-6 text-slate-700">
+                <p className="font-black text-[#81131a]">Sample script you may use</p>
+                <p className="mt-3">“Hello, my name is <strong>[Your Name]</strong>. I am a <strong>[recent graduate/final-year student]</strong> studying <strong>[your course]</strong>.</p>
+                <p className="mt-3">I am applying for the Renewable Energy / Electrical Engineering Graduate Trainee position at Betech Solar Solutions because I am passionate about solar energy and enjoy helping people understand technical products.</p>
+                <p className="mt-3">I have basic knowledge of solar panels, batteries, hybrid inverters, and solar systems. I am confident communicating with customers, comfortable on camera, and interested in creating useful solar content.</p>
+                <p className="mt-3">I am ready to learn, support customers professionally, attend site installations, and contribute to the Betech Solar Solutions team. Thank you for considering my application.”</p>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-slate-600">Please record the video in a quiet, well-lit place, speak naturally, and look at the camera. A solar-product explanation, technical topic, service explanation, or presentation in the applicant’s own words is preferred.</p>
             </aside>
           </div>
         </section>
@@ -206,13 +214,13 @@ export default function CareerApplicationClient() {
                   <Field label="Email address" name="email" type="email" placeholder="you@example.com" required />
                   <Field label="Phone number" name="phone" type="tel" placeholder="07... or +254..." required />
                   <Field label="Current location" name="currentLocation" placeholder="Nairobi, Kenya" required />
-                  <label className="block text-sm font-bold text-slate-800">Education level<select name="educationLevel" required defaultValue="" className={inputClass}><option value="" disabled>Select education level</option><option>Diploma</option><option>Degree</option><option>Other relevant qualification</option></select></label>
+                  <label className="block text-sm font-bold text-slate-800">Education level <RequiredMark /><select name="educationLevel" required defaultValue="" className={inputClass}><option value="" disabled>Select education level</option><option>Diploma</option><option>Degree</option><option>Other relevant qualification</option></select></label>
                   <Field label="Course / area of study" name="courseOfStudy" placeholder="e.g. Renewable Energy or Electrical Engineering" required />
-                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Graduation status<select name="graduationStatus" required defaultValue="" className={inputClass}><option value="" disabled>Select your status</option><option>Graduated in 2024</option><option>Graduated in 2025</option><option>Final-year student awaiting graduation</option></select></label>
-                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">CV upload<span className="mt-2 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#8d141d]/35 bg-[#fffaf5] px-4 text-sm font-semibold text-slate-600 transition hover:border-[#8d141d] hover:bg-[#fff5f5]"><Upload className="h-5 w-5 shrink-0 text-[#8d141d]" /><span className="min-w-0 truncate">{cvName || "Choose a PDF, DOC, or DOCX file (max 8 MB)"}</span><input name="cv" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required className="sr-only" onChange={(event) => setCvName(event.target.files?.[0]?.name || "")} /></span></label>
-                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Cover letter<textarea name="coverLetter" required minLength={40} maxLength={6000} rows={6} placeholder="Tell us why you are a great fit for this opportunity." className={inputClass} /></label>
-                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Short explainer video link <span className="font-normal text-slate-500">(choose this or upload a video below)</span><input name="tiktokWorkUrl" type="url" placeholder="https://www.tiktok.com/... or a shareable Google Drive, YouTube, Instagram, or Facebook link" className={inputClass} /><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">Choose one option: share a link or upload a short video below. Explain a product, technical topic, service, or presentation in your own words; a solar-product explanation is preferred.</span></label>
-                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Or upload your short explainer video<span className="mt-2 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#8d141d]/35 bg-[#fffaf5] px-4 text-sm font-semibold text-slate-600 transition hover:border-[#8d141d] hover:bg-[#fff5f5]"><Video className="h-5 w-5 shrink-0 text-[#8d141d]" /><span className="min-w-0 truncate">{videoName || "Choose MP4, MOV, or WebM video (max 50 MB)"}</span><input name="explainerVideo" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" className="sr-only" onChange={(event) => setVideoName(event.target.files?.[0]?.name || "")} /></span><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">A video link or uploaded video is required.</span></label>
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Graduation status <RequiredMark /><select name="graduationStatus" required defaultValue="" className={inputClass}><option value="" disabled>Select your status</option><option>Graduated in 2024</option><option>Graduated in 2025</option><option>Final-year student awaiting graduation</option></select></label>
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">CV upload <RequiredMark /><span className="mt-2 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#8d141d]/35 bg-[#fffaf5] px-4 text-sm font-semibold text-slate-600 transition hover:border-[#8d141d] hover:bg-[#fff5f5]"><Upload className="h-5 w-5 shrink-0 text-[#8d141d]" /><span className="min-w-0 truncate">{cvName || "Choose a PDF, DOC, or DOCX file (max 8 MB)"}</span><input name="cv" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required className="sr-only" onChange={(event) => setCvName(event.target.files?.[0]?.name || "")} /></span></label>
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Cover letter <RequiredMark /><textarea name="coverLetter" required minLength={40} maxLength={6000} rows={6} placeholder="Tell us why you are a great fit for this opportunity." className={inputClass} /></label>
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Short explainer video link <span className="font-normal text-slate-500">(required: provide this or upload a video below)</span><input name="tiktokWorkUrl" type="url" placeholder="https://www.tiktok.com/... or a shareable Google Drive, YouTube, Instagram, or Facebook link" className={inputClass} /><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">Paste a public link to your short explainer or presentation video.</span></label>
+                  <label className="block text-sm font-bold text-slate-800 sm:col-span-2">Or upload your short explainer video <span className="font-normal text-slate-500">(required: provide this or a link above)</span><span className="mt-2 flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#8d141d]/35 bg-[#fffaf5] px-4 text-sm font-semibold text-slate-600 transition hover:border-[#8d141d] hover:bg-[#fff5f5]"><Video className="h-5 w-5 shrink-0 text-[#8d141d]" /><span className="min-w-0 truncate">{videoName || "Choose MP4, MOV, or WebM video (max 50 MB)"}</span><input name="explainerVideo" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" className="sr-only" onChange={(event) => setVideoName(event.target.files?.[0]?.name || "")} /></span><span className="mt-2 block text-sm font-normal leading-6 text-slate-500">A video link or uploaded video is required.</span></label>
                 </div>
                 <label className="mt-7 flex cursor-pointer items-start gap-3 rounded-xl bg-[#faf6f1] p-4 text-sm leading-6 text-slate-700"><input name="consent" value="true" type="checkbox" required className="mt-1 h-4 w-4 rounded border-slate-400 text-[#8d141d] focus:ring-[#8d141d]" /><span>I confirm that the information I have provided is accurate and that Betech Solar Solutions may contact me regarding this application.</span></label>
                 {error ? <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{error}</p> : null}
@@ -228,8 +236,12 @@ export default function CareerApplicationClient() {
   );
 }
 
+function RequiredMark() {
+  return <span aria-hidden="true" className="text-[#8d141d]">*</span>;
+}
+
 function Field({ label, name, type = "text", placeholder, required = false }: { label: string; name: string; type?: string; placeholder?: string; required?: boolean }) {
-  return <label className="block text-sm font-bold text-slate-800">{label}<input name={name} type={type} required={required} placeholder={placeholder} className={inputClass} /></label>;
+  return <label className="block text-sm font-bold text-slate-800">{label}{required ? <> <RequiredMark /></> : null}<input name={name} type={type} required={required} placeholder={placeholder} className={inputClass} /></label>;
 }
 
 function DetailList({ title, items }: { title: string; items: string[] }) {
