@@ -33,6 +33,7 @@ type ItemRow = {
 };
 
 const warrantyOptions = ["1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
+const LAST_SAVED_PRINTABLE_RECEIPT_KEY = "betechops:last-saved-printable-receipt";
 const newItem = (): ItemRow => ({
   id: Math.random().toString(36).slice(2),
   title: "",
@@ -743,7 +744,43 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     paymentMethods: { ...selectedPaymentMethods, CASH: selectedPaymentMethods.CASH || (isMpesaExpress && cashWithMpesaExpress), MPESA_EXPRESS: isMpesaExpress },
   });
 
-  const [lastPrintableUrl, setLastPrintableUrl] = useState<string | null>(null);
+  const [lastSavedPrintableUrl, setLastSavedPrintableUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const restoreLastPrintableReceipt = async () => {
+      try {
+        const savedUrl = window.sessionStorage.getItem(LAST_SAVED_PRINTABLE_RECEIPT_KEY);
+        if (savedUrl?.startsWith("/receipts/print/")) {
+          if (!cancelled) {
+            setLastSavedPrintableUrl(savedUrl);
+          }
+          return;
+        }
+
+        // A cashier may have reloaded the POS page or used another browser tab.
+        // Restore today's latest accessible POS receipt so the action is useful
+        // even before this browser has saved its first local receipt link.
+        const response = await fetch("/api/receipts?onlyPos=1&scope=global&page=1&size=1", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const data = await response.json().catch(() => ({}));
+        const receiptId = typeof data?.receipts?.[0]?.id === "string" ? data.receipts[0].id : "";
+        if (!cancelled && receiptId) {
+          const url = `/receipts/print/${encodeURIComponent(receiptId)}`;
+          window.sessionStorage.setItem(LAST_SAVED_PRINTABLE_RECEIPT_KEY, url);
+          setLastSavedPrintableUrl(url);
+        }
+      } catch {
+        // The button remains available and explains when no printable receipt exists.
+      }
+    };
+    void restoreLastPrintableReceipt();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toBase64Utf8 = (value: string) => {
     const bytes = new TextEncoder().encode(value);
@@ -761,7 +798,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const openPreviewWindow = (draft: ReturnType<typeof buildDraft>, autoPrint = false) => {
     try {
       const url = buildPreviewUrl(draft);
-      setLastPrintableUrl(url);
       if (autoPrint) {
         const previewWindow = window.open(`${url}&autoPrint=1`, "_blank");
         if (!previewWindow) throw new Error("Popup blocked");
@@ -780,7 +816,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const openSavedReceiptWindow = (receiptId: string, autoPrint = false) => {
     try {
       const url = `/receipts/print/${encodeURIComponent(receiptId)}`;
-      setLastPrintableUrl(url);
+      setLastSavedPrintableUrl(url);
+      window.sessionStorage.setItem(LAST_SAVED_PRINTABLE_RECEIPT_KEY, url);
       const params = new URLSearchParams();
       if (autoPrint) params.set("autoPrint", "1");
       const query = params.toString();
@@ -908,6 +945,64 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       }
       return { ...prev, [method]: !isActive };
     });
+  };
+
+  const reopenLastPrintableReceipt = async () => {
+    const savedUrl = lastSavedPrintableUrl || window.sessionStorage.getItem(LAST_SAVED_PRINTABLE_RECEIPT_KEY);
+    if (!savedUrl?.startsWith("/receipts/print/")) {
+      showToast("No saved printable receipt is available yet.", "error");
+      return;
+    }
+    const receiptId = savedUrl.split("/").pop();
+    if (!receiptId) {
+      showToast("The saved receipt link is invalid. Please open receipt history.", "error");
+      return;
+    }
+    // Open a blank tab while this is still a user-initiated action; after the
+    // required accountability checks succeed we safely navigate it to print.
+    const receiptWindow = window.open("", "_blank");
+    if (!receiptWindow) {
+      showToast("Popup blocked. Allow popups to reopen the receipt.", "error");
+      return;
+    }
+    try {
+      const detailResponse = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      const detail = await detailResponse.json().catch(() => ({}));
+      if (!detailResponse.ok || !detail?.receipt) {
+        throw new Error(detail?.error || "You cannot access this receipt.");
+      }
+      const receipt = detail.receipt;
+      const receiptNumber = String(receipt.receiptNumber || receipt.order?.orderNumber || receiptId);
+      const customerName = String(receipt.order?.customerName || "Customer");
+      const amount = Number(receipt.order?.totalAmount || 0).toLocaleString("en-KE");
+      const createdAt = new Date(receipt.generatedAt || receipt.createdAt).toLocaleString("en-KE");
+      const confirmed = window.confirm(`REPRINT — NOT A NEW PAYMENT\n\nReceipt: ${receiptNumber}\nCustomer: ${customerName}\nDate: ${createdAt}\nAmount: KES ${amount}\n\nContinue to reprint this existing receipt?`);
+      if (!confirmed) {
+        receiptWindow.close();
+        return;
+      }
+      const reason = window.prompt("Reason for reprint (recorded in the audit log):");
+      if (!reason?.trim()) {
+        receiptWindow.close();
+        showToast("A reprint reason is required for accountability.", "error");
+        return;
+      }
+      const auditResponse = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/reprint`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const audit = await auditResponse.json().catch(() => ({}));
+      if (!auditResponse.ok) throw new Error(audit?.error || "Unable to record the reprint.");
+      receiptWindow.location.href = `${savedUrl}?reprint=1&autoPrint=1`;
+    } catch (error) {
+      receiptWindow.close();
+      showToast(error instanceof Error ? error.message : "Unable to prepare the reprint.", "error");
+    }
   };
 
   const selectMpesaExpress = () => {
@@ -2145,11 +2240,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             </button>
             <button
               type="button"
-              disabled={!lastPrintableUrl}
-              onClick={() => {
-                if (lastPrintableUrl) window.open(lastPrintableUrl, "_blank");
-              }}
-              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={reopenLastPrintableReceipt}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5"
             >
               Reopen last printable
             </button>

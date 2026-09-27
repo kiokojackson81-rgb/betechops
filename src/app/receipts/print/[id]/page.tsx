@@ -42,6 +42,8 @@ export default async function Page({
       : (searchParams as { [key: string]: string | string[] | undefined } | undefined);
   const autoPrintRaw = resolvedSearchParams?.autoPrint;
   const autoPrint = Array.isArray(autoPrintRaw) ? autoPrintRaw[0] : autoPrintRaw;
+  const reprintRaw = resolvedSearchParams?.reprint;
+  const isReprint = (Array.isArray(reprintRaw) ? reprintRaw[0] : reprintRaw) === "1";
 
   const receipt = await waitForReceiptById({
     receiptId: id,
@@ -89,6 +91,13 @@ export default async function Page({
   return (
     <div className="receipt-preview-host bg-slate-200">
       <PrintOnLoad enabled={autoPrint === "1"} />
+      {isReprint ? (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center overflow-hidden print:flex">
+          <span className="-rotate-45 border-4 border-red-700/50 px-8 py-3 text-4xl font-black tracking-[0.24em] text-red-700/50">
+            REPRINT — NOT A NEW PAYMENT
+          </span>
+        </div>
+      ) : null}
       {autoPrint !== "1" ? (
         <div className="mx-auto w-full max-w-[148mm] px-4 pt-4">
           <ReceiptToolbar receiptId={id} />
