@@ -28,7 +28,7 @@ function consumeRateLimit(key: string) {
 
 function errorMessage(error: unknown) {
   if (error instanceof ZodError) return error.issues[0]?.message || "Please check the application form and try again.";
-  if (error instanceof Error && /^(Please upload your CV|Upload your CV|Your CV|The uploaded PDF)/.test(error.message)) return error.message;
+  if (error instanceof Error && /^(Please upload your CV|Upload your CV|Your CV|The uploaded CV|The uploaded PDF|A video link|Enter a valid public link|The uploaded explainer video|Application file storage)/.test(error.message)) return error.message;
   return "We could not submit your application. Please try again.";
 }
 

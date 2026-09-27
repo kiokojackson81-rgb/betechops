@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { upload } from "@vercel/blob/client";
 import { ArrowRight, CheckCircle2, CircleUserRound, Clapperboard, FileText, Globe2, LoaderCircle, Mail, MessageCircleMore, Upload, Video } from "lucide-react";
 
 const roleHighlights = [
@@ -43,17 +44,56 @@ export default function CareerApplicationClient() {
   const [success, setSuccess] = useState(false);
   const [cvName, setCvName] = useState("");
   const [videoName, setVideoName] = useState("");
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   async function submitApplication(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
-    setSubmitting(true);
     setError("");
 
     try {
-      const response = await fetch("/api/career/applications", { method: "POST", body: new FormData(form) });
+      const formData = new FormData(form);
+      const cvFile = formData.get("cv");
+      const videoFile = formData.get("explainerVideo");
+      const videoLink = String(formData.get("tiktokWorkUrl") || "").trim();
+
+      if (!(cvFile instanceof File) || !cvFile.size) {
+        throw new Error("Please upload your CV as a PDF, DOC, or DOCX file.");
+      }
+
+      setUploadingVideo(true);
+      const cvExtension = cvFile.name.split(".").pop()?.toLowerCase() || "pdf";
+      const safeCvName = cvFile.name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || `cv.${cvExtension}`;
+      const uploadedCv = await upload(`career-applications/cv/${crypto.randomUUID()}/${safeCvName}`, cvFile, {
+        access: "public",
+        contentType: cvFile.type || undefined,
+        handleUploadUrl: "/api/career/video-upload",
+        multipart: true,
+      });
+      formData.set("cvUrl", uploadedCv.url);
+      formData.delete("cv");
+
+      if (!videoLink && (!(videoFile instanceof File) || !videoFile.size)) {
+        throw new Error("A video link or uploaded video is required.");
+      }
+
+      if (videoFile instanceof File && videoFile.size) {
+        const extension = videoFile.name.split(".").pop()?.toLowerCase() || "mp4";
+        const safeName = videoFile.name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || `explainer.${extension}`;
+        const uploaded = await upload(`career-applications/video/${crypto.randomUUID()}/${safeName}`, videoFile, {
+          access: "public",
+          contentType: videoFile.type || undefined,
+          handleUploadUrl: "/api/career/video-upload",
+          multipart: true,
+        });
+        formData.set("explainerVideoUrl", uploaded.url);
+        formData.delete("explainerVideo");
+      }
+
+      setSubmitting(true);
+      const response = await fetch("/api/career/applications", { method: "POST", body: formData });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "We could not submit your application. Please try again.");
       setSuccess(true);
@@ -64,6 +104,7 @@ export default function CareerApplicationClient() {
       setError(submissionError instanceof Error ? submissionError.message : "We could not submit your application. Please try again.");
     } finally {
       setSubmitting(false);
+      setUploadingVideo(false);
     }
   }
 
@@ -224,7 +265,7 @@ export default function CareerApplicationClient() {
                 </div>
                 <label className="mt-7 flex cursor-pointer items-start gap-3 rounded-xl bg-[#faf6f1] p-4 text-sm leading-6 text-slate-700"><input name="consent" value="true" type="checkbox" required className="mt-1 h-4 w-4 rounded border-slate-400 text-[#8d141d] focus:ring-[#8d141d]" /><span>I confirm that the information I have provided is accurate and that Betech Solar Solutions may contact me regarding this application.</span></label>
                 {error ? <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{error}</p> : null}
-                <button type="submit" disabled={submitting} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-xl bg-[linear-gradient(135deg,#b21d28,#7a0000)] px-6 text-base font-extrabold text-white shadow-[0_16px_32px_rgba(122,0,0,0.22)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70">{submitting ? <><LoaderCircle className="h-5 w-5 animate-spin" /> Submitting application…</> : <>Submit Application <ArrowRight className="h-5 w-5" /></>}</button>
+                <button type="submit" disabled={submitting || uploadingVideo} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-xl bg-[linear-gradient(135deg,#b21d28,#7a0000)] px-6 text-base font-extrabold text-white shadow-[0_16px_32px_rgba(122,0,0,0.22)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70">{uploadingVideo ? <><LoaderCircle className="h-5 w-5 animate-spin" /> Uploading video…</> : submitting ? <><LoaderCircle className="h-5 w-5 animate-spin" /> Submitting application…</> : <>Submit Application <ArrowRight className="h-5 w-5" /></>}</button>
               </form>
             )}
           </div>

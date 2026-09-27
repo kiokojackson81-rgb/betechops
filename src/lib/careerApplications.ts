@@ -22,7 +22,9 @@ const applicationSchema = z.object({
   courseOfStudy: z.string().trim().min(2).max(180),
   graduationStatus: z.enum(["Graduated in 2024", "Graduated in 2025", "Final-year student awaiting graduation"]),
   coverLetter: z.string().trim().min(40, "Please add a short cover letter of at least 40 characters.").max(6000),
+  cvUrl: z.string().trim().max(2000),
   tiktokWorkUrl: z.string().trim().max(2000),
+  explainerVideoUrl: z.string().trim().max(2000),
   consent: z.literal("true"),
 });
 
@@ -61,7 +63,9 @@ export function parseCareerApplication(form: FormData) {
     courseOfStudy: form.get("courseOfStudy"),
     graduationStatus: form.get("graduationStatus"),
     coverLetter: form.get("coverLetter"),
+    cvUrl: form.get("cvUrl"),
     tiktokWorkUrl: form.get("tiktokWorkUrl"),
+    explainerVideoUrl: form.get("explainerVideoUrl"),
     consent: form.get("consent"),
   });
 }
@@ -123,7 +127,7 @@ function hrEmail(input: CareerApplicationInput, cv: UploadedCv, video: UploadedV
     ["Education", input.educationLevel],
     ["Course", input.courseOfStudy],
     ["Graduation", input.graduationStatus],
-    ["Explainer video", video?.url || input.tiktokWorkUrl],
+    ["Explainer video", video?.url || input.explainerVideoUrl || input.tiktokWorkUrl],
   ];
   return {
     to: "hr@betech.co.ke",
@@ -140,22 +144,42 @@ function hrEmail(input: CareerApplicationInput, cv: UploadedCv, video: UploadedV
 export async function submitCareerApplication(form: FormData) {
   const input = parseCareerApplication(form);
   const file = form.get("cv");
-  if (!(file instanceof File)) throw new Error("Please upload your CV as a PDF, DOC, or DOCX file.");
+  const uploadedCvUrl = input.cvUrl.trim();
+  if (!uploadedCvUrl && !(file instanceof File)) throw new Error("Please upload your CV as a PDF, DOC, or DOCX file.");
+  if (uploadedCvUrl) {
+    try {
+      const url = new URL(uploadedCvUrl);
+      if (!url.hostname.endsWith(".public.blob.vercel-storage.com")) throw new Error("invalid");
+    } catch {
+      throw new Error("The uploaded CV could not be verified. Please upload it again.");
+    }
+  }
 
   const videoFile = form.get("explainerVideo");
   const videoLink = input.tiktokWorkUrl.trim();
+  const uploadedVideoUrl = input.explainerVideoUrl.trim();
   if (videoLink) {
     try { new URL(videoLink); } catch { throw new Error("Enter a valid public link to your short explainer video."); }
   }
-  if (!videoLink && (!(videoFile instanceof File) || !videoFile.size)) throw new Error("A video link or uploaded video is required.");
-  const cv = await uploadCv(file);
-  const video = videoFile instanceof File && videoFile.size ? await uploadExplainerVideo(videoFile) : null;
+  if (uploadedVideoUrl) {
+    try {
+      const uploadedUrl = new URL(uploadedVideoUrl);
+      if (!uploadedUrl.hostname.endsWith(".public.blob.vercel-storage.com")) throw new Error("invalid");
+    } catch {
+      throw new Error("The uploaded explainer video could not be verified. Please upload it again.");
+    }
+  }
+  if (!videoLink && !uploadedVideoUrl && (!(videoFile instanceof File) || !videoFile.size)) throw new Error("A video link or uploaded video is required.");
+  const cv = uploadedCvUrl
+    ? { url: uploadedCvUrl, pathname: "", fileName: "Uploaded CV", contentType: "application/octet-stream", size: 0 }
+    : await uploadCv(file as File);
+  const video = !uploadedVideoUrl && videoFile instanceof File && videoFile.size ? await uploadExplainerVideo(videoFile) : null;
   const [applicantResult, hrResult] = await Promise.allSettled([
     sendGeneralCustomerNotificationEmail(applicantEmail(input)),
     sendGeneralCustomerNotificationEmail(hrEmail(input, cv, video)),
   ]);
   if (hrResult.status === "rejected") {
-    await del(cv.pathname, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
+    if (cv.pathname) await del(cv.pathname, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
     if (video) await del(video.pathname, { token: process.env.BLOB_READ_WRITE_TOKEN }).catch(() => undefined);
     console.error("[career] HR application email delivery failed");
     throw new Error("We could not submit your application. Please try again.");
