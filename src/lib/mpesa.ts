@@ -1320,7 +1320,33 @@ export async function handleC2bConfirmation(payload: unknown) {
     if ((error as { code?: string }).code === "P2002") return null;
     throw error;
   });
-  if (!payment || !target) return;
+  if (!payment) return;
+  if (!target) {
+    // A direct PayBill payment is real money even when its account reference
+    // cannot be linked automatically. Alert operations so it can be reconciled,
+    // but deliberately do not describe it as a completed order payment.
+    await notifyAdminCriticalSms({
+      eventType: "PAYBILL_PAYMENT_UNMATCHED",
+      entityId: payment.id,
+      title: "Unmatched Paybill payment received",
+      details: [
+        `Amount: KSh ${amount.toLocaleString("en-KE")}`,
+        `Account reference: ${reference || "Not provided"}`,
+        `M-Pesa code: ${receiptNumber || "Not provided"}`,
+        phoneNumber ? `Payer line: ${maskedPhone(phoneNumber)}` : "Payer line: Not provided",
+        "Action required: reconcile this payment before treating an order or receipt as paid.",
+      ],
+      actionPath: "/admin/mpesa-payments",
+      payload: {
+        mpesaPaymentId: payment.id,
+        transactionId,
+        accountReference: reference || null,
+        amount,
+        notificationType: "PAYBILL_UNMATCHED_ADMIN_SMS",
+      },
+    });
+    return;
+  }
   const confirmation = await applyConfirmedPayment(payment.id, { amount, receiptNumber, transactionId, phoneNumber, transactionAt, resultCode: 0, resultDescription: "C2B payment received", payload });
   if (confirmation?.application.applied && confirmation.payment.websiteOrderId) {
     await notifyConfirmedWebsiteOrder({

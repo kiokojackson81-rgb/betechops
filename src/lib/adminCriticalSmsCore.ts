@@ -3,6 +3,7 @@ import { normalizeKenyanPhone } from "@/lib/phone";
 export const ADMIN_CRITICAL_SMS_EVENT_TYPES = [
   "WEB_ORDER_CREATED",
   "WEB_ORDER_PAID",
+  "PAYBILL_PAYMENT_UNMATCHED",
   "COMPLAINT_CREATED",
   "WEB_PROJECT_BOOKED",
   "WEB_PROJECT_PAID",

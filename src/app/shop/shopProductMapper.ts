@@ -208,11 +208,16 @@ function compactUnique(values: Array<string | null | undefined>) {
 async function queryOpsCatalogueProducts(
   whereClause = "",
   params: unknown[] = [],
-  options: { detail?: boolean } = {},
+  options: { detail?: boolean; listing?: boolean } = {},
 ) {
   const capabilities = await getProductTableCapabilities(prisma);
   const available = capabilities.available;
   const includeDetail = options.detail !== false;
+  // The shared storefront cache is a catalogue-card cache. It must not carry
+  // free-form product copy/JSON for every product; product pages load those
+  // fields by id or slug below. Some legacy records contain multi-megabyte
+  // descriptions/specification JSON or data-URI image metadata.
+  const includeListingText = options.listing !== true;
 
   if (capabilities.schemaMode === "modern") {
     return prisma.$queryRawUnsafe<OpsCatalogueProduct[]>(
@@ -230,11 +235,11 @@ async function queryOpsCatalogueProducts(
         COALESCE("stockQuantity", 0) AS "stockQuantity",
         COALESCE("isActive", true) AS "isActive",
         ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
-        ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+        ${includeListingText && available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
         ${includeDetail && available.has("description") ? `"description"` : `NULL::text`} AS "description",
-        ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+        ${includeListingText && available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
         ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
-        ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+        ${includeListingText && available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
         ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
         ${includeDetail && available.has("imageExtractedText") ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
         ${includeDetail && available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
@@ -251,9 +256,9 @@ async function queryOpsCatalogueProducts(
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
         ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
-        ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
+        ${includeListingText && available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
         ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
-        ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
+        ${includeListingText && available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
         ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
         ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand",
         ${available.has("commissionEnabled") ? `COALESCE("commissionEnabled", false)` : `NULL::boolean`} AS "commissionEnabled",
@@ -263,7 +268,7 @@ async function queryOpsCatalogueProducts(
         ${available.has("lipaPolePoleMinDeposit") ? `"lipaPolePoleMinDeposit"` : `NULL::numeric`} AS "lipaPolePoleMinDeposit",
         ${available.has("lipaPolePoleMaxDays") ? `"lipaPolePoleMaxDays"` : `NULL::int`} AS "lipaPolePoleMaxDays",
         ${available.has("lipaPolePoleDefaultDays") ? `"lipaPolePoleDefaultDays"` : `NULL::int`} AS "lipaPolePoleDefaultDays",
-        ${available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
+        ${includeListingText && available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
         ${available.has("productType") ? `, "productType"` : `, NULL::text`} AS "productType",
         ${includeDetail && available.has("catalogueConfiguration") ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration"
       FROM "Product"
@@ -291,11 +296,11 @@ async function queryOpsCatalogueProducts(
         0 AS "stockQuantity",
         COALESCE("active", true) AS "isActive",
         ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
-        ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+        ${includeListingText && available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
         ${includeDetail && available.has("description") ? `"description"` : `NULL::text`} AS "description",
-        ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+        ${includeListingText && available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
         ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
-        ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+        ${includeListingText && available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
         ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
         ${includeDetail && available.has("imageExtractedText") ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
         ${includeDetail && available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
@@ -312,9 +317,9 @@ async function queryOpsCatalogueProducts(
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
         ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
-        ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
+        ${includeListingText && available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
         ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
-        ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
+        ${includeListingText && available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
         ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
         ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand",
         ${available.has("commissionEnabled") ? `COALESCE("commissionEnabled", false)` : `NULL::boolean`} AS "commissionEnabled",
@@ -324,7 +329,7 @@ async function queryOpsCatalogueProducts(
         ${available.has("lipaPolePoleMinDeposit") ? `"lipaPolePoleMinDeposit"` : `NULL::numeric`} AS "lipaPolePoleMinDeposit",
         ${available.has("lipaPolePoleMaxDays") ? `"lipaPolePoleMaxDays"` : `NULL::int`} AS "lipaPolePoleMaxDays",
         ${available.has("lipaPolePoleDefaultDays") ? `"lipaPolePoleDefaultDays"` : `NULL::int`} AS "lipaPolePoleDefaultDays",
-        ${available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
+        ${includeListingText && available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
         ${available.has("productType") ? `, "productType"` : `, NULL::text`} AS "productType",
         ${includeDetail && available.has("catalogueConfiguration") ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration"
       FROM "Product"
@@ -344,6 +349,15 @@ async function queryOpsCatalogueProducts(
 function normalizeOptionalText(value: string | null | undefined) {
   const normalized = sanitizeProductDescription(String(value || ""));
   return normalized || null;
+}
+
+function normalizeListingImage(value: string | null | undefined, fallback: string) {
+  const image = normalizeOptionalText(value);
+  // Base64/data-URI images can be several megabytes. They remain available on
+  // the direct product page, but catalogue cards use the category visual until
+  // the image is stored as a proper URL.
+  if (!image || /^data:/i.test(image) || image.length > 2_048) return fallback;
+  return image;
 }
 
 function normalizeRichDescription(value: string | null | undefined) {
@@ -679,7 +693,7 @@ function applyAdvertisedAccessoriesPolicy(
 
 function mapOpsProduct(
   product: OpsCatalogueProduct,
-  options: { autoEnableLipaPolePole?: boolean } = {},
+  options: { autoEnableLipaPolePole?: boolean; listing?: boolean } = {},
 ): ShopProductMappingPreview {
   const price = Number(product.sellingPrice);
   const explicitShopCategory = normalizeShopCategoryValue(product.shopCategory);
@@ -718,10 +732,13 @@ function mapOpsProduct(
     product.defaultWarranty?.trim() ||
     inferWarranty(product);
   const warrantyNotes = normalizeOptionalText(product.warrantyNotes);
-  const mainImage =
+  const rawMainImage =
     normalizeOptionalText(product.mainImageUrl) ||
     normalizeOptionalText(product.shopImageUrl) ||
     category.image;
+  const mainImage = options.listing
+    ? normalizeListingImage(rawMainImage, category.image)
+    : rawMainImage;
   const galleryImages = compactUnique([
     mainImage,
     ...normalizeStringArray(product.galleryImageUrls),
@@ -988,15 +1005,15 @@ const getCachedOpsCatalogueProductsReadOnly = unstable_cache(
     // Catalogue cards do not need rich descriptions, gallery media, OCR text or
     // full checkout policy. Keeping those out of the shared data cache avoids
     // Next.js' 2 MB cache-entry limit; detail routes load the full product below.
-    const products = await queryOpsCatalogueProducts("", [], { detail: false });
+    const products = await queryOpsCatalogueProducts("", [], { detail: false, listing: true });
     const autoEnableLipaPolePole = !products.some(
       (product) => product.lipaPolePoleEnabled === true,
     );
     return products
-      .map((product) => mapOpsProduct(product, { autoEnableLipaPolePole }))
+      .map((product) => mapOpsProduct(product, { autoEnableLipaPolePole, listing: true }))
       .filter((entry): entry is ShopProductMappingPreview => Boolean(entry));
   },
-  ["shop:ops-catalogue:listing:v2"],
+  ["shop:ops-catalogue:listing:v3"],
   {
     revalidate: SHOP_CATALOGUE_REVALIDATE_SECONDS,
     tags: ["shop-products"],
