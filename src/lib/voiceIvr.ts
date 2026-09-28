@@ -16,9 +16,9 @@ export type VoiceRoutePlan = {
 };
 
 export const BETECH_WORKING_HOURS_WELCOME_MESSAGE = [
-  "Welcome to Betech Solar Solutions.",
-  "Please hold as we connect you to our customer service team.",
-  "If you wish to speak to our technician, press 1.",
+  "Thank you for calling Betech Solar Solutions.",
+  "Please hold while we connect you to our customer service team.",
+  "If you wish to speak to one of our engineers, press 1.",
 ].join(" ");
 
 export const BETECH_WORKING_HOURS_DIGITS_PROMPT =
