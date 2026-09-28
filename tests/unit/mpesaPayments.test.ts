@@ -19,10 +19,14 @@ jest.mock("@/lib/adminCriticalSms", () => ({
   notifyAdminCriticalSms: jest.fn(),
 }));
 
+jest.mock("@/lib/africasTalking", () => ({
+  sendTransactionalSms: jest.fn(),
+}));
+
 import { prisma } from "@/lib/prisma";
 import { getStkPaymentStatus, handleC2bConfirmation, handleStkCallback, initiateStkPush, initiateStkPushForResource, reconcileUnmatchedMpesaPayment } from "@/lib/mpesa";
 import { recordLppPayment } from "@/lib/lipaPolePoleService";
-import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
+import { sendTransactionalSms } from "@/lib/africasTalking";
 
 const transactionId = "TESTMPESA001";
 const basePayment = {
@@ -59,7 +63,10 @@ function callbackPayload(reference: string, transId = transactionId) {
 }
 
 describe("M-Pesa C2B ledger and reconciliation", () => {
-  beforeEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    (sendTransactionalSms as jest.Mock).mockResolvedValue({});
+  });
 
   it("automatically matches a known C2B reference and applies the payment once", async () => {
     const pendingPayment = { ...basePayment, status: "PENDING", orderId: "order-1", accountReference: "ORD-001" };
@@ -94,16 +101,10 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
 
     expect(prisma.mpesaPayment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "UNMATCHED", accountReference: "TEST001", transactionId }) }));
     expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(notifyAdminCriticalSms).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: "PAYBILL_PAYMENT_UNMATCHED",
-      entityId: basePayment.id,
-      actionPath: "/admin/mpesa-payments",
-      details: expect.arrayContaining([
-        "Amount: KSh 10",
-        "Account reference: TEST001",
-        "M-Pesa code: TESTMPESA001",
-      ]),
-    }));
+    expect(sendTransactionalSms).toHaveBeenCalledWith(
+      "0722151083",
+      "BETECH PAYBILL ALERT: KSh 10 received. Account reference: TEST001. M-Pesa code: TESTMPESA001. This payment is not yet linked to a Betech receipt or order.",
+    );
   });
 
   it("recovers a pending LPP STK payment from its exact legacy unmatched C2B callback and applies it once", async () => {

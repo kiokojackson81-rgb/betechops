@@ -1323,28 +1323,13 @@ export async function handleC2bConfirmation(payload: unknown) {
   if (!payment) return;
   if (!target) {
     // A direct PayBill payment is real money even when its account reference
-    // cannot be linked automatically. Alert operations so it can be reconciled,
-    // but deliberately do not describe it as a completed order payment.
-    await notifyAdminCriticalSms({
-      eventType: "PAYBILL_PAYMENT_UNMATCHED",
-      entityId: payment.id,
-      title: "Unmatched Paybill payment received",
-      details: [
-        `Amount: KSh ${amount.toLocaleString("en-KE")}`,
-        `Account reference: ${reference || "Not provided"}`,
-        `M-Pesa code: ${receiptNumber || "Not provided"}`,
-        phoneNumber ? `Payer line: ${maskedPhone(phoneNumber)}` : "Payer line: Not provided",
-        "Action required: reconcile this payment before treating an order or receipt as paid.",
-      ],
-      actionPath: "/admin/mpesa-payments",
-      payload: {
-        mpesaPaymentId: payment.id,
-        transactionId,
-        accountReference: reference || null,
-        amount,
-        notificationType: "PAYBILL_UNMATCHED_ADMIN_SMS",
-      },
-    });
+    // cannot be linked automatically. Send the same operations number used
+    // by the normal POS payment notification, but never describe this as a
+    // completed order payment.
+    await sendTransactionalSms(
+      "0722151083",
+      `BETECH PAYBILL ALERT: KSh ${amount.toLocaleString("en-KE")} received. Account reference: ${reference || "Not provided"}. M-Pesa code: ${receiptNumber || "Not provided"}. This payment is not yet linked to a Betech receipt or order.`,
+    ).catch((error) => console.error("[mpesa] unmatched Paybill operations SMS failed", error));
     return;
   }
   const confirmation = await applyConfirmedPayment(payment.id, { amount, receiptNumber, transactionId, phoneNumber, transactionAt, resultCode: 0, resultDescription: "C2B payment received", payload });
