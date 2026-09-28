@@ -103,7 +103,7 @@ describe("M-Pesa C2B ledger and reconciliation", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(sendTransactionalSms).toHaveBeenCalledWith(
       "0722151083",
-      "BETECH PAYBILL ALERT: KSh 10 received. Account reference: TEST001. M-Pesa code: TESTMPESA001. This payment is not yet linked to a Betech receipt or order.",
+      "BETECH PAYMENT ALERT: KSh 10 received. Account reference: TEST001. M-Pesa code: TESTMPESA001. This payment is not yet linked to a Betech receipt or order.",
     );
   });
 

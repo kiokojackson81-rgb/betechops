@@ -1328,7 +1328,7 @@ export async function handleC2bConfirmation(payload: unknown) {
     // completed order payment.
     await sendTransactionalSms(
       "0722151083",
-      `BETECH PAYBILL ALERT: KSh ${amount.toLocaleString("en-KE")} received. Account reference: ${reference || "Not provided"}. M-Pesa code: ${receiptNumber || "Not provided"}. This payment is not yet linked to a Betech receipt or order.`,
+      `BETECH PAYMENT ALERT: KSh ${amount.toLocaleString("en-KE")} received. Account reference: ${reference || "Not provided"}. M-Pesa code: ${receiptNumber || "Not provided"}. This payment is not yet linked to a Betech receipt or order.`,
     ).catch((error) => console.error("[mpesa] unmatched Paybill operations SMS failed", error));
     return;
   }
