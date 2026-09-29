@@ -805,6 +805,11 @@ export default function ReceiptsAdminClient({
         if (appliedFilters.podStatus) {
           params.set("status", appliedFilters.podStatus);
         }
+        if (appliedFilters.customerType === "pod") {
+          // The POD desk is an operational delivery queue. Include unpaid and
+          // pending entries instead of applying the sales-only calculation.
+          params.set("salesOnly", "false");
+        }
         if (isAllPeriodPendingPodQueue) params.set("carryForwardPending", "1");
         params.set("scope", scopeMode);
         if (onlyPos) params.set("onlyPos", "1");
@@ -1965,6 +1970,8 @@ export default function ReceiptsAdminClient({
         base.set("scope", scopeMode);
         if (onlyPos) base.set("onlyPos", "1");
         base.set("customerType", "pod");
+        // POD counts are workflow counts, not paid-sales totals.
+        base.set("salesOnly", "false");
         if (!ledgerEnabled) base.set("includeLedger", "false");
 
         const fetchOne = async (status?: string) => {
@@ -2349,7 +2356,7 @@ export default function ReceiptsAdminClient({
                   POD receipts only
                 </p>
                 <p className="text-sm text-slate-300">
-                  Paid PODs only (marked via “Mark POD paid”).
+                  All POD delivery work, including pending and failed deliveries.
                 </p>
               </div>
               <span className="text-xs text-emerald-300">
@@ -2380,7 +2387,7 @@ export default function ReceiptsAdminClient({
               </button>
               <div className="rounded-xl border border-white/5 bg-slate-950/60 p-3 text-center">
                 <p className="text-xs uppercase tracking-wide text-slate-500">
-                  Paid value
+                  POD value
                 </p>
                 <p className="text-2xl font-semibold text-white">
                   {formatCurrency(podStats.totalValue)}

@@ -197,20 +197,39 @@ async function computePosOnlyReceiptSummary(options: SummaryOptions): Promise<Po
   const summary = await summarizePosReceiptsForPeriod({
     start: options.start, end: options.end,
     userId: options.attendantId ?? (options.scope === "mine" ? options.currentUserId : null),
-    ownershipMode: "staffOnly", supportPricingScope: "any", paymentScope: "paidOnly",
+    ownershipMode: "staffOnly", supportPricingScope: "any", paymentScope: options.salesOnly === false ? "all" : "paidOnly",
     docType: options.docType, paymentMethod: options.paymentMethod, search: options.search,
     customerType: options.customerType, podStatus: options.podStatus,
   });
+  // The administrator POD panel is a delivery-work queue. Pending PODs have
+  // no sales-recognition date yet, so its count/value must come from the POD
+  // records themselves rather than the paid-sales calculation.
+  const isOperationalPodQueue =
+    options.salesOnly === false && options.customerType?.toLowerCase() === "pod";
+  const podQueueRows = isOperationalPodQueue
+    ? summary.receiptBreakdown.filter((row) => row.reason !== "Cancelled")
+    : [];
+  const podQueueValue = podQueueRows.reduce((sum, row) => sum + Number(row.sales ?? 0), 0);
+  const podQueueItems = podQueueRows.reduce((sum, row) => sum + Number(row.itemCount ?? 0), 0);
+  const podQueuePaymentTotals = podQueueRows.reduce(
+    (totals, row) => {
+      const bucket = row.paymentMethod === "CASH" ? totals.cash : totals.mpesa;
+      bucket.totalSales += Number(row.sales ?? 0);
+      bucket.count += 1;
+      return totals;
+    },
+    { mpesa: { totalSales: 0, count: 0 }, cash: { totalSales: 0, count: 0 } },
+  );
   const contributors: ProfitReceiptContributor[] = summary.receiptBreakdown.filter(row => row.eligible).map(row => ({
     source: "pos", id: row.receiptId, key: buildReceiptKey(row.receiptKey, row.receiptId), receiptNumber: row.receiptKey,
     sellingTotal: row.eligibleSales, buyingTotal: row.buyingTotal ?? 0, profit: row.profit,
   }));
   const awaitingPricingCount = summary.receiptBreakdown.filter(row => row.reason === "Awaiting complete buying prices").length;
-  return { totalSales: summary.totalSales, totalCost: contributors.reduce((sum, row) => sum + row.buyingTotal, 0),
+  return { totalSales: isOperationalPodQueue ? podQueueValue : summary.totalSales, totalCost: contributors.reduce((sum, row) => sum + row.buyingTotal, 0),
     totalProfit: summary.totalProfit, totalProfitPriced: summary.totalProfit, totalProfitInclusive: summary.totalProfit,
-    receiptsCount: summary.totalReceipts, posReceiptsCount: summary.totalReceipts, posTotalSales: summary.totalSales,
-    itemsCount: summary.totalItems, hasCompleteCosts: awaitingPricingCount === 0, awaitingPricingCount,
-    paymentTotals: { mpesa: { totalSales: summary.paymentStats.totalSalesMpesa, count: summary.paymentStats.countMpesaReceipts }, cash: { totalSales: summary.paymentStats.totalSalesCash, count: summary.paymentStats.countCashReceipts } },
+    receiptsCount: isOperationalPodQueue ? podQueueRows.length : summary.totalReceipts, posReceiptsCount: isOperationalPodQueue ? podQueueRows.length : summary.totalReceipts, posTotalSales: isOperationalPodQueue ? podQueueValue : summary.totalSales,
+    itemsCount: isOperationalPodQueue ? podQueueItems : summary.totalItems, hasCompleteCosts: awaitingPricingCount === 0, awaitingPricingCount,
+    paymentTotals: isOperationalPodQueue ? podQueuePaymentTotals : { mpesa: { totalSales: summary.paymentStats.totalSalesMpesa, count: summary.paymentStats.countMpesaReceipts }, cash: { totalSales: summary.paymentStats.totalSalesCash, count: summary.paymentStats.countCashReceipts } },
     profitReceiptIds: contributors.map(row => row.id!), profitContributors: contributors,
   };
 }
