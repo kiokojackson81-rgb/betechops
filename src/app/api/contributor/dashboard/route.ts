@@ -165,6 +165,7 @@ export async function GET() {
   return noStoreJson({
     ok: true,
     earningPerProductKes: PRODUCT_UPLOAD_EARNING_KES,
+    paysThroughPayroll: access.paysThroughPayroll,
     balance,
     products,
     withdrawals,

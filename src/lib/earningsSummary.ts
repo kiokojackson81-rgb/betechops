@@ -7,6 +7,8 @@ import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals"
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
+import { getProductContributorCommissionForPeriod } from "@/lib/productContributor";
+import { isPayrollProductContributorEmail } from "@/lib/productContributorConfig";
 
 export type EarningsSummary = {
   periodKey: string;
@@ -329,11 +331,23 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);
   }
 
-  const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
+  const calculatedProductCommissions = computeProductCommissions({
     newProducts,
     copiedProducts,
     editedProducts,
   });
+  const payrollProductCommission = isPayrollProductContributorEmail(normalizedEmail)
+    ? await getProductContributorCommissionForPeriod({
+        contributorId: opts.userId,
+        start,
+        end,
+      })
+    : 0;
+  const newProductCommission =
+    Number(calculatedProductCommissions.newProductCommission ?? 0) +
+    payrollProductCommission;
+  const copiedCommission = Number(calculatedProductCommissions.copiedCommission ?? 0);
+  const editedCommission = Number(calculatedProductCommissions.editedCommission ?? 0);
 
   let computedGrossCommission = salesCommission + newProductCommission + copiedCommission + editedCommission + commissionTopUpTotal;
 
@@ -350,7 +364,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // overrides). For others prefer a persisted `commissionTotal` when present.
   let finalGrossCommission: number;
   const ledgerPersistedCommission = ledger && (ledger as any).commissionTotal ? Number((ledger as any).commissionTotal) : 0;
-  if (isBrendah || isJeniffer || isPosProfit10) {
+  if (isBrendah || isJeniffer || isPosProfit10 || payrollProductCommission > 0) {
     finalGrossCommission = computedGrossCommission;
   } else if (ledgerPersistedCommission > 0) {
     finalGrossCommission = ledgerPersistedCommission;

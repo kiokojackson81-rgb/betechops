@@ -16,6 +16,15 @@ const withdrawalInput = z.object({
 export async function POST(req: Request) {
   const access = await requireProductContributor();
   if (!access.ok) return access.res;
+  if (access.paysThroughPayroll) {
+    return noStoreJson(
+      {
+        error:
+          "Product upload commission is added automatically to your Betech earnings and cannot be withdrawn separately.",
+      },
+      { status: 409 },
+    );
+  }
   const parsed = withdrawalInput.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success)
     return noStoreJson(

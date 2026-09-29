@@ -162,6 +162,7 @@ export default function ContributorDashboard() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [balance, setBalance] = useState<Balance | null>(null);
   const [earning, setEarning] = useState(5);
+  const [paysThroughPayroll, setPaysThroughPayroll] = useState(false);
   const [form, setForm] = useState(blank());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -188,6 +189,7 @@ export default function ContributorDashboard() {
     setWithdrawals(data.withdrawals || []);
     setBalance(data.balance);
     setEarning(data.earningPerProductKes || 5);
+    setPaysThroughPayroll(Boolean(data.paysThroughPayroll));
   }
   useEffect(() => {
     void load();
@@ -482,8 +484,10 @@ export default function ContributorDashboard() {
             </h1>
             <p className="mt-2 max-w-2xl text-slate-300">
               Create complete products for the Betech website. Every product you
-              create earns {money(earning)}. You can edit your work at any time;
-              products cannot be deleted from this workspace.
+              create earns {money(earning)}{paysThroughPayroll
+                ? " as product commission in your Betech earnings."
+                : "."} You can edit your work at any time; products cannot be
+              deleted from this workspace.
             </p>
           </div>
           <button
@@ -519,9 +523,13 @@ export default function ContributorDashboard() {
               {[
                 ["Products created", balance?.productsCreated ?? 0],
                 ["Total earned", money(balance?.totalEarnedKes ?? 0)],
-                ["Available to withdraw", money(balance?.availableKes ?? 0)],
-                ["Awaiting payment", money(balance?.pendingKes ?? 0)],
-                ["Already paid", money(balance?.paidKes ?? 0)],
+                ...(paysThroughPayroll
+                  ? [["Payroll product commission", money(balance?.totalEarnedKes ?? 0)]]
+                  : [
+                      ["Available to withdraw", money(balance?.availableKes ?? 0)],
+                      ["Awaiting payment", money(balance?.pendingKes ?? 0)],
+                      ["Already paid", money(balance?.paidKes ?? 0)],
+                    ]),
               ].map(([label, value]) => (
                 <div
                   key={String(label)}
@@ -536,6 +544,16 @@ export default function ContributorDashboard() {
                 </div>
               ))}
             </section>
+            {paysThroughPayroll ? (
+              <section className="mx-auto max-w-xl rounded-3xl border border-emerald-400/20 bg-emerald-400/5 p-5">
+                <h2 className="text-xl font-black">Added to your earnings automatically</h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  Each product you create adds {money(earning)} to your current
+                  Betech earnings as product commission. This credit is paid
+                  through payroll, so it is not available as a separate withdrawal.
+                </p>
+              </section>
+            ) : (
             <section className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-slate-900/80 p-5">
               <h2 className="text-xl font-black">Request withdrawal</h2>
               <p className="mt-1 text-sm text-slate-400">
@@ -591,6 +609,7 @@ export default function ContributorDashboard() {
                 )}
               </div>
             </section>
+            )}
           </>
         ) : (
           <>

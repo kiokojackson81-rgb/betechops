@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import {
-  PRODUCT_CONTRIBUTOR_EMAIL,
-  PRODUCT_UPLOAD_EARNING_KES,
+  isPayrollProductContributorEmail,
+  isProductContributorEmail,
 } from "@/lib/productContributorConfig";
 import { sendTransactionalSms } from "@/lib/africasTalking";
 
@@ -23,14 +23,19 @@ export async function requireProductContributor() {
       res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
-  if (user.email?.trim().toLowerCase() !== PRODUCT_CONTRIBUTOR_EMAIL) {
+  if (!isProductContributorEmail(user.email)) {
     return {
       ok: false as const,
       res: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
     };
   }
   await ensureProductContributorSchema();
-  return { ok: true as const, userId: user.id, session };
+  return {
+    ok: true as const,
+    userId: user.id,
+    session,
+    paysThroughPayroll: isPayrollProductContributorEmail(user.email),
+  };
 }
 
 export async function requireProductContributorAdmin() {
@@ -172,4 +177,22 @@ export async function getContributorBalance(
     pendingKes,
     availableKes: Math.max(0, totalEarnedKes - paidKes - pendingKes),
   };
+}
+
+/** Product credits that are paid through the staff payroll for a period. */
+export async function getProductContributorCommissionForPeriod(input: {
+  contributorId: string;
+  start: Date;
+  end: Date;
+}) {
+  await ensureProductContributorSchema();
+  const [row] = await prisma.$queryRawUnsafe<Array<{ amountKes: number }>>(
+    `SELECT COALESCE(SUM("earningKes"), 0)::int AS "amountKes"
+     FROM "ProductContributorProduct"
+     WHERE "contributorId" = $1 AND "createdAt" >= $2 AND "createdAt" <= $3`,
+    input.contributorId,
+    input.start,
+    input.end,
+  );
+  return Number(row?.amountKes ?? 0);
 }

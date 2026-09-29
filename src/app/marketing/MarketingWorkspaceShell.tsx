@@ -110,6 +110,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     webOrders: withImpersonation("/marketing/receipts?tab=web-orders"),
     agentOrders: withImpersonation("/marketing/agent-orders"),
     lipaPolePole: withImpersonation("/marketing/lipa-pole-pole"),
+    productUploads: "/contributor",
     quotations: withImpersonation("/marketing/receipts?tab=quotations"),
     products: withImpersonation("/marketing/products"),
     earnings: withImpersonation("/marketing/earnings"),
@@ -142,6 +143,8 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     identity.email.toLowerCase() === "brendah@betech.co.ke" ||
     identity.role.toUpperCase() === "ADMIN" ||
     identity.role.toUpperCase() === "SUPERVISOR";
+  const canUseProductContributorDesk =
+    identity.email.toLowerCase() === "stephen@betech.co.ke";
 
   const coreMobileLinks = [
     { key: "dashboard" as const, href: links.dashboard, label: "Dashboard", icon: LayoutDashboard },
@@ -184,6 +187,9 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
                 <Link href={links.quotations} className={navClass(isActive("quotations"))}><FileText className="h-4 w-4" />Quotations</Link>
                 {canManageProducts ? (
                   <Link href={links.products} className={navClass(isActive("products"))}><PackageSearch className="h-4 w-4 text-amber-200" />Website products</Link>
+                ) : null}
+                {canUseProductContributorDesk && !impersonateId ? (
+                  <Link href={links.productUploads} className={navClass()}><PackageSearch className="h-4 w-4 text-emerald-200" />Product uploads</Link>
                 ) : null}
               </div>
             </div>

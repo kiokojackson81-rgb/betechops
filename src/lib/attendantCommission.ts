@@ -10,6 +10,10 @@ import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals"
 import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
 import { getOrCreateCommissionPeriod, computeProductCommissions, computeSalesCommissionFromTiers, computeJenifferProratedCommission } from "@/lib/commission";
 import { computeOnlinePeriodCommission, computeBrendahDirectCommission } from "@/lib/onlineCommission";
+import {
+  getProductContributorCommissionForPeriod,
+} from "@/lib/productContributor";
+import { isPayrollProductContributorEmail } from "@/lib/productContributorConfig";
 import { type TradingPeriod } from "@/lib/tradingPeriod";
 
 export type AttendantCommissionSummary = {
@@ -68,11 +72,23 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
   const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
   const marketing = await summarizeMarketingReportsForPeriod({ userId: attendantId, userEmail: user?.email, period });
   const marketingTotals = marketing.totals || { totalNewProducts: 0, totalCopiedProducts: 0, totalEditedProducts: 0 } as any;
-  const { newProductCommission, copiedCommission, editedCommission } = computeProductCommissions({
+  const calculatedProductCommissions = computeProductCommissions({
     newProducts: marketingTotals.totalNewProducts ?? 0,
     copiedProducts: marketingTotals.totalCopiedProducts ?? 0,
     editedProducts: marketingTotals.totalEditedProducts ?? 0,
   });
+  const payrollProductCommission = isPayrollProductContributorEmail(user?.email)
+    ? await getProductContributorCommissionForPeriod({
+        contributorId: attendantId,
+        start,
+        end,
+      })
+    : 0;
+  const newProductCommission =
+    Number(calculatedProductCommissions.newProductCommission ?? 0) +
+    payrollProductCommission;
+  const copiedCommission = Number(calculatedProductCommissions.copiedCommission ?? 0);
+  const editedCommission = Number(calculatedProductCommissions.editedCommission ?? 0);
 
   // Marketplace assignment sales and computed marketplace commission
   const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);

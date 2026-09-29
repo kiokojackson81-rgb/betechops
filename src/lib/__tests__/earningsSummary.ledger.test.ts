@@ -22,9 +22,14 @@ jest.unstable_mockModule('@/lib/supportEntries', () => ({
 }));
 
 jest.unstable_mockModule('@/lib/commission', () => ({
+  getCommissionPeriodForRead: jest.fn().mockResolvedValue({ tiers: [], tradingPeriod: { start: new Date('2025-12-25T00:00:00Z'), end: new Date('2026-01-24T23:59:59.999Z'), key: '2025-12-24_2026-01-24' } }),
   getOrCreateCommissionPeriod: jest.fn().mockResolvedValue({ period: { id: 'p' }, tiers: [], tradingPeriod: { start: new Date('2025-12-25T00:00:00Z'), end: new Date('2026-01-24T23:59:59.999Z'), key: '2025-12-24_2026-01-24' } }),
   computeSalesCommissionFromTiers: jest.fn().mockReturnValue(0),
   computeProductCommissions: jest.fn().mockReturnValue({ newProductCommission: 0, copiedCommission: 0, editedCommission: 0 }),
+}));
+
+jest.unstable_mockModule('@/lib/productContributor', () => ({
+  getProductContributorCommissionForPeriod: jest.fn().mockResolvedValue(0),
 }));
 
 const { getEarningsSummaryForUser } = await import('../earningsSummary');
