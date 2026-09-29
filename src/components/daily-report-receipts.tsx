@@ -268,13 +268,16 @@ export default function DailyReportReceiptsPanel({
         const params = new URLSearchParams();
         params.set("includeItems", "false");
         params.set("size", "80");
+        // Pending POD is an operational queue, not a period report. Never
+        // hide an undelivered order just because a new trading period began.
+        const isAllPeriodPendingPodQueue = podFilter === "pod_pending";
         const startIso = toStartOfDayIso(start ?? undefined);
         const endIso = toEndOfDayIso(end ?? undefined);
-        if (startIso && !carryForwardPending) params.set("start", startIso);
-        if (endIso && !carryForwardPending) params.set("end", endIso);
+        if (startIso && !carryForwardPending && !isAllPeriodPendingPodQueue) params.set("start", startIso);
+        if (endIso && !carryForwardPending && !isAllPeriodPendingPodQueue) params.set("end", endIso);
         if (debouncedQuery) params.set("q", debouncedQuery);
         params.set("scope", "mine");
-        if (carryForwardPending) params.set("carryForwardPending", "1");
+        if (carryForwardPending || isAllPeriodPendingPodQueue) params.set("carryForwardPending", "1");
         if (summarySalesOnly) params.set("summarySalesOnly", "1");
         const settledOnly = podFilter === "settled";
         if (onlyPos) params.set("onlyPos", "1");

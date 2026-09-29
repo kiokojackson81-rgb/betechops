@@ -725,10 +725,13 @@ export default function ReceiptsAdminClient({
           params.set("customerType", activeFilters.customerType);
         if (activeFilters.podStatus)
           params.set("status", activeFilters.podStatus);
+        const isAllPeriodPendingPodQueue =
+          activeFilters.customerType === "pod" && activeFilters.podStatus === "pending";
         const startParam = buildDateParam(activeFilters.start, false);
         const endParam = buildDateParam(activeFilters.end, true);
-        if (startParam) params.set("start", startParam);
-        if (endParam) params.set("end", endParam);
+        if (startParam && !isAllPeriodPendingPodQueue) params.set("start", startParam);
+        if (endParam && !isAllPeriodPendingPodQueue) params.set("end", endParam);
+        if (isAllPeriodPendingPodQueue) params.set("carryForwardPending", "1");
         const isProfitDrilldown = activeSummaryView === "profit";
         params.set("scope", scopeMode);
         if (activeOnlyPos) params.set("onlyPos", "1");
@@ -779,10 +782,12 @@ export default function ReceiptsAdminClient({
       setSummaryLoading(true);
       try {
         const params = new URLSearchParams();
+        const isAllPeriodPendingPodQueue =
+          appliedFilters.customerType === "pod" && appliedFilters.podStatus === "pending";
         const startParam = buildDateParam(appliedFilters.start, false);
         const endParam = buildDateParam(appliedFilters.end, true);
-        if (startParam) params.set("start", startParam);
-        if (endParam) params.set("end", endParam);
+        if (startParam && !isAllPeriodPendingPodQueue) params.set("start", startParam);
+        if (endParam && !isAllPeriodPendingPodQueue) params.set("end", endParam);
         if (appliedFilters.paymentMethod)
           params.set("paymentMethod", appliedFilters.paymentMethod);
         if (appliedFilters.attendantId) {
@@ -800,6 +805,7 @@ export default function ReceiptsAdminClient({
         if (appliedFilters.podStatus) {
           params.set("status", appliedFilters.podStatus);
         }
+        if (isAllPeriodPendingPodQueue) params.set("carryForwardPending", "1");
         params.set("scope", scopeMode);
         if (onlyPos) params.set("onlyPos", "1");
         if (!ledgerEnabled) params.set("includeLedger", "false");
@@ -1964,6 +1970,11 @@ export default function ReceiptsAdminClient({
         const fetchOne = async (status?: string) => {
           const params = new URLSearchParams(base);
           if (status) params.set("status", status);
+          if (status === "pending") {
+            params.delete("start");
+            params.delete("end");
+            params.set("carryForwardPending", "1");
+          }
           const res = await fetch(
             `/api/admin/receipts/summary?${params.toString()}`,
             {

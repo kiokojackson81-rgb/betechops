@@ -18,16 +18,24 @@ export async function GET(request: NextRequest) {
   const debug = debugParam === "true" || debugParam === "1";
   const scopeParam = url.searchParams.get("scope");
   const scope = scopeParam === "global" ? "global" : "mine";
+  const customerType = url.searchParams.get("customerType") || undefined;
+  const podStatus = url.searchParams.get("status") || undefined;
+  // Pending POD remains live operational work until an outcome is recorded.
+  // It must therefore remain visible on the admin desk across all periods.
+  const isAllPeriodPendingPodQueue =
+    customerType?.toLowerCase() === "pod" && podStatus?.toLowerCase() === "pending";
   const period = getTradingPeriodFor(new Date());
-  const start = parseDateParam(url.searchParams.get("start"), period.start);
-  const end = parseDateParam(url.searchParams.get("end"), period.end, true);
+  const start = isAllPeriodPendingPodQueue
+    ? new Date("2000-01-01T00:00:00.000Z")
+    : parseDateParam(url.searchParams.get("start"), period.start);
+  const end = isAllPeriodPendingPodQueue
+    ? new Date("2100-01-01T00:00:00.000Z")
+    : parseDateParam(url.searchParams.get("end"), period.end, true);
   const identity = await resolveTargetUserId(request);
   const userId = identity.resolvedUserId;
   if (scope === "mine" && !userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const customerType = url.searchParams.get("customerType") || undefined;
-  const podStatus = url.searchParams.get("status") || undefined;
   const onlyPos = ["1", "true", "yes"].includes((url.searchParams.get("onlyPos") || "").toLowerCase());
 
   try {

@@ -222,6 +222,10 @@ export async function GET(req: NextRequest) {
   const isSupportDocType = normalizedDocType === "SUPPORT";
   const requestedCustomerType = (url.searchParams.get("customerType") || "").toLowerCase().trim();
   const isProjectOnlyView = requestedCustomerType === "project";
+  // Pending POD is outstanding delivery work. It must remain visible across
+  // every trading period until the delivery outcome is recorded.
+  const isAllPeriodPendingPodQueue =
+    requestedCustomerType === "pod" && (url.searchParams.get("status") || "").toLowerCase() === "pending";
   const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
   const includeMarketingReceipts =
     !isProjectOnlyView && !onlyPos && (isMarketingDocType || (includeLedger && !normalizedDocType));
@@ -268,7 +272,7 @@ export async function GET(req: NextRequest) {
   };
 
   const and: Prisma.ReceiptWhereInput[] = [];
-  const shouldApplyGeneratedAtWindow = !carryForwardPending && !isProjectOnlyView;
+  const shouldApplyGeneratedAtWindow = !carryForwardPending && !isAllPeriodPendingPodQueue && !isProjectOnlyView;
   if (shouldApplyGeneratedAtWindow) {
     and.push({ createdAt: { lte: endDate } });
   }
@@ -1051,8 +1055,7 @@ export async function GET(req: NextRequest) {
   // desk asks for pending POD work, keep it visible across trading periods so
   // an unresolved delivery cannot disappear merely because its receipt was
   // created before the currently selected date range.
-  const includePendingPodAcrossPeriods =
-    carryForwardPending && customerType === "pod" && podStatus === "pending";
+  const includePendingPodAcrossPeriods = customerType === "pod" && podStatus === "pending";
   const filteredByEffectiveDate = isProjectOnlyView
     ? deduped
     : deduped.filter((row) => {
