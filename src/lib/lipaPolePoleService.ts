@@ -206,6 +206,7 @@ export type SerializedLppAccount = {
   termsVersion: string | null;
   quantity: number;
   agreedUnitPrice: number;
+  createdById: string | null;
   assignedToId: string | null;
   assignedToName: string | null;
   salespersonId: string | null;
@@ -2545,6 +2546,7 @@ export async function getSerializedLppAccountDetail(
     termsVersion: lpp.termsVersion ?? null,
     quantity: Number(lpp.quantity ?? 1),
     agreedUnitPrice: Number(lpp.agreedUnitPrice ?? 0),
+    createdById: lpp.createdById ?? null,
     assignedToId: lpp.assignedToId,
     assignedToName: meta.assignedToName,
     salespersonId: lpp.salespersonId ?? null,
@@ -2604,6 +2606,7 @@ export async function listSerializedLppAccounts(
     q?: string;
     status?: string | null;
     assignedToId?: string | null;
+    createdById?: string | null;
     customerId?: string | null;
     take?: number;
   },
@@ -2612,6 +2615,7 @@ export async function listSerializedLppAccounts(
   const q = trimToNull(input?.q ?? null);
   const status = trimToNull(input?.status ?? null);
   const assignedToId = trimToNull(input?.assignedToId ?? null);
+  const createdById = trimToNull(input?.createdById ?? null);
   const customerId = trimToNull(input?.customerId ?? null);
   const take = Math.min(200, Math.max(1, Number(input?.take ?? 100)));
 
@@ -2643,6 +2647,7 @@ export async function listSerializedLppAccounts(
     WHERE 1 = 1
       ${status ? Prisma.sql`AND lpp."status"::text = ${status}` : Prisma.empty}
       ${assignedToId ? Prisma.sql`AND lpp."assignedToId" = ${assignedToId}` : Prisma.empty}
+      ${createdById ? Prisma.sql`AND lpp."createdById" = ${createdById}` : Prisma.empty}
       ${customerId ? Prisma.sql`AND lpp."customerId" = ${customerId}` : Prisma.empty}
       ${
         q
@@ -2712,6 +2717,7 @@ export async function listSerializedLppAccounts(
       termsVersion: row.termsVersion ?? null,
       quantity: Number(row.quantity ?? 1),
       agreedUnitPrice: Number(row.agreedUnitPrice ?? 0),
+      createdById: row.createdById ?? null,
       assignedToId: row.assignedToId,
       assignedToName: row.assignedToName,
       salespersonId: row.salespersonId ?? null,

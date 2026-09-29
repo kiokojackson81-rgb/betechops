@@ -5,6 +5,7 @@ import {
   type LipaPolePoleSearchParams,
 } from "@/app/admin/lipa-pole-pole/loadLipaPolePoleAdminWorkspace";
 import { canAccessOnlineSupervisorWorkspace } from "@/lib/onlineSupervisorAccess";
+import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,10 @@ export default async function AttendantLipaPolePolePage({
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
   const resolved = await Promise.resolve(searchParams ?? {});
-  if (!(await canAccessOnlineSupervisorWorkspace(resolved.impersonateId))) {
+  const session = await auth();
+  const role = String((session?.user as { role?: string } | undefined)?.role ?? "").toUpperCase();
+  const isStaff = ["ADMIN", "SUPERVISOR", "ATTENDANT"].includes(role);
+  if (!isStaff && !(await canAccessOnlineSupervisorWorkspace(resolved.impersonateId))) {
     redirect("/not-authorized");
   }
 

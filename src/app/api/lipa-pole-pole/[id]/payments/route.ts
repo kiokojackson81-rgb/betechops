@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getActorId, noStoreJson, requireRole } from "@/lib/api";
-import { getLppAccountSummary, recordLppPayment } from "@/lib/lipaPolePoleService";
+import { getLppAccountSummary, getSerializedLppAccountDetail, recordLppPayment } from "@/lib/lipaPolePoleService";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +53,11 @@ export async function POST(req: Request, context: ParamsContext) {
   const { id } = await resolveParams(context);
 
   try {
+    const existing = await getSerializedLppAccountDetail(id);
+    const isOwnAccount = existing.account.createdById === actorId;
+    if (auth.role === "ATTENDANT" && !isOwnAccount) {
+      return noStoreJson({ error: "You can only record payments for Lipa Pole Pole orders you created." }, { status: 403 });
+    }
     const result = await recordLppPayment({
       lipaPolePoleId: id,
       amount: parsed.data.amount,
@@ -61,6 +66,7 @@ export async function POST(req: Request, context: ParamsContext) {
       receivedById: actorId,
       receivedAt: parsed.data.receivedAt ?? null,
       notes: parsed.data.notes ?? null,
+      status: auth.role === "ADMIN" ? "SUCCESS" : "PENDING",
       allowOverpaymentOverride:
         auth.role === "ADMIN" &&
         (parsed.data.allowOverpaymentOverride ?? false),

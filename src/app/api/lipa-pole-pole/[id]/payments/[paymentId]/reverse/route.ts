@@ -36,7 +36,7 @@ function mapErrorStatus(message: string) {
 }
 
 export async function POST(req: Request, context: ParamsContext) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
+  const auth = await requireRole(["ADMIN"]);
   if (!auth.ok) return auth.res;
 
   const body = await req.json().catch(() => ({}));

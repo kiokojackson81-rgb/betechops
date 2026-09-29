@@ -8,7 +8,7 @@ type ParamsContext = { params: Promise<{ id: string; paymentId: string }> };
 const schema = z.object({ reason: z.string().trim().min(3).max(1000) });
 
 export async function POST(request: Request, context: ParamsContext) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
+  const auth = await requireRole(["ADMIN"]);
   if (!auth.ok) return auth.res;
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });

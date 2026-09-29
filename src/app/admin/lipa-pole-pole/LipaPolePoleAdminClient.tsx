@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import MpesaStkPaymentPanel from "@/app/shop/_components/MpesaStkPaymentPanel";
 import PosProductSelectorModal, { type PosCatalogProduct } from "@/components/receipts/PosProductSelectorModal";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
@@ -43,6 +44,7 @@ export type LppListItem = {
   itemWarranty: string | null;
   quantity: number;
   agreedUnitPrice: number;
+  createdById: string | null;
   assignedToId: string | null;
   assignedToName: string | null;
   salespersonId: string | null;
@@ -240,7 +242,7 @@ type SearchSelectorProps = {
 };
 
 type DetailsTab = "OVERVIEW" | "PAYMENTS" | "FOLLOW_UPS" | "TIMELINE";
-type ActionModal = "PAYMENT" | "ASSIGN" | "FOLLOW_UP" | "PROMISE" | "RELEASE" | null;
+type ActionModal = "PAYMENT" | "STK_PROMPT" | "ASSIGN" | "FOLLOW_UP" | "PROMISE" | "RELEASE" | null;
 type QuickFilter = "ALL" | "ACTIVE" | "DUE_TODAY" | "DUE_WEEK" | "OVERDUE" | "FULLY_PAID" | "CANCELLED";
 type InstallmentFrequency = "WEEKLY" | "MONTHLY";
 
@@ -499,6 +501,7 @@ export default function LipaPolePoleAdminClient({
   const [isReleasing, setIsReleasing] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [canDeleteAccounts, setCanDeleteAccounts] = useState(false);
+  const [canReviewPayments, setCanReviewPayments] = useState(false);
   const [isSubmittingFollowUp, setIsSubmittingFollowUp] = useState(false);
   const [isSubmittingPromise, setIsSubmittingPromise] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(embeddedCreateMode);
@@ -597,11 +600,13 @@ export default function LipaPolePoleAdminClient({
         if (!cancelled) {
           setDefaultStaffId(sessionUserId);
           setCanDeleteAccounts(sessionRole === "ADMIN");
+          setCanReviewPayments(sessionRole === "ADMIN");
         }
       } catch {
         if (!cancelled) {
           setDefaultStaffId(null);
           setCanDeleteAccounts(false);
+          setCanReviewPayments(false);
         }
       }
     })();
@@ -1049,7 +1054,12 @@ export default function LipaPolePoleAdminClient({
         }),
       });
       await refreshList(selectedId);
-      setBanner({ tone: "success", text: "Payment recorded." });
+      setBanner({
+        tone: "success",
+        text: canReviewPayments
+          ? "Payment recorded."
+          : "Payment submitted for administrator confirmation.",
+      });
       setPaymentForm({
         amount: "",
         method: "MPESA",
@@ -1677,6 +1687,7 @@ export default function LipaPolePoleAdminClient({
                                   onReversePayment={handleReversePayment}
                                   onVerifyPayment={(paymentId) => void handleReviewPayment(paymentId, "VERIFY")}
                                   onRejectPayment={(paymentId) => void handleReviewPayment(paymentId, "REJECT")}
+                                  canReviewPayments={canReviewPayments}
                                   onDeleteAccount={() => void handleDeleteAccount()}
                                   isConvertingPos={isConvertingPos}
                                   isConvertingProject={isConvertingProject}
@@ -2092,6 +2103,8 @@ export default function LipaPolePoleAdminClient({
           title={
             actionModal === "PAYMENT"
               ? "Record Payment"
+              : actionModal === "STK_PROMPT"
+                ? "Prompt Customer to Pay"
               : actionModal === "ASSIGN"
                 ? "Assign / Reassign Account"
                 : actionModal === "FOLLOW_UP"
@@ -2135,13 +2148,25 @@ export default function LipaPolePoleAdminClient({
               </Field>
               <div className="flex gap-3">
                 <button type="submit" className={primaryButtonClass} disabled={isSubmittingPayment}>
-                  {isSubmittingPayment ? "Saving..." : "Record payment"}
+                  {isSubmittingPayment ? "Saving..." : canReviewPayments ? "Record payment" : "Submit for admin confirmation"}
                 </button>
                 <button type="button" className={secondaryButtonClass} onClick={() => setActionModal(null)}>
                   Cancel
                 </button>
               </div>
             </form>
+          ) : null}
+
+          {actionModal === "STK_PROMPT" ? (
+            <MpesaStkPaymentPanel
+              resourceType="LPP"
+              reference={activeDetail.account.reference}
+              amountDue={activeDetail.summary.balance}
+              initialPhone={activeDetail.account.customerPhone}
+              allowAmountChoice
+              actionLabel="Send M-Pesa prompt"
+              onSuccess={() => void refreshList(selectedId)}
+            />
           ) : null}
 
           {actionModal === "ASSIGN" ? (
@@ -2260,6 +2285,7 @@ function ExpandedRowDetails({
   onReversePayment,
   onVerifyPayment,
   onRejectPayment,
+  canReviewPayments,
   onDeleteAccount,
   isConvertingPos,
   isConvertingProject,
@@ -2277,6 +2303,7 @@ function ExpandedRowDetails({
   onReversePayment: (paymentId: string) => void;
   onVerifyPayment: (paymentId: string) => void;
   onRejectPayment: (paymentId: string) => void;
+  canReviewPayments: boolean;
   onDeleteAccount: () => void;
   isConvertingPos: boolean;
   isConvertingProject: boolean;
@@ -2474,6 +2501,9 @@ function ExpandedRowDetails({
                       <button type="button" className={primaryButtonClass} onClick={() => onOpenAction("PAYMENT")}>
                         Record Payment
                       </button>
+                      <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("STK_PROMPT")}>
+                        Prompt customer to pay
+                      </button>
                       <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("FOLLOW_UP")}>
                         Follow Up
                       </button>
@@ -2528,12 +2558,12 @@ function ExpandedRowDetails({
                           </span>
                         </td>
                         <td className="py-3 text-right">
-                          {payment.status === "PENDING" ? (
+                          {payment.status === "PENDING" && canReviewPayments ? (
                             <div className="flex justify-end gap-3">
                               <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300 hover:text-emerald-200" onClick={() => onVerifyPayment(payment.id)}>Verify</button>
                               <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-300 hover:text-rose-200" onClick={() => onRejectPayment(payment.id)}>Reject</button>
                             </div>
-                          ) : payment.status === "SUCCESS" ? (
+                          ) : payment.status === "SUCCESS" && canReviewPayments ? (
                             <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-200 transition hover:text-rose-100" onClick={() => void onReversePayment(payment.id)}>
                               Reverse
                             </button>
@@ -2640,6 +2670,9 @@ function ExpandedRowDetails({
             <>
               <button type="button" className={primaryButtonClass} onClick={() => onOpenAction("PAYMENT")}>
                 Record Payment
+              </button>
+              <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("STK_PROMPT")}>
+                Prompt customer to pay
               </button>
               <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("FOLLOW_UP")}>
                 Follow Up

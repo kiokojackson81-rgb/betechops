@@ -27,7 +27,11 @@ export async function GET(_req: Request, context: ParamsContext) {
 
   try {
     const detail = await getSerializedLppAccountDetail(id);
-    if (auth.role === "ATTENDANT" && !auth.isBenjamin && detail.account.assignedToId !== actorId) {
+    if (
+      auth.role === "ATTENDANT" &&
+      !auth.isBenjamin &&
+      detail.account.createdById !== actorId
+    ) {
       return noStoreJson({ error: "Forbidden" }, { status: 403 });
     }
     return noStoreJson({ ok: true, ...detail });

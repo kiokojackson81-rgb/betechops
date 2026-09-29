@@ -223,6 +223,7 @@ export async function POST(req: Request) {
         ? {
             ...parsed.data.initialPayment,
             receivedById: actorId,
+            status: auth.role === "ADMIN" ? "SUCCESS" : "PENDING",
           }
         : null,
       assignment: {
@@ -263,13 +264,14 @@ export async function GET(req: Request) {
     (await getActorId());
 
   const requestedAssignedToId = (searchParams.get("assignedToId") || "").trim() || null;
-  const assignedToId =
-    auth.role === "ATTENDANT" && !auth.isBenjamin ? actorId : requestedAssignedToId;
+  const staffOwnOrdersOnly = auth.role === "ATTENDANT" && !auth.isBenjamin;
+  const assignedToId = staffOwnOrdersOnly ? null : requestedAssignedToId;
 
   const items = await listSerializedLppAccounts({
     q: q ?? undefined,
     status: status ?? undefined,
     assignedToId: assignedToId ?? undefined,
+    createdById: staffOwnOrdersOnly ? actorId : undefined,
     take: limit,
   });
 

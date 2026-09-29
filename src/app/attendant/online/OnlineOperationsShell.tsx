@@ -164,14 +164,18 @@ export default function OnlineOperationsShell({
               </div>
             </div>
 
+            <div>
+              <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Customer accounts</div>
+              <button type="button" onClick={onOpenLipaPolePole} className={`${navItemClass} ${activeClass("/attendant/online/lipa-pole-pole")} w-full text-left`}>
+                <HandCoins className="h-4 w-4" />
+                My Lipa Pole Pole orders
+              </button>
+            </div>
+
             {isSupervisor ? (
               <div>
                 <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Supervisor tools</div>
                 <div className="space-y-1">
-                  <button type="button" onClick={onOpenLipaPolePole} className={`${navItemClass} ${activeClass("/attendant/online/lipa-pole-pole")} w-full text-left`}>
-                    <HandCoins className="h-4 w-4" />
-                    Lipa Pole Pole
-                  </button>
                   <button type="button" onClick={onOpenPerformance} className={`${navItemClass} ${activePath.endsWith("/performance") || activePath.includes("/performance/week") ? "border-cyan-400/40 bg-cyan-400/10 text-white" : ""} w-full text-left`}>
                     <BarChart3 className="h-4 w-4" />
                     Performance
@@ -262,12 +266,14 @@ export default function OnlineOperationsShell({
                 <a href={payslipHref} download className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-center text-xs text-cyan-100">Payslip PDF</a>
               </div>
             </details>
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+              <button type="button" onClick={onOpenLipaPolePole} className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm ${activeClass("/attendant/online/lipa-pole-pole") ? "border-cyan-400/40 bg-cyan-400/10 text-white" : "border-white/10 text-slate-200"}`}>
+                <HandCoins className="h-4 w-4" /> My Lipa Pole Pole orders
+              </button>
+            </div>
             {isSupervisor ? (
               <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                 <>
-                  <button type="button" onClick={onOpenLipaPolePole} className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm ${activeClass("/attendant/online/lipa-pole-pole") ? "border-cyan-400/40 bg-cyan-400/10 text-white" : "border-white/10 text-slate-200"}`}>
-                    <HandCoins className="h-4 w-4" /> Lipa Pole Pole
-                  </button>
                   <button type="button" onClick={onOpenPerformance} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200">
                     <BarChart3 className="h-4 w-4" /> Performance
                   </button>

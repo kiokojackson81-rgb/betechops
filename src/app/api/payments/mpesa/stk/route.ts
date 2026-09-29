@@ -22,11 +22,19 @@ const requestSchema = z.object({
 
 async function assertCustomerOwnsPrivateResource(resourceType: "SITE_VISIT" | "LPP" | "INSTALLATION_PROJECT", reference: string) {
   const session = await auth();
-  const user = session?.user as { id?: string | null; phone?: string | null; email?: string | null } | undefined;
+  const user = session?.user as { id?: string | null; phone?: string | null; email?: string | null; role?: string | null } | undefined;
   if (!user?.id) throw Object.assign(new Error("Sign in to pay this record."), { status: 401 });
   if (resourceType === "LPP") {
-    const lpp = await prisma.lipaPolePole.findFirst({ where: { reference: { equals: reference, mode: "insensitive" } }, select: { customerId: true } });
-    if (!lpp || lpp.customerId !== user.id) throw Object.assign(new Error("Payment record not found."), { status: 404 });
+    const lpp = await prisma.lipaPolePole.findFirst({
+      where: { reference: { equals: reference, mode: "insensitive" } },
+      select: { customerId: true, createdById: true, assignedToId: true },
+    });
+    const role = String(user.role || "").toUpperCase();
+    const isOperationsStaff = ["ADMIN", "SUPERVISOR", "ATTENDANT"].includes(role);
+    const mayPrompt = isOperationsStaff
+      ? role !== "ATTENDANT" || lpp?.createdById === user.id
+      : lpp?.customerId === user.id;
+    if (!lpp || !mayPrompt) throw Object.assign(new Error("Payment record not found."), { status: 404 });
     return;
   }
   if (resourceType === "INSTALLATION_PROJECT") {

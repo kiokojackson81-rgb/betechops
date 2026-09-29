@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 type ParamsContext = { params: Promise<{ id: string; paymentId: string }> };
 
 export async function POST(_request: Request, context: ParamsContext) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
+  // A staff-entered manual payment remains pending until finance/admin review.
+  const auth = await requireRole(["ADMIN"]);
   if (!auth.ok) return auth.res;
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
   const { id, paymentId } = await context.params;
