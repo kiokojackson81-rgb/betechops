@@ -243,7 +243,6 @@ export async function summarizePosReceiptsForPeriod(period: {
           ...(period.docType ? [{ docType: period.docType as any }] : []),
           ...(ownerOr ? [{ OR: ownerOr }] : []),
           ...(period.paymentMethod ? [{ data: { path: ["paymentMethod"], equals: period.paymentMethod } }] : []),
-          ...(period.customerType === "pod" ? [{ data: { path: ["customerType"], equals: "pod" } }] : []),
           ...(period.podStatus ? [{ data: { path: ["podDelivery", "status"], equals: period.podStatus === "failed" ? "delivery_failed" : period.podStatus } }] : []),
           ...(period.search ? [{ OR: [
             { receiptNumber: { contains: period.search, mode: "insensitive" as const } },
@@ -288,6 +287,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   await attachReceiptPricingEvidence(receipts, client);
   const isPodReceipt = (r: any) => Boolean(r?.data && typeof r.data === "object" && (r.data as any).podDelivery);
   const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+  const requestedPodStatus = period.podStatus === "failed" ? "delivery_failed" : period.podStatus?.toLowerCase();
   const isPodPaid = (r: any) => Boolean((r?.data as any)?.podDelivery?.paidAt);
   const isPosPaid = (r: any) => {
     const paymentStatus = (r?.order?.paymentStatus ?? "").toString().toUpperCase().trim();
@@ -306,6 +306,13 @@ export async function summarizePosReceiptsForPeriod(period: {
   //   POD counts once delivered and the linked order is already PAID, even if
   //   the separate POD `paidAt` marker has not been set yet.
   const filteredReceipts = receipts
+    .filter((receipt) => {
+      if (period.customerType !== "pod") return true;
+      // Current POD receipts are reliably identified by the podDelivery
+      // object. Older rows may not have the legacy customerType="pod" flag.
+      if (!isPodReceipt(receipt)) return false;
+      return !requestedPodStatus || podStatusOf(receipt) === requestedPodStatus;
+    })
     .filter((r: any) => {
       if (period.paymentScope === "all") return !isReceiptCancelledForSales(r) && isCompletedProjectReceiptForSales(r);
       return receiptFinancialExclusion(r) === null;
