@@ -22,6 +22,7 @@ type DailyReportReceiptRow = {
   podDeliveryStatus?: string | null;
   podDeliveryNote?: string | null;
   podEvidenceUrl?: string | null;
+  podReturnTrackingNumber?: string | null;
   podDeliveryFee?: number | null;
   detailUrl?: string | null;
   isProjectReceipt?: boolean;
@@ -204,6 +205,7 @@ export default function DailyReportReceiptsPanel({
   const [podActionReason, setPodActionReason] = useState("");
   const [podEvidenceUrl, setPodEvidenceUrl] = useState("");
   const [podEvidenceFileName, setPodEvidenceFileName] = useState("");
+  const [podReturnTrackingNumber, setPodReturnTrackingNumber] = useState("");
   const [podDeliveryFee, setPodDeliveryFee] = useState("");
   const [podUploading, setPodUploading] = useState(false);
   const [podSaving, setPodSaving] = useState(false);
@@ -398,6 +400,7 @@ export default function DailyReportReceiptsPanel({
     setPodActionReason("");
     setPodEvidenceUrl(receipt.podEvidenceUrl ?? "");
     setPodEvidenceFileName("");
+    setPodReturnTrackingNumber(receipt.podReturnTrackingNumber ?? "");
     setPodDeliveryFee(receipt.podDeliveryFee != null ? String(receipt.podDeliveryFee) : "");
     setActionError(null);
   };
@@ -434,6 +437,14 @@ export default function DailyReportReceiptsPanel({
 
   const submitPodAction = async () => {
     if (!podActionReceipt) return;
+    if (!podEvidenceUrl.trim()) {
+      setActionError("Attach delivery evidence before saving the POD outcome.");
+      return;
+    }
+    if (podActionStatus === "delivery_failed" && !podReturnTrackingNumber.trim()) {
+      setActionError("Enter the return tracking or ticket number before marking delivery failed.");
+      return;
+    }
     setPodSaving(true);
     setActionError(null);
     try {
@@ -446,6 +457,7 @@ export default function DailyReportReceiptsPanel({
           reason: podActionReason.trim() || undefined,
           evidenceUrl: podEvidenceUrl.trim() || undefined,
           evidenceFileName: podEvidenceFileName.trim() || undefined,
+          returnTrackingNumber: podReturnTrackingNumber.trim() || undefined,
           deliveryFee: podDeliveryFee.trim() === "" ? undefined : Number(podDeliveryFee),
         }),
       });
@@ -667,10 +679,11 @@ export default function DailyReportReceiptsPanel({
                     : "border-white/10 bg-white/[0.03]"
                 }`}
               >
-                <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start xl:grid-cols-[72px_minmax(0,1.35fr)_minmax(0,.7fr)_minmax(0,.8fr)_minmax(0,.9fr)_minmax(0,1.05fr)] xl:items-center">
-                  <div>
+                <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start xl:grid-cols-[100px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,.8fr)_minmax(0,.72fr)_minmax(0,.9fr)_minmax(0,.95fr)_minmax(150px,1fr)] xl:items-stretch">
+                  <div className="xl:border-r xl:border-white/10 xl:pr-4">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Type</span>
                     <span
-                      className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                      className={`mt-1 inline-flex h-12 w-12 items-center justify-center rounded-full border text-[11px] font-semibold uppercase tracking-[0.12em] ${
                         receipt.isPodDelivery
                           ? "border-yellow-400/30 bg-yellow-500/10 text-yellow-200"
                           : "border-sky-400/25 bg-sky-400/10 text-sky-100"
@@ -679,26 +692,44 @@ export default function DailyReportReceiptsPanel({
                       {receipt.isPodDelivery ? "POD" : "POS"}
                     </span>
                   </div>
-                  <div className="min-w-0 md:pr-3">
+                  <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Customer</span>
                     <Link href={customerProfileHref} className="line-clamp-2 font-semibold leading-5 text-white transition hover:text-cyan-200">
                       {receipt.customerName ?? "-"}
                     </Link>
                     <div className="mt-1 break-normal text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
-                    <div className="mt-1 break-all text-xs text-slate-500">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.docType ?? receipt.id}</div>
+                    {!cancelled && receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
+                      <button
+                        type="button"
+                        onClick={() => openPodAction(receipt)}
+                        className="mt-3 rounded-lg border border-yellow-400/40 bg-yellow-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-yellow-100 hover:bg-yellow-500/20"
+                      >
+                        Record delivery outcome
+                      </button>
+                    ) : null}
                   </div>
-                  <div className="min-w-0 text-sm text-slate-300">
-                    <div>{receipt.docType ?? "Receipt"}</div>
-                    <div className="mt-1 text-xs text-slate-500">{receipt.attendantName ?? "Attendant unknown"}</div>
+                  <div className="min-w-0 text-sm text-slate-300 xl:border-r xl:border-white/10 xl:pr-4">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Receipt no.</span>
+                    <div className="mt-1 break-all font-medium text-slate-100">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.id}</div>
+                    <div className="mt-1 text-xs text-slate-500">{receipt.docType ?? "Receipt"}</div>
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 text-sm text-slate-300 xl:border-r xl:border-white/10 xl:pr-4">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Receipt owner</span>
+                    <div className="mt-1 font-medium text-slate-100">{receipt.attendantName ?? "Unassigned"}</div>
+                  </div>
+                  <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Amount</span>
                     <div className={cancelled ? "font-semibold text-rose-200" : "font-semibold text-emerald-300"}>{formatKES(receipt.total)}</div>
                     {receipt.isPodDelivery && receipt.podDeliveryFee != null ? (
                       <div className="mt-1 text-xs text-emerald-200">Fee {formatKES(receipt.podDeliveryFee)}</div>
-                    ) : (
-                      <div className="mt-1 text-xs text-slate-500">{receipt.customerEmail || "No email"}</div>
-                    )}
+                    ) : null}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Email</span>
+                    <div className="mt-1 break-all text-sm text-slate-300">{receipt.customerEmail || "—"}</div>
+                  </div>
+                  <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">POD status</span>
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
                         cancelled
@@ -724,18 +755,13 @@ export default function DailyReportReceiptsPanel({
                         Payment {projectPaymentLabel}
                       </div>
                     ) : null}
-                    <div className="mt-2 text-xs text-slate-500">{formatDateTime(receipt.createdAt)}</div>
                   </div>
-                  <div className="grid min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:col-span-2 xl:col-span-1 xl:grid-cols-1 2xl:grid-cols-2">
-                    {!cancelled && receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
-                      <button
-                        type="button"
-                        onClick={() => openPodAction(receipt)}
-                        className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-yellow-100 hover:bg-yellow-500/20"
-                      >
-                        Mark POD delivered
-                      </button>
-                    ) : null}
+                  <div className="grid min-w-0 grid-cols-1 gap-2 md:col-span-2 xl:col-span-1 xl:border-r xl:border-white/10 xl:pr-4">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Created at</span>
+                    <div className="text-sm text-slate-300">{formatDateTime(receipt.createdAt)}</div>
+                  </div>
+                  <div className="grid min-w-0 grid-cols-1 gap-2 md:col-span-2 xl:col-span-1">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Actions</span>
                     {!cancelled && receipt.isPodDelivery && receipt.source === "pos" ? (
                       <button
                         type="button"
@@ -778,7 +804,7 @@ export default function DailyReportReceiptsPanel({
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">POD update</p>
                 <h3 className="mt-1 text-xl font-semibold text-white">{podActionReceipt.orderRef ?? podActionReceipt.receiptNumber ?? podActionReceipt.id}</h3>
-                <p className="mt-2 text-sm text-slate-400">Record the delivery outcome and attach proof if available.</p>
+                <p className="mt-2 text-sm text-slate-400">Record the delivery outcome. Evidence is required for every final outcome.</p>
               </div>
               <button type="button" onClick={closePodAction} aria-label="Close POD update" className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10">
                 Close
@@ -803,11 +829,22 @@ export default function DailyReportReceiptsPanel({
                   onChange={(event) => setPodActionReason(event.target.value)}
                   rows={3}
                   className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                  placeholder="Optional delivery note"
+                  placeholder={podActionStatus === "delivery_failed" ? "Optional reason for the failed delivery" : "Optional delivery note"}
                 />
               </label>
+              {podActionStatus === "delivery_failed" ? (
+                <label className="block text-xs uppercase tracking-wide text-slate-400">
+                  Return tracking / ticket number <span className="text-rose-300">(required)</span>
+                  <input
+                    value={podReturnTrackingNumber}
+                    onChange={(event) => setPodReturnTrackingNumber(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    placeholder="Courier return tracking or ticket number"
+                  />
+                </label>
+              ) : null}
               <label className="block text-xs uppercase tracking-wide text-slate-400">
-                Attach evidence
+                Attach evidence <span className="text-rose-300">(required)</span>
                 <input
                   type="file"
                   accept="image/*,.pdf"
@@ -850,7 +887,7 @@ export default function DailyReportReceiptsPanel({
               <button
                 type="button"
                 onClick={() => void submitPodAction()}
-                disabled={podUploading || podSaving}
+                disabled={podUploading || podSaving || !podEvidenceUrl.trim() || (podActionStatus === "delivery_failed" && !podReturnTrackingNumber.trim())}
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
               >
                 {podSaving ? "Saving..." : "Save POD update"}

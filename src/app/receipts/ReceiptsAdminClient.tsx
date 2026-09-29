@@ -132,7 +132,7 @@ type PodOutcomeDraft = {
   status: "delivered" | "delivery_failed";
   reason: string;
   evidenceFile: File | null;
-  overrideEvidence: boolean;
+  returnTrackingNumber: string;
 };
 
 const CANCELLATION_REASONS = [
@@ -1094,6 +1094,12 @@ export default function ReceiptsAdminClient({
       try {
         let evidenceUrl: string | undefined;
         let evidenceFileName: string | undefined;
+        if (!outcome.evidenceFile) {
+          throw new Error("Attach evidence before recording a POD outcome.");
+        }
+        if (outcome.status === "delivery_failed" && !outcome.returnTrackingNumber.trim()) {
+          throw new Error("Enter the return tracking or ticket number before marking delivery failed.");
+        }
         if (outcome.evidenceFile) {
           const form = new FormData();
           form.set("file", outcome.evidenceFile);
@@ -1119,7 +1125,7 @@ export default function ReceiptsAdminClient({
             reason: outcome.reason.trim() || undefined,
             evidenceUrl,
             evidenceFileName,
-            force: outcome.overrideEvidence,
+            returnTrackingNumber: outcome.returnTrackingNumber.trim() || undefined,
           }),
         });
         let payload: any = {};
@@ -1171,7 +1177,7 @@ export default function ReceiptsAdminClient({
       status: "delivered",
       reason: "",
       evidenceFile: null,
-      overrideEvidence: false,
+      returnTrackingNumber: "",
     });
 
   const handleMarkPodPaid = useCallback(
@@ -3964,7 +3970,8 @@ function PodOutcomeModal({
   onSubmit: () => void;
 }) {
   if (!draft) return null;
-  const needsEvidence = !draft.evidenceFile && !draft.overrideEvidence;
+  const needsEvidence = !draft.evidenceFile;
+  const needsReturnTracking = draft.status === "delivery_failed" && !draft.returnTrackingNumber.trim();
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
       <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b1424] p-6 shadow-2xl">
@@ -3975,8 +3982,8 @@ function PodOutcomeModal({
           Record delivery or returned item
         </h2>
         <p className="mt-2 text-sm text-slate-400">
-          Photo evidence is required. An administrator may proceed without it
-          only when necessary.
+          Evidence is required for every outcome. A failed delivery also needs
+          the courier return tracking or ticket number.
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
@@ -4010,6 +4017,17 @@ function PodOutcomeModal({
             }
           />
         </label>
+        {draft.status === "delivery_failed" ? (
+          <label className="mt-4 block text-sm text-slate-200">
+            Return tracking / ticket number <span className="text-rose-300">(required)</span>
+            <input
+              value={draft.returnTrackingNumber}
+              onChange={(event) => onChange({ returnTrackingNumber: event.target.value })}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-white"
+              placeholder="Courier return tracking or ticket number"
+            />
+          </label>
+        ) : null}
         <label className="mt-4 block cursor-pointer rounded-2xl border border-cyan-400/35 bg-cyan-400/10 px-4 py-5 text-center text-sm font-bold text-cyan-100">
           <input
             type="file"
@@ -4026,17 +4044,6 @@ function PodOutcomeModal({
               ? "TAKE / CHOOSE RETURNED-ITEM PHOTO"
               : "TAKE / CHOOSE DELIVERY PHOTO"}
         </label>
-        <label className="mt-4 flex items-start gap-3 text-sm text-amber-200">
-          <input
-            type="checkbox"
-            checked={draft.overrideEvidence}
-            onChange={(event) =>
-              onChange({ overrideEvidence: event.target.checked })
-            }
-            className="mt-1"
-          />
-          <span>Administrator override: record without evidence.</span>
-        </label>
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
@@ -4049,7 +4056,7 @@ function PodOutcomeModal({
           <button
             type="button"
             onClick={onSubmit}
-            disabled={processing || needsEvidence}
+            disabled={processing || needsEvidence || needsReturnTracking}
             className="rounded-xl bg-cyan-400 px-4 py-3 text-sm font-black text-slate-950 disabled:opacity-40"
           >
             {processing

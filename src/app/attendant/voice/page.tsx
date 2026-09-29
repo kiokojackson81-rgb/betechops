@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import VoiceConsoleClient from "@/components/voice/VoiceConsoleClient";
-import { getLandingPage } from "@/lib/auth/helpers";
+import { getLandingPage } from "@/lib/getLandingPage";
 import { withImpersonateId } from "@/lib/impersonation";
 import {
   getVoiceLiveSnapshot,

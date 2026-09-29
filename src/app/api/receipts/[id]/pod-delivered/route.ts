@@ -131,8 +131,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   let finalReason: string | null = null;
   let evidenceUrl: string | null = null;
   let evidenceFileName: string | null = null;
+  let returnTrackingNumber: string | null = null;
   let deliveryFee: number | null = null;
-  let evidenceOverride = false;
   try {
     const body = (await req.json()) ?? {};
     if (body && typeof body.status === "string") {
@@ -140,16 +140,6 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       if (s === "delivered" || s === "delivery_failed" || s === "failed") {
         desiredStatus = s === "failed" ? "delivery_failed" : s;
       }
-    }
-    if (body && body.force === true) {
-      const role = String(guard?.user?.role ?? "").toUpperCase();
-      if (role !== "ADMIN" && role !== "SUPERVISOR") {
-        return NextResponse.json(
-          { error: "Insufficient role to force finalization" },
-          { status: 403 },
-        );
-      }
-      evidenceOverride = true;
     }
     if (
       body &&
@@ -172,6 +162,9 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     ) {
       evidenceFileName = body.evidenceFileName.trim();
     }
+    if (body && typeof body.returnTrackingNumber === "string" && body.returnTrackingNumber.trim().length > 0) {
+      returnTrackingNumber = body.returnTrackingNumber.trim();
+    }
     if (body && typeof body.deliveryFee !== "undefined") {
       const parsedFee = Number(body.deliveryFee);
       if (Number.isFinite(parsedFee)) {
@@ -181,12 +174,17 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   } catch {
     // no body / invalid json – default to 'delivered'
   }
-  if (!evidenceUrl && !evidenceOverride) {
+  if (!evidenceUrl) {
     return NextResponse.json(
       {
-        error:
-          "Attach photo evidence before recording a delivery outcome. An administrator may override this requirement.",
+        error: "Attach evidence before recording a delivery outcome.",
       },
+      { status: 400 },
+    );
+  }
+  if (desiredStatus === "delivery_failed" && !returnTrackingNumber) {
+    return NextResponse.json(
+      { error: "A return tracking or ticket number is required when delivery fails." },
       { status: 400 },
     );
   }
@@ -215,6 +213,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     if (evidenceUrl) updatedPodDeliveryBase.evidenceUrl = evidenceUrl;
     if (evidenceFileName)
       updatedPodDeliveryBase.evidenceFileName = evidenceFileName;
+    updatedPodDeliveryBase.returnTrackingNumber = returnTrackingNumber;
     if (deliveryFee !== null) updatedPodDeliveryBase.deliveryFee = deliveryFee;
   }
 

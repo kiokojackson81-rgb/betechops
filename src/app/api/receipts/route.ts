@@ -743,6 +743,7 @@ export async function GET(req: NextRequest) {
       podDeliveryStatus: podDeliveryData?.status ?? null,
       podDeliveryNote: podDeliveryData?.note ?? null,
       podEvidenceUrl: podDeliveryData?.evidenceUrl ?? null,
+      podReturnTrackingNumber: podDeliveryData?.returnTrackingNumber ?? null,
       podDeliveryFee: podDeliveryFee > 0 ? podDeliveryFee : null,
       isProjectReceipt: Boolean(projectFlowData?.isProject),
       projectStage: effectiveProjectStage,
@@ -1046,9 +1047,22 @@ export async function GET(req: NextRequest) {
     return buyingTotal > 0;
   });
 
+  // A pending POD has no financial recognition date yet. When the operations
+  // desk asks for pending POD work, keep it visible across trading periods so
+  // an unresolved delivery cannot disappear merely because its receipt was
+  // created before the currently selected date range.
+  const includePendingPodAcrossPeriods =
+    carryForwardPending && customerType === "pod" && podStatus === "pending";
   const filteredByEffectiveDate = isProjectOnlyView
     ? deduped
     : deduped.filter((row) => {
+        if (
+          includePendingPodAcrossPeriods &&
+          Boolean((row as any).isPodDelivery) &&
+          String((row as any).podDeliveryStatus ?? "").toLowerCase() === "pending"
+        ) {
+          return true;
+        }
         const effectiveDate =
           row.createdAt instanceof Date
             ? row.createdAt
@@ -1078,7 +1092,17 @@ export async function GET(req: NextRequest) {
 
   // Keep cancelled receipts in the read-only audit list, but exclude them from
   // every calculated value returned with that list.
-  const summaryRows = filteredByEffectiveDate.filter((row) => !isReceiptCancelledForSales(row) && (row as any).financialRecognized !== false);
+  const summaryRows = filteredByEffectiveDate.filter((row) => {
+    if (isReceiptCancelledForSales(row)) return false;
+    if ((row as any).financialRecognized !== false) return true;
+    // The operations desk's pending-POD view is a work queue. Its count and
+    // visible value must include unpaid deliveries that still require action.
+    return (
+      includePendingPodAcrossPeriods &&
+      Boolean((row as any).isPodDelivery) &&
+      String((row as any).podDeliveryStatus ?? "").toLowerCase() === "pending"
+    );
+  });
 
   filteredByEffectiveDate.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = summaryRows.length;
