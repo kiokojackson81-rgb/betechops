@@ -130,9 +130,9 @@ describe('admin receipts summary', () => {
     expect(summary.paymentTotals.mpesa).toEqual({ totalSales: 0, count: 0 });
   });
 
-  it('returns POS profit contributors for receipts created before the pricing date', async () => {
-    const start = new Date('2026-05-03T00:00:00+03:00');
-    const end = new Date('2026-05-03T23:59:59.999+03:00');
+  it('returns POS profit contributors in the completed receipt period when pricing is entered later', async () => {
+    const start = new Date('2026-04-30T00:00:00+03:00');
+    const end = new Date('2026-04-30T23:59:59.999+03:00');
     const orderNumber = 'Betech-20260430-77777';
     const pricedAt = new Date('2026-05-03T12:00:00+03:00');
 

@@ -21,12 +21,12 @@ beforeEach(() => {
   (prisma.supportSale.findMany as jest.Mock).mockResolvedValue([]);
   (prisma.productCost.findMany as jest.Mock).mockResolvedValue([]);
 });
-test("ordinary sale and profit both move from creation day to pricing day in admin and staff reports", async () => {
+test("ordinary sale stays in its completed period when pricing is entered later", async () => {
   for (const summarize of [computeAdminReceiptSummary, summarizePosReceiptsForPeriod]) {
     const old = await summarize({ ...range("2026-09-21"), onlyPos: true, scope: "global" } as any);
-    expect(old.totalSales).toBe(0); expect(old.totalProfit).toBe(0);
+    expect(old.totalSales).toBe(10000); expect(old.totalProfit).toBe(4000);
     const current = await summarize({ ...range("2026-09-22"), onlyPos: true, scope: "global" } as any);
-    expect(current.totalSales).toBe(10000); expect(current.totalProfit).toBe(4000);
+    expect(current.totalSales).toBe(0); expect(current.totalProfit).toBe(0);
   }
 });
 test("POD financials stay on delivery day even if costs are entered the following day", async () => {
@@ -46,35 +46,35 @@ test("incomplete ordinary pricing never manufactures a sale", () => {
   receipt.order.items[0].orderCosts = [];
   expect(getReceiptRecognitionDate(receipt)).toBeNull();
 });
-test("a correction does not move an already recognized receipt to another day", () => {
+test("pricing corrections do not move an already completed receipt to another day", () => {
   receipt.data.financialRecognitionAt = today.toISOString();
   receipt.data.buyingPriceUpdatedAt = tomorrow.toISOString();
-  expect(getReceiptRecognitionDate(receipt)).toEqual(today);
+  expect(getReceiptRecognitionDate(receipt)).toEqual(yesterday);
 });
-test("released product commission belongs to the receipt recognition day, not later approval day", async () => {
+test("released product commission belongs to the receipt completion day, not later approval day", async () => {
   (prisma.commissionEarning.findMany as jest.Mock).mockResolvedValue([{ amount: 200, basis: "product_flat", createdAt: yesterday, calcDetail: { approvedAt: tomorrow.toISOString() }, orderItem: { order: { receipt } } }]);
-  expect(await getReleasedPosProductCommissionForStaffPeriod("staff", range("2026-09-22").start, range("2026-09-22").end)).toBe(200);
+  expect(await getReleasedPosProductCommissionForStaffPeriod("staff", range("2026-09-21").start, range("2026-09-21").end)).toBe(200);
   expect(await getReleasedPosProductCommissionForStaffPeriod("staff", range("2026-09-23").start, range("2026-09-23").end)).toBe(0);
 });
 test("historical daily ledger rows follow the linked POS date without rewriting source records", async () => {
   const entries = [{ id: "entry", date: yesterday, receipts: [{ receiptNumber: receipt.receiptNumber, sellingTotal: 10000, buyingTotal: 6000 }], sales: [] }];
-  expect(await ledgerEntriesForRecognitionPeriod(entries, range("2026-09-21").start, range("2026-09-21").end, prisma)).toEqual([]);
-  const recognized = await ledgerEntriesForRecognitionPeriod(entries, range("2026-09-22").start, range("2026-09-22").end, prisma);
-  expect(recognized[0]).toMatchObject({ date: today, totalSales: 10000, totalProfit: 4000 });
+  const recognized = await ledgerEntriesForRecognitionPeriod(entries, range("2026-09-21").start, range("2026-09-21").end, prisma);
+  expect(recognized[0]).toMatchObject({ date: yesterday, totalSales: 10000, totalProfit: 4000 });
+  expect(await ledgerEntriesForRecognitionPeriod(entries, range("2026-09-22").start, range("2026-09-22").end, prisma)).toEqual([]);
   expect(entries[0].date).toEqual(yesterday);
 });
-test("historical support pricing dates are resolved from dated receipt keys", async () => {
+test("historical support pricing validates a completed receipt without moving its period", async () => {
   delete receipt.data.buyingPriceUpdatedAt;
   receipt.totals = { total: 10000 };
   receipt.order.items = [];
   (prisma.supportReceipt.findMany as jest.Mock).mockResolvedValue([{ receiptKey: "2026-09-22:BETECH202609211", buyingTotal: 6000, items: [{ buyingPrice: 6000, pricedAt: today }] }]);
-  const summary = await computeAdminReceiptSummary({ ...range("2026-09-22"), onlyPos: true, scope: "global" });
+  const summary = await computeAdminReceiptSummary({ ...range("2026-09-21"), onlyPos: true, scope: "global" });
   expect(summary.totalSales).toBe(10000); expect(summary.totalProfit).toBe(4000);
 });
 
-test("projects need completion and pricing; whichever happens later determines recognition", () => {
+test("projects use completion rather than later pricing for trading-period recognition", () => {
   receipt.data.projectFlow = { isProject: true, stage: "COMPLETED_POSTED", projectValue: 10000, totalPaidAmount: 10000, completedAt: yesterday.toISOString() };
-  expect(getReceiptRecognitionDate(receipt)).toEqual(today);
+  expect(getReceiptRecognitionDate(receipt)).toEqual(yesterday);
   receipt.data.projectFlow.completedAt = tomorrow.toISOString();
   expect(getReceiptRecognitionDate(receipt)).toEqual(tomorrow);
   receipt.data.projectFlow.stage = "PROJECT_INSTALLED";
@@ -103,12 +103,12 @@ test("projects need completion and pricing; whichever happens later determines r
   const period = await summarizePosReceiptsForPeriod({ start: yesterday, end: tomorrow });
   expect(period.receiptBreakdown[0]).toMatchObject({ sales: 25000, eligibleSales: 0, reason: "Awaiting complete buying prices" });
 });
- test("profit is recomputed from costs rather than stale persisted profit", async () => {
+test("profit is recomputed from costs rather than stale persisted profit", async () => {
   receipt.totals = { total: 10000, profit: 9999 };
-  const result = await summarizePosReceiptsForPeriod(range("2026-09-22"));
+  const result = await summarizePosReceiptsForPeriod(range("2026-09-21"));
   expect(result.totalProfit).toBe(4000);
   receipt.order.items[0].orderCosts[0].unitCost = 11000;
-  expect((await summarizePosReceiptsForPeriod(range("2026-09-22"))).totalProfit).toBe(-1000);
+  expect((await summarizePosReceiptsForPeriod(range("2026-09-21"))).totalProfit).toBe(-1000);
 });
  test("POD support pricing deducts delivery costs once and canonical aliases do not duplicate profit", async () => {
   receipt.totals = { total: 10000 };

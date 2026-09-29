@@ -20,7 +20,7 @@ describe("summarizePosReceiptsForPeriod", () => {
     prisma.supportSale.findMany.mockResolvedValue([]);
   });
 
-  test("does not assign the seller’s receipt to its technician", async () => {
+  test("attributes a completed project to its assigned handler", async () => {
     prisma.receipt.findMany
       .mockResolvedValueOnce([
         {
@@ -64,9 +64,9 @@ describe("summarizePosReceiptsForPeriod", () => {
       ownershipMode: "staffOnly",
     });
 
-    expect(summary.totalSales).toBe(0);
-    expect(summary.totalReceipts).toBe(0);
-    expect(summary.totalItems).toBe(0);
+    expect(summary.totalSales).toBe(250000);
+    expect(summary.totalReceipts).toBe(1);
+    expect(summary.totalItems).toBe(1);
   });
 
   test("does not count a cancelled receipt even when it was previously paid", async () => {

@@ -9,9 +9,14 @@ export const recognitionDate = (value: unknown): Date | null => {
   const date = value instanceof Date ? value : new Date(String(value));
   return Number.isNaN(date.getTime()) ? null : date;
 };
-const latest = (values: unknown[]) => values.map(recognitionDate).filter((d): d is Date => Boolean(d)).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
-/** One financial date for sales, costs, profit and commissions. Creation remains audit metadata. */
+/**
+ * One immutable business-event date for sales, costs, profit and commissions.
+ *
+ * Cost/pricing information is an eligibility requirement, not a new sale event.
+ * A later price entry must never move a completed receipt into a later trading
+ * period, otherwise the same sale can be counted twice across payroll periods.
+ */
 export function getReceiptRecognitionDate(receipt: any): Date | null {
   if (!receipt || isReceiptCancelledForSales(receipt)) return null;
   const data = record(receipt.data);
@@ -37,11 +42,15 @@ export function getReceiptRecognitionDate(receipt: any): Date | null {
     if (String(pod.status).toLowerCase() !== "delivered") return null;
     return recognitionDate(pod.deliveredAt) ?? recognitionDate(pod.paidAt) ?? recognitionDate(pod.financialFinalizedAt) ?? recognitionDate(receipt.generatedAt ?? receipt.createdAt);
   }
-  const pricedAt = recognitionDate(data.financialRecognitionAt)
-    ?? recognitionDate(data.buyingPriceUpdatedAt)
-    ?? latest([support?.pricedAt, ...items.flatMap((item: any) => (item.orderCosts ?? []).map((cost: any) => cost.createdAt))])
-    ?? recognitionDate(receipt.generatedAt ?? receipt.createdAt);
-  return completedAt && pricedAt && completedAt > pricedAt ? completedAt : pricedAt;
+  // A project carries forward only when it was still pending at a period close
+  // and is then completed in the new period. Its completion date is therefore
+  // authoritative even if costs are entered afterwards.
+  if (flow?.isProject) return completedAt;
+
+  // For an ordinary POS sale, issuance is the completed sales event. Do not use
+  // financialRecognitionAt, buyingPriceUpdatedAt, support pricedAt, or order-cost
+  // timestamps here: those are subsequent accounting actions, not completion.
+  return recognitionDate(receipt.generatedAt ?? receipt.createdAt);
 }
 
 export function recognitionDay(date: Date) {

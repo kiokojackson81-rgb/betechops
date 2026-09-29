@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import VoiceConsoleClient from "@/components/voice/VoiceConsoleClient";
+import { getLandingPage } from "@/lib/auth/helpers";
 import { withImpersonateId } from "@/lib/impersonation";
 import {
   getVoiceLiveSnapshot,
@@ -21,10 +22,10 @@ export default async function AttendantVoicePage({ searchParams }: PageProps) {
 
   if (!viewer) redirect("/attendant/login");
 
-  const backHref =
-    viewer.targetAttendantCategory === "DIRECT_SALES_OPS"
-      ? withImpersonateId("/marketing/tracker", viewer.impersonateId)
-      : withImpersonateId("/attendant/daily-report", viewer.impersonateId);
+  const backHref = withImpersonateId(
+    getLandingPage(viewer.targetAttendantCategory, viewer.targetRole || undefined),
+    viewer.impersonateId,
+  );
 
   try {
     const initialData = await getVoiceLiveSnapshot({
