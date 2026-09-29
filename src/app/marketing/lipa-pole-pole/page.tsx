@@ -25,6 +25,7 @@ export default async function MarketingLipaPolePolePage({
       {...workspace}
       workspaceEmbedded
       scopeCreatedById={String(resolved.impersonateId || "").trim() || null}
+      bookingReceiptBasePath="/lipa-pole-pole/print"
     />
   );
 }

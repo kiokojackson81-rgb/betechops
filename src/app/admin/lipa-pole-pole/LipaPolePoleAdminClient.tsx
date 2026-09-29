@@ -353,8 +353,12 @@ function titleCase(value: string) {
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function getBookingReceiptHref(id: string, autoPrint = false) {
-  return `/admin/lipa-pole-pole/${encodeURIComponent(id)}/booking-receipt${autoPrint ? "?autoPrint=1" : ""}`;
+function getBookingReceiptHref(
+  id: string,
+  autoPrint = false,
+  basePath = "/admin/lipa-pole-pole",
+) {
+  return `${basePath}/${encodeURIComponent(id)}/booking-receipt${autoPrint ? "?autoPrint=1" : ""}`;
 }
 
 function inferInstallmentFrequency(
@@ -471,6 +475,7 @@ export default function LipaPolePoleAdminClient({
   embeddedCreateMode = false,
   workspaceEmbedded = false,
   scopeCreatedById = null,
+  bookingReceiptBasePath = "/admin/lipa-pole-pole",
   onCancelInlineCreate,
 }: {
   initialItems: LppListItem[];
@@ -481,6 +486,8 @@ export default function LipaPolePoleAdminClient({
   workspaceEmbedded?: boolean;
   /** Admin impersonation keeps this client restricted to the selected staff member's orders. */
   scopeCreatedById?: string | null;
+  /** Embedded staff workspaces must use the standalone printable receipt route. */
+  bookingReceiptBasePath?: string;
   onCancelInlineCreate?: () => void;
 }) {
   const [items, setItems] = useState(initialItems);
@@ -956,7 +963,7 @@ export default function LipaPolePoleAdminClient({
       if (shouldPrint) {
         if (printWindow) {
           try {
-            printWindow.location.replace(getBookingReceiptHref(data.account.id, true));
+            printWindow.location.replace(getBookingReceiptHref(data.account.id, true, bookingReceiptBasePath));
           } catch {
             printFailed = true;
             printWindow.close();
@@ -1701,6 +1708,7 @@ export default function LipaPolePoleAdminClient({
                                   isConvertingProject={isConvertingProject}
                                   isDeletingAccount={isDeletingAccount}
                                   canDeleteAccounts={canDeleteAccounts}
+                                  bookingReceiptBasePath={bookingReceiptBasePath}
                                 />
                               )}
                             </td>
@@ -2095,7 +2103,7 @@ export default function LipaPolePoleAdminClient({
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href={getBookingReceiptHref(createSuccess.accountId, true)} target="_blank" rel="noreferrer" className={primaryButtonClass}>
+              <Link href={getBookingReceiptHref(createSuccess.accountId, true, bookingReceiptBasePath)} target="_blank" rel="noreferrer" className={primaryButtonClass}>
                 Print Booking Receipt
               </Link>
               <button type="button" className={secondaryButtonClass} onClick={() => setCreateSuccess(null)}>
@@ -2299,6 +2307,7 @@ function ExpandedRowDetails({
   isConvertingProject,
   isDeletingAccount,
   canDeleteAccounts,
+  bookingReceiptBasePath,
 }: {
   detail: LppDetail;
   customerContext: Customer360Context | null;
@@ -2317,6 +2326,7 @@ function ExpandedRowDetails({
   isConvertingProject: boolean;
   isDeletingAccount: boolean;
   canDeleteAccounts: boolean;
+  bookingReceiptBasePath: string;
 }) {
   const account = detail.account;
   const due = describeDueDate(account.expectedCompletionDate);
@@ -2671,7 +2681,7 @@ function ExpandedRowDetails({
         ) : null}
 
         <div className="flex flex-wrap gap-3 border-t border-white/10 pt-4">
-          <Link href={getBookingReceiptHref(account.id, true)} target="_blank" rel="noreferrer" className={secondaryButtonClass}>
+          <Link href={getBookingReceiptHref(account.id, true, bookingReceiptBasePath)} target="_blank" rel="noreferrer" className={secondaryButtonClass}>
             Print Booking Receipt
           </Link>
           {detail.summary.balance > 0 ? (
