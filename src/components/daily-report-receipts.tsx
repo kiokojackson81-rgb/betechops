@@ -679,7 +679,8 @@ export default function DailyReportReceiptsPanel({
                     : "border-white/10 bg-white/[0.03]"
                 }`}
               >
-                <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start xl:grid-cols-[100px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,.8fr)_minmax(0,.72fr)_minmax(0,.9fr)_minmax(0,.95fr)_minmax(150px,1fr)] xl:items-stretch">
+                <div className="xl:overflow-x-auto xl:pb-1">
+                  <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start xl:min-w-[1240px] xl:grid-cols-[84px_minmax(150px,1.35fr)_minmax(135px,1fr)_minmax(105px,.7fr)_minmax(96px,.65fr)_minmax(96px,.7fr)_minmax(128px,.85fr)_minmax(140px,.9fr)_minmax(138px,.9fr)] xl:items-stretch">
                   <div className="xl:border-r xl:border-white/10 xl:pr-4">
                     <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Type</span>
                     <span
@@ -760,7 +761,7 @@ export default function DailyReportReceiptsPanel({
                     <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Created at</span>
                     <div className="text-sm text-slate-300">{formatDateTime(receipt.createdAt)}</div>
                   </div>
-                  <div className="grid min-w-0 grid-cols-1 gap-2 md:col-span-2 xl:col-span-1">
+                  <div className="grid min-w-0 grid-cols-1 content-start gap-2 md:col-span-2 xl:col-span-1">
                     <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Actions</span>
                     {!cancelled && receipt.isPodDelivery && receipt.source === "pos" ? (
                       <button
@@ -781,6 +782,7 @@ export default function DailyReportReceiptsPanel({
                     <Link href={customerProfileHref} className="inline-flex min-w-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-500/20">
                       Open customer
                     </Link>
+                  </div>
                   </div>
                 </div>
                 {receipt.podDeliveryNote ? (
