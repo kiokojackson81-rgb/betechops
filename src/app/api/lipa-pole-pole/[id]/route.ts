@@ -16,7 +16,7 @@ function resolveParams(context: ParamsContext): Promise<{ id: string }> {
   return Promise.resolve((context as { params: { id: string } }).params);
 }
 
-export async function GET(_req: Request, context: ParamsContext) {
+export async function GET(req: Request, context: ParamsContext) {
   const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!auth.ok) return auth.res;
 
@@ -24,6 +24,7 @@ export async function GET(_req: Request, context: ParamsContext) {
     (auth.session?.user as { id?: string } | undefined)?.id ??
     (await getActorId());
   const { id } = await resolveParams(context);
+  const impersonateId = new URL(req.url).searchParams.get("impersonateId")?.trim() || null;
 
   try {
     const detail = await getSerializedLppAccountDetail(id);
@@ -31,6 +32,13 @@ export async function GET(_req: Request, context: ParamsContext) {
       auth.role === "ATTENDANT" &&
       !auth.isBenjamin &&
       detail.account.createdById !== actorId
+    ) {
+      return noStoreJson({ error: "Forbidden" }, { status: 403 });
+    }
+    if (
+      auth.role === "ADMIN" &&
+      impersonateId &&
+      detail.account.createdById !== impersonateId
     ) {
       return noStoreJson({ error: "Forbidden" }, { status: 403 });
     }

@@ -264,14 +264,20 @@ export async function GET(req: Request) {
     (await getActorId());
 
   const requestedAssignedToId = (searchParams.get("assignedToId") || "").trim() || null;
+  const requestedImpersonateId = (searchParams.get("impersonateId") || "").trim() || null;
   const staffOwnOrdersOnly = auth.role === "ATTENDANT" && !auth.isBenjamin;
   const assignedToId = staffOwnOrdersOnly ? null : requestedAssignedToId;
+  const createdById = staffOwnOrdersOnly
+    ? actorId
+    : auth.role === "ADMIN"
+      ? requestedImpersonateId
+      : null;
 
   const items = await listSerializedLppAccounts({
     q: q ?? undefined,
     status: status ?? undefined,
     assignedToId: assignedToId ?? undefined,
-    createdById: staffOwnOrdersOnly ? actorId : undefined,
+    createdById: createdById ?? undefined,
     take: limit,
   });
 

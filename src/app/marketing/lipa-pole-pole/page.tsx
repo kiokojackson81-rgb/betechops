@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
 import LipaPolePoleAdminClient from "@/app/admin/lipa-pole-pole/LipaPolePoleAdminClient";
-import {
-  loadLipaPolePoleAdminWorkspace,
-  type LipaPolePoleSearchParams,
-} from "@/app/admin/lipa-pole-pole/loadLipaPolePoleAdminWorkspace";
+import { loadLipaPolePoleAdminWorkspace, type LipaPolePoleSearchParams } from "@/app/admin/lipa-pole-pole/loadLipaPolePoleAdminWorkspace";
 import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +10,7 @@ export default async function MarketingLipaPolePolePage({
 }: {
   searchParams?: Promise<LipaPolePoleSearchParams> | LipaPolePoleSearchParams;
 }) {
+  const resolved = await Promise.resolve(searchParams ?? {});
   const session = await auth();
   const role = String((session?.user as { role?: string } | undefined)?.role ?? "").toUpperCase();
   if (!["ADMIN", "SUPERVISOR", "ATTENDANT"].includes(role)) {
@@ -20,7 +18,13 @@ export default async function MarketingLipaPolePolePage({
   }
 
   const workspace = await loadLipaPolePoleAdminWorkspace(
-    await Promise.resolve(searchParams ?? {}),
+    resolved,
   );
-  return <LipaPolePoleAdminClient {...workspace} workspaceEmbedded />;
+  return (
+    <LipaPolePoleAdminClient
+      {...workspace}
+      workspaceEmbedded
+      scopeCreatedById={String(resolved.impersonateId || "").trim() || null}
+    />
+  );
 }

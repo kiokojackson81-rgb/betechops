@@ -8,6 +8,7 @@ export type LipaPolePoleSearchParams = {
   q?: string;
   status?: string;
   id?: string;
+  impersonateId?: string;
 };
 
 async function fetchJson<T>(path: string) {
@@ -24,11 +25,13 @@ export async function loadLipaPolePoleAdminWorkspace(params: LipaPolePoleSearchP
   const q = (params.q || "").trim();
   const status = (params.status || "ALL").trim().toUpperCase();
   const selectedId = (params.id || "").trim();
+  const impersonateId = (params.impersonateId || "").trim();
 
   const listPayload = await fetchJson<{ items?: LppListItem[] }>(
     withParams("/api/lipa-pole-pole", {
       q: q || undefined,
       status: status !== "ALL" ? status : undefined,
+      impersonateId: impersonateId || undefined,
       limit: 100,
     }),
   );
@@ -37,7 +40,9 @@ export async function loadLipaPolePoleAdminWorkspace(params: LipaPolePoleSearchP
   const activeId = selectedId || items[0]?.id || "";
   const detailPayload = activeId
     ? await fetchJson<({ ok: true } & LppDetail) | { error?: string }>(
-        `/api/lipa-pole-pole/${activeId}`,
+        withParams(`/api/lipa-pole-pole/${activeId}`, {
+          impersonateId: impersonateId || undefined,
+        }),
       )
     : null;
   const detail = detailPayload && "account" in detailPayload ? detailPayload : null;

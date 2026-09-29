@@ -470,6 +470,7 @@ export default function LipaPolePoleAdminClient({
   initialStatus,
   embeddedCreateMode = false,
   workspaceEmbedded = false,
+  scopeCreatedById = null,
   onCancelInlineCreate,
 }: {
   initialItems: LppListItem[];
@@ -478,6 +479,8 @@ export default function LipaPolePoleAdminClient({
   initialStatus: string;
   embeddedCreateMode?: boolean;
   workspaceEmbedded?: boolean;
+  /** Admin impersonation keeps this client restricted to the selected staff member's orders. */
+  scopeCreatedById?: string | null;
   onCancelInlineCreate?: () => void;
 }) {
   const [items, setItems] = useState(initialItems);
@@ -713,12 +716,13 @@ export default function LipaPolePoleAdminClient({
     else params.delete("q");
     if (status !== "ALL") params.set("status", status);
     else params.delete("status");
+    if (scopeCreatedById) params.set("impersonateId", scopeCreatedById);
     if (expandedLppId) params.set("id", expandedLppId);
     else params.delete("id");
     const next = params.toString();
     const href = next ? `${window.location.pathname}?${next}` : window.location.pathname;
     window.history.replaceState({}, "", href);
-  }, [embeddedCreateMode, expandedLppId, q, status]);
+  }, [embeddedCreateMode, expandedLppId, q, scopeCreatedById, status]);
 
   // The backend query is intentionally driven by debounced `q` and `status`.
   useEffect(() => {
@@ -748,6 +752,7 @@ export default function LipaPolePoleAdminClient({
     const params = new URLSearchParams();
     if (q.trim()) params.set("q", q.trim());
     if (status !== "ALL") params.set("status", status);
+    if (scopeCreatedById) params.set("impersonateId", scopeCreatedById);
     params.set("limit", "100");
     const data = await readJson<{ items: LppListItem[] }>(`/api/lipa-pole-pole?${params.toString()}`);
     const nextItems = data.items || [];
@@ -767,7 +772,10 @@ export default function LipaPolePoleAdminClient({
   async function loadDetail(id: string) {
     setLoadingDetailId(id);
     try {
-      const data = await readJson<{ ok: true } & LppDetail>(`/api/lipa-pole-pole/${id}`);
+      const detailParams = new URLSearchParams();
+      if (scopeCreatedById) detailParams.set("impersonateId", scopeCreatedById);
+      const detailPath = `/api/lipa-pole-pole/${id}${detailParams.size ? `?${detailParams.toString()}` : ""}`;
+      const data = await readJson<{ ok: true } & LppDetail>(detailPath);
       setDetail({
         account: data.account,
         items: data.items,
