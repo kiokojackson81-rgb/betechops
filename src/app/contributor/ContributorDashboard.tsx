@@ -93,6 +93,25 @@ const warrantyOptions = [
   "25 years",
 ];
 const PUBLIC_SHOP_ORIGIN = "https://www.betech.co.ke";
+const PRODUCT_DRAFT_STORAGE_KEY = "betech:product-contributor:draft:v1";
+
+function hasProductDraftContent(form: ReturnType<typeof blank>) {
+  return Boolean(
+    form.name.trim() ||
+      form.brand.trim() ||
+      form.shortDescription.trim() ||
+      form.description.trim() ||
+      form.mainImageUrl.trim(),
+  );
+}
+
+function clearProductDraft() {
+  try {
+    window.localStorage.removeItem(PRODUCT_DRAFT_STORAGE_KEY);
+  } catch {
+    // Draft protection is best effort when browser storage is unavailable.
+  }
+}
 
 function money(value: number) {
   return new Intl.NumberFormat("en-KE", {
@@ -175,6 +194,7 @@ export default function ContributorDashboard() {
   const [categoryQuery, setCategoryQuery] = useState("");
   const [pickerCategory, setPickerCategory] = useState<string | null>(null);
   const [recentCategories, setRecentCategories] = useState<string[]>([]);
+  const [draftReady, setDraftReady] = useState(false);
 
   async function load() {
     const res = await fetch("/api/contributor/dashboard", {
@@ -194,6 +214,38 @@ export default function ContributorDashboard() {
   useEffect(() => {
     void load();
   }, []);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(PRODUCT_DRAFT_STORAGE_KEY);
+      if (stored) {
+        const saved = JSON.parse(stored) as Partial<ReturnType<typeof blank>>;
+        const restored = { ...blank(), ...saved };
+        if (hasProductDraftContent(restored)) {
+          setForm(restored);
+          setNotice("Your unfinished product draft was restored automatically.");
+        }
+      }
+    } catch {
+      // A malformed or unavailable local draft must never block product work.
+    } finally {
+      setDraftReady(true);
+    }
+  }, []);
+  useEffect(() => {
+    if (!draftReady || editingId) return;
+    const timer = window.setTimeout(() => {
+      try {
+        if (hasProductDraftContent(form)) {
+          window.localStorage.setItem(PRODUCT_DRAFT_STORAGE_KEY, JSON.stringify(form));
+        } else {
+          clearProductDraft();
+        }
+      } catch {
+        // The user can continue even if browser storage is full or disabled.
+      }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [draftReady, editingId, form]);
   useEffect(() => {
     const query = form.brand.trim();
     if (!query) return;
@@ -418,6 +470,7 @@ export default function ContributorDashboard() {
     );
     setForm(blank());
     setEditingId(null);
+    clearProductDraft();
     await load();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -624,12 +677,18 @@ export default function ContributorDashboard() {
                       The image, price, category, and description are required
                       for a usable website listing.
                     </p>
+                    {!editingId ? (
+                      <p className="mt-2 text-xs font-semibold text-emerald-300">
+                        Draft protection is on: your entered details save automatically on this device.
+                      </p>
+                    ) : null}
                   </div>
                   {editingId ? (
                     <button
                       onClick={() => {
                         setEditingId(null);
                         setForm(blank());
+                        clearProductDraft();
                       }}
                       className="text-sm font-bold text-cyan-300"
                     >
@@ -1229,6 +1288,7 @@ export default function ContributorDashboard() {
                               onClick={() => {
                                 setEditingId(product.id);
                                 setForm(toForm(product));
+                                clearProductDraft();
                                 window.scrollTo({ top: 0, behavior: "smooth" });
                               }}
                               className="rounded-lg border border-cyan-400/40 px-3 py-2 text-sm font-bold text-cyan-300"
@@ -1347,6 +1407,7 @@ export default function ContributorDashboard() {
                                     onClick={() => {
                                       setEditingId(product.id);
                                       setForm(toForm(product));
+                                      clearProductDraft();
                                       window.scrollTo({
                                         top: 0,
                                         behavior: "smooth",
