@@ -9,6 +9,7 @@ import {
   FileDown,
   FileText,
   Globe2,
+  HandCoins,
   HeartPulse,
   LayoutDashboard,
   LogOut,
@@ -45,6 +46,9 @@ function pageHeading(pathname: string) {
   }
   if (pathname.includes("/agent-orders")) {
     return ["Agent Orders", "Review, process, and follow up agent-assisted customer orders."];
+  }
+  if (pathname.includes("/lipa-pole-pole")) {
+    return ["Lipa Mdogo Mdogo", "Manage the Lipa Mdogo Mdogo orders you created, print booking receipts, and prompt customers to pay."];
   }
   if (pathname.includes("/receipts")) {
     return ["Sales & Receipts", "Manage POS receipts, website orders, POD activity, and quotations."];
@@ -105,6 +109,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     pos: withImpersonation("/marketing/receipts?tab=pos"),
     webOrders: withImpersonation("/marketing/receipts?tab=web-orders"),
     agentOrders: withImpersonation("/marketing/agent-orders"),
+    lipaPolePole: withImpersonation("/marketing/lipa-pole-pole"),
     quotations: withImpersonation("/marketing/receipts?tab=quotations"),
     products: withImpersonation("/marketing/products"),
     earnings: withImpersonation("/marketing/earnings"),
@@ -118,6 +123,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
   const isActive = (key: keyof typeof links) => {
     if (key === "dashboard") return pathname === "/marketing/tracker";
     if (key === "agentOrders") return pathname.includes("/agent-orders");
+    if (key === "lipaPolePole") return pathname.includes("/lipa-pole-pole");
     if (key === "products") return pathname.includes("/products");
     if (key === "earnings") return pathname.includes("/earnings");
     if (key === "wellness") return pathname.includes("/wellness");
@@ -142,6 +148,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     { key: "pos" as const, href: links.pos, label: "Receipts", icon: Receipt },
     { key: "webOrders" as const, href: links.webOrders, label: "Web orders", icon: Globe2 },
     { key: "agentOrders" as const, href: links.agentOrders, label: "Agent orders", icon: UsersRound },
+    { key: "lipaPolePole" as const, href: links.lipaPolePole, label: "Lipa Mdogo", icon: HandCoins },
   ];
 
   return (
@@ -173,6 +180,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
                 <Link href={links.pos} className={navClass(isActive("pos"))}><Receipt className="h-4 w-4" />POS receipts & POD</Link>
                 <Link href={links.webOrders} className={navClass(isActive("webOrders"))}><Globe2 className="h-4 w-4" />Website orders</Link>
                 <Link href={links.agentOrders} className={navClass(isActive("agentOrders"))}><UsersRound className="h-4 w-4" />Agent orders</Link>
+                <Link href={links.lipaPolePole} className={navClass(isActive("lipaPolePole"))}><HandCoins className="h-4 w-4 text-emerald-200" />Lipa Mdogo Mdogo</Link>
                 <Link href={links.quotations} className={navClass(isActive("quotations"))}><FileText className="h-4 w-4" />Quotations</Link>
                 {canManageProducts ? (
                   <Link href={links.products} className={navClass(isActive("products"))}><PackageSearch className="h-4 w-4 text-amber-200" />Website products</Link>
@@ -241,6 +249,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
               </summary>
               <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-2 sm:grid-cols-4">
                 <Link href={links.quotations} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Quotations</Link>
+                <Link href={links.lipaPolePole} className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-center text-xs text-emerald-100">Lipa Mdogo Mdogo</Link>
                 {canManageProducts ? (
                   <Link href={links.products} className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center text-xs text-amber-100">Website products</Link>
                 ) : null}
