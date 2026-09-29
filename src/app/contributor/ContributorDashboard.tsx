@@ -97,12 +97,24 @@ const PRODUCT_DRAFT_STORAGE_KEY = "betech:product-contributor:draft:v1";
 
 function hasProductDraftContent(form: ReturnType<typeof blank>) {
   return Boolean(
-    form.name.trim() ||
-      form.brand.trim() ||
-      form.shortDescription.trim() ||
-      form.description.trim() ||
-      form.mainImageUrl.trim(),
+    String(form.name || "").trim() ||
+      String(form.brand || "").trim() ||
+      String(form.shortDescription || "").trim() ||
+      String(form.description || "").trim() ||
+      String(form.mainImageUrl || "").trim(),
   );
+}
+
+function restoreProductDraft(raw: unknown): ReturnType<typeof blank> {
+  const defaults = blank();
+  if (!raw || typeof raw !== "object") return defaults;
+  const candidate = raw as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(defaults).map(([key, defaultValue]) => {
+      const value = candidate[key];
+      return [key, typeof value === typeof defaultValue ? value : defaultValue];
+    }),
+  ) as ReturnType<typeof blank>;
 }
 
 function clearProductDraft() {
@@ -197,19 +209,27 @@ export default function ContributorDashboard() {
   const [draftReady, setDraftReady] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/contributor/dashboard", {
-      cache: "no-store",
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setNotice(data.error || "Unable to load your dashboard.");
-      return;
+    try {
+      const res = await fetch("/api/contributor/dashboard", {
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotice(data.error || "Unable to load your dashboard.");
+        return false;
+      }
+      setProducts(data.products || []);
+      setWithdrawals(data.withdrawals || []);
+      setBalance(data.balance);
+      setEarning(data.earningPerProductKes || 5);
+      setPaysThroughPayroll(Boolean(data.paysThroughPayroll));
+      return true;
+    } catch {
+      setNotice(
+        "Your product may be saved, but the dashboard could not refresh. Check your connection, then refresh the page.",
+      );
+      return false;
     }
-    setProducts(data.products || []);
-    setWithdrawals(data.withdrawals || []);
-    setBalance(data.balance);
-    setEarning(data.earningPerProductKes || 5);
-    setPaysThroughPayroll(Boolean(data.paysThroughPayroll));
   }
   useEffect(() => {
     void load();
@@ -218,8 +238,7 @@ export default function ContributorDashboard() {
     try {
       const stored = window.localStorage.getItem(PRODUCT_DRAFT_STORAGE_KEY);
       if (stored) {
-        const saved = JSON.parse(stored) as Partial<ReturnType<typeof blank>>;
-        const restored = { ...blank(), ...saved };
+        const restored = restoreProductDraft(JSON.parse(stored));
         if (hasProductDraftContent(restored)) {
           setForm(restored);
           setNotice("Your unfinished product draft was restored automatically.");
