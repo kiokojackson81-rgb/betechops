@@ -751,6 +751,7 @@ type PaymentApplicationResult = {
   paidBefore: number;
   paidAfter: number;
   total: number;
+  lppPaymentId: string | null;
 };
 
 function maskedPhone(value: string | null | undefined) {
@@ -915,7 +916,7 @@ async function applyConfirmedPaymentInTransaction(
 
   if (!payment.orderId && !payment.websiteOrderId && !payment.resourceType) {
     await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "UNMATCHED" } });
-    return { applied: false, paidBefore: 0, paidAfter: 0, total: 0 };
+    return { applied: false, paidBefore: 0, paidAfter: 0, total: 0, lppPaymentId: null };
   }
 
   let paidBefore = 0;
