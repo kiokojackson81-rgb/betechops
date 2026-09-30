@@ -5,7 +5,11 @@ import { MpesaPayment, MpesaPaymentPurpose, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { ensureSiteVisitsSchema } from "@/lib/siteVisits";
-import { getLppAccountSummary, recordLppPayment } from "@/lib/lipaPolePoleService";
+import {
+  getLppAccountSummary,
+  notifyLppConfirmedPayment,
+  recordLppPayment,
+} from "@/lib/lipaPolePoleService";
 import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import { dispatchSiteVisitCreated } from "@/lib/siteVisitNotifications";
 import { buildReceiptProjectFlow, readReceiptProjectFlow } from "@/lib/receiptProjects";
@@ -894,7 +898,7 @@ async function applyConfirmedPaymentInTransaction(
   input: ConfirmedPaymentInput,
 ): Promise<PaymentApplicationResult> {
   if (payment.status === "UNMATCHED") {
-    return { applied: false, paidBefore: 0, paidAfter: 0, total: 0 };
+    return { applied: false, paidBefore: 0, paidAfter: 0, total: 0, lppPaymentId: null };
   }
 
   const amount = Math.max(0, input.amount);
@@ -917,6 +921,7 @@ async function applyConfirmedPaymentInTransaction(
   let paidBefore = 0;
   let paidAfter = 0;
   let total = 0;
+  let lppPaymentId: string | null = null;
   if (payment.orderId) {
     const order = await tx.order.findUniqueOrThrow({ where: { id: payment.orderId } });
     total = toNumber(order.totalAmount);
@@ -1002,6 +1007,7 @@ async function applyConfirmedPaymentInTransaction(
       notes: `Daraja M-Pesa receipt for ${payment.accountReference || "Lipa Pole Pole installment"}.`,
       status: "SUCCESS",
     }, tx);
+    lppPaymentId = lppPayment.paymentId;
     total = toNumber(lppPayment.summary.agreedTotal);
     paidAfter = toNumber(lppPayment.summary.totalPaid);
     paidBefore = Math.max(0, paidAfter - amount);
@@ -1040,11 +1046,11 @@ async function applyConfirmedPaymentInTransaction(
     await tx.receipt.update({ where: { id: receipt.id }, data: { data: { ...receiptData, customerType: "project", installationPaymentState: "CONFIRMED", installationPaymentKind: null, installationPaymentConfirmedAt: (input.transactionAt || new Date()).toISOString(), lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null, lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null, projectFlow: flow } } });
   }
   await tx.mpesaPayment.update({ where: { id: payment.id }, data: { ...common, status: "SUCCESS" } });
-  return { applied: true, paidBefore, paidAfter, total };
+  return { applied: true, paidBefore, paidAfter, total, lppPaymentId };
 }
 
 async function applyConfirmedPayment(paymentId: string, input: ConfirmedPaymentInput) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     // This conditional claim makes duplicate/retried Daraja callbacks harmless:
     // only the transaction that changes PENDING can apply the accounting entry.
     const claimed = await tx.mpesaPayment.updateMany({ where: { id: paymentId, status: "PENDING" }, data: { status: "SUCCESS" } });
@@ -1054,6 +1060,19 @@ async function applyConfirmedPayment(paymentId: string, input: ConfirmedPaymentI
     const application = await applyConfirmedPaymentInTransaction(tx, payment, input);
     return { payment, application };
   });
+  if (
+    result?.application.applied &&
+    result.payment.resourceType === "LPP" &&
+    result.payment.resourceId &&
+    result.application.lppPaymentId
+  ) {
+    await notifyLppConfirmedPayment({
+      lipaPolePoleId: result.payment.resourceId,
+      paymentId: result.application.lppPaymentId,
+      isFullyPaid: result.application.paidAfter >= result.application.total,
+    });
+  }
+  return result;
 }
 
 async function findReconciliationTarget(

@@ -147,7 +147,9 @@ function buildLifecycleCustomerSms(context: LppLifecycleNotificationContext) {
   return [
     `Hello ${context.customerName || "Customer"},`,
     lifecycleLead(context),
-    context.productName ? `Product: ${context.productName}.` : null,
+    // The booking reference is sufficient for an SMS receipt. Product names
+    // can be long enough to split the message into several billable segments.
+    `Booking: ${context.reference}.`,
     context.paymentReference
       ? `Payment ref: ${context.paymentReference}.`
       : null,

@@ -725,13 +725,12 @@ export default function ReceiptsAdminClient({
           params.set("customerType", activeFilters.customerType);
         if (activeFilters.podStatus)
           params.set("status", activeFilters.podStatus);
-        const isAllPeriodPendingPodQueue =
-          activeFilters.customerType === "pod" && activeFilters.podStatus === "pending";
+        const isAllPeriodPodQueue = activeFilters.customerType === "pod";
         const startParam = buildDateParam(activeFilters.start, false);
         const endParam = buildDateParam(activeFilters.end, true);
-        if (startParam && !isAllPeriodPendingPodQueue) params.set("start", startParam);
-        if (endParam && !isAllPeriodPendingPodQueue) params.set("end", endParam);
-        if (isAllPeriodPendingPodQueue) params.set("carryForwardPending", "1");
+        if (startParam && !isAllPeriodPodQueue) params.set("start", startParam);
+        if (endParam && !isAllPeriodPodQueue) params.set("end", endParam);
+        if (isAllPeriodPodQueue) params.set("carryForwardPending", "1");
         const isProfitDrilldown = activeSummaryView === "profit";
         params.set("scope", scopeMode);
         if (activeOnlyPos) params.set("onlyPos", "1");
@@ -782,12 +781,11 @@ export default function ReceiptsAdminClient({
       setSummaryLoading(true);
       try {
         const params = new URLSearchParams();
-        const isAllPeriodPendingPodQueue =
-          appliedFilters.customerType === "pod" && appliedFilters.podStatus === "pending";
+        const isAllPeriodPodQueue = appliedFilters.customerType === "pod";
         const startParam = buildDateParam(appliedFilters.start, false);
         const endParam = buildDateParam(appliedFilters.end, true);
-        if (startParam && !isAllPeriodPendingPodQueue) params.set("start", startParam);
-        if (endParam && !isAllPeriodPendingPodQueue) params.set("end", endParam);
+        if (startParam && !isAllPeriodPodQueue) params.set("start", startParam);
+        if (endParam && !isAllPeriodPodQueue) params.set("end", endParam);
         if (appliedFilters.paymentMethod)
           params.set("paymentMethod", appliedFilters.paymentMethod);
         if (appliedFilters.attendantId) {
@@ -810,7 +808,7 @@ export default function ReceiptsAdminClient({
           // pending entries instead of applying the sales-only calculation.
           params.set("salesOnly", "false");
         }
-        if (isAllPeriodPendingPodQueue) params.set("carryForwardPending", "1");
+        if (isAllPeriodPodQueue) params.set("carryForwardPending", "1");
         params.set("scope", scopeMode);
         if (onlyPos) params.set("onlyPos", "1");
         if (!ledgerEnabled) params.set("includeLedger", "false");
@@ -1956,11 +1954,7 @@ export default function ReceiptsAdminClient({
     (async () => {
       setPodPanelLoading(true);
       try {
-        const startParam = buildDateParam(appliedFilters.start, false);
-        const endParam = buildDateParam(appliedFilters.end, true);
         const base = new URLSearchParams();
-        if (startParam) base.set("start", startParam);
-        if (endParam) base.set("end", endParam);
         if (appliedFilters.paymentMethod)
           base.set("paymentMethod", appliedFilters.paymentMethod);
         if (appliedFilters.attendantId)
@@ -1977,11 +1971,7 @@ export default function ReceiptsAdminClient({
         const fetchOne = async (status?: string) => {
           const params = new URLSearchParams(base);
           if (status) params.set("status", status);
-          if (status === "pending") {
-            params.delete("start");
-            params.delete("end");
-            params.set("carryForwardPending", "1");
-          }
+          params.set("carryForwardPending", "1");
           const res = await fetch(
             `/api/admin/receipts/summary?${params.toString()}`,
             {

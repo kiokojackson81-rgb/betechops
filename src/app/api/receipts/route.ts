@@ -222,10 +222,9 @@ export async function GET(req: NextRequest) {
   const isSupportDocType = normalizedDocType === "SUPPORT";
   const requestedCustomerType = (url.searchParams.get("customerType") || "").toLowerCase().trim();
   const isProjectOnlyView = requestedCustomerType === "project";
-  // Pending POD is outstanding delivery work. It must remain visible across
-  // every trading period until the delivery outcome is recorded.
-  const isAllPeriodPendingPodQueue =
-    requestedCustomerType === "pod" && (url.searchParams.get("status") || "").toLowerCase() === "pending";
+  // POD is operational delivery work. Every delivery status remains visible
+  // across reporting periods in the POD desk.
+  const isAllPeriodPodQueue = requestedCustomerType === "pod";
   const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
   const includeMarketingReceipts =
     !isProjectOnlyView && !onlyPos && (isMarketingDocType || (includeLedger && !normalizedDocType));
@@ -272,7 +271,7 @@ export async function GET(req: NextRequest) {
   };
 
   const and: Prisma.ReceiptWhereInput[] = [];
-  const shouldApplyGeneratedAtWindow = !carryForwardPending && !isAllPeriodPendingPodQueue && !isProjectOnlyView;
+  const shouldApplyGeneratedAtWindow = !carryForwardPending && !isAllPeriodPodQueue && !isProjectOnlyView;
   if (shouldApplyGeneratedAtWindow) {
     and.push({ createdAt: { lte: endDate } });
   }
@@ -1051,18 +1050,16 @@ export async function GET(req: NextRequest) {
     return buyingTotal > 0;
   });
 
-  // A pending POD has no financial recognition date yet. When the operations
-  // desk asks for pending POD work, keep it visible across trading periods so
-  // an unresolved delivery cannot disappear merely because its receipt was
-  // created before the currently selected date range.
-  const includePendingPodAcrossPeriods = customerType === "pod" && podStatus === "pending";
+  // POD is a delivery-work queue. Its pending, failed, and delivered records
+  // must remain visible across periods rather than disappearing with sales
+  // reporting dates.
+  const includePodAcrossPeriods = customerType === "pod";
   const filteredByEffectiveDate = isProjectOnlyView
     ? deduped
     : deduped.filter((row) => {
         if (
-          includePendingPodAcrossPeriods &&
-          Boolean((row as any).isPodDelivery) &&
-          String((row as any).podDeliveryStatus ?? "").toLowerCase() === "pending"
+          includePodAcrossPeriods &&
+          Boolean((row as any).isPodDelivery)
         ) {
           return true;
         }
@@ -1098,12 +1095,11 @@ export async function GET(req: NextRequest) {
   const summaryRows = filteredByEffectiveDate.filter((row) => {
     if (isReceiptCancelledForSales(row)) return false;
     if ((row as any).financialRecognized !== false) return true;
-    // The operations desk's pending-POD view is a work queue. Its count and
-    // visible value must include unpaid deliveries that still require action.
+    // The operations desk's POD view is a work queue. Its count and visible
+    // value include delivery work even before financial recognition.
     return (
-      includePendingPodAcrossPeriods &&
-      Boolean((row as any).isPodDelivery) &&
-      String((row as any).podDeliveryStatus ?? "").toLowerCase() === "pending"
+      includePodAcrossPeriods &&
+      Boolean((row as any).isPodDelivery)
     );
   });
 

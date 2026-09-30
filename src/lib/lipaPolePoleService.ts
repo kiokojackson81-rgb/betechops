@@ -2341,6 +2341,23 @@ async function safelyDispatchLppLifecycleNotifications(
   }
 }
 
+/**
+ * Sends the customer receipt only after an automatic M-Pesa transaction has
+ * committed.  Keeping this outside the payment transaction prevents an SMS
+ * provider issue from affecting payment reconciliation.
+ */
+export async function notifyLppConfirmedPayment(input: {
+  lipaPolePoleId: string;
+  paymentId: string;
+  isFullyPaid: boolean;
+}) {
+  await safelyDispatchLppLifecycleNotifications({
+    lipaPolePoleId: input.lipaPolePoleId,
+    paymentId: input.paymentId,
+    event: input.isFullyPaid ? "PLAN_COMPLETED" : "PAYMENT_RECEIVED",
+  });
+}
+
 export async function getLppAccountSummary(
   lipaPolePoleId: string,
   db: DbClient = prisma,

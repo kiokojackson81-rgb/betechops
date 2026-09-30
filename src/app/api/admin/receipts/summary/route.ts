@@ -20,15 +20,14 @@ export async function GET(request: NextRequest) {
   const scope = scopeParam === "global" ? "global" : "mine";
   const customerType = url.searchParams.get("customerType") || undefined;
   const podStatus = url.searchParams.get("status") || undefined;
-  // Pending POD remains live operational work until an outcome is recorded.
-  // It must therefore remain visible on the admin desk across all periods.
-  const isAllPeriodPendingPodQueue =
-    customerType?.toLowerCase() === "pod" && podStatus?.toLowerCase() === "pending";
+  // POD is an operational delivery queue, not a period-bound sales report.
+  // Every POD status must remain available until it is resolved or audited.
+  const isAllPeriodPodQueue = customerType?.toLowerCase() === "pod";
   const period = getTradingPeriodFor(new Date());
-  const start = isAllPeriodPendingPodQueue
+  const start = isAllPeriodPodQueue
     ? new Date("2000-01-01T00:00:00.000Z")
     : parseDateParam(url.searchParams.get("start"), period.start);
-  const end = isAllPeriodPendingPodQueue
+  const end = isAllPeriodPodQueue
     ? new Date("2100-01-01T00:00:00.000Z")
     : parseDateParam(url.searchParams.get("end"), period.end, true);
   const identity = await resolveTargetUserId(request);
