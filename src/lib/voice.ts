@@ -1463,13 +1463,6 @@ export function inferVoiceCompletionStatus(
     ) ?? 0;
   const hasBridgeEvidence =
     bridgeDuration > 0 ||
-    dialDuration > 0 ||
-    Boolean(safeString(payload.recordingUrl)) ||
-    Boolean(
-      safeString(
-        payload.dialDestinationNumber || payload.lastDialDestinationNumber,
-      ),
-    ) ||
     [
       "answered",
       "connected",
@@ -1479,11 +1472,10 @@ export function inferVoiceCompletionStatus(
       "successful",
       "transferred",
       "bridged",
-    ].includes(bridgeStatus) ||
-    Boolean(
-      hangupCause &&
-      !["USER_BUSY", "BUSY", "NO_ANSWER", "NO ANSWER"].includes(hangupCause),
-    );
+    ].includes(bridgeStatus);
+  // A destination number and ringing duration prove only that an agent was
+  // attempted. They do not prove that an agent actually joined the call.
+  const unansweredAttemptDuration = dialDuration || duration;
 
   if (["connected", "in_progress", "transferred"].includes(normalizedStatus)) {
     return normalizedStatus;
@@ -1491,11 +1483,10 @@ export function inferVoiceCompletionStatus(
   if (normalizedStatus === "answered") {
     if (
       direction === "INBOUND" &&
-      duration > 0 &&
       treatInboundSuccessWithoutBridgeAsNoAnswer &&
       !hasBridgeEvidence
     ) {
-      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS
+      return unansweredAttemptDuration < ATTEMPTED_CALL_THRESHOLD_SECONDS
         ? "attempted_call"
         : "no_answer";
     }
@@ -1512,7 +1503,7 @@ export function inferVoiceCompletionStatus(
 
   if (isProviderTerminalSuccess && direction === "INBOUND" && duration > 0) {
     if (treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
-      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS
+      return unansweredAttemptDuration < ATTEMPTED_CALL_THRESHOLD_SECONDS
         ? "attempted_call"
         : "no_answer";
     }
@@ -1545,17 +1536,8 @@ export function hasAnsweredVoiceBridge(
         payload.talkDurationInSeconds ||
         payload.conversationDurationInSeconds,
     ) ?? 0;
-  const dialDuration =
-    parseInteger(
-      payload.dialDurationInSeconds ||
-        payload.dialDuration ||
-        payload.dialCallDurationInSeconds,
-    ) ?? 0;
-
   return (
     bridgeDuration > 0 ||
-    dialDuration > 0 ||
-    Boolean(safeString(payload.recordingUrl)) ||
     [
       "answered",
       "connected",

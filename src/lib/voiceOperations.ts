@@ -604,15 +604,6 @@ function inferVoiceProviderOutcomeFromPayload(
     ) || 0;
   const hasBridgeEvidence =
     bridgeDuration > 0 ||
-    dialDuration > 0 ||
-    Boolean(String(payload.recordingUrl || "").trim()) ||
-    Boolean(
-      String(
-        payload.dialDestinationNumber ||
-          payload.lastDialDestinationNumber ||
-          "",
-      ).trim(),
-    ) ||
     [
       "answered",
       "connected",
@@ -622,11 +613,9 @@ function inferVoiceProviderOutcomeFromPayload(
       "successful",
       "transferred",
       "bridged",
-    ].includes(bridgeStatus) ||
-    Boolean(
-      hangupCause &&
-      !["USER_BUSY", "BUSY", "NO_ANSWER", "NO ANSWER"].includes(hangupCause),
-    );
+    ].includes(bridgeStatus);
+  // A dial destination/ring duration records an attempt, not an agent answer.
+  const unansweredAttemptDuration = dialDuration || duration;
 
   if (["connected", "in_progress", "transferred"].includes(normalizedStatus)) {
     return normalizedStatus;
@@ -634,11 +623,10 @@ function inferVoiceProviderOutcomeFromPayload(
   if (normalizedStatus === "answered") {
     if (
       direction === "INBOUND" &&
-      duration > 0 &&
       treatInboundSuccessWithoutBridgeAsNoAnswer &&
       !hasBridgeEvidence
     ) {
-      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS
+      return unansweredAttemptDuration < ATTEMPTED_CALL_THRESHOLD_SECONDS
         ? "attempted_call"
         : "no_answer";
     }
@@ -655,7 +643,7 @@ function inferVoiceProviderOutcomeFromPayload(
 
   if (isProviderTerminalSuccess && direction === "INBOUND" && duration > 0) {
     if (treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
-      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS
+      return unansweredAttemptDuration < ATTEMPTED_CALL_THRESHOLD_SECONDS
         ? "attempted_call"
         : "no_answer";
     }
@@ -2103,6 +2091,11 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         select: {
           assignedToId: true,
           status: true,
+          durationInSeconds: true,
+          isActive: true,
+          routeType: true,
+          routedTo: true,
+          rawPayloadJson: true,
         },
       })
     : [];
@@ -2127,9 +2120,10 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     };
 
     current.receivedCallsToday += 1;
-    if (isAnsweredStatus(call.status)) current.answeredCallsToday += 1;
-    if (isMissedStatus(call.status)) current.missedCallsToday += 1;
-    if (isAttemptedCallStatus(call.status)) current.attemptedCallsToday += 1;
+    const effectiveStatus = resolveVoiceProviderOutcome(call).displayStatus;
+    if (isAnsweredStatus(effectiveStatus)) current.answeredCallsToday += 1;
+    if (isMissedStatus(effectiveStatus)) current.missedCallsToday += 1;
+    if (isAttemptedCallStatus(effectiveStatus)) current.attemptedCallsToday += 1;
 
     accumulator.set(call.assignedToId, current);
     return accumulator;
