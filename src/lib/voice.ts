@@ -28,6 +28,7 @@ type VoicePayload = Record<string, string>;
 type VoiceRouteLabel =
   | "BRENDAH"
   | "JENNIFER"
+  | "STEPHEN"
   | "ADMIN"
   | "OVERFLOW"
   | "QUOTATION_OWNER";
@@ -76,6 +77,7 @@ function isVoiceWebrtcEnabled() {
 function getDefaultWebrtcClientName(label: VoiceRouteTarget["label"]) {
   if (label === "BRENDAH") return "brendah";
   if (label === "JENNIFER") return "jennifer";
+  if (label === "STEPHEN") return "stephen";
   if (label === "OVERFLOW") return "overflow";
   return "jackson";
 }
@@ -110,7 +112,7 @@ export async function claimQuickCallRecovery(input: {
   // The public routing configuration is authoritative.  In particular, do
   // not infer an agent from User.phone: that field is also used by HR/payroll.
   const targets = await buildVoiceTargets();
-  const matchingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN]
+  const matchingTargets = [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN]
     .filter((target) =>
       target.userId &&
       target.routingEnabled &&
@@ -297,9 +299,11 @@ async function resolveRoutingUsers() {
         { email: { contains: "brendah", mode: "insensitive" } },
         { email: { contains: "jen", mode: "insensitive" } },
         { email: { contains: "jackson", mode: "insensitive" } },
+        { email: { equals: "stephen@betech.co.ke", mode: "insensitive" } },
         { name: { contains: "Brendah", mode: "insensitive" } },
         { name: { contains: "Jennifer", mode: "insensitive" } },
         { name: { contains: "Jackson", mode: "insensitive" } },
+        { name: { contains: "Stephen", mode: "insensitive" } },
       ],
     },
     select: {
@@ -335,6 +339,12 @@ async function resolveRoutingUsers() {
           normalizedName.includes("jeniffer")
         );
       }
+      if (label === "STEPHEN") {
+        return (
+          normalizedEmail === "stephen@betech.co.ke" ||
+          normalizedName.includes("stephen")
+        );
+      }
       return (
         normalizedEmail.includes("jackson") ||
         normalizedName.includes("jackson") ||
@@ -348,8 +358,18 @@ async function resolveRoutingUsers() {
   return {
     BRENDAH: findUserId("BRENDAH", brendahPhone),
     JENNIFER: findUserId("JENNIFER", jenniferPhone),
+    STEPHEN: findUserId("STEPHEN", null),
     ADMIN: findUserId("ADMIN", adminPhone),
   };
+}
+
+async function getStephenVoicePhone(userId: string | null) {
+  if (!userId) return "";
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { phone: true },
+  });
+  return normalizeVoiceNumber(user?.phone || "");
 }
 
 async function buildVoiceTargets(): Promise<
@@ -362,6 +382,8 @@ async function buildVoiceTargets(): Promise<
   const brendahUserId = routingUsers.BRENDAH;
   const jenniferUserId = routingUsers.JENNIFER;
   const adminUserId = routingUsers.ADMIN;
+  const stephenUserId = routingUsers.STEPHEN;
+  const stephenPhone = await getStephenVoicePhone(stephenUserId);
 
   const voiceRoutingConfig = await prisma.voiceRoutingConfig.findUnique({
     where: { key: "default" },
@@ -391,6 +413,7 @@ async function buildVoiceTargets(): Promise<
   const userIds = [
     brendahUserId,
     jenniferUserId,
+    stephenUserId,
     adminUserId,
     overflowUserId,
   ].filter((value): value is string => Boolean(value));
@@ -590,6 +613,7 @@ async function buildVoiceTargets(): Promise<
   return {
     BRENDAH: toTarget("BRENDAH", brendahPhone, brendahUserId),
     JENNIFER: toTarget("JENNIFER", jenniferPhone, jenniferUserId),
+    STEPHEN: toTarget("STEPHEN", stephenPhone, stephenUserId),
     ADMIN: toTarget("ADMIN", adminPhone, adminUserId),
     OVERFLOW: toTarget("OVERFLOW", overflowPhone || "", overflowUserId, {
       alwaysDial: true,
@@ -1070,10 +1094,11 @@ export async function getVoiceRouteTargets(
   const allConfiguredTargets = [
     targets.BRENDAH,
     targets.JENNIFER,
+    targets.STEPHEN,
     targets.ADMIN,
     targets.OVERFLOW,
   ].filter((target) => target.phoneNumber);
-  const agentTargets = [targets.BRENDAH, targets.JENNIFER].filter(
+  const agentTargets = [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN].filter(
     (target) => target.phoneNumber && target.routingEnabled,
   );
   const adminTarget = targets.ADMIN;
@@ -1081,6 +1106,7 @@ export async function getVoiceRouteTargets(
   const quotationOwnerTargets = [
     targets.BRENDAH,
     targets.JENNIFER,
+    targets.STEPHEN,
     targets.ADMIN,
   ].filter((target) => target.phoneNumber && target.routingEnabled);
   const directFallbackTargets = [adminTarget, overflowTarget].filter(
@@ -1108,6 +1134,7 @@ export async function getVoiceRouteTargets(
       adminTarget,
       targets.BRENDAH,
       targets.JENNIFER,
+      targets.STEPHEN,
       overflowTarget,
     ].filter(
       (target) =>
@@ -1150,7 +1177,7 @@ export async function getVoiceRouteTargets(
     findStickyOwnerTarget(callerNumber, agentTargets),
     findLastAnsweredTarget(
       callerNumber,
-      [targets.BRENDAH, targets.JENNIFER, targets.ADMIN, targets.OVERFLOW].filter(
+      [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN, targets.OVERFLOW].filter(
         (target) => target.phoneNumber && target.routingEnabled,
       ),
       date,
@@ -1227,9 +1254,10 @@ export async function getVoiceRouteTargets(
   const workingTargets = [
     targets.BRENDAH,
     targets.JENNIFER,
+    targets.STEPHEN,
     targets.ADMIN,
     ...(quotationOwnerTarget &&
-    ![targets.BRENDAH, targets.JENNIFER, targets.ADMIN].some(
+    ![targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN].some(
       (target) => target.userId === quotationOwnerTarget.userId,
     )
       ? [quotationOwnerTarget]
@@ -1301,11 +1329,14 @@ async function resolveAnsweredAgentAssignment(
   const routingUsers = await resolveRoutingUsers();
   const brendahPhone = getConfiguredPhone("BRENDAH");
   const jenniferPhone = getConfiguredPhone("JENNIFER");
+  const stephenPhone = await getStephenVoicePhone(routingUsers.STEPHEN);
 
   if (normalizedDestination === brendahPhone && routingUsers.BRENDAH)
     return routingUsers.BRENDAH;
   if (normalizedDestination === jenniferPhone && routingUsers.JENNIFER)
     return routingUsers.JENNIFER;
+  if (normalizedDestination === stephenPhone && routingUsers.STEPHEN)
+    return routingUsers.STEPHEN;
   return null;
 }
 
