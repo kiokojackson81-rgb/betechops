@@ -1995,12 +1995,12 @@ export default function VoiceConsoleClient({
                   <div className="text-base font-semibold text-white">
                     BetechOps
                   </div>
-                  <Link
+                  <a
                     href={voiceHomeHref}
                     className="text-xs text-cyan-200 transition hover:text-cyan-100"
                   >
                     Go Home
-                  </Link>
+                  </a>
                 </div>
               </div>
 
