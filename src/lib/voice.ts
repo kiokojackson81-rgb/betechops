@@ -638,6 +638,7 @@ type QuotationOwnerRow = {
 
 async function buildQuotationOwnerVoiceTarget(
   ownerId: string,
+  options?: { alwaysDialMobile?: boolean },
 ): Promise<VoiceRouteTarget | null> {
   const [user, presence, routingPreference, activeCall] = await Promise.all([
     prisma.user.findFirst({
@@ -687,14 +688,17 @@ async function buildQuotationOwnerVoiceTarget(
       Date.now() - lastSeenAt.getTime() <= VOICE_PRESENCE_ROUTING_WINDOW_MS,
   );
   const isAvailable =
-    presenceStatus === "AVAILABLE" && hasRecentPresence && !hasBusyCall;
+    Boolean(options?.alwaysDialMobile) ||
+    (presenceStatus === "AVAILABLE" && hasRecentPresence && !hasBusyCall);
   const skipReasons: string[] = [];
-  if (!presence) skipReasons.push("missing_presence");
-  if (presenceStatus !== "AVAILABLE") {
-    skipReasons.push(`status_${presenceStatus.toLowerCase()}`);
+  if (!options?.alwaysDialMobile) {
+    if (!presence) skipReasons.push("missing_presence");
+    if (presenceStatus !== "AVAILABLE") {
+      skipReasons.push(`status_${presenceStatus.toLowerCase()}`);
+    }
+    if (!hasRecentPresence) skipReasons.push("stale_or_missing_presence");
+    if (hasBusyCall) skipReasons.push("active_call_in_progress");
   }
-  if (!hasRecentPresence) skipReasons.push("stale_or_missing_presence");
-  if (hasBusyCall) skipReasons.push("active_call_in_progress");
 
   return {
     label: "QUOTATION_OWNER",
@@ -779,15 +783,10 @@ async function findAssignedLeadTarget(
   const phoneVariants = getKenyanPhoneVariants(callerNumber);
   if (!phoneVariants.length) return null;
 
-  const agentUserIds = agentTargets
-    .map((target) => target.userId)
-    .filter((value): value is string => Boolean(value));
-  if (!agentUserIds.length) return null;
-
   const assignedLead = await prisma.voiceLead.findFirst({
     where: {
       phone: { in: phoneVariants },
-      assignedToId: { in: agentUserIds },
+      assignedToId: { not: null },
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     select: {
@@ -796,11 +795,8 @@ async function findAssignedLeadTarget(
   });
 
   if (!assignedLead?.assignedToId) return null;
-  return (
-    agentTargets.find(
-      (target) => target.userId === assignedLead.assignedToId,
-    ) ?? null
-  );
+  return agentTargets.find((target) => target.userId === assignedLead.assignedToId) ??
+    buildQuotationOwnerVoiceTarget(assignedLead.assignedToId, { alwaysDialMobile: true });
 }
 
 async function findAssignedFollowUpTarget(
@@ -811,15 +807,10 @@ async function findAssignedFollowUpTarget(
   const phoneVariants = getKenyanPhoneVariants(callerNumber);
   if (!phoneVariants.length) return null;
 
-  const agentUserIds = agentTargets
-    .map((target) => target.userId)
-    .filter((value): value is string => Boolean(value));
-  if (!agentUserIds.length) return null;
-
   const followUp = await prisma.voiceFollowUp.findFirst({
     where: {
       phone: { in: phoneVariants },
-      assignedToId: { in: agentUserIds },
+      assignedToId: { not: null },
       status: { in: ["pending", "contacted", "open", "pending_follow_up"] },
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -829,10 +820,8 @@ async function findAssignedFollowUpTarget(
   });
 
   if (!followUp?.assignedToId) return null;
-  return (
-    agentTargets.find((target) => target.userId === followUp.assignedToId) ??
-    null
-  );
+  return agentTargets.find((target) => target.userId === followUp.assignedToId) ??
+    buildQuotationOwnerVoiceTarget(followUp.assignedToId, { alwaysDialMobile: true });
 }
 
 async function findStickyOwnerTarget(
@@ -843,16 +832,11 @@ async function findStickyOwnerTarget(
   const phoneVariants = getKenyanPhoneVariants(callerNumber);
   if (!phoneVariants.length) return null;
 
-  const agentUserIds = agentTargets
-    .map((target) => target.userId)
-    .filter((value): value is string => Boolean(value));
-  if (!agentUserIds.length) return null;
-
   const [followUp, lead, lastCall] = await Promise.all([
     prisma.voiceFollowUp.findFirst({
       where: {
         phone: { in: phoneVariants },
-        assignedToId: { in: agentUserIds },
+        assignedToId: { not: null },
         status: { in: ["pending", "contacted", "open", "pending_follow_up"] },
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -861,7 +845,7 @@ async function findStickyOwnerTarget(
     prisma.voiceLead.findFirst({
       where: {
         phone: { in: phoneVariants },
-        assignedToId: { in: agentUserIds },
+        assignedToId: { not: null },
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       select: { assignedToId: true, updatedAt: true, createdAt: true },
@@ -870,7 +854,7 @@ async function findStickyOwnerTarget(
       where: {
         direction: "INBOUND",
         callerNumber: { in: phoneVariants },
-        assignedToId: { in: agentUserIds },
+        assignedToId: { not: null },
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       select: { assignedToId: true, updatedAt: true, createdAt: true },
@@ -895,10 +879,8 @@ async function findStickyOwnerTarget(
     })[0];
 
   if (!freshest?.assignedToId) return null;
-  return (
-    agentTargets.find((target) => target.userId === freshest.assignedToId) ??
-    null
-  );
+  return agentTargets.find((target) => target.userId === freshest.assignedToId) ??
+    buildQuotationOwnerVoiceTarget(freshest.assignedToId, { alwaysDialMobile: true });
 }
 
 async function findPreviousAgentTarget(

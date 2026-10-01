@@ -1186,6 +1186,24 @@ async function listVoiceRoutingCandidates() {
   });
 }
 
+async function listVoiceAssignmentCandidates() {
+  return prisma.user.findMany({
+    where: {
+      isActive: true,
+      phone: { not: null },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      attendantCategory: true,
+    },
+    orderBy: [{ name: "asc" }, { email: "asc" }],
+  });
+}
+
 async function getVoiceRoutingConfig() {
   return prisma.voiceRoutingConfig.findUnique({
     where: { key: "default" },
@@ -1420,6 +1438,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     newVoiceLeadsCount,
     voiceRoutingConfigRaw,
     routingCandidatesRaw,
+    assignmentCandidatesRaw,
   ] = await Promise.all([
     prisma.voiceCall.count({
       where: {
@@ -1542,6 +1561,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     }),
     viewer.isAdmin ? getVoiceRoutingConfig() : Promise.resolve(null),
     viewer.isAdmin ? listVoiceRoutingCandidates() : Promise.resolve([]),
+    viewer.isAdmin ? listVoiceAssignmentCandidates() : Promise.resolve([]),
   ]);
 
   const callbackRequestTaskIds = followUpsRaw.map((task) => task.id);
@@ -2215,6 +2235,19 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       String(candidate.phone || "").trim() ||
       "Unnamed user",
   }));
+  const assignmentCandidates = assignmentCandidatesRaw.map((candidate) => ({
+    id: candidate.id,
+    name: candidate.name,
+    email: candidate.email,
+    phone: candidate.phone,
+    role: candidate.role,
+    attendantCategory: candidate.attendantCategory,
+    label:
+      String(candidate.name || "").trim() ||
+      String(candidate.email || "").trim() ||
+      String(candidate.phone || "").trim() ||
+      "Unnamed employee",
+  }));
 
   const selectedCall =
     (input.selectedCallId
@@ -2326,6 +2359,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       updatedAt: toIso(voiceRoutingConfigRaw?.updatedAt),
     },
     routingCandidates,
+    assignmentCandidates,
     summary: viewer.isAdmin
       ? {
           callsToday: callsTodayCount,

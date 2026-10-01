@@ -1618,6 +1618,17 @@ export default function VoiceConsoleClient({
     softphone.transportMode,
   ]);
 
+  const assignableEmployees = useMemo(
+    () =>
+      [...(data.assignmentCandidates || [])].sort(
+        (left: any, right: any) =>
+          String(left.label || left.name || "").localeCompare(
+            String(right.label || right.name || ""),
+          ),
+      ),
+    [data.assignmentCandidates],
+  );
+
   const queueItems = useMemo(() => {
     const query = queueSearch.trim().toLowerCase();
     const allItems = [
@@ -3456,10 +3467,10 @@ export default function VoiceConsoleClient({
                                                           className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
                                                         >
                                                           <option value="">
-                                                            Select agent
+                                                            Select employee
                                                           </option>
-                                                          {visibleAgents.map(
-                                                            (agent) => (
+                                                          {assignableEmployees.map(
+                                                            (agent: any) => (
                                                               <option
                                                                 key={agent.id}
                                                                 value={agent.id}
@@ -4121,7 +4132,7 @@ export default function VoiceConsoleClient({
                                             className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
                                           >
                                             <option value="">Reassign</option>
-                                            {visibleAgents.map((agent) => (
+                                            {assignableEmployees.map((agent: any) => (
                                               <option
                                                 key={agent.id}
                                                 value={agent.id}
@@ -4986,8 +4997,8 @@ export default function VoiceConsoleClient({
                                     }}
                                     className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
                                   >
-                                    <option value="">Select agent</option>
-                                    {visibleAgents.map((agent) => (
+                                    <option value="">Select employee</option>
+                                    {assignableEmployees.map((agent: any) => (
                                       <option key={agent.id} value={agent.id}>
                                         {(agent as any).displayName ||
                                           agent.name}
