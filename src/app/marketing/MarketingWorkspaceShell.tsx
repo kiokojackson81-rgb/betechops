@@ -50,6 +50,9 @@ function pageHeading(pathname: string) {
   if (pathname.includes("/lipa-pole-pole")) {
     return ["Lipa Mdogo Mdogo", "Manage the Lipa Mdogo Mdogo orders you created, print booking receipts, and prompt customers to pay."];
   }
+  if (pathname.includes("/attendant/voice")) {
+    return ["Voice Calls", "Manage your incoming calls, customer context, callbacks, and follow-up work."];
+  }
   if (pathname.includes("/receipts")) {
     return ["Sales & Receipts", "Manage POS receipts, website orders, POD activity, and quotations."];
   }
@@ -128,6 +131,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     if (key === "products") return pathname.includes("/products");
     if (key === "earnings") return pathname.includes("/earnings");
     if (key === "wellness") return pathname.includes("/wellness");
+    if (key === "voice") return pathname.includes("/attendant/voice");
     if (key === "pos") return pathname.includes("/receipts") && (currentTab === "pos" || !currentTab);
     if (key === "webOrders") return pathname.includes("/receipts") && currentTab === "web-orders";
     if (key === "quotations") return pathname.includes("/receipts") && currentTab === "quotations";
@@ -183,6 +187,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
                 <Link href={links.pos} className={navClass(isActive("pos"))}><Receipt className="h-4 w-4" />POS receipts & POD</Link>
                 <Link href={links.webOrders} className={navClass(isActive("webOrders"))}><Globe2 className="h-4 w-4" />Website orders</Link>
                 <Link href={links.agentOrders} className={navClass(isActive("agentOrders"))}><UsersRound className="h-4 w-4" />Agent orders</Link>
+                <Link href={links.voice} className={navClass(isActive("voice"))}><PhoneCall className="h-4 w-4 text-cyan-200" />Voice calls</Link>
                 <Link href={links.lipaPolePole} className={navClass(isActive("lipaPolePole"))}><HandCoins className="h-4 w-4 text-emerald-200" />Lipa Mdogo Mdogo</Link>
                 <Link href={links.quotations} className={navClass(isActive("quotations"))}><FileText className="h-4 w-4" />Quotations</Link>
                 {canManageProducts ? (
@@ -198,7 +203,6 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
               <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Daily tools</div>
               <div className="space-y-1">
                 <Link href={links.createReceipt} className={navClass()}><ShoppingBag className="h-4 w-4 text-emerald-200" />Create receipt</Link>
-                <Link href={links.voice} className={navClass()}><PhoneCall className="h-4 w-4" />Calls & follow-ups</Link>
                 <Link href={links.wellness} className={navClass(isActive("wellness"))}><HeartPulse className="h-4 w-4" />Wellness</Link>
               </div>
             </div>
@@ -255,12 +259,12 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
               </summary>
               <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-2 sm:grid-cols-4">
                 <Link href={links.quotations} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Quotations</Link>
+                <Link href={links.voice} className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-center text-xs text-cyan-100">Voice calls</Link>
                 <Link href={links.lipaPolePole} className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-center text-xs text-emerald-100">Lipa Mdogo Mdogo</Link>
                 {canManageProducts ? (
                   <Link href={links.products} className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center text-xs text-amber-100">Website products</Link>
                 ) : null}
                 <Link href={links.createReceipt} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Create receipt</Link>
-                <Link href={links.voice} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Follow-ups</Link>
                 <Link href={links.wellness} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Wellness</Link>
                 <Link href={links.earnings} className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-center text-xs text-emerald-100">Earnings</Link>
                 <a href={links.report} download className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-center text-xs text-cyan-100">Report PDF</a>
