@@ -1941,7 +1941,8 @@ async function ensureAutoCallbackFollowUp(input: {
   const notes =
     input.notes?.trim() ||
     `Auto-created after ${safeString(input.status).replace(/_/g, " ") || "missed"} call.`;
-  const dueAt = new Date(Date.now() + 15 * 60 * 1000);
+  // Missed callers receive an owned callback task with a ten-minute SLA.
+  const dueAt = new Date(Date.now() + 10 * 60 * 1000);
   const title = input.title?.trim() || "Call back customer";
 
   if (existing) {
@@ -1952,8 +1953,12 @@ async function ensureAutoCallbackFollowUp(input: {
         voiceLeadId: input.voiceLeadId ?? existing.voiceLeadId,
         assignedToId: input.assignedToId ?? existing.assignedToId,
         title,
-        dueAt: existing.dueAt ?? dueAt,
-        notes: existing.notes || notes,
+        // Keep the earliest SLA deadline and consolidate repeat misses into
+        // the same customer task instead of creating callback duplicates.
+        dueAt: existing.dueAt && existing.dueAt < dueAt ? existing.dueAt : dueAt,
+        notes: existing.notes
+          ? `${existing.notes}\nRepeat missed call: ${new Date().toISOString()}.`
+          : notes,
       },
     });
   }
@@ -1980,11 +1985,9 @@ async function closeVoiceCallbackWorkForAnsweredCall(call: {
   status: string;
   durationInSeconds?: number | null;
 }) {
-  if (
-    !isAnsweredBusinessStatus(call.status) &&
-    Number(call.durationInSeconds ?? 0) <= 0
-  )
-    return;
+  // Only a verified bridge can reconcile an earlier missed-call task. Ring
+  // time or a provider's optimistic "answered" state is not enough.
+  if (!isAnsweredBusinessStatus(call.status)) return;
 
   const phoneVariants = getCustomerContactPhones(call);
   if (!phoneVariants.length) return;
