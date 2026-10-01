@@ -604,6 +604,7 @@ function inferVoiceProviderOutcomeFromPayload(
     ) || 0;
   const hasBridgeEvidence =
     bridgeDuration > 0 ||
+    Boolean(String(payload.recordingUrl || "").trim()) ||
     [
       "answered",
       "connected",

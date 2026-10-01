@@ -1463,6 +1463,9 @@ export function inferVoiceCompletionStatus(
     ) ?? 0;
   const hasBridgeEvidence =
     bridgeDuration > 0 ||
+    // Africa's Talking stores recordings for completed bridged conversations,
+    // even when it omits a separate bridge-duration field.
+    Boolean(safeString(payload.recordingUrl)) ||
     [
       "answered",
       "connected",
@@ -1538,6 +1541,7 @@ export function hasAnsweredVoiceBridge(
     ) ?? 0;
   return (
     bridgeDuration > 0 ||
+    Boolean(safeString(payload.recordingUrl)) ||
     [
       "answered",
       "connected",
