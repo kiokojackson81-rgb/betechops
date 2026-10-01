@@ -340,10 +340,7 @@ async function resolveRoutingUsers() {
         );
       }
       if (label === "STEPHEN") {
-        return (
-          normalizedEmail === "stephen@betech.co.ke" ||
-          normalizedName.includes("stephen")
-        );
+        return normalizedEmail === "stephen@betech.co.ke";
       }
       return (
         normalizedEmail.includes("jackson") ||

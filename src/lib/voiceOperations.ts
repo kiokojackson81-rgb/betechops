@@ -969,8 +969,7 @@ function buildRoutingAgentDefinitions(): RoutingAgentDefinition[] {
       phone: null,
       webRtcClientName: "stephen",
       match: (agent) =>
-        normalizeCompareValue(agent.email) === "stephen@betech.co.ke" ||
-        normalizeCompareValue(agent.name).includes("stephen"),
+        normalizeCompareValue(agent.email) === "stephen@betech.co.ke",
     },
     {
       key: "ADMIN",
