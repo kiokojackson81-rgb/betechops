@@ -1,4 +1,4 @@
-import { Check, Clock, Download, FileText, MessageCircle, Phone, Star } from "lucide-react";
+import { CalendarDays, Check, CircleDot, Clock, Download, FileText, MessageCircle, Phone, Star } from "lucide-react";
 import { footerGroups } from "@/app/shop/shopData";
 import { receiptMoney, type CustomerReceiptPresentation } from "@/lib/customerReceiptPresentation";
 import type { ReceiptReferralOffer } from "@/lib/reviewsReferrals";
@@ -32,6 +32,7 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
             <div className="sm:border-l sm:border-emerald-200 sm:pl-5"><dt className="text-sm text-slate-600">Outstanding balance</dt><dd className="mt-1 break-words text-2xl font-bold text-emerald-900">{receiptMoney(receipt.balance)}</dd></div>
           </dl>
         </section>
+        {receipt.project ? <ProjectStatusCard project={receipt.project} /> : null}
         <section aria-labelledby="purchase-heading" className="mt-6">
           <h2 id="purchase-heading" className="text-xl font-bold">Purchase summary</h2>
           <ul className="mt-3 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-slate-50">
@@ -56,4 +57,30 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
       </div>
     </article>
   </div>;
+}
+
+const projectStages = [
+  ["RECEIPT_CREATED", "Confirmed"],
+  ["PROJECT_SCHEDULED", "Scheduled"],
+  ["PROJECT_IN_PROGRESS", "In progress"],
+  ["PROJECT_INSTALLED", "Installed"],
+  ["COMPLETED_POSTED", "Completed"],
+] as const;
+
+function ProjectStatusCard({ project }: { project: NonNullable<CustomerReceiptPresentation["project"]> }) {
+  const isCancelled = project.stage === "CANCELLED";
+  const currentIndex = projectStages.findIndex(([stage]) => stage === project.stage);
+  return <section aria-label="Project progress" className={`mt-6 rounded-xl border p-5 sm:p-6 ${isCancelled ? "border-rose-200 bg-rose-50" : "border-sky-200 bg-sky-50"}`}>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className={`text-xs font-bold uppercase tracking-[0.16em] ${isCancelled ? "text-rose-700" : "text-sky-700"}`}>Installation project</p>
+        <h2 className="mt-1 flex items-center gap-2 text-xl font-bold text-slate-900"><CircleDot className={isCancelled ? "text-rose-600" : "text-sky-600"} size={22} aria-hidden="true" />Project status: {project.stageLabel}</h2>
+      </div>
+      {project.scheduledDate ? <div className="flex items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm font-semibold text-slate-700"><CalendarDays size={18} className="text-sky-700" aria-hidden="true" />Installation date: {project.scheduledDate}</div> : null}
+    </div>
+    {!isCancelled ? <ol className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">{projectStages.map(([stage, label], index) => {
+      const complete = currentIndex >= index;
+      return <li key={stage} className={`min-h-16 rounded-lg border p-3 text-xs font-bold ${complete ? "border-sky-300 bg-white text-sky-900" : "border-slate-200 bg-white/50 text-slate-500"}`}><span className="mb-2 flex h-5 w-5 items-center justify-center rounded-full bg-current/10">{complete ? <Check size={13} aria-hidden="true" /> : index + 1}</span>{label}</li>;
+    })}</ol> : <p className="mt-3 text-sm text-rose-800">This project has been cancelled. Please contact Betech if you need assistance.</p>}
+  </section>;
 }

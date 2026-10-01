@@ -1,7 +1,29 @@
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
+
 export const receiptMoney = (value: number) => `KSh ${new Intl.NumberFormat("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const amount = (value: unknown) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+
+function formatProjectStage(stage: string) {
+  switch (stage) {
+    case "RECEIPT_CREATED": return "Awaiting confirmation";
+    case "PROJECT_SCHEDULED": return "Scheduled";
+    case "PROJECT_IN_PROGRESS": return "In progress";
+    case "PROJECT_INSTALLED": return "Installation complete";
+    case "COMPLETED_POSTED": return "Completed";
+    case "CANCELLED": return "Cancelled";
+    default: return "Project being prepared";
+  }
+}
+
+function formatProjectDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" }).format(date)
+    : null;
+}
 
 /** The live order ledger is authoritative, including for commissioned projects. */
 export function customerReceiptPresentation(receipt: {
@@ -10,6 +32,7 @@ export function customerReceiptPresentation(receipt: {
 }) {
   const { order } = receipt;
   const data = record(receipt.data);
+  const projectFlow = readReceiptProjectFlow(data.projectFlow ?? record(data.metadata).projectFlow);
   const paid = amount(order.paidAmount);
   const total = amount(order.totalAmount);
   const balance = Math.round(Math.max(0, total - paid) * 100) / 100;
@@ -26,6 +49,13 @@ export function customerReceiptPresentation(receipt: {
     paid, balance, total,
     status: balance === 0 ? "Paid in full" : paid > 0 ? "Partially paid" : "Awaiting payment",
     paymentDate: lastPayment ? new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" }).format(lastPayment) : paid > 0 ? "Not recorded" : "No payment yet",
+    project: projectFlow
+      ? {
+          stage: projectFlow.stage,
+          stageLabel: formatProjectStage(projectFlow.stage),
+          scheduledDate: formatProjectDate(projectFlow.scheduledDate),
+        }
+      : null,
     items: rawItems.map((rawItem: unknown, index: number) => {
       const item = record(rawItem);
       return {

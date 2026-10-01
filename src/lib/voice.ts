@@ -1058,7 +1058,7 @@ export function buildStickyVoiceTargetOrder(input: {
   // A saved customer owner is exclusive. Do not spill the caller into the
   // round-robin pool; only the admin-selected backup receiver is attempted.
   return [input.stickyTarget, input.fallbackTarget].filter(
-    (target) => {
+    (target): target is VoiceRouteTarget => {
       if (!target) return false;
       const normalizedNumber = normalizeVoiceNumber(target.phoneNumber);
       if (!normalizedNumber || !target.routingEnabled) return false;
