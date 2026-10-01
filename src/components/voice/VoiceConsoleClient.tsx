@@ -1525,6 +1525,7 @@ export default function VoiceConsoleClient({
     const routingAliases = [
       { key: "brendah", match: ["brendah"] },
       { key: "jennifer", match: ["jennifer", "jeniffer", "jen"] },
+      { key: "stephen", match: ["stephen"] },
       { key: "jackson", match: ["jackson", "admin"] },
     ];
     const preferredByAlias = new Map<string, (typeof data.agents)[number]>();

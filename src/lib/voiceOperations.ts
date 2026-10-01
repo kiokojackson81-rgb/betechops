@@ -910,7 +910,7 @@ function getManualReassignmentPhone(call: {
 }
 
 type RoutingAgentDefinition = {
-  key: "BRENDAH" | "JENNIFER" | "ADMIN";
+  key: "BRENDAH" | "JENNIFER" | "STEPHEN" | "ADMIN";
   displayName: string;
   roleLabel: string;
   phone: string | null;
@@ -957,8 +957,20 @@ function buildRoutingAgentDefinitions(): RoutingAgentDefinition[] {
       match: (agent) =>
         normalizeCompareValue(agent.email).includes("jen") ||
         normalizeCompareValue(agent.name).includes("jen") ||
-        normalizeCompareValue(agent.phone) ===
+          normalizeCompareValue(agent.phone) ===
           normalizeCompareValue(jenniferPhone),
+    },
+    {
+      key: "STEPHEN",
+      displayName: "Stephen",
+      roleLabel: "Direct Sales Agent",
+      // Stephen's active routing line is stored on his staff record, so it
+      // can be changed without a deployment.
+      phone: null,
+      webRtcClientName: "stephen",
+      match: (agent) =>
+        normalizeCompareValue(agent.email) === "stephen@betech.co.ke" ||
+        normalizeCompareValue(agent.name).includes("stephen"),
     },
     {
       key: "ADMIN",
@@ -1362,9 +1374,11 @@ function serializePresenceRow(
         ? 1
         : routingDefinition?.key === "JENNIFER"
           ? 2
-          : routingDefinition?.key === "ADMIN"
+          : routingDefinition?.key === "STEPHEN"
             ? 3
-            : 99,
+            : routingDefinition?.key === "ADMIN"
+              ? 4
+              : 99,
     status: effectiveStatus,
     lastSeenAt: toIso(agent.voicePresence?.lastSeenAt),
     updatedAt: toIso(agent.voicePresence?.updatedAt),
