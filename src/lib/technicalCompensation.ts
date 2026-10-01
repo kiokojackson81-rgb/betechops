@@ -3,7 +3,10 @@ import type { TradingPeriod } from "@/lib/tradingPeriod";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const TECHNICAL_POS_PROFIT_COMMISSION_RATE = 0.1;
-export const TECHNICAL_PROJECT_COMPLETION_COMMISSION = 2000;
+/** Fixed payment for completing an assigned project; it is not sale commission. */
+export const TECHNICAL_PROJECT_COMPLETION_FEE = 2000;
+/** @deprecated Use TECHNICAL_PROJECT_COMPLETION_FEE. */
+export const TECHNICAL_PROJECT_COMPLETION_COMMISSION = TECHNICAL_PROJECT_COMPLETION_FEE;
 
 export type TechnicalProjectCommissionSummary = {
   pendingCount: number;
@@ -63,8 +66,8 @@ export async function getTechnicalProjectCommissionSummary(
 
   return {
     pendingCount,
-    pendingAmount: pendingCount * TECHNICAL_PROJECT_COMPLETION_COMMISSION,
+    pendingAmount: pendingCount * TECHNICAL_PROJECT_COMPLETION_FEE,
     completedCount,
-    completedAmount: completedCount * TECHNICAL_PROJECT_COMPLETION_COMMISSION,
+    completedAmount: completedCount * TECHNICAL_PROJECT_COMPLETION_FEE,
   };
 }

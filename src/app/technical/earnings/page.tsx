@@ -233,8 +233,8 @@ export default async function TechnicalEarningsPage() {
               <div className="flex items-center justify-between"><span>Total sales</span><span>{formatCurrency(payrollRow.totalSales)}</span></div>
               <div className="flex items-center justify-between"><span>Total receipts</span><span>{payrollRow.totalReceipts}</span></div>
               <div className="flex items-center justify-between"><span>Total items</span><span>{payrollRow.totalItems}</span></div>
-              <div className="flex items-center justify-between"><span>Pending project commission</span><span>{formatCurrency(projectCommission.pendingAmount)}</span></div>
-              <div className="flex items-center justify-between"><span>Completed project commission</span><span>{formatCurrency(projectCommission.completedAmount)}</span></div>
+              <div className="flex items-center justify-between"><span>Pending project completion fee</span><span>{formatCurrency(projectCommission.pendingAmount)}</span></div>
+              <div className="flex items-center justify-between"><span>Completed project completion fee</span><span>{formatCurrency(projectCommission.completedAmount)}</span></div>
               <div className="flex items-center justify-between"><span>Bonuses / additions</span><span>{formatCurrency(payrollRow.bonusTotal)}</span></div>
             </div>
           </div>

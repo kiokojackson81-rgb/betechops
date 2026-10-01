@@ -126,7 +126,7 @@ function commissionLines(summary: SummaryLike): EarningsCardLine[] {
       return [
         { label: "POS profit commission", amount: posProfitShare, kind: "earning" as const },
         { label: "POS product commission", amount: posProduct, kind: "earning" as const },
-        { label: "Project commission", amount: projectCompleted, kind: "earning" as const },
+        { label: "Project completion fee", amount: projectCompleted, kind: "earning" as const },
       ].filter((line) => line.amount !== 0);
     }
     default:

@@ -454,7 +454,7 @@ export default async function TechnicalDashboardPage({
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
             <div className="font-semibold text-white">In progress</div>
-            <div className="mt-1">Project stays visible for operations and pending project commission only.</div>
+            <div className="mt-1">Project stays visible for operations and the pending project completion fee only.</div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
             <div className="font-semibold text-white">Completed and posted</div>
@@ -494,7 +494,7 @@ export default async function TechnicalDashboardPage({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="min-w-0 rounded-[24px] border border-amber-400/20 bg-amber-500/10 p-5">
-              <div className="text-sm text-amber-100/80">Pending project commission</div>
+              <div className="text-sm text-amber-100/80">Pending project completion fee</div>
               <div className="mt-2 break-words text-2xl font-semibold leading-tight text-amber-100 sm:text-3xl">
                 {formatCurrency(projectCommission.pendingAmount).replace("Ksh", "KES")}
               </div>
@@ -503,7 +503,7 @@ export default async function TechnicalDashboardPage({
               </div>
             </div>
             <div className="min-w-0 rounded-[24px] border border-emerald-400/20 bg-emerald-500/10 p-5">
-              <div className="text-sm text-emerald-100/80">Completed project commission</div>
+              <div className="text-sm text-emerald-100/80">Completed project completion fee</div>
               <div className="mt-2 break-words text-2xl font-semibold leading-tight text-emerald-100 sm:text-3xl">
                 {formatCurrency(projectCommission.completedAmount).replace("Ksh", "KES")}
               </div>

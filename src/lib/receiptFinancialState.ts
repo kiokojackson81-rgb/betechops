@@ -1,15 +1,11 @@
 import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
 import { readReceiptProjectFlow, isReceiptProjectRecognizedForSales } from "@/lib/receiptProjects";
 
-/** Sales belong to the recorded seller, not every technician or document issuer. */
+/**
+ * Sales belong to the recorded seller. A project handler is paid the separate
+ * completion fee, but assignment must never transfer the underlying sale.
+ */
 export function receiptSalesOwner(receipt: any): string | null {
-  const projectFlow = readReceiptProjectFlow(receipt?.data?.projectFlow);
-  // Once a project is completed and posted, its assigned handler owns the
-  // sale for POS attribution. The project-completion allowance is calculated
-  // separately, so this preserves both earnings components.
-  if (projectFlow?.isProject && projectFlow.stage === "COMPLETED_POSTED" && projectFlow.handlerStaffId) {
-    return projectFlow.handlerStaffId;
-  }
   return receipt?.order?.attendantId || receipt?.data?.attendantId || receipt?.issuedById || null;
 }
 

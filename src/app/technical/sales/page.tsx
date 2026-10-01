@@ -252,7 +252,7 @@ export default async function TechnicalSalesPage() {
           <div className="mt-1 text-sm text-slate-500">Commission earned from your sales</div>
         </div>
         <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
-          <div className="text-sm text-slate-400">Project commission</div>
+          <div className="text-sm text-slate-400">Project completion fee</div>
           <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{formatCurrency(projectCommission.completedAmount)}</div>
           <div className="mt-1 text-sm text-slate-500">
             Pending {formatCurrency(projectCommission.pendingAmount)} across {projectCommission.pendingCount} in-progress assigned project{projectCommission.pendingCount === 1 ? "" : "s"}
@@ -265,7 +265,7 @@ export default async function TechnicalSalesPage() {
           <div>
             <div className="text-lg font-semibold text-white">Your receipt sales and assigned projects</div>
             <div className="text-sm text-slate-400">
-              This includes receipts you created and projects assigned to you. Completed and posted projects show their KSh 2,000 completion commission here.
+              This includes receipts you created and projects assigned to you. Completed and posted projects show their KSh 2,000 completion fee here; assignment does not transfer the sale.
             </div>
           </div>
           <Link href="/receipts" target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5">
@@ -287,7 +287,7 @@ export default async function TechnicalSalesPage() {
                 supportProfitByReceipt.get(canonicalReceiptNumber(receipt.order?.orderNumber || receipt.receiptNumber || undefined) || "") ?? null;
               const profit = extractProfit(receipt, supportProfit);
               const commission = !isProjectPendingForSales && profit > 0 ? Math.round(profit * TECHNICAL_POS_PROFIT_COMMISSION_RATE) : 0;
-              const projectCompletionCommission = isCompletedProject && projectFlow?.handlerStaffId === viewer.id ? 2000 : 0;
+              const projectCompletionFee = isCompletedProject && projectFlow?.handlerStaffId === viewer.id ? 2000 : 0;
               return (
                 <div key={receipt.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -315,12 +315,12 @@ export default async function TechnicalSalesPage() {
                         <span className="break-words text-right font-semibold text-white">{formatCurrency(Number(receipt.order?.totalAmount ?? 0))}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>{isCompletedProject ? "Completed project commission" : "Commission on receipt"}</span>
-                        <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(isCompletedProject ? projectCompletionCommission : commission)}</span>
+                        <span>{isCompletedProject ? "Completed project fee" : "Commission on receipt"}</span>
+                        <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(isCompletedProject ? projectCompletionFee : commission)}</span>
                       </div>
                       <div className="text-xs text-slate-500">
                         {isCompletedProject
-                          ? "Completed and posted project assigned to you. KSh 2,000 completion commission is included in this period."
+                          ? "Completed and posted project assigned to you. The KSh 2,000 completion fee is included in this period."
                           : isProjectPendingForSales
                           ? "Project workflow is not yet completed and posted to POS, so this receipt is still excluded from sales and commission totals."
                           : profit > 0
