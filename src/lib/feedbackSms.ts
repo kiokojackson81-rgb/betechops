@@ -56,7 +56,7 @@ export async function maybeSendCallFeedbackSms(
   if (session.smsSent) return { sent: false, reason: "already_sent_for_call" } as const;
 
   const feedbackUrl = getFeedbackPublicUrl(session.token);
-  const message = `Thank you for calling Betech Solar Solutions. We value your feedback. Please share your experience with us here: ${feedbackUrl}`;
+  const message = `Thank you for calling Betech Solar Solutions. We’d appreciate your feedback about today’s call. It takes about 30 seconds and helps us improve our service: ${feedbackUrl}\nThank you.`;
 
   const sendResult = await sendVoiceSmsOncePerDay({
     phoneNumber: targetPhone,

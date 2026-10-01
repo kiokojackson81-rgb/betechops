@@ -13,20 +13,7 @@ import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 
-const contactReasons = [
-  "Solar System",
-  "Solar Water Pump",
-  "Solar Water Heater",
-  "Battery",
-  "Inverter",
-  "Solar Panels",
-  "Technical Support",
-  "Installation",
-  "Quotation",
-  "Other",
-] as const;
-
-const helpfulOptions = ["Very Helpful", "Somewhat Helpful", "No"] as const;
+const helpfulOptions = ["Very helpful", "Somewhat helpful", "Not helpful"] as const;
 const answeredOptions = ["Yes", "Partially", "No"] as const;
 const recommendOptions = ["Definitely", "Maybe", "No"] as const;
 
@@ -43,15 +30,12 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
   const tiktokHref = "https://www.tiktok.com/@betechsolarprojects";
   const [form, setForm] = useState({
     rating: 0,
-    contactReason: "",
     staffHelpful: "",
     questionsAnswered: "",
     recommend: "",
     comments: "",
     wantsContact: "No",
-    name: "",
-    phone: "",
-    email: "",
+    followUpDetails: "",
   });
   const [recoveryPhone, setRecoveryPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +46,7 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [activePromoTab, setActivePromoTab] = useState<"support" | "refer" | "contact">("support");
 
-  const wantsContact = form.wantsContact === "Yes";
+  const wantsContact = form.wantsContact === "Yes, please call me";
   const isFormActive = initialState === "active" && !submitted;
 
   const trustBadges = useMemo(
@@ -83,11 +67,9 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
   const validate = () => {
     const nextErrors: Record<string, string> = {};
     if (!form.rating) nextErrors.rating = "Please rate your experience.";
-    if (!form.contactReason) nextErrors.contactReason = "Please choose what you contacted us about.";
     if (!form.staffHelpful) nextErrors.staffHelpful = "Please tell us whether our staff were helpful.";
     if (!form.questionsAnswered) nextErrors.questionsAnswered = "Please tell us whether your questions were answered.";
     if (!form.recommend) nextErrors.recommend = "Please tell us whether you would recommend Betech Solar.";
-    if (wantsContact && !form.phone.trim()) nextErrors.phone = "Phone number is required if you want follow-up.";
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -105,15 +87,12 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
         body: JSON.stringify({
           token,
           rating: form.rating,
-          contactReason: form.contactReason,
           staffHelpful: form.staffHelpful,
           questionsAnswered: form.questionsAnswered,
           recommend: form.recommend,
           comments: form.comments,
           wantsContact,
-          name: wantsContact ? form.name : "",
-          phone: wantsContact ? form.phone : "",
-          email: wantsContact ? form.email : "",
+          followUpDetails: wantsContact ? form.followUpDetails : "",
         }),
       });
 
@@ -206,7 +185,7 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
               ) : null}
 
               {isFormActive ? (
-                <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
+                <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
                   <section className={`${shopStyles.lightCard} p-4 sm:p-5`}>
                     <div className="text-sm font-bold text-slate-900">1. How would you rate your experience?</div>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -229,16 +208,8 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
                     {fieldErrors.rating ? <div className="mt-2 text-sm text-rose-700">{fieldErrors.rating}</div> : null}
                   </section>
 
-                  <QuestionChipGroup
-                    title="2. What did you contact us about?"
-                    options={contactReasons}
-                    value={form.contactReason}
-                    onChange={(value) => setForm((current) => ({ ...current, contactReason: value }))}
-                    error={fieldErrors.contactReason}
-                  />
-
                   <QuestionOptionGroup
-                    title="3. Were our staff helpful?"
+                    title="2. Were our staff helpful?"
                     options={helpfulOptions}
                     value={form.staffHelpful}
                     onChange={(value) => setForm((current) => ({ ...current, staffHelpful: value }))}
@@ -246,7 +217,7 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
                   />
 
                   <QuestionOptionGroup
-                    title="4. Did we answer your questions?"
+                    title="3. Did we answer your questions?"
                     options={answeredOptions}
                     value={form.questionsAnswered}
                     onChange={(value) => setForm((current) => ({ ...current, questionsAnswered: value }))}
@@ -254,7 +225,7 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
                   />
 
                   <QuestionOptionGroup
-                    title="5. Would you recommend Betech Solar?"
+                    title="4. Would you recommend Betech Solar?"
                     options={recommendOptions}
                     value={form.recommend}
                     onChange={(value) => setForm((current) => ({ ...current, recommend: value }))}
@@ -273,29 +244,22 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
                   </section>
 
                   <QuestionOptionGroup
-                    title="Would you like us to contact you regarding your feedback?"
-                    options={["Yes", "No"]}
+                    title="Would you like our team to call you about your experience or help with any questions we couldn’t answer during the call?"
+                    options={["Yes, please call me", "No, thank you"]}
                     value={form.wantsContact}
                     onChange={(value) => setForm((current) => ({ ...current, wantsContact: value }))}
                   />
 
                   {wantsContact ? (
-                    <section className={`${shopStyles.lightCard} grid gap-4 p-4 sm:grid-cols-2 sm:p-5`}>
-                      <Field label="Name" value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} />
-                      <Field
-                        label="Phone Number"
-                        value={form.phone}
-                        onChange={(value) => setForm((current) => ({ ...current, phone: value }))}
-                        error={fieldErrors.phone}
+                    <section className={`${shopStyles.lightCard} p-4 sm:p-5`}>
+                      <label className="block text-sm font-bold text-slate-900">What would you like us to follow up on?</label>
+                      <textarea
+                        value={form.followUpDetails}
+                        onChange={(event) => setForm((current) => ({ ...current, followUpDetails: event.target.value }))}
+                        placeholder="Optional: tell us what would help."
+                        rows={3}
+                        className="mt-3 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fffdf9] px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-[#f59e0b] focus:ring-2 focus:ring-[#f59e0b]/20"
                       />
-                      <div className="sm:col-span-2">
-                        <Field
-                          label="Email Optional"
-                          value={form.email}
-                          onChange={(value) => setForm((current) => ({ ...current, email: value }))}
-                          type="email"
-                        />
-                      </div>
                     </section>
                   ) : null}
 
@@ -600,43 +564,6 @@ function Field({
       />
       {error ? <span className="mt-2 block text-sm text-rose-700">{error}</span> : null}
     </label>
-  );
-}
-
-function QuestionChipGroup({
-  title,
-  options,
-  value,
-  onChange,
-  error,
-}: {
-  title: string;
-  options: readonly string[];
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}) {
-  return (
-    <section className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-      <div className="text-sm font-bold text-slate-900">{title}</div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onChange(option)}
-            className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
-              value === option
-                ? "border-[#7a0000] bg-[#7a0000] text-white"
-                : "border-[#7a0000]/10 bg-[#fffdf9] text-slate-800 hover:border-[#f59e0b]/40"
-            }`}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-      {error ? <div className="mt-2 text-sm text-rose-700">{error}</div> : null}
-    </section>
   );
 }
 

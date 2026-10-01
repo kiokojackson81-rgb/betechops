@@ -41,15 +41,12 @@ export async function POST(req: NextRequest) {
     const parsed = callFeedbackSchema.safeParse({
       token: body?.token,
       rating: Number(body?.rating),
-      contactReason: body?.contactReason,
       staffHelpful: body?.staffHelpful,
       questionsAnswered: body?.questionsAnswered,
       recommend: body?.recommend,
       comments: body?.comments,
       wantsContact: Boolean(body?.wantsContact),
-      name: body?.name,
-      phone: body?.phone,
-      email: body?.email,
+      followUpDetails: body?.followUpDetails,
     });
 
     if (!parsed.success) {

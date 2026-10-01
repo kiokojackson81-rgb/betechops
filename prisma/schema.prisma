@@ -2331,6 +2331,7 @@ model VoiceCallFeedback {
   customerName      String?
   customerEmail     String?
   wantsContact      Boolean    @default(false)
+  followUpDetails   String?
   followUpCreated   Boolean    @default(false)
   followUpTaskId    String?
   voiceCall         VoiceCall? @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)

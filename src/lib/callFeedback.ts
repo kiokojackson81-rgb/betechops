@@ -5,23 +5,10 @@ import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { getShopBaseUrl } from "@/lib/runtimeUrls";
 
-export const CALL_FEEDBACK_CONTACT_REASONS = [
-  "Solar System",
-  "Solar Water Pump",
-  "Solar Water Heater",
-  "Battery",
-  "Inverter",
-  "Solar Panels",
-  "Technical Support",
-  "Installation",
-  "Quotation",
-  "Other",
-] as const;
-
 export const CALL_FEEDBACK_STAFF_HELPFUL_OPTIONS = [
-  "Very Helpful",
-  "Somewhat Helpful",
-  "No",
+  "Very helpful",
+  "Somewhat helpful",
+  "Not helpful",
 ] as const;
 
 export const CALL_FEEDBACK_ANSWER_OPTIONS = ["Yes", "Partially", "No"] as const;
@@ -42,21 +29,12 @@ const boundedText = (max: number) =>
 export const callFeedbackSchema = z.object({
   token: z.string().trim().min(5).max(32),
   rating: z.number().int().min(1).max(5),
-  contactReason: z.enum(CALL_FEEDBACK_CONTACT_REASONS),
   staffHelpful: z.enum(CALL_FEEDBACK_STAFF_HELPFUL_OPTIONS),
   questionsAnswered: z.enum(CALL_FEEDBACK_ANSWER_OPTIONS),
   recommend: z.enum(CALL_FEEDBACK_RECOMMEND_OPTIONS),
   comments: boundedText(1200),
   wantsContact: z.boolean().default(false),
-  name: boundedText(120),
-  phone: boundedText(32),
-  email: z
-    .string()
-    .trim()
-    .email()
-    .max(160)
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+  followUpDetails: boundedText(1200),
 });
 
 export type CallFeedbackInput = z.infer<typeof callFeedbackSchema>;
@@ -157,11 +135,12 @@ async function createLowRatingFollowUp(tx: Prisma.TransactionClient, session: {
       notes: [
         "Customer submitted low feedback rating.",
         `Rating: ${input.rating}/5`,
-        `Service: ${input.contactReason}`,
         `Helpful: ${input.staffHelpful}`,
         `Questions answered: ${input.questionsAnswered}`,
         `Recommend: ${input.recommend}`,
         input.comments ? `Comment: ${input.comments}` : null,
+        input.wantsContact ? "Customer requested a call back." : null,
+        input.followUpDetails ? `Follow-up request: ${input.followUpDetails}` : null,
         `Feedback token: ${session.token}`,
       ]
         .filter(Boolean)
@@ -288,7 +267,7 @@ export async function submitFeedbackByToken(input: CallFeedbackInput) {
     if (session.expiresAt.getTime() < Date.now()) return { ok: false, error: "expired_token" } as const;
 
     let followUpTaskId: string | null = null;
-    if (input.rating <= 3) {
+    if (input.rating <= 3 || input.wantsContact) {
       followUpTaskId = await createLowRatingFollowUp(tx, session, input);
     }
 
@@ -296,14 +275,13 @@ export async function submitFeedbackByToken(input: CallFeedbackInput) {
       where: { token },
       data: {
         rating: input.rating,
-        serviceType: input.contactReason,
+        serviceType: null,
         staffHelpful: input.staffHelpful,
         questionsAnswered: input.questionsAnswered,
         wouldRecommend: input.recommend,
         comment: input.comments || null,
-        customerName: input.name || null,
-        customerEmail: input.email || null,
         wantsContact: input.wantsContact,
+        followUpDetails: input.wantsContact ? input.followUpDetails || null : null,
         submitted: true,
         submittedAt: new Date(),
         followUpCreated: Boolean(followUpTaskId),

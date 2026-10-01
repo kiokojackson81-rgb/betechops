@@ -63,6 +63,7 @@ type FeedbackStats = {
 type FeedbackDetail = {
   feedback: FeedbackListItem & {
     comments: string | null;
+    followUpDetails: string | null;
     name: string | null;
     email: string | null;
     callId: string | null;
@@ -421,11 +422,10 @@ export default function VoiceFeedbackPanel({ mode = "admin" }: { mode?: "admin" 
                                 <InfoCard label="Clicks" value={String(detail?.feedback.openedCount ?? item.openedCount)} />
                                 <InfoCard label="Submitted" value={detail?.feedback.submittedAt ? formatDateTime(detail.feedback.submittedAt) : item.submitted ? "Yes" : "No"} />
                                 <InfoCard label="Rating" value={detail?.feedback.rating != null ? `${detail.feedback.rating}/5` : "Pending"} />
-                                <InfoCard label="Reason" value={detail?.feedback.contactReason || item.contactReason || "-"} />
                                 <InfoCard label="Recommend" value={detail?.feedback.recommend || item.recommend || "-"} />
                                 <InfoCard label="Staff Helpful" value={detail?.feedback.staffHelpful || item.staffHelpful || "-"} />
                                 <InfoCard label="Questions Answered" value={detail?.feedback.questionsAnswered || item.questionsAnswered || "-"} />
-                                <InfoCard label="Contact Request" value={detail?.feedback.wantsContact ? `${detail.feedback.name || "No name"} · ${detail.feedback.phone || "No phone"} · ${detail.feedback.email || "No email"}` : "No follow-up requested"} />
+                                <InfoCard label="Call-back Request" value={detail?.feedback.wantsContact ? "Yes — use the linked call/customer details" : "No follow-up requested"} />
                               </div>
 
                               <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -434,6 +434,13 @@ export default function VoiceFeedbackPanel({ mode = "admin" }: { mode?: "admin" 
                                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Comments</div>
                                     <div className="mt-2 text-sm text-slate-200">{detail?.feedback.comments || "No comments shared."}</div>
                                   </div>
+
+                                  {detail?.feedback.wantsContact ? (
+                                    <div className="rounded-xl border border-emerald-900/70 bg-emerald-950/20 p-4">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Requested follow-up</div>
+                                      <div className="mt-2 text-sm text-slate-100">{detail.feedback.followUpDetails || "Customer requested a call back; no additional details were provided."}</div>
+                                    </div>
+                                  ) : null}
 
                                   <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
                                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Linked Call History</div>
