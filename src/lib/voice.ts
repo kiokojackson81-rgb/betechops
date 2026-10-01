@@ -1051,26 +1051,15 @@ function buildWorkingHoursSelection(input: {
 
 export function buildStickyVoiceTargetOrder(input: {
   stickyTarget: VoiceRouteTarget;
-  roundRobinTarget: VoiceRouteTarget | null;
-  agentTargets: VoiceRouteTarget[];
-  adminTarget: VoiceRouteTarget;
+  fallbackTarget: VoiceRouteTarget | null;
 }) {
-  const roundRobinIndex = input.roundRobinTarget
-    ? input.agentTargets.findIndex(
-        (target) => target.label === input.roundRobinTarget?.label,
-      )
-    : -1;
-  const rotatedAgents =
-    roundRobinIndex > 0
-      ? [
-          ...input.agentTargets.slice(roundRobinIndex),
-          ...input.agentTargets.slice(0, roundRobinIndex),
-        ]
-      : input.agentTargets;
   const seenNumbers = new Set<string>();
 
-  return [input.stickyTarget, ...rotatedAgents, input.adminTarget].filter(
+  // A saved customer owner is exclusive. Do not spill the caller into the
+  // round-robin pool; only the admin-selected backup receiver is attempted.
+  return [input.stickyTarget, input.fallbackTarget].filter(
     (target) => {
+      if (!target) return false;
       const normalizedNumber = normalizeVoiceNumber(target.phoneNumber);
       if (!normalizedNumber || !target.routingEnabled) return false;
       if (seenNumbers.has(normalizedNumber)) return false;
@@ -1228,9 +1217,11 @@ export async function getVoiceRouteTargets(
         preferredTarget: stickyTarget,
         orderedTargets: buildStickyVoiceTargetOrder({
           stickyTarget,
-          roundRobinTarget,
-          agentTargets,
-          adminTarget,
+          fallbackTarget: overflowTarget.phoneNumber
+            ? overflowTarget
+            : adminTarget.phoneNumber
+              ? adminTarget
+              : null,
         }),
         routeReason: quotationOwnerTarget
           ? ("quotation_owner" as const)

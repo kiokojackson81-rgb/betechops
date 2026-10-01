@@ -3475,7 +3475,7 @@ export default function VoiceConsoleClient({
                                                           <div className="text-xs text-slate-500">
                                                             {isDirty
                                                               ? "Assignment changed. Save to persist future routing."
-                                                              : "Current owner is already saved."}
+                                                              : "Future calls go only to this owner, then the admin-selected backup destination."}
                                                           </div>
                                                           <button
                                                             type="button"
@@ -4208,11 +4208,10 @@ export default function VoiceConsoleClient({
                             Overflow Routing
                           </div>
                           <div className="mt-1 text-base font-semibold text-white">
-                            Backup destination when main routing is unavailable
+                            Backup destination for unavailable routing owners
                           </div>
                           <div className="mt-1 text-sm text-slate-400">
-                            Use this when admin is off, agents are out of
-                            office, or you need a manual after-hours receiver.
+                            A customer assigned to one employee rings that employee only. If they cannot take the call, it goes here—not to the other round-robin agents. Use it for after-hours or manual escalation.
                           </div>
                         </div>
                         <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
@@ -4999,7 +4998,7 @@ export default function VoiceConsoleClient({
                                     <div className="text-xs text-slate-500">
                                       {isDirty
                                         ? "Click save to persist this reassignment on the server."
-                                        : "Saved owner will be used for future routing."}
+                                        : "Future calls go only to this owner, then the admin-selected backup destination."}
                                     </div>
                                     <button
                                       type="button"
