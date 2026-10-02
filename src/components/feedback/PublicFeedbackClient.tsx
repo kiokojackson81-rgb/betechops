@@ -15,7 +15,6 @@ import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 
 const helpfulOptions = ["Very helpful", "Somewhat helpful", "Not helpful"] as const;
 const answeredOptions = ["Yes", "Partially", "No"] as const;
-const recommendOptions = ["Definitely", "Maybe", "No"] as const;
 
 type PublicFeedbackClientProps = {
   token?: string | null;
@@ -32,10 +31,8 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
     rating: 0,
     staffHelpful: "",
     questionsAnswered: "",
-    recommend: "",
     comments: "",
     wantsContact: "No",
-    followUpDetails: "",
   });
   const [recoveryPhone, setRecoveryPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -69,7 +66,6 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
     if (!form.rating) nextErrors.rating = "Please rate your experience.";
     if (!form.staffHelpful) nextErrors.staffHelpful = "Please tell us whether our staff were helpful.";
     if (!form.questionsAnswered) nextErrors.questionsAnswered = "Please tell us whether your questions were answered.";
-    if (!form.recommend) nextErrors.recommend = "Please tell us whether you would recommend Betech Solar.";
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -89,10 +85,8 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
           rating: form.rating,
           staffHelpful: form.staffHelpful,
           questionsAnswered: form.questionsAnswered,
-          recommend: form.recommend,
           comments: form.comments,
           wantsContact,
-          followUpDetails: wantsContact ? form.followUpDetails : "",
         }),
       });
 
@@ -169,9 +163,8 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
                   <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-[2.65rem]">
                     Thank You for Calling Betech Solar Solutions
                   </h1>
-                  <h2 className="mt-2 text-xl font-semibold text-[#7a0000] sm:text-2xl">We&apos;d Love Your Feedback</h2>
                   <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
-                    Thank you for choosing Betech Solar Solutions. Your feedback helps us improve our products and customer service.
+                    We&apos;d love your feedback. It takes about 30 seconds and helps us improve our service.
                   </p>
 
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -224,44 +217,23 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
                     error={fieldErrors.questionsAnswered}
                   />
 
-                  <QuestionOptionGroup
-                    title="4. Would you recommend Betech Solar?"
-                    options={recommendOptions}
-                    value={form.recommend}
-                    onChange={(value) => setForm((current) => ({ ...current, recommend: value }))}
-                    error={fieldErrors.recommend}
-                  />
-
                   <section className={`${shopStyles.lightCard} p-4 sm:p-5`}>
                     <label className="block text-sm font-bold text-slate-900">Any comments or suggestions?</label>
                     <textarea
                       value={form.comments}
                       onChange={(event) => setForm((current) => ({ ...current, comments: event.target.value }))}
-                      placeholder="Tell us how we can serve you even better."
+                      placeholder="Is there anything we could improve or do differently to serve you better?"
                       rows={5}
                       className="mt-3 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fffdf9] px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-[#f59e0b] focus:ring-2 focus:ring-[#f59e0b]/20"
                     />
                   </section>
 
                   <QuestionOptionGroup
-                    title="Would you like our team to call you about your experience or help with any questions we couldn’t answer during the call?"
+                    title="Would you like our Customer Service Manager to call you?"
                     options={["Yes, please call me", "No, thank you"]}
                     value={form.wantsContact}
                     onChange={(value) => setForm((current) => ({ ...current, wantsContact: value }))}
                   />
-
-                  {wantsContact ? (
-                    <section className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-                      <label className="block text-sm font-bold text-slate-900">What would you like us to follow up on?</label>
-                      <textarea
-                        value={form.followUpDetails}
-                        onChange={(event) => setForm((current) => ({ ...current, followUpDetails: event.target.value }))}
-                        placeholder="Optional: tell us what would help."
-                        rows={3}
-                        className="mt-3 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fffdf9] px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-[#f59e0b] focus:ring-2 focus:ring-[#f59e0b]/20"
-                      />
-                    </section>
-                  ) : null}
 
                   {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
 

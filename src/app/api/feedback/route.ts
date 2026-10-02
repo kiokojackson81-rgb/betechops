@@ -43,10 +43,8 @@ export async function POST(req: NextRequest) {
       rating: Number(body?.rating),
       staffHelpful: body?.staffHelpful,
       questionsAnswered: body?.questionsAnswered,
-      recommend: body?.recommend,
       comments: body?.comments,
       wantsContact: Boolean(body?.wantsContact),
-      followUpDetails: body?.followUpDetails,
     });
 
     if (!parsed.success) {

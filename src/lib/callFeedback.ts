@@ -12,7 +12,6 @@ export const CALL_FEEDBACK_STAFF_HELPFUL_OPTIONS = [
 ] as const;
 
 export const CALL_FEEDBACK_ANSWER_OPTIONS = ["Yes", "Partially", "No"] as const;
-export const CALL_FEEDBACK_RECOMMEND_OPTIONS = ["Definitely", "Maybe", "No"] as const;
 
 const SUCCESS_STATUSES = new Set(["success", "successful", "completed", "complete", "answered"]);
 const FEEDBACK_TOKEN_EXPIRY_DAYS = 30;
@@ -31,10 +30,9 @@ export const callFeedbackSchema = z.object({
   rating: z.number().int().min(1).max(5),
   staffHelpful: z.enum(CALL_FEEDBACK_STAFF_HELPFUL_OPTIONS),
   questionsAnswered: z.enum(CALL_FEEDBACK_ANSWER_OPTIONS),
-  recommend: z.enum(CALL_FEEDBACK_RECOMMEND_OPTIONS),
+  recommend: z.string().trim().max(80).optional(),
   comments: boundedText(1200),
   wantsContact: z.boolean().default(false),
-  followUpDetails: boundedText(1200),
 });
 
 export type CallFeedbackInput = z.infer<typeof callFeedbackSchema>;
@@ -137,10 +135,8 @@ async function createLowRatingFollowUp(tx: Prisma.TransactionClient, session: {
         `Rating: ${input.rating}/5`,
         `Helpful: ${input.staffHelpful}`,
         `Questions answered: ${input.questionsAnswered}`,
-        `Recommend: ${input.recommend}`,
         input.comments ? `Comment: ${input.comments}` : null,
         input.wantsContact ? "Customer requested a call back." : null,
-        input.followUpDetails ? `Follow-up request: ${input.followUpDetails}` : null,
         `Feedback token: ${session.token}`,
       ]
         .filter(Boolean)
@@ -278,10 +274,10 @@ export async function submitFeedbackByToken(input: CallFeedbackInput) {
         serviceType: null,
         staffHelpful: input.staffHelpful,
         questionsAnswered: input.questionsAnswered,
-        wouldRecommend: input.recommend,
+        wouldRecommend: input.recommend || null,
         comment: input.comments || null,
         wantsContact: input.wantsContact,
-        followUpDetails: input.wantsContact ? input.followUpDetails || null : null,
+        followUpDetails: null,
         submitted: true,
         submittedAt: new Date(),
         followUpCreated: Boolean(followUpTaskId),
