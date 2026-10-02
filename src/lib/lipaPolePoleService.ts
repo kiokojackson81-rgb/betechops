@@ -437,6 +437,28 @@ export type ReleaseLppProductInput = {
   notes?: string | null;
 };
 
+export type SwitchLppItemInput = {
+  lipaPolePoleId: string;
+  productId: string;
+  description: string;
+  quantity: number;
+  unitPrice: number | string | Prisma.Decimal;
+  serial?: string | null;
+  warranty?: string | null;
+  reason: string;
+  changedById?: string | null;
+};
+
+export type RefundLppInput = {
+  lipaPolePoleId: string;
+  amount: number | string | Prisma.Decimal;
+  refundMethod: string;
+  refundReference?: string | null;
+  reason: string;
+  approvedById?: string | null;
+  createdById?: string | null;
+};
+
 export type CreateLppFollowUpInput = {
   lipaPolePoleId: string;
   assignedToId?: string | null;
@@ -1968,6 +1990,110 @@ export async function releaseLppProduct(
   return released;
 }
 
+/**
+ * Replaces an unfinished plan's item without touching its payment history.
+ * The new item must cost at least the confirmed credit already on the plan;
+ * this avoids creating an untracked customer credit. A lower value item can
+ * instead be handled by recording a refund first.
+ */
+export async function switchLppItem(
+  input: SwitchLppItemInput,
+  db: DbClient = prisma,
+) {
+  const description = trimToNull(input.description);
+  const reason = trimToNull(input.reason);
+  const quantity = Math.max(0, Math.trunc(Number(input.quantity)));
+  const unitPrice = toMoney(input.unitPrice);
+  if (!description || !reason || !trimToNull(input.productId) || quantity < 1 || unitPrice.lte(0)) {
+    throw new Error("INVALID_ITEM_CHANGE");
+  }
+
+  const switched = await withLppTransaction(db, async (tx) => {
+    const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
+    if (lpp.convertedReceiptId || lpp.convertedProjectId || lpp.fulfilledAt || ["REFUNDED", "CANCELLED", "CLOSED"].includes(lpp.status)) {
+      throw new Error("LPP_NOT_ELIGIBLE_FOR_ITEM_CHANGE");
+    }
+    const [payments, items] = await Promise.all([
+      getLppPayments(tx, lpp.id),
+      getLppItems(tx, lpp.id),
+    ]);
+    const confirmedCredit = computeLppFinancialSummary({ agreedTotal: lpp.agreedTotal, payments }).totalPaid;
+    const agreedTotal = unitPrice.mul(quantity).toDecimalPlaces(2);
+    if (agreedTotal.lt(confirmedCredit)) throw new Error("REPLACEMENT_ITEM_BELOW_CONFIRMED_CREDIT");
+
+    const oldValue = {
+      productId: lpp.productId,
+      customProductName: lpp.customProductName,
+      quantity: lpp.quantity,
+      agreedUnitPrice: Number(lpp.agreedUnitPrice),
+      agreedTotal: Number(lpp.agreedTotal),
+      itemSerial: lpp.itemSerial,
+      itemWarranty: lpp.itemWarranty,
+      items: items.map((item) => ({ description: item.description, quantity: item.quantity, unitPrice: Number(item.unitPrice), total: Number(item.total), productId: item.productId })),
+    };
+    const newValue = { productId: input.productId, description, quantity, unitPrice: Number(unitPrice), agreedTotal: Number(agreedTotal), serial: trimToNull(input.serial), warranty: trimToNull(input.warranty), confirmedCredit: Number(confirmedCredit) };
+
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "LipaPolePole"
+      SET "productId" = ${input.productId}, "customProductName" = ${description}, "quantity" = ${quantity},
+          "agreedUnitPrice" = ${unitPrice}, "agreedTotal" = ${agreedTotal}, "itemSerial" = ${trimToNull(input.serial)},
+          "itemWarranty" = ${trimToNull(input.warranty)}, "completedAt" = NULL, "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${lpp.id}
+    `);
+    await tx.$executeRaw(Prisma.sql`DELETE FROM "LipaPolePoleItem" WHERE "lipaPolePoleId" = ${lpp.id}`);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "LipaPolePoleItem" ("id", "lipaPolePoleId", "productId", "description", "quantity", "unitPrice", "total", "serial", "warranty", "position", "createdAt", "updatedAt")
+      VALUES (${randomUUID()}, ${lpp.id}, ${input.productId}, ${description}, ${quantity}, ${unitPrice}, ${agreedTotal}, ${trimToNull(input.serial)}, ${trimToNull(input.warranty)}, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "LipaPolePoleAdjustment" ("id", "lipaPolePoleId", "adjustmentType", "oldValue", "newValue", "reason", "approvedById", "createdById", "createdAt")
+      VALUES (${randomUUID()}, ${lpp.id}, 'ITEM_SWITCH', ${oldValue as Prisma.JsonObject}, ${newValue as Prisma.JsonObject}, ${reason}, ${input.changedById ?? null}, ${input.changedById ?? null}, CURRENT_TIMESTAMP)
+    `);
+    await writeLppEvent(tx, { lipaPolePoleId: lpp.id, eventType: "ITEM_CHANGED", actorId: input.changedById ?? null, metadata: { reason, oldValue, newValue } });
+    await updateLppStatusAndCompletion(tx, { lpp: (await getLppById(tx, lpp.id))!, payments });
+    await writeActionLog(tx, { actorId: input.changedById, entity: "LipaPolePole", entityId: lpp.id, action: "SWITCH_ITEM", before: oldValue, after: newValue });
+    const refreshed = await getLppById(tx, lpp.id);
+    if (!refreshed) throw new Error("LPP_NOT_FOUND_AFTER_ITEM_CHANGE");
+    return refreshed;
+  });
+  if (db === prisma) await safelyDispatchLppLifecycleNotifications({ lipaPolePoleId: input.lipaPolePoleId, event: "ITEM_CHANGED" });
+  return switched;
+}
+
+/** Records a manual refund. This deliberately does not reverse original payments. */
+export async function refundLpp(
+  input: RefundLppInput,
+  db: DbClient = prisma,
+) {
+  const reason = trimToNull(input.reason);
+  const refundMethod = trimToNull(input.refundMethod);
+  const amount = toMoney(input.amount);
+  if (!reason || !refundMethod || amount.lte(0)) throw new Error("INVALID_REFUND");
+
+  const refunded = await withLppTransaction(db, async (tx) => {
+    const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
+    if (lpp.convertedReceiptId || lpp.convertedProjectId || lpp.fulfilledAt || ["REFUNDED", "CANCELLED", "CLOSED"].includes(lpp.status)) throw new Error("LPP_NOT_ELIGIBLE_FOR_REFUND");
+    const payments = await getLppPayments(tx, lpp.id);
+    const confirmedCredit = computeLppFinancialSummary({ agreedTotal: lpp.agreedTotal, payments }).totalPaid;
+    if (!amount.eq(confirmedCredit)) throw new Error("REFUND_MUST_MATCH_CONFIRMED_CREDIT");
+    const refundId = randomUUID();
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "LipaPolePoleRefund" ("id", "lipaPolePoleId", "amount", "refundMethod", "refundReference", "reason", "approvedById", "createdById", "createdAt")
+      VALUES (${refundId}, ${lpp.id}, ${amount}, ${refundMethod}, ${trimToNull(input.refundReference)}, ${reason}, ${input.approvedById ?? null}, ${input.createdById ?? null}, CURRENT_TIMESTAMP)
+    `);
+    await tx.$executeRaw(Prisma.sql`UPDATE "LipaPolePole" SET "status" = 'REFUNDED'::"LipaPolePoleStatus", "completedAt" = NULL, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${lpp.id}`);
+    await tx.$executeRaw(Prisma.sql`UPDATE "LipaPolePoleReminder" SET "status" = 'CANCELLED' WHERE "lipaPolePoleId" = ${lpp.id} AND "status" IN ('PENDING', 'PROCESSING')`);
+    const metadata = { refundId, amount: Number(amount), refundMethod, refundReference: trimToNull(input.refundReference), reason, confirmedCredit: Number(confirmedCredit) };
+    await writeLppEvent(tx, { lipaPolePoleId: lpp.id, eventType: "REFUND_RECORDED", actorId: input.createdById ?? null, metadata });
+    await writeActionLog(tx, { actorId: input.createdById, entity: "LipaPolePole", entityId: lpp.id, action: "RECORD_REFUND", before: { status: lpp.status, confirmedCredit: Number(confirmedCredit) }, after: { status: "REFUNDED", ...metadata } });
+    const refreshed = await getLppById(tx, lpp.id);
+    if (!refreshed) throw new Error("LPP_NOT_FOUND_AFTER_REFUND");
+    return refreshed;
+  });
+  if (db === prisma) await safelyDispatchLppLifecycleNotifications({ lipaPolePoleId: input.lipaPolePoleId, event: "REFUND_RECORDED", amount: Number(amount), reason });
+  return refunded;
+}
+
 export async function createLppFollowUp(
   input: CreateLppFollowUpInput,
   db: DbClient = prisma,
@@ -2143,6 +2269,8 @@ type LppLifecycleDispatchInput = {
   lipaPolePoleId: string;
   event: LppLifecycleEvent;
   paymentId?: string | null;
+  amount?: number | null;
+  reason?: string | null;
 };
 
 async function dispatchLppLifecycleNotifications(
@@ -2248,13 +2376,13 @@ async function dispatchLppLifecycleNotifications(
     totalPaid,
     balance: Math.max(0, agreedTotal - totalPaid),
     currency: row.currency,
-    paymentAmount: row.paymentAmount == null ? null : Number(row.paymentAmount),
+    paymentAmount: input.amount ?? (row.paymentAmount == null ? null : Number(row.paymentAmount)),
     paymentReference:
       row.paymentReference == null
         ? null
         : (extractMpesaTransactionCode(row.paymentReference) ??
           row.paymentReference),
-    reason: row.paymentReason,
+    reason: input.reason ?? row.paymentReason,
     nextInstallmentDate: nextInstallment
       ? new Date(nextInstallment.dueDate)
       : null,

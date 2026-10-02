@@ -38,7 +38,9 @@ export type LppLifecycleEvent =
   | "PAYMENT_REJECTED"
   | "PAYMENT_REVERSED"
   | "PLAN_COMPLETED"
-  | "PRODUCT_RELEASED";
+  | "PRODUCT_RELEASED"
+  | "ITEM_CHANGED"
+  | "REFUND_RECORDED";
 
 export type LppLifecycleRecipient = "CUSTOMER" | "ASSIGNED_AGENT";
 
@@ -116,6 +118,10 @@ function lifecycleLead(context: LppLifecycleNotificationContext) {
       return `Congratulations. Your Lipa Pole Pole plan ${context.reference} is fully paid.`;
     case "PRODUCT_RELEASED":
       return `The product for Lipa Pole Pole plan ${context.reference} has been released successfully.`;
+    case "ITEM_CHANGED":
+      return `Your Lipa Pole Pole plan ${context.reference} has been updated to a new item. Your confirmed payments have been carried forward.`;
+    case "REFUND_RECORDED":
+      return `Your refund of ${amount} for Lipa Pole Pole plan ${context.reference} has been recorded and is being processed.`;
   }
 }
 
@@ -129,6 +135,8 @@ function lifecycleSubject(context: LppLifecycleNotificationContext) {
     PAYMENT_REVERSED: "Lipa Pole Pole payment reversed",
     PLAN_COMPLETED: "Lipa Pole Pole plan fully paid",
     PRODUCT_RELEASED: "Lipa Pole Pole product released",
+    ITEM_CHANGED: "Lipa Pole Pole item updated",
+    REFUND_RECORDED: "Lipa Pole Pole refund recorded",
   };
   return `${labels[context.event]} - ${context.reference}`;
 }

@@ -242,7 +242,7 @@ type SearchSelectorProps = {
 };
 
 type DetailsTab = "OVERVIEW" | "PAYMENTS" | "FOLLOW_UPS" | "TIMELINE";
-type ActionModal = "PAYMENT" | "STK_PROMPT" | "ASSIGN" | "FOLLOW_UP" | "PROMISE" | "RELEASE" | null;
+type ActionModal = "PAYMENT" | "STK_PROMPT" | "ASSIGN" | "FOLLOW_UP" | "PROMISE" | "RELEASE" | "SWITCH_ITEM" | "REFUND" | null;
 type QuickFilter = "ALL" | "ACTIVE" | "DUE_TODAY" | "DUE_WEEK" | "OVERDUE" | "FULLY_PAID" | "CANCELLED";
 type InstallmentFrequency = "WEEKLY" | "MONTHLY";
 
@@ -531,6 +531,7 @@ export default function LipaPolePoleAdminClient({
   const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
   const [createItems, setCreateItems] = useState<CreateLppItem[]>([]);
   const [productSelectorOpen, setProductSelectorOpen] = useState(false);
+  const [replacementProductSelectorOpen, setReplacementProductSelectorOpen] = useState(false);
   const [productSelectorTargetId, setProductSelectorTargetId] = useState<string | null>(null);
   const [catalogProducts, setCatalogProducts] = useState<PosCatalogProduct[]>([]);
   const [showItemSerial, setShowItemSerial] = useState(false);
@@ -574,6 +575,10 @@ export default function LipaPolePoleAdminClient({
     collectorReference: "",
     notes: "",
   });
+  const [replacementProduct, setReplacementProduct] = useState<PosCatalogProduct | null>(null);
+  const [switchItemForm, setSwitchItemForm] = useState({ quantity: "1", reason: "" });
+  const [refundForm, setRefundForm] = useState({ amount: "", method: "MPESA", reference: "", reason: "" });
+  const [isResolvingPlan, setIsResolvingPlan] = useState(false);
   const [followUpForm, setFollowUpForm] = useState({
     taskType: "FOLLOW_UP_TODAY",
     taskDate: "",
@@ -819,6 +824,11 @@ export default function LipaPolePoleAdminClient({
       ? current.map((item) => item.id === productSelectorTargetId ? { ...nextItem, id: item.id } : item)
       : [...current, nextItem]);
     setProductSelectorTargetId(null);
+  }
+
+  function handleReplacementProductChange(option: PosCatalogProduct) {
+    setReplacementProduct(option);
+    setSwitchItemForm((current) => ({ ...current, quantity: String(activeDetail?.account.quantity || 1) }));
   }
 
   function applyCatalogToCreateItem(id: string, product: PosCatalogProduct) {
@@ -1188,6 +1198,51 @@ export default function LipaPolePoleAdminClient({
     } finally {
       setIsReleasing(false);
     }
+  }
+
+  async function handleSwitchItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedId || !replacementProduct) {
+      setBanner({ tone: "error", text: "Select the replacement item from the catalog." });
+      return;
+    }
+    if (!switchItemForm.reason.trim()) {
+      setBanner({ tone: "error", text: "Give a reason for the item change." });
+      return;
+    }
+    setIsResolvingPlan(true);
+    setBanner(null);
+    try {
+      await readJson(`/api/lipa-pole-pole/${selectedId}/switch-item`, {
+        method: "POST",
+        body: JSON.stringify({ productId: replacementProduct.id, description: replacementProduct.name, quantity: switchItemForm.quantity, unitPrice: replacementProduct.sellingPrice, warranty: replacementProduct.defaultWarranty || null, reason: switchItemForm.reason.trim() }),
+      });
+      await refreshList(selectedId);
+      setBanner({ tone: "success", text: "Item changed. Confirmed payments were carried forward and the customer was notified by SMS." });
+      setActionModal(null);
+      setReplacementProduct(null);
+      setSwitchItemForm({ quantity: "1", reason: "" });
+    } catch (error) { showError(error); } finally { setIsResolvingPlan(false); }
+  }
+
+  async function handleRefund(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedId || !refundForm.amount.trim() || !refundForm.reason.trim()) {
+      setBanner({ tone: "error", text: "Refund amount and reason are required." });
+      return;
+    }
+    setIsResolvingPlan(true);
+    setBanner(null);
+    try {
+      await readJson(`/api/lipa-pole-pole/${selectedId}/refund`, {
+        method: "POST",
+        body: JSON.stringify({ amount: refundForm.amount, refundMethod: refundForm.method, refundReference: refundForm.reference.trim() || null, reason: refundForm.reason.trim() }),
+      });
+      await refreshList(selectedId);
+      setBanner({ tone: "success", text: "Refund recorded, plan closed, and the customer was notified by SMS." });
+      setActionModal(null);
+      setRefundForm({ amount: "", method: "MPESA", reference: "", reason: "" });
+    } catch (error) { showError(error); } finally { setIsResolvingPlan(false); }
   }
 
   async function handleDeleteAccount() {
@@ -2081,6 +2136,11 @@ export default function LipaPolePoleAdminClient({
         }}
         onSelect={handleProductChange}
       />
+      <PosProductSelectorModal
+        open={replacementProductSelectorOpen}
+        onClose={() => setReplacementProductSelectorOpen(false)}
+        onSelect={handleReplacementProductChange}
+      />
 
       {createSuccess ? (
         <ModalShell
@@ -2127,6 +2187,10 @@ export default function LipaPolePoleAdminClient({
                   ? "Record Follow-Up"
                   : actionModal === "PROMISE"
                     ? "Record Promise To Pay"
+                    : actionModal === "SWITCH_ITEM"
+                      ? "Change Plan Item"
+                      : actionModal === "REFUND"
+                        ? "Record Refund & Close Plan"
                     : "Release Product"
           }
           subtitle={`${activeDetail.account.reference} · ${activeDetail.account.customerName || "Unknown customer"}`}
@@ -2281,6 +2345,39 @@ export default function LipaPolePoleAdminClient({
                   Cancel
                 </button>
               </div>
+            </form>
+          ) : null}
+
+          {actionModal === "SWITCH_ITEM" ? (
+            <form className="space-y-4" onSubmit={handleSwitchItem}>
+              <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-50">
+                All confirmed payments stay on this account as credit. The replacement item must cost at least the confirmed amount already paid.
+              </div>
+              <Field label="Replacement item">
+                <button type="button" className={`${inputClass} text-left`} onClick={() => setReplacementProductSelectorOpen(true)}>
+                  {replacementProduct ? `${replacementProduct.name} · ${formatKes(replacementProduct.sellingPrice)}` : "Select from POS catalog"}
+                </button>
+              </Field>
+              <Field label="Quantity">
+                <input type="number" min="1" className={inputClass} value={switchItemForm.quantity} onChange={(event) => setSwitchItemForm((current) => ({ ...current, quantity: event.target.value }))} />
+              </Field>
+              <Field label="Reason for change">
+                <textarea className={textareaClass} value={switchItemForm.reason} onChange={(event) => setSwitchItemForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Customer cannot continue with the original item..." />
+              </Field>
+              <div className="flex gap-3"><button type="submit" className={primaryButtonClass} disabled={isResolvingPlan}>{isResolvingPlan ? "Saving..." : "Change item & notify customer"}</button><button type="button" className={secondaryButtonClass} onClick={() => setActionModal(null)}>Cancel</button></div>
+            </form>
+          ) : null}
+
+          {actionModal === "REFUND" ? (
+            <form className="space-y-4" onSubmit={handleRefund}>
+              <div className="rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-50">
+                This records a manual refund, closes the plan, preserves all original payment records, and sends the customer an SMS. The refund amount must equal the confirmed amount paid.
+              </div>
+              <Field label="Refund amount"><input className={inputClass} value={refundForm.amount} onChange={(event) => setRefundForm((current) => ({ ...current, amount: event.target.value }))} placeholder={activeDetail ? String(activeDetail.summary.totalPaid) : "0"} /></Field>
+              <Field label="Refund method"><select className={inputClass} value={refundForm.method} onChange={(event) => setRefundForm((current) => ({ ...current, method: event.target.value }))}><option value="MPESA">M-Pesa</option><option value="CASH">Cash</option><option value="BANK">Bank</option><option value="CARD">Card</option><option value="OTHER">Other</option></select></Field>
+              <Field label="Refund reference (optional)"><input className={inputClass} value={refundForm.reference} onChange={(event) => setRefundForm((current) => ({ ...current, reference: event.target.value }))} placeholder="M-Pesa, bank or cash reference" /></Field>
+              <Field label="Reason for refund"><textarea className={textareaClass} value={refundForm.reason} onChange={(event) => setRefundForm((current) => ({ ...current, reason: event.target.value }))} /></Field>
+              <div className="flex gap-3"><button type="submit" className="inline-flex items-center justify-center rounded-2xl border border-rose-500/35 bg-rose-500/15 px-4 py-3 text-sm font-semibold text-rose-50 hover:bg-rose-500/25 disabled:opacity-60" disabled={isResolvingPlan}>{isResolvingPlan ? "Saving..." : "Record refund & notify customer"}</button><button type="button" className={secondaryButtonClass} onClick={() => setActionModal(null)}>Cancel</button></div>
             </form>
           ) : null}
         </ModalShell>
@@ -2701,6 +2798,16 @@ function ExpandedRowDetails({
               <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("ASSIGN")}>
                 Assign / Reassign
               </button>
+              {!account.convertedReceiptId && !account.convertedProjectId && !account.fulfilledAt ? (
+                <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("SWITCH_ITEM")}>
+                  Change Item
+                </button>
+              ) : null}
+              {!account.convertedReceiptId && !account.convertedProjectId && !account.fulfilledAt && detail.summary.totalPaid > 0 ? (
+                <button type="button" className="inline-flex items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20" onClick={() => onOpenAction("REFUND")}>
+                  Refund & Close
+                </button>
+              ) : null}
             </>
           ) : null}
 
