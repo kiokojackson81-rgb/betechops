@@ -32,6 +32,7 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
     staffHelpful: "",
     questionsAnswered: "",
     comments: "",
+    customerServiceExperience: "",
     wantsContact: "No",
   });
   const [recoveryPhone, setRecoveryPhone] = useState("");
@@ -86,6 +87,7 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
           staffHelpful: form.staffHelpful,
           questionsAnswered: form.questionsAnswered,
           comments: form.comments,
+          customerServiceExperience: form.customerServiceExperience,
           wantsContact,
         }),
       });
@@ -219,12 +221,21 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
 
                   <section className={`${shopStyles.lightCard} p-4 sm:p-5`}>
                     <label className="block text-sm font-bold text-slate-900">Any comments or suggestions?</label>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">Is there anything we could improve or do differently to serve you better?</p>
                     <textarea
                       value={form.comments}
                       onChange={(event) => setForm((current) => ({ ...current, comments: event.target.value }))}
                       placeholder="Is there anything we could improve or do differently to serve you better?"
                       rows={5}
                       className="mt-3 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fffdf9] px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-[#f59e0b] focus:ring-2 focus:ring-[#f59e0b]/20"
+                    />
+                    <label className="mt-4 block text-sm font-bold text-slate-900">Your customer service experience <span className="font-normal text-slate-500">(optional)</span></label>
+                    <textarea
+                      value={form.customerServiceExperience}
+                      onChange={(event) => setForm((current) => ({ ...current, customerServiceExperience: event.target.value }))}
+                      placeholder="Tell us about the customer service you received."
+                      rows={3}
+                      className="mt-2 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fffdf9] px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-[#f59e0b] focus:ring-2 focus:ring-[#f59e0b]/20"
                     />
                   </section>
 

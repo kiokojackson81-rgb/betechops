@@ -30,8 +30,8 @@ export const callFeedbackSchema = z.object({
   rating: z.number().int().min(1).max(5),
   staffHelpful: z.enum(CALL_FEEDBACK_STAFF_HELPFUL_OPTIONS),
   questionsAnswered: z.enum(CALL_FEEDBACK_ANSWER_OPTIONS),
-  recommend: z.string().trim().max(80).optional(),
   comments: boundedText(1200),
+  customerServiceExperience: boundedText(1200),
   wantsContact: z.boolean().default(false),
 });
 
@@ -136,6 +136,7 @@ async function createLowRatingFollowUp(tx: Prisma.TransactionClient, session: {
         `Helpful: ${input.staffHelpful}`,
         `Questions answered: ${input.questionsAnswered}`,
         input.comments ? `Comment: ${input.comments}` : null,
+        input.customerServiceExperience ? `Customer service experience: ${input.customerServiceExperience}` : null,
         input.wantsContact ? "Customer requested a call back." : null,
         `Feedback token: ${session.token}`,
       ]
@@ -271,10 +272,10 @@ export async function submitFeedbackByToken(input: CallFeedbackInput) {
       where: { token },
       data: {
         rating: input.rating,
-        serviceType: null,
         staffHelpful: input.staffHelpful,
         questionsAnswered: input.questionsAnswered,
-        wouldRecommend: input.recommend || null,
+        wouldRecommend: null,
+        serviceType: input.customerServiceExperience || null,
         comment: input.comments || null,
         wantsContact: input.wantsContact,
         followUpDetails: null,

@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       staffHelpful: body?.staffHelpful,
       questionsAnswered: body?.questionsAnswered,
       comments: body?.comments,
+      customerServiceExperience: body?.customerServiceExperience,
       wantsContact: Boolean(body?.wantsContact),
     });
 
