@@ -2,10 +2,11 @@ import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto"
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const DOCUMENT_ACCESS_MS = 24 * 60 * 60 * 1000;
 export type DocumentKind = "receipt" | "certificate";
-export type DocumentAccess = { kind: DocumentKind; token: string; receiptId: string; phone: string | null; issuedAt: Date | null };
+export type DocumentAccess = { kind: DocumentKind; token: string; receiptId: string; phone: string | null; issuedAt: Date | null; publicWhileProjectActive?: boolean };
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 function secret() {
   const value = process.env.DOCUMENT_ACCESS_SECRET || process.env.NEXTAUTH_SECRET;
@@ -36,7 +37,24 @@ export async function resolveDocument(kind: string, token: string): Promise<Docu
     const receipt = await prisma.receipt.findFirst({ where: { data: { path: ["publicReceiptToken"], equals: token } }, select: { id: true, data: true, order: { select: { customerPhone: true } } } });
     if (!receipt) return null;
     const data = receipt.data as Record<string, unknown> | null;
-    return { kind, token, receiptId: receipt.id, phone: normalizeKenyanPhone(receipt.order.customerPhone || ""), issuedAt: typeof data?.publicReceiptTokenIssuedAt === "string" ? new Date(data.publicReceiptTokenIssuedAt) : null };
+    const projectFlow = readReceiptProjectFlow(data?.projectFlow);
+    const projectCompletedAt = projectFlow?.stage === "COMPLETED_POSTED"
+      ? new Date(projectFlow.completedAt || projectFlow.updatedAt || "")
+      : null;
+    const completedAt = projectCompletedAt && !Number.isNaN(projectCompletedAt.getTime()) ? projectCompletedAt : null;
+    return {
+      kind,
+      token,
+      receiptId: receipt.id,
+      phone: normalizeKenyanPhone(receipt.order.customerPhone || ""),
+      // Project assignment links must remain usable throughout installation.
+      // The 24-hour grace period starts only after the project is completed.
+      issuedAt: projectFlow ? completedAt : (typeof data?.publicReceiptTokenIssuedAt === "string" ? new Date(data.publicReceiptTokenIssuedAt) : null),
+      publicWhileProjectActive: Boolean(
+        projectFlow &&
+          !["COMPLETED_POSTED", "CANCELLED"].includes(projectFlow.stage),
+      ),
+    };
   }
   if (kind === "certificate" && /^[A-Za-z0-9_-]{43}$/.test(token)) {
     const session = await prisma.commissioningSession.findUnique({ where: { customerTokenHash: digest(token) }, select: { receiptId: true, status: true, customerDeliveredAt: true, issuedAt: true, receipt: { select: { order: { select: { customerPhone: true } } } } } });
@@ -46,6 +64,7 @@ export async function resolveDocument(kind: string, token: string): Promise<Docu
   return null;
 }
 export async function canAccessDocument(doc: DocumentAccess) {
+  if (doc.publicWhileProjectActive) return true;
   if (withinDocumentWindow(doc.issuedAt)) return true;
   return validDocumentGrant(doc, (await cookies()).get(documentCookieName(doc))?.value || "");
 }

@@ -511,7 +511,10 @@ export function buildReceiptProjectFlow(input: {
     externalAgentIds,
     externalAgentPhone: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.phone : null,
     assignedHandlers,
-    completedAt: toTrimmedString(existing?.completedAt) || null,
+    completedAt:
+      stage === "COMPLETED_POSTED"
+        ? toTrimmedString(existing?.completedAt) || new Date().toISOString()
+        : toTrimmedString(existing?.completedAt) || null,
     createdAt: toTrimmedString(existing?.createdAt) || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   } satisfies ReceiptProjectFlow;
