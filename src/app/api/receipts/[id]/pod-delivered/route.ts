@@ -15,9 +15,8 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
-import { sendTransactionalSms } from "@/lib/africasTalking";
-import { normalizeKenyanPhone } from "@/lib/phone";
 import { randomUUID } from "crypto";
+import { notifyPodCustomer } from "@/lib/customerOrderNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -822,24 +821,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     );
   }
 
-  if (desiredStatus === "delivery_failed") {
-    const customerPhone = normalizeKenyanPhone(
-      receipt.order?.customerPhone ?? "",
-    );
-    if (customerPhone) {
-      const customerName = String(
-        receipt.order?.customerName || "Customer",
-      ).trim();
-      const reference =
-        receipt.order?.orderNumber || receipt.receiptNumber || receiptId;
-      await sendTransactionalSms(
-        customerPhone,
-        `Hello ${customerName}, we were unable to complete delivery for order ${reference}.${finalReason ? ` Reason: ${finalReason}.` : ""} Your item has been returned safely. You are always welcome to purchase from Betech again whenever you are ready.`,
-      ).catch((error) =>
-        console.error(`[pod][${requestId}] failed-delivery SMS failed`, error),
-      );
-    }
-  }
+  await notifyPodCustomer({ receiptId, event: desiredStatus === "delivered" ? "POD_DELIVERED" : "DELIVERY_FAILED" }).catch((error) => console.error(`[pod][${requestId}] customer notification failed`, error));
 
   let sendResult: any = null;
   try {

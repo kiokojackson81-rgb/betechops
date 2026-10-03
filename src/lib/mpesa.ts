@@ -16,6 +16,7 @@ import { buildReceiptProjectFlow, readReceiptProjectFlow } from "@/lib/receiptPr
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { sendTransactionalSms } from "@/lib/africasTalking";
 import { sendReceiptChannels } from "@/workers/receiptSender";
+import { notifyWebsiteOrderCustomer } from "@/lib/customerOrderNotifications";
 
 const DARAJA_PRODUCTION_BASE_URL = "https://api.safaricom.co.ke";
 const DEFAULT_CALLBACK_BASE_URL = "https://betech.co.ke";
@@ -806,6 +807,7 @@ async function notifyConfirmedWebsiteOrder(input: {
     actionPath: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(order.id)}`,
     payload: { orderRef: order.orderRef, receiptNumber: receipt, paid, total },
   });
+  await notifyWebsiteOrderCustomer({ websiteOrderId: order.id, event: "PAYMENT_CONFIRMED" }).catch((error) => console.error("[customer notifications] website payment", error));
 }
 
 async function notifyConfirmedSiteVisit(siteVisitId: string) {

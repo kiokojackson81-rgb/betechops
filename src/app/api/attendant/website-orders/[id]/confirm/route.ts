@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { notifyWebsiteOrderCustomer } from "@/lib/customerOrderNotifications";
 import {
   canAdvanceWebsiteOrderStatus,
   ensureWebsiteOrderAssignments,
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest, context: { params: Promise<any>
     },
     include: websiteOrderAdminInclude,
   });
+
+  await notifyWebsiteOrderCustomer({ websiteOrderId: order.id, event: "PROCESSING" }).catch((error) => console.error("[customer notifications] website processing", error));
 
   return NextResponse.json({ ok: true, order: await serializeWebsiteOrder(order) });
 }

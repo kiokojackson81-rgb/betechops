@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { notifyWebsiteOrderCustomer } from "@/lib/customerOrderNotifications";
 import { ensureReviewInvitationsForWebsiteOrder, syncReferralLinkForWebsiteOrder } from "@/lib/reviewsReferrals";
 import {
   buildWebsiteOrderReceiptPayload,
@@ -142,6 +143,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<any
       error: error instanceof Error ? error.message : String(error),
     });
   });
+  const eventByStatus = { [WebsiteOrderStatus.PROCESSING]: "PROCESSING", [WebsiteOrderStatus.DISPATCHED]: "DISPATCHED", [WebsiteOrderStatus.PAYMENT_CONFIRMED]: "PAYMENT_CONFIRMED", [WebsiteOrderStatus.DELIVERED]: "DELIVERED", [WebsiteOrderStatus.CANCELLED]: "CANCELLED" } as const;
+  const notificationEvent = eventByStatus[parsed.data.status as keyof typeof eventByStatus];
+  if (notificationEvent) await notifyWebsiteOrderCustomer({ websiteOrderId: order.id, event: notificationEvent }).catch((error) => console.error("[customer notifications] website status", error));
 
   return NextResponse.json({ ok: true, order: await serializeWebsiteOrder(order) });
 }

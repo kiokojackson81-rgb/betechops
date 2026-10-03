@@ -30,6 +30,7 @@ import {
   summarizeCheckoutFulfilment,
 } from "@/lib/checkoutDeliveryPayment";
 import { getOpsBaseUrl, isOpsHost, isShopHost } from "@/lib/runtimeUrls";
+import { notifyWebsiteOrderCustomer } from "@/lib/customerOrderNotifications";
 
 export const dynamic = "force-dynamic";
 
@@ -377,6 +378,8 @@ export async function POST(request: NextRequest) {
   // confirmation or payment amount. Run them after replying so checkout can
   // immediately continue to the M-Pesa prompt.
   after(async () => {
+    await notifyWebsiteOrderCustomer({ websiteOrderId: created.id, event: "ORDER_PLACED" }).catch((error) => console.error("[customer notifications] order placed", error));
+    if (requiresImmediatePayment) await notifyWebsiteOrderCustomer({ websiteOrderId: created.id, event: "PAYMENT_REQUESTED" }).catch((error) => console.error("[customer notifications] payment requested", error));
     await syncReferralLinkForWebsiteOrder(created.id).catch((error) => {
       console.error("[referrals] failed to sync customer referral for website order", {
         orderId: created.id,

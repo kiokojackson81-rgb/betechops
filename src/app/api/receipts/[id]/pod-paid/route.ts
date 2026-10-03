@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAttendant } from '@/lib/auth';
 import { publishSummaryUpdate } from '@/lib/receiptSseBroker';
 import { randomUUID } from 'crypto';
+import { notifyPodCustomer } from '@/lib/customerOrderNotifications';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   } catch (e) {
     console.warn('[pod-paid] failed to publish summary update', e);
   }
+  await notifyPodCustomer({ receiptId, event: 'POD_PAID' }).catch((error) => console.error(`[pod-paid][${requestId}] customer notification failed`, error));
 
   return NextResponse.json({ ok: true });
 }

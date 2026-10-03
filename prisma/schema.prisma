@@ -1588,6 +1588,7 @@ model Receipt {
   order                         Order                    @relation(fields: [orderId], references: [id])
   files                         ReceiptFile[]
   projectNotifications          ProjectNotificationLog[]
+  customerOrderNotifications    CustomerOrderNotificationLog[]
   websiteOrders                 WebsiteOrder[]
   complaints                    Complaint[]
   commissioningSession          CommissioningSession?
@@ -1749,6 +1750,51 @@ enum ProjectNotificationStatus {
   SKIPPED
 }
 
+enum CustomerOrderNotificationEventType {
+  ORDER_PLACED
+  PAYMENT_REQUESTED
+  PROCESSING
+  DISPATCHED
+  PAYMENT_CONFIRMED
+  DELIVERED
+  DELIVERY_FAILED
+  CANCELLED
+  POD_ORDER_RECEIVED
+  POD_PAID
+  POD_DELIVERED
+}
+
+enum CustomerOrderNotificationChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+model CustomerOrderNotificationLog {
+  id                String                         @id @default(cuid())
+  websiteOrderId    String?
+  receiptId         String?
+  eventType         CustomerOrderNotificationEventType
+  channel           CustomerOrderNotificationChannel
+  recipientName     String?
+  recipientAddress  String?
+  idempotencyKey    String                         @unique
+  status            ProjectNotificationStatus      @default(PENDING)
+  providerMessageId String?
+  attemptCount      Int                            @default(0)
+  errorMessage      String?
+  payloadSnapshot   Json?
+  createdAt         DateTime                       @default(now())
+  sentAt            DateTime?
+  failedAt          DateTime?
+  websiteOrder      WebsiteOrder?                  @relation(fields: [websiteOrderId], references: [id], onDelete: Cascade)
+  receipt           Receipt?                       @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([websiteOrderId, createdAt])
+  @@index([receiptId, createdAt])
+  @@index([status, createdAt])
+}
+
 model ProjectNotificationLog {
   id                String                           @id @default(cuid())
   receiptId         String
@@ -1817,6 +1863,7 @@ model WebsiteOrder {
   items               WebsiteOrderItem[]
   mpesaPayments       MpesaPayment[]
   complaints          Complaint[]
+  customerNotifications CustomerOrderNotificationLog[]
 
   @@index([status, createdAt])
   @@index([orderType, createdAt])
