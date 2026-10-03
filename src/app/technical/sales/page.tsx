@@ -4,13 +4,19 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
-import { getTechnicalProjectCommissionSummary, TECHNICAL_POS_PROFIT_COMMISSION_RATE } from "@/lib/technicalCompensation";
+import {
+  getTechnicalProjectCommissionSummary,
+  isTechnicalProjectAssignee,
+  TECHNICAL_POS_PROFIT_COMMISSION_RATE,
+  TECHNICAL_PROJECT_COMPLETION_FEE,
+} from "@/lib/technicalCompensation";
 import getLandingPage from "@/lib/getLandingPage";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { receiptSalesOwner } from "@/lib/receiptFinancialState";
 
 export const dynamic = "force-dynamic";
 
@@ -118,7 +124,7 @@ export default async function TechnicalSalesPage() {
   const viewer = await resolveViewer();
   const period = getTradingPeriodFor(new Date());
 
-  const [payrollRow, summary, projectCommission, receipts] = await Promise.all([
+  const [payrollRow, summary, projectCommission, receiptCandidates] = await Promise.all([
     buildPayrollRow(
       {
         id: viewer.id,
@@ -142,13 +148,17 @@ export default async function TechnicalSalesPage() {
         createdAt: { gte: period.start, lte: period.end },
         OR: [
           { issuedById: viewer.id },
+          { order: { attendantId: viewer.id } },
+          { data: { path: ["attendantId"], equals: viewer.id } },
           { data: { path: ["projectFlow", "handlerStaffId"], equals: viewer.id } },
+          { data: { path: ["projectFlow", "isProject"], equals: true } },
         ],
       },
       orderBy: { createdAt: "desc" },
-      take: 40,
+      take: 200,
       select: {
         id: true,
+        issuedById: true,
         receiptNumber: true,
         createdAt: true,
         totals: true,
@@ -160,6 +170,7 @@ export default async function TechnicalSalesPage() {
             totalAmount: true,
             orderNumber: true,
             paymentStatus: true,
+            attendantId: true,
             items: {
               select: {
                 quantity: true,
@@ -176,6 +187,21 @@ export default async function TechnicalSalesPage() {
       },
     }),
   ]);
+
+  // The JSON query above can efficiently find the primary technician, but it
+  // cannot reliably search every member of `handlerStaffIds`. Filter the
+  // project candidates after parsing their normalized workflow instead.
+  const receipts = receiptCandidates
+    .filter((receipt) => {
+      if (receiptSalesOwner(receipt) === viewer.id) return true;
+      const projectFlow = readReceiptProjectFlow(
+        receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+          ? (receipt.data as Record<string, unknown>).projectFlow
+          : null,
+      );
+      return isTechnicalProjectAssignee(projectFlow, viewer.id);
+    })
+    .slice(0, 40);
 
   const supportReceiptNumbers = Array.from(
     new Set(
@@ -265,7 +291,7 @@ export default async function TechnicalSalesPage() {
           <div>
             <div className="text-lg font-semibold text-white">Your receipt sales and assigned projects</div>
             <div className="text-sm text-slate-400">
-              This includes receipts you created and projects assigned to you. Completed and posted projects show their KSh 2,000 completion fee here; assignment does not transfer the sale.
+              This includes your receipt sales and projects assigned to you. Each receipt shows sales commission and project completion fee separately; project assignment does not transfer the sale.
             </div>
           </div>
           <Link href="/receipts" target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5">
@@ -283,11 +309,18 @@ export default async function TechnicalSalesPage() {
               );
               const isProjectPendingForSales = Boolean(projectFlow?.isProject && projectFlow.stage !== "COMPLETED_POSTED");
               const isCompletedProject = Boolean(projectFlow?.isProject && projectFlow.stage === "COMPLETED_POSTED");
+              const ownsSale = receiptSalesOwner(receipt) === viewer.id;
+              const assignedToProject = isTechnicalProjectAssignee(projectFlow, viewer.id);
               const supportProfit =
                 supportProfitByReceipt.get(canonicalReceiptNumber(receipt.order?.orderNumber || receipt.receiptNumber || undefined) || "") ?? null;
               const profit = extractProfit(receipt, supportProfit);
-              const commission = !isProjectPendingForSales && profit > 0 ? Math.round(profit * TECHNICAL_POS_PROFIT_COMMISSION_RATE) : 0;
-              const projectCompletionFee = isCompletedProject && projectFlow?.handlerStaffId === viewer.id ? 2000 : 0;
+              const receiptCommission = ownsSale && !isProjectPendingForSales && profit > 0
+                ? Math.round(profit * TECHNICAL_POS_PROFIT_COMMISSION_RATE)
+                : 0;
+              const projectCompletionFee = isCompletedProject && assignedToProject
+                ? TECHNICAL_PROJECT_COMPLETION_FEE
+                : 0;
+              const totalReceiptEarnings = receiptCommission + projectCompletionFee;
               return (
                 <div key={receipt.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -315,17 +348,29 @@ export default async function TechnicalSalesPage() {
                         <span className="break-words text-right font-semibold text-white">{formatCurrency(Number(receipt.order?.totalAmount ?? 0))}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span>{isCompletedProject ? "Completed project fee" : "Commission on receipt"}</span>
-                        <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(isCompletedProject ? projectCompletionFee : commission)}</span>
+                        <span>Commission on receipt</span>
+                        <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(receiptCommission)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Project completion fee</span>
+                        <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(projectCompletionFee)}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-white/10 pt-2 font-semibold text-white">
+                        <span>Total earned on this receipt</span>
+                        <span className="break-words text-right text-emerald-300">{formatCurrency(totalReceiptEarnings)}</span>
                       </div>
                       <div className="text-xs text-slate-500">
-                        {isCompletedProject
-                          ? "Completed and posted project assigned to you. The KSh 2,000 completion fee is included in this period."
-                          : isProjectPendingForSales
-                          ? "Project workflow is not yet completed and posted to POS, so this receipt is still excluded from sales and commission totals."
-                          : profit > 0
-                            ? "Pricing completed. This receipt already contributes to your POS commission."
-                            : "Awaiting confirmation before the commission amount can be included."}
+                        {isProjectPendingForSales && assignedToProject
+                          ? "The project fee becomes payable after the project is completed and posted to POS."
+                          : receiptCommission > 0 && projectCompletionFee > 0
+                            ? "This is your sale and a completed project assigned to you, so both earnings are included."
+                            : receiptCommission > 0
+                              ? "This receipt belongs to you and contributes to your POS commission."
+                              : projectCompletionFee > 0
+                                ? "Completed and posted project assigned to you. The KSh 2,000 project fee is included in this period."
+                                : ownsSale
+                                  ? "Awaiting confirmation before the commission amount can be included."
+                                  : "This project is assigned to you; it does not transfer the underlying sale."}
                       </div>
                       <div className="pt-1">
                         <Link href={`/receipts/${encodeURIComponent(receipt.id)}`} target="_blank" rel="noreferrer" className="inline-flex rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/5">

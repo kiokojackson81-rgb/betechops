@@ -15,6 +15,20 @@ export type TechnicalProjectCommissionSummary = {
   completedAmount: number;
 };
 
+/**
+ * A project can have more than one internal technician.  The legacy
+ * `handlerStaffId` is the primary assignee, while `handlerStaffIds` contains
+ * every assigned internal technician.  Treat either representation as an
+ * assignment so staff are not excluded from their project-work earnings.
+ */
+export function isTechnicalProjectAssignee(
+  flow: ReturnType<typeof readReceiptProjectFlow>,
+  userId: string,
+) {
+  if (!flow || !userId) return false;
+  return flow.handlerStaffId === userId || flow.handlerStaffIds.includes(userId);
+}
+
 export async function getTechnicalProjectCommissionSummary(
   userId: string,
   period: TradingPeriod,
@@ -45,7 +59,7 @@ export async function getTechnicalProjectCommissionSummary(
         : {};
     const flow = readReceiptProjectFlow(rawData.projectFlow);
     if (!flow) continue;
-    if (String(flow.handlerStaffId || "").trim() !== userId) continue;
+    if (!isTechnicalProjectAssignee(flow, userId)) continue;
 
     if (flow.stage === "PROJECT_IN_PROGRESS") {
       pendingCount += 1;
@@ -53,7 +67,11 @@ export async function getTechnicalProjectCommissionSummary(
     }
 
     if (flow.stage === "COMPLETED_POSTED") {
-      const completedAt = flow.updatedAt ? new Date(flow.updatedAt) : receipt.createdAt;
+      const completedAt = flow.completedAt
+        ? new Date(flow.completedAt)
+        : flow.updatedAt
+          ? new Date(flow.updatedAt)
+          : receipt.createdAt;
       if (
         Number.isFinite(completedAt.getTime()) &&
         completedAt >= period.start &&
