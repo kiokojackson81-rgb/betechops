@@ -38,6 +38,11 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
           <ul className="mt-3 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-slate-50">
             {receipt.items.map(item => <li key={item.id} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 p-4"><div className="min-w-0 flex-1 basis-40"><p className="break-words font-medium">{item.name}</p><p className="mt-1 text-sm text-slate-600">Qty {item.quantity} × {receiptMoney(item.unitPrice)}</p></div><p className="font-semibold">{receiptMoney(item.lineTotal)}</p></li>)}
           </ul>
+          <dl className="mt-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:ml-auto sm:max-w-md">
+            <div className="flex items-center justify-between gap-4"><dt className="text-slate-600">Item subtotal</dt><dd className="font-medium">{receiptMoney(receipt.subtotal)}</dd></div>
+            {receipt.showDiscount ? <div className="mt-2 flex items-center justify-between gap-4 text-emerald-700"><dt>Discount</dt><dd className="font-medium">−{receiptMoney(receipt.discount)}</dd></div> : null}
+            <div className="mt-3 flex items-center justify-between gap-4 border-t border-slate-200 pt-3 text-base font-bold text-slate-950"><dt>Final amount payable</dt><dd>{receiptMoney(receipt.total)}</dd></div>
+          </dl>
           <div className="mt-4 grid gap-3 sm:grid-cols-2"><a href={pdf} target="_blank" rel="noreferrer" className="receipt-primary"><FileText size={21} aria-hidden="true" />View Receipt</a><a href={`${pdf}?download=1`} className="receipt-secondary"><Download size={21} aria-hidden="true" />Download PDF</a></div>
         </section>
         <section aria-labelledby="help-heading" className="mt-6 border-t border-slate-200 pt-5">

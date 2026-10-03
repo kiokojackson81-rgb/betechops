@@ -27,7 +27,7 @@ function formatProjectDate(value: string | null | undefined) {
 
 /** The live order ledger is authoritative, including for commissioned projects. */
 export function customerReceiptPresentation(receipt: {
-  receiptNumber?: string | null; data?: unknown;
+  receiptNumber?: string | null; data?: unknown; discount?: unknown; showDiscount?: boolean | null;
   order: { customerName: string; orderNumber: string; totalAmount: number; paidAmount: number; items?: unknown[]; mpesaPayments?: Array<{ transactionAt: Date | null }>; layawayPlan?: { payments: Array<{ paidAt: Date }> } | null };
 }) {
   const { order } = receipt;
@@ -43,10 +43,27 @@ export function customerReceiptPresentation(receipt: {
     .map(value => new Date(value)).filter(value => Number.isFinite(value.getTime()));
   const lastPayment = paid > 0 && dates.length ? new Date(Math.max(...dates.map(date => date.getTime()))) : null;
   const rawItems = order.items?.length ? order.items : Array.isArray(data.items) ? data.items : [];
+  const items = rawItems.map((rawItem: unknown, index: number) => {
+    const item = record(rawItem);
+    const quantity = amount(item.quantity ?? 1);
+    const unitPrice = amount(item.sellingPrice ?? item.unitPrice ?? item.price);
+    return {
+      id: String(item.id || index), name: String(record(item.product).name || item.title || item.productName || item.name || "Purchased item"),
+      quantity, unitPrice,
+      lineTotal: unitPrice * quantity,
+    };
+  });
+  const subtotal = Math.round(items.reduce((sum, item) => sum + item.lineTotal, 0) * 100) / 100;
+  // The order ledger is the final agreed amount. Older receipts occasionally
+  // have a saved line-item price but no saved discount, so infer the visible
+  // discount only when the item subtotal is higher than that ledger amount.
+  const explicitDiscount = amount(receipt.discount ?? data.discount);
+  const discount = Math.round(Math.max(explicitDiscount, subtotal > total ? subtotal - total : 0) * 100) / 100;
+  const showDiscount = Boolean(receipt.showDiscount || data.showDiscount || discount > 0);
   return {
     customerName: order.customerName,
     receiptNumber: receipt.receiptNumber || order.orderNumber,
-    paid, balance, total,
+    paid, balance, total, subtotal, discount, showDiscount,
     status: balance === 0 ? "Paid in full" : paid > 0 ? "Partially paid" : "Awaiting payment",
     paymentDate: lastPayment ? new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" }).format(lastPayment) : paid > 0 ? "Not recorded" : "No payment yet",
     project: projectFlow
@@ -56,13 +73,7 @@ export function customerReceiptPresentation(receipt: {
           scheduledDate: formatProjectDate(projectFlow.scheduledDate),
         }
       : null,
-    items: rawItems.map((rawItem: unknown, index: number) => {
-      const item = record(rawItem);
-      return {
-      id: String(item.id || index), name: String(record(item.product).name || item.title || item.productName || item.name || "Purchased item"),
-      quantity: amount(item.quantity ?? 1), unitPrice: amount(item.sellingPrice ?? item.unitPrice ?? item.price),
-      lineTotal: amount(item.sellingPrice ?? item.unitPrice ?? item.price) * amount(item.quantity ?? 1),
-    }; }),
+    items,
   };
 }
 
