@@ -94,7 +94,9 @@ try {
   }
 
   console.log("[vercel-build] running next build");
-  run("next build --turbopack");
+  // npx resolves the local Next.js binary consistently on Vercel, Unix, and
+  // Windows; a bare `next` command depends on the shell's PATH behavior.
+  run("npx next build --turbopack");
 } catch (err) {
   console.error("[vercel-build] failed", err);
   process.exit(1);

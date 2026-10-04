@@ -1,6 +1,9 @@
 type ReceiptLike = {
   data?: unknown;
-  order?: { paidAmount?: unknown; totalAmount?: unknown; paymentStatus?: unknown } | null;
+  // Different read paths select different order fields. Delivery state lives
+  // on the receipt data, so the helper must accept both a full order ledger
+  // and lightweight review/referral projections.
+  order?: unknown;
 };
 
 const record = (value: unknown): Record<string, unknown> =>
