@@ -150,9 +150,15 @@ export default async function Page({
     paymentDetailsShown: Boolean(receipt?.paymentDetailsShown),
     notes: receipt?.notes ?? null,
     warrantyText: receipt?.warrantyText ?? null,
-    customerType: String(receipt?.data?.customerType || "walk-in").toLowerCase(),
-    deliveryStatus: String(receipt?.data?.deliveryStatus || "pending").toLowerCase(),
-    deliveryPaymentTerm: String(receipt?.data?.deliveryPaymentTerm || "PAY_BEFORE_DELIVERY").toUpperCase(),
+    customerType: (["walk-in", "online", "delivery", "pod", "project"].includes(String(receipt?.data?.customerType || "").toLowerCase())
+      ? String(receipt?.data?.customerType).toLowerCase()
+      : "walk-in") as "walk-in" | "online" | "delivery" | "pod" | "project",
+    deliveryStatus: (["pending", "delivered", "failed"].includes(String(receipt?.data?.deliveryStatus || "").toLowerCase())
+      ? String(receipt?.data?.deliveryStatus).toLowerCase()
+      : "pending") as "pending" | "delivered" | "failed",
+    deliveryPaymentTerm: (String(receipt?.data?.deliveryPaymentTerm || "").toUpperCase() === "PAY_ON_DELIVERY"
+      ? "PAY_ON_DELIVERY"
+      : "PAY_BEFORE_DELIVERY") as "PAY_BEFORE_DELIVERY" | "PAY_ON_DELIVERY",
     items:
       sourceItems.length > 0
         ? sourceItems.map((item: any, index: number) => {
