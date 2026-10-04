@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowRight, CheckCircle2, Gift, Headphones, Mail, MapPin, Phone, ShieldCheck, Sparkles, Star, Truck } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, ClipboardList, FileWarning, MapPinned, Phone, ShieldCheck, Sparkles, Star, Store, Wrench } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState } from "react";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
@@ -24,9 +24,8 @@ type PublicFeedbackClientProps = {
 
 export default function PublicFeedbackClient({ token = "", initialState, popularProducts }: PublicFeedbackClientProps) {
   const router = useRouter();
-  const supportWhatsAppHref = "https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution";
-  const referAndEarnHref = "https://agents.betech.co.ke/";
-  const tiktokHref = "https://www.tiktok.com/@betechsolarprojects";
+  const jacksonWhatsAppHref = "https://wa.me/254705663175?text=Hello%20Jackson%2C%20I%20need%20customer%20service%20help%20from%20Betech%20Solar.";
+  const jonathanWhatsAppHref = "https://wa.me/254717241877?text=Hello%20Engineer%20Jonathan%2C%20I%20need%20after-sales%20support%20from%20Betech%20Solar.";
   const [form, setForm] = useState({
     rating: 0,
     staffHelpful: "",
@@ -41,7 +40,6 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [activePromoTab, setActivePromoTab] = useState<"support" | "refer" | "contact">("support");
 
   const wantsContact = form.wantsContact === "Yes, please call me";
   const isFormActive = initialState === "active" && !submitted;
@@ -54,12 +52,6 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
     ],
     [],
   );
-
-  const promoTabs = [
-    { key: "support" as const, label: "WhatsApp Support", icon: Headphones },
-    { key: "refer" as const, label: "Refer & Earn", icon: Gift },
-    { key: "contact" as const, label: "Call, Email & TikTok", icon: Sparkles },
-  ];
 
   const validate = () => {
     const nextErrors: Record<string, string> = {};
@@ -256,106 +248,33 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
               )}
             </section>
 
-            <section className="mt-6 grid gap-4 md:grid-cols-2">
-              <TrustCard
-                icon={<MapPin className="h-5 w-5" />}
-                title="Nairobi CBD Shop"
-                copy={`Pramukh Plaza, 3rd Floor, Shop 3
-Junction of Munyu Road and Sheikh Karume Road`}
-              />
-              <TrustCard
-                icon={<Truck className="h-5 w-5" />}
-                title="Countrywide Delivery & Installation"
-                copy="We deliver and install solar systems countrywide with quick support before and after purchase."
-              />
-            </section>
-
-            <section className={`${shopStyles.lightCard} mt-6 overflow-hidden`}>
-              <div className="border-b border-[#7a0000]/10 px-5 py-5 sm:px-6">
-                <div className="flex items-center gap-2 text-[#7a0000]">
-                  <ShieldCheck className="h-5 w-5" />
-                  <div className="text-sm font-black uppercase tracking-[0.16em]">Trust & Rewards</div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {promoTabs.map((tab) => {
-                    const Icon = tab.icon;
-                    const active = activePromoTab === tab.key;
-                    return (
-                      <button
-                        key={tab.key}
-                        type="button"
-                        onClick={() => setActivePromoTab(tab.key)}
-                        className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-bold transition ${
-                          active ? "border-[#7a0000] bg-[#7a0000] text-white" : "border-[#7a0000]/12 bg-[#fffaf2] text-slate-800"
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
+            <section aria-labelledby="support-heading" className={`${shopStyles.lightCard} mt-6 overflow-hidden`}>
+              <div className="border-b border-[#7a0000]/10 bg-gradient-to-r from-[#7a0000]/[0.05] to-[#f59e0b]/[0.08] px-5 py-5 sm:px-6">
+                <div className="flex items-center gap-2 text-[#7a0000]"><ShieldCheck className="h-5 w-5" /><div className="text-sm font-black uppercase tracking-[0.16em]">Betech support centre</div></div>
+                <h2 id="support-heading" className="mt-2 text-2xl font-black tracking-tight text-slate-950">Get the right help, fast</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Call or WhatsApp the right team, manage your solar service, or explore Betech resources.</p>
               </div>
-              <div className="p-5 sm:p-6">
-                {activePromoTab === "support" ? (
-                  <PromoPanel
-                    icon={<Headphones className="h-6 w-6" />}
-                    title="Get quick solar help on WhatsApp"
-                    copy="Talk to Betech Solar on WhatsApp for fast product guidance, pricing help, and the best setup for your home or biashara."
-                    cta={
-                      <TrackedWhatsAppLink
-                        href={supportWhatsAppHref}
-                        className={shopStyles.whatsappButton}
-                        label="Feedback page WhatsApp support"
-                        context="feedback_page"
-                        ariaLabel="Chat with Betech Solar on WhatsApp"
-                      >
-                        Chat on WhatsApp
-                      </TrackedWhatsAppLink>
-                    }
-                  />
-                ) : null}
-                {activePromoTab === "refer" ? (
-                  <PromoPanel
-                    icon={<Gift className="h-6 w-6" />}
-                    title="Refer and earn"
-                    copy="You could earn upto Ksh100,000 if you refer customer to us. Share serious solar enquiries and let our team handle product matching, quotation, and closing."
-                    cta={
-                      <Link
-                        href={referAndEarnHref}
-                        className={shopStyles.goldButton}
-                      >
-                        Start referring
-                      </Link>
-                    }
-                  />
-                ) : null}
-                {activePromoTab === "contact" ? (
-                  <PromoPanel
-                    icon={<Sparkles className="h-6 w-6" />}
-                    title="Reach Betech Solar fast"
-                    copy="Call 0722151083 or +254711082542, email info@betech.co.ke, and follow us on TikTok to see product demos, installations, and customer transformations."
-                    cta={
-                      <>
-                        <Link href="tel:0722151083" className={shopStyles.primaryButton}>Call 0722151083</Link>
-                        <Link href="mailto:info@betech.co.ke" className={shopStyles.secondaryButton}>Email us</Link>
-                        <Link
-                          href={tiktokHref}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={shopStyles.goldButton}
-                        >
-                          Follow us on TikTok
-                        </Link>
-                      </>
-                    }
-                    bulletItems={[
-                      { icon: <Phone className="h-4 w-4" />, label: "0722151083 / +254711082542" },
-                      { icon: <Mail className="h-4 w-4" />, label: "info@betech.co.ke" },
-                      { icon: <Star className="h-4 w-4" />, label: "@betechsolarprojects" },
-                    ]}
-                  />
-                ) : null}
+              <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-2">
+                <SupportContactCard icon={<Phone className="h-6 w-6" />} title="Customer Service Manager" name="Jackson · 0705 663 175" copy="For orders, payments, delivery questions, and general customer service." callHref="tel:0705663175" whatsappHref={jacksonWhatsAppHref} whatsappLabel="WhatsApp Jackson" />
+                <SupportContactCard icon={<Wrench className="h-6 w-6" />} title="After-sales support" name="Engineer Jonathan · 0717 241 877" copy="For technical support after installation, warranty help, and system concerns." callHref="tel:0717241877" whatsappHref={jonathanWhatsAppHref} whatsappLabel="WhatsApp Jonathan" />
+              </div>
+              <div className="border-t border-[#7a0000]/10 px-5 py-5 sm:px-6">
+                <div className="flex items-center gap-2 text-slate-900"><MapPinned className="h-5 w-5 text-[#7a0000]" /><h3 className="font-black">Our service location</h3></div>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Betech Solar Solutions serves customers across Kenya with countrywide delivery, installation, and remote support.</p>
+              </div>
+              <div className="grid gap-2 border-t border-[#7a0000]/10 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
+                <SupportLink href="/support/report-issue" icon={<FileWarning className="h-5 w-5" />} title="Report an issue or complaint" />
+                <SupportLink href="/warranty-support" icon={<ShieldCheck className="h-5 w-5" />} title="Warranty support" />
+                <SupportLink href="https://www.tiktok.com/@betechsolarprojects" icon={<Sparkles className="h-5 w-5" />} title="See recent projects" external />
+                <SupportLink href="/request-quote" icon={<ClipboardList className="h-5 w-5" />} title="Request a solar system quote" />
+                <SupportLink href="/site-visit" icon={<MapPinned className="h-5 w-5" />} title="Request a site visit" />
+                <SupportLink href="/p/terms" icon={<ClipboardList className="h-5 w-5" />} title="Installation terms & conditions" />
+                <SupportLink href="/delivery-installation-payment" icon={<Store className="h-5 w-5" />} title="Delivery, installation & payments" />
+              </div>
+              <div className="flex flex-col gap-2 border-t border-[#7a0000]/10 bg-[#fffaf2] p-5 text-sm font-bold sm:flex-row sm:flex-wrap sm:p-6">
+                <Link href="https://www.betech.co.ke/" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#7a0000] px-4 text-white">Betech Solar Online Store</Link>
+                <Link href="https://agents.betech.co.ke/" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#7a0000]/20 px-4 text-[#7a0000]">Agents portal</Link>
+                <Link href="https://ops.betech.co.ke/" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#7a0000]/20 px-4 text-[#7a0000]">Operations portal</Link>
               </div>
             </section>
 
@@ -435,40 +354,29 @@ function ThankYouCard() {
   );
 }
 
-function PromoPanel({
-  icon,
-  title,
-  copy,
-  cta,
-  bulletItems,
-}: {
-  icon: ReactNode;
-  title: string;
-  copy: string;
-  cta?: ReactNode;
-  bulletItems?: Array<{ icon: ReactNode; label: string }>;
-}) {
+function SupportContactCard({ icon, title, name, copy, callHref, whatsappHref, whatsappLabel }: { icon: ReactNode; title: string; name: string; copy: string; callHref: string; whatsappHref: string; whatsappLabel: string }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[88px_minmax(0,1fr)] lg:items-start">
-      <div className="inline-flex h-20 w-20 items-center justify-center rounded-[24px] bg-[radial-gradient(circle_at_top,#fff3d8_0%,#ffe7ab_55%,#fff7e3_100%)] text-[#7a0000] shadow-[0_20px_45px_rgba(242,178,15,0.16)]">
-        {icon}
+    <article className="rounded-2xl border border-[#7a0000]/10 bg-[#fffdf9] p-4 shadow-sm">
+      <div className="flex gap-3">
+        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">{icon}</span>
+        <div className="min-w-0">
+          <h3 className="font-black text-slate-950">{title}</h3>
+          <p className="mt-1 text-sm font-bold text-[#7a0000]">{name}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{copy}</p>
+        </div>
       </div>
-      <div>
-        <h3 className="text-2xl font-black tracking-tight text-slate-950">{title}</h3>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{copy}</p>
-        {bulletItems?.length ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {bulletItems.map((item) => (
-              <div key={item.label} className="inline-flex items-center gap-2 rounded-full border border-[#7a0000]/10 bg-[#fffaf2] px-3 py-2 text-sm font-semibold text-slate-700">
-                <span className="text-[#7a0000]">{item.icon}</span>
-                {item.label}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {cta ? <div className="mt-5 flex flex-wrap gap-3">{cta}</div> : null}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Link href={callHref} className={`${shopStyles.primaryButton} min-h-11 px-3 text-sm`}>Call now</Link>
+        <TrackedWhatsAppLink href={whatsappHref} className={`${shopStyles.whatsappButton} min-h-11 px-3 text-sm`} label={whatsappLabel} context="feedback_support" ariaLabel={whatsappLabel}>WhatsApp</TrackedWhatsAppLink>
       </div>
-    </div>
+    </article>
+  );
+}
+function SupportLink({ href, icon, title, external = false }: { href: string; icon: ReactNode; title: string; external?: boolean }) {
+  return (
+    <Link href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} className="flex min-h-14 items-center gap-3 rounded-2xl border border-[#7a0000]/10 bg-[#fffdf9] px-4 py-3 text-sm font-bold text-slate-800 transition hover:border-[#f59e0b]/50 hover:bg-[#fffaf2]">
+      <span className="text-[#7a0000]">{icon}</span><span className="flex-1">{title}</span><ArrowRight className="h-4 w-4 text-[#7a0000]" />
+    </Link>
   );
 }
 
@@ -577,23 +485,3 @@ function QuestionOptionGroup({
   );
 }
 
-function TrustCard({
-  icon,
-  title,
-  copy,
-  cta,
-}: {
-  icon: ReactNode;
-  title: string;
-  copy: string;
-  cta?: ReactNode;
-}) {
-  return (
-    <div className={`${shopStyles.lightCard} p-5`}>
-      <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">{icon}</div>
-      <div className="mt-4 text-lg font-black text-slate-950">{title}</div>
-      <div className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{copy}</div>
-      {cta ? <div className="mt-4">{cta}</div> : null}
-    </div>
-  );
-}
