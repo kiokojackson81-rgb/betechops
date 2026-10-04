@@ -81,6 +81,7 @@ export function customerReceiptPresentation(receipt: {
       ? {
           status: currentDeliveryStatus,
           paymentLabel: deliveryPaymentLabel(receipt),
+          servingAgentName: String(data.attendantName || data.servedByName || data.salespersonName || "our sales team").trim(),
         }
       : null,
     items,
