@@ -2,6 +2,7 @@ import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/r
 import { readReceiptAggregatePricing } from "@/lib/receiptAggregatePricing";
 import { isReceiptCancelledForSales } from "@/lib/receiptSalesEligibility";
 import { receiptIsFullyPaid } from "@/lib/receiptFinancialState";
+import { deliveryStatus, isDeliveryReceipt } from "@/lib/deliveryReceipt";
 
 const record = (value: any): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value : {};
 export const recognitionDate = (value: unknown): Date | null => {
@@ -38,9 +39,9 @@ export function getReceiptRecognitionDate(receipt: any): Date | null {
     if (!historicallyCompleted && support && !support.complete && !costsKnown) return null;
     if (!historicallyCompleted && !support?.complete && !costsKnown && !(aggregate.buyingTotal > 0)) return null;
   }
-  if (Object.keys(pod).length || String(data.customerType).toLowerCase() === "pod") {
-    if (String(pod.status).toLowerCase() !== "delivered") return null;
-    return recognitionDate(pod.deliveredAt) ?? recognitionDate(pod.paidAt) ?? recognitionDate(pod.financialFinalizedAt) ?? recognitionDate(receipt.generatedAt ?? receipt.createdAt);
+  if (isDeliveryReceipt(receipt)) {
+    if (deliveryStatus(receipt) !== "delivered") return null;
+    return recognitionDate(pod.deliveredAt) ?? recognitionDate(data.deliveredAt) ?? recognitionDate(pod.paidAt) ?? recognitionDate(data.externalPayment && record(data.externalPayment).confirmedAt) ?? recognitionDate(receipt.generatedAt ?? receipt.createdAt);
   }
   // A project carries forward only when it was still pending at a period close
   // and is then completed in the new period. Its completion date is therefore

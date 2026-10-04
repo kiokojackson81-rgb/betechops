@@ -32,6 +32,10 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
             <div className="sm:border-l sm:border-emerald-200 sm:pl-5"><dt className="text-sm text-slate-600">Outstanding balance</dt><dd className="mt-1 break-words text-2xl font-bold text-emerald-900">{receiptMoney(receipt.balance)}</dd></div>
           </dl>
         </section>
+        {receipt.delivery ? <section aria-label="Delivery status" className={`mt-4 rounded-xl border p-4 text-sm ${receipt.delivery.status === "failed" || receipt.delivery.status === "delivery_failed" ? "border-rose-200 bg-rose-50 text-rose-900" : "border-sky-200 bg-sky-50 text-sky-950"}`}>
+          <p className="font-bold">Delivery: {receipt.delivery.status === "delivered" ? "Delivered" : receipt.delivery.status === "failed" || receipt.delivery.status === "delivery_failed" ? "Delivery failed" : "Pending"}</p>
+          <p className="mt-1">{receipt.delivery.paymentLabel}. {receipt.delivery.status === "delivered" ? "Staff will confirm the payment record once payment has been verified." : "Your order is not treated as a completed sale until delivery and payment are confirmed."}</p>
+        </section> : null}
         {receipt.project ? <ProjectStatusCard project={receipt.project} /> : null}
         <section aria-labelledby="purchase-heading" className="mt-6">
           <h2 id="purchase-heading" className="text-xl font-bold">Purchase summary</h2>

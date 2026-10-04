@@ -34,13 +34,15 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const role = guard?.user?.role ?? 'attendant';
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Insufficient role to mark POD paid' }, { status: 403 });
-  }
-
-  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId } });
+  const role = String(guard?.user?.role ?? 'attendant').toLowerCase();
+  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, include: { order: true } });
   if (!receipt) return NextResponse.json({ error: 'Receipt not found' }, { status: 404 });
+  const actorId = guard.user?.id ?? null;
+  const dataOwnerId = typeof receipt.data === 'object' && receipt.data ? String((receipt.data as Record<string, unknown>).attendantId || '') : '';
+  const ownsReceipt = Boolean(actorId) && (actorId === receipt.issuedById || actorId === receipt.order?.attendantId || actorId === dataOwnerId);
+  if (!['admin', 'supervisor'].includes(role) && !ownsReceipt) {
+    return NextResponse.json({ error: 'Only the assigned agent or an administrator can confirm this payment' }, { status: 403 });
+  }
 
   const baseData = typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : {};
   const pod = typeof baseData.podDelivery === 'object' && baseData.podDelivery ? { ...(baseData.podDelivery as Record<string, unknown>) } : null;
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   }
 
   const paidAt = new Date().toISOString();
-  const paidById = guard.user?.id ?? null;
+  const paidById = actorId;
   const paidByName = guard.user?.name ?? guard.user?.email ?? null;
 
   const updatedPod = { ...pod, paidAt, paidById, paidBy: paidByName } as Record<string, unknown>;
@@ -64,6 +66,12 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       if (rp.paidAt) throw new Error('already_paid');
       rd.podDelivery = { ...rp, ...updatedPod };
       await tx.receipt.update({ where: { id: receiptId }, data: { data: rd as Prisma.InputJsonValue } });
+      if (re?.orderId) {
+        await tx.order.update({
+          where: { id: re.orderId },
+          data: { paidAmount: receipt.order.totalAmount, paymentStatus: 'PAID' },
+        });
+      }
 
       if (paidById) {
         try {

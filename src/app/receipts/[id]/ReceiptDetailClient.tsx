@@ -26,6 +26,9 @@ type EditDraft = {
   paymentDetailsShown: boolean;
   notes?: string | null;
   warrantyText?: string | null;
+  customerType?: "walk-in" | "online" | "delivery" | "pod" | "project";
+  deliveryStatus?: "pending" | "delivered" | "failed";
+  deliveryPaymentTerm?: "PAY_BEFORE_DELIVERY" | "PAY_ON_DELIVERY";
   items: EditItem[];
 };
 
@@ -56,6 +59,7 @@ export default function ReceiptDetailClient({
 }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [draft, setDraft] = useState<EditDraft>(() => cloneDraft(initialDraft));
 
   const totals = useMemo(() => {
@@ -151,6 +155,24 @@ export default function ReceiptDetailClient({
     }
   };
 
+  const confirmDeliveryPayment = async () => {
+    const method = window.prompt("Payment method: CASH, EQUITY_PAYBILL, DTB_PAYBILL or ABSA_PAYBILL", "CASH")?.trim().toUpperCase();
+    if (!method) return;
+    const reference = window.prompt("Payment reference (optional)", "") ?? "";
+    setConfirmingPayment(true);
+    try {
+      const res = await fetch(`/api/receipts/${receiptId}/external-payment`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paymentCollectionMethod: method, paymentReference: reference }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Unable to confirm payment");
+      showToast("Delivery payment confirmed", "success");
+      window.location.reload();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to confirm payment", "error");
+    } finally {
+      setConfirmingPayment(false);
+    }
+  };
+
   return (
     <div className="mx-auto bg-transparent p-0 text-black">
       <div className="no-print mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
@@ -181,6 +203,11 @@ export default function ReceiptDetailClient({
             className="shrink-0 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900"
           >
             Edit receipt
+          </button>
+        ) : null}
+        {canEdit && draft.customerType === "delivery" && draft.deliveryPaymentTerm === "PAY_ON_DELIVERY" ? (
+          <button type="button" onClick={confirmDeliveryPayment} disabled={confirmingPayment} className="shrink-0 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
+            {confirmingPayment ? "Confirming…" : "Confirm delivery payment"}
           </button>
         ) : null}
         {canEdit ? (
@@ -226,6 +253,11 @@ export default function ReceiptDetailClient({
                   ))}
                 </select>
               </label>
+              <label className="text-sm text-slate-700">Customer type
+                <select value={draft.customerType || "walk-in"} onChange={(e) => setDraft((current) => ({ ...current, customerType: e.target.value as EditDraft["customerType"] }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="walk-in">Walk in</option><option value="online">Online</option><option value="delivery">Delivery</option><option value="pod">POD (pay on delivery)</option><option value="project">Project</option>
+                </select>
+              </label>
               <label className="text-sm text-slate-700">
                 Customer name
                 <input
@@ -243,6 +275,15 @@ export default function ReceiptDetailClient({
                 />
               </label>
             </div>
+            {draft.customerType === "delivery" ? <div className="mt-4 grid gap-4 rounded-xl border border-sky-200 bg-sky-50 p-4 md:grid-cols-2">
+              <label className="text-sm text-slate-700">Delivery payment
+                <select value={draft.deliveryPaymentTerm || "PAY_BEFORE_DELIVERY"} onChange={(e) => setDraft((current) => ({ ...current, deliveryPaymentTerm: e.target.value as EditDraft["deliveryPaymentTerm"] }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="PAY_BEFORE_DELIVERY">Pay before delivery</option><option value="PAY_ON_DELIVERY">Pay on delivery</option></select>
+              </label>
+              <label className="text-sm text-slate-700">Delivery status
+                <select value={draft.deliveryStatus || "pending"} onChange={(e) => setDraft((current) => ({ ...current, deliveryStatus: e.target.value as EditDraft["deliveryStatus"] }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="pending">Pending</option><option value="delivered">Delivered</option><option value="failed">Failed</option></select>
+              </label>
+              <p className="md:col-span-2 text-xs text-slate-600">Delivery sales, commissions and referral rewards only release after staff confirm full payment and mark the delivery as delivered.</p>
+            </div> : null}
 
             <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               <label className="inline-flex items-center gap-2">

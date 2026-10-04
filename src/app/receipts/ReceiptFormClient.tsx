@@ -183,6 +183,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showAddressInput, setShowAddressInput] = useState<boolean>(false);
   const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "pod" | "project" | "">("");
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
+  const [deliveryPaymentTerm, setDeliveryPaymentTerm] = useState<"PAY_BEFORE_DELIVERY" | "PAY_ON_DELIVERY">("PAY_BEFORE_DELIVERY");
   const [podNote, setPodNote] = useState<string>("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>(createDefaultProjectDraft());
   const [deposit, setDeposit] = useState<number>(0);
@@ -324,6 +325,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       }
       if (parsed.deliveryStatus && ["pending", "delivered", "failed"].includes(parsed.deliveryStatus)) {
         setDeliveryStatus(parsed.deliveryStatus);
+      }
+      if (parsed.deliveryPaymentTerm === "PAY_ON_DELIVERY" || parsed.deliveryPaymentTerm === "PAY_BEFORE_DELIVERY") {
+        setDeliveryPaymentTerm(parsed.deliveryPaymentTerm);
       }
       if (parsed.notes) {
         setNotes(String(parsed.notes));
@@ -717,6 +721,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     // paperSize: fixed to A5, omitted from draft
     customerType,
     deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
+    deliveryPaymentTerm: customerType === "delivery" ? deliveryPaymentTerm : undefined,
     projectFlow:
       customerType === "project"
         ? buildReceiptProjectFlow({
@@ -1384,6 +1389,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         paymentMethod: resolvedPaymentMethod,
         customerType,
         deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
+        deliveryPaymentTerm: customerType === "delivery" ? deliveryPaymentTerm : undefined,
         podDelivery: customerType === "pod" ? { note: podNote || "" } : undefined,
         projectFlow: projectFlow ?? undefined,
         notes,
@@ -1646,6 +1652,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
       {customerType === "delivery" && (
         <>
+          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/5 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200">When will the customer pay?</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(["PAY_BEFORE_DELIVERY", "PAY_ON_DELIVERY"] as const).map((term) => (
+                <button key={term} type="button" onClick={() => setDeliveryPaymentTerm(term)} className={`rounded-full px-3 py-2 text-sm font-semibold ${deliveryPaymentTerm === term ? "bg-emerald-500 text-slate-950" : "border border-white/10 text-slate-100"}`}>
+                  {term === "PAY_BEFORE_DELIVERY" ? "Pay before delivery" : "Pay on delivery"}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-300">Pay-on-delivery receipts stay payment pending until an authorised staff member confirms the payment.</p>
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
             <span>Delivery status</span>
             {(["pending", "delivered", "failed"] as const).map((status) => (

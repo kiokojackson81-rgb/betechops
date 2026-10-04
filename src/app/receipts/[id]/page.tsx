@@ -150,6 +150,9 @@ export default async function Page({
     paymentDetailsShown: Boolean(receipt?.paymentDetailsShown),
     notes: receipt?.notes ?? null,
     warrantyText: receipt?.warrantyText ?? null,
+    customerType: String(receipt?.data?.customerType || "walk-in").toLowerCase(),
+    deliveryStatus: String(receipt?.data?.deliveryStatus || "pending").toLowerCase(),
+    deliveryPaymentTerm: String(receipt?.data?.deliveryPaymentTerm || "PAY_BEFORE_DELIVERY").toUpperCase(),
     items:
       sourceItems.length > 0
         ? sourceItems.map((item: any, index: number) => {

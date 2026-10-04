@@ -1,4 +1,5 @@
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { deliveryPaymentLabel, deliveryStatus, isDeliveryReceipt } from "@/lib/deliveryReceipt";
 
 export const receiptMoney = (value: number) => `KSh ${new Intl.NumberFormat("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 
@@ -60,17 +61,26 @@ export function customerReceiptPresentation(receipt: {
   const explicitDiscount = amount(receipt.discount ?? data.discount);
   const discount = Math.round(Math.max(explicitDiscount, subtotal > total ? subtotal - total : 0) * 100) / 100;
   const showDiscount = Boolean(receipt.showDiscount || data.showDiscount || discount > 0);
+  const isDelivery = isDeliveryReceipt(receipt);
+  const currentDeliveryStatus = isDelivery ? deliveryStatus(receipt) : null;
+  const paymentPendingOnDelivery = isDelivery && deliveryPaymentLabel(receipt) === "Pay on delivery" && paid <= 0;
   return {
     customerName: order.customerName,
     receiptNumber: receipt.receiptNumber || order.orderNumber,
     paid, balance, total, subtotal, discount, showDiscount,
-    status: balance === 0 ? "Paid in full" : paid > 0 ? "Partially paid" : "Awaiting payment",
+    status: paymentPendingOnDelivery ? "Payment pending" : balance === 0 ? "Paid in full" : paid > 0 ? "Partially paid" : "Awaiting payment",
     paymentDate: lastPayment ? new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" }).format(lastPayment) : paid > 0 ? "Not recorded" : "No payment yet",
     project: projectFlow
       ? {
           stage: projectFlow.stage,
           stageLabel: formatProjectStage(projectFlow.stage),
           scheduledDate: formatProjectDate(projectFlow.scheduledDate),
+        }
+      : null,
+    delivery: isDelivery
+      ? {
+          status: currentDeliveryStatus,
+          paymentLabel: deliveryPaymentLabel(receipt),
         }
       : null,
     items,

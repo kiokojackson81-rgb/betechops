@@ -1167,6 +1167,13 @@ export async function POST(req: NextRequest) {
     isPodPaymentMethod(payload?.paymentMethod) ||
     normalizeCustomerType(payload?.customerType) === "pod";
   const isProjectReceipt = normalizeCustomerType(payload?.customerType) === "project";
+  const isStandardDelivery = normalizeCustomerType(payload?.customerType) === "delivery";
+  const deliveryPaymentTerm = String(payload?.deliveryPaymentTerm || "").trim().toUpperCase() === "PAY_ON_DELIVERY"
+    ? "PAY_ON_DELIVERY"
+    : "PAY_BEFORE_DELIVERY";
+  const isPayOnDelivery = isStandardDelivery && deliveryPaymentTerm === "PAY_ON_DELIVERY";
+  const isCompletedStandardDelivery = !isStandardDelivery || String(payload?.deliveryStatus || "pending").trim().toLowerCase() === "delivered";
+  const isDeliveryRecognizedOnCreation = !isPodDelivery && !isPayOnDelivery && isCompletedStandardDelivery;
   const isMpesaExpress = String(payload?.paymentMethod || "").trim().toUpperCase() === "MPESA_EXPRESS";
   const normalizedDeliveryAddress =
     typeof payload?.deliveryAddress === "string" ? payload.deliveryAddress.trim() : "";
@@ -1339,6 +1346,8 @@ export async function POST(req: NextRequest) {
             ? "PENDING"
             : isPodDelivery
               ? "PENDING"
+              : isPayOnDelivery
+                ? "PENDING"
               : isMpesaExpress
                 ? "PENDING"
               : "COMPLETED";
@@ -1353,10 +1362,12 @@ export async function POST(req: NextRequest) {
             ? "PARTIAL"
             : isPodDelivery
               ? "UNPAID"
+              : isPayOnDelivery
+                ? "UNPAID"
               : isMpesaExpress
                 ? expressCashAmount > 0 ? "PARTIAL" : "UNPAID"
               : "PAID";
-      const paidAmountValue = isProjectReceipt ? projectPaidAmount : docType === "LAYAWAY" ? deposit : isPodDelivery ? 0 : isMpesaExpress ? expressCashAmount : Number(total) || 0;
+      const paidAmountValue = isProjectReceipt ? projectPaidAmount : docType === "LAYAWAY" ? deposit : (isPodDelivery || isPayOnDelivery) ? 0 : isMpesaExpress ? expressCashAmount : Number(total) || 0;
       // choose shop: provided or first active
       let shopId = payload?.shopId;
       if (!shopId) {
@@ -1708,7 +1719,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Record support daily entry + receipt so support commission ledger can include this sale
-      if (attendantId && !isPodDelivery) {
+      if (attendantId && isDeliveryRecognizedOnCreation) {
         const startOfDay = new Date(entryDate);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(entryDate);
@@ -1814,7 +1825,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (attendantId && !isPodDelivery && tx.marketingDailyEntry && tx.marketingReceipt) {
+      if (attendantId && isDeliveryRecognizedOnCreation && tx.marketingDailyEntry && tx.marketingReceipt) {
         try {
           const marketingStart = new Date(entryDate);
           marketingStart.setHours(0, 0, 0, 0);
@@ -1931,7 +1942,7 @@ export async function POST(req: NextRequest) {
       // Preserve the existing gross-based commission seed behavior, then add POS product commissions.
       if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
         try {
-          if (!isPodDelivery) {
+          if (isDeliveryRecognizedOnCreation) {
             const perItemEarnings = createdOrderItems.map((it) => {
               const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
               const status = docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING");
@@ -2004,7 +2015,7 @@ export async function POST(req: NextRequest) {
       // Optionally release immediately if threshold met (skip for POD receipts).
       // This must never block receipt persistence: if commission release bookkeeping fails,
       // keep the receipt and log the failure for follow-up repair.
-      if (!isPodDelivery && Number(total) >= IMMEDIATE_THRESHOLD && attendantId) {
+      if (isDeliveryRecognizedOnCreation && Number(total) >= IMMEDIATE_THRESHOLD && attendantId) {
         try {
           console.info("[receipts] immediate threshold branch start", {
             orderNumber: orderUpsert.orderNumber,

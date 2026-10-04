@@ -13,6 +13,7 @@ import { normalizeKenyanPhone } from "@/lib/phone";
 import { createOtpCodeForChannel, createDirectVerifiedAuthToken, readVerifiedAuthToken, verifyOtpCodeForChannel } from "@/lib/phoneOtpAuth";
 import { prisma } from "@/lib/prisma";
 import { receiptIsFullyPaid } from "@/lib/receiptFinancialState";
+import { isDeliveryCompleted, isDeliveryReceipt } from "@/lib/deliveryReceipt";
 import { isReceiptProjectRecognizedForSales, readReceiptProjectFlow } from "@/lib/receiptProjects";
 import {
   CUSTOMER_REFERRAL_COOKIE_NAME,
@@ -1579,6 +1580,9 @@ export function receiptIsEligibleForReferral(receipt: any): boolean {
   const data = receipt?.data && typeof receipt.data === "object" ? receipt.data : {};
   const projectFlow = readReceiptProjectFlow(data.projectFlow);
   const isProject = data.customerType === "project" || Boolean(projectFlow?.isProject);
+  if (isDeliveryReceipt(receipt)) {
+    return receiptIsFullyPaid(receipt) && isDeliveryCompleted(receipt);
+  }
   return !isProject || (receiptIsFullyPaid(receipt) && isReceiptProjectRecognizedForSales(data.projectFlow));
 }
 
@@ -2052,9 +2056,10 @@ export async function backfillReviewInvitationsForRecentSales(input?: {
       const isProject = customerType === "project" || Boolean(projectFlow.isProject);
       const podDelivery = readJsonObject(receiptData.podDelivery || orderMetadata.podDelivery);
       const isPod = customerType === "pod";
+      const isDelivery = isDeliveryReceipt(receipt);
       const isCompletedProject = !isProject || String(projectFlow.stage || "").toUpperCase() === "COMPLETED_POSTED";
       const isDeliveredPod = !isPod || String(podDelivery.status || "").trim().toLowerCase() === "delivered";
-      if (!isCompletedProject || !isDeliveredPod) continue;
+      if (!isCompletedProject || !isDeliveredPod || (isDelivery && (!isDeliveryCompleted(receipt) || !receiptIsFullyPaid(receipt)))) continue;
 
       const completedAt =
         (isProject && (toDate(projectFlow.completedAt) || toDate(projectFlow.updatedAt))) ||

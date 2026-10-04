@@ -9,12 +9,14 @@ import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { sendReceiptChannels } from "@/workers/receiptSender";
 import { sendTransactionalSms } from "@/lib/africasTalking";
 
-const EXTERNAL_PAYBILL_CHANNELS = new Set(["EQUITY_PAYBILL", "DTB_PAYBILL", "ABSA_PAYBILL"]);
+const EXTERNAL_PAYBILL_CHANNELS = new Set(["EQUITY_PAYBILL", "DTB_PAYBILL", "ABSA_PAYBILL", "CASH", "MPESA"]);
 
 const channelLabel = (channel: string) => ({
   EQUITY_PAYBILL: "Equity Paybill",
   DTB_PAYBILL: "DTB Paybill",
   ABSA_PAYBILL: "Absa Paybill",
+  CASH: "Cash",
+  MPESA: "M-Pesa",
 }[channel] ?? channel);
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const paymentCollectionMethod = String(body?.paymentCollectionMethod ?? "").trim().toUpperCase();
   const paymentReference = String(body?.paymentReference ?? "").trim().slice(0, 120) || null;
   if (!EXTERNAL_PAYBILL_CHANNELS.has(paymentCollectionMethod)) {
-    return NextResponse.json({ error: "Select an external Paybill channel to confirm payment" }, { status: 400 });
+    return NextResponse.json({ error: "Select a supported payment channel to confirm payment" }, { status: 400 });
   }
 
   const actor = guard.session?.user as { id?: string; name?: string; email?: string } | undefined;

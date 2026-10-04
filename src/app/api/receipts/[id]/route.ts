@@ -363,7 +363,6 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       }
       const docType = body?.docType ? String(body.docType).toUpperCase() : String(existing.docType);
       const layawayDeposit = Number(existing.order?.layawayPlan?.deposit ?? existing.order?.paidAmount ?? 0);
-      const paidAmount = docType === "LAYAWAY" ? layawayDeposit : total;
       const existingData =
         existing.data && typeof existing.data === "object" && !Array.isArray(existing.data)
           ? (existing.data as Record<string, unknown>)
@@ -375,8 +374,18 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       const isPodDelivery =
         String(body?.customerType ?? existingData.customerType ?? "").toLowerCase() === "pod" ||
         Boolean(existingPodDelivery);
+      const isStandardDelivery = String(body?.customerType ?? existingData.customerType ?? "").toLowerCase() === "delivery";
+      const deliveryStatus = String(body?.deliveryStatus ?? existingData.deliveryStatus ?? "pending").trim().toLowerCase();
       const podDeliveryStatus = String(existingPodDelivery?.status ?? "").trim().toLowerCase();
       const isDeliveredPod = isPodDelivery && podDeliveryStatus === "delivered";
+      const isCompletedDelivery = isPodDelivery ? isDeliveredPod : !isStandardDelivery || deliveryStatus === "delivered";
+      // Editing a delivery receipt must not invent a payment. Preserve the
+      // existing ledger until an authorised staff member confirms payment.
+      const paidAmount = docType === "LAYAWAY"
+        ? layawayDeposit
+        : (isPodDelivery || isStandardDelivery)
+          ? Math.min(total, Number(existing.order?.paidAmount ?? 0))
+          : total;
 
       // refresh products + items
       // Delete dependent CommissionEarning rows first to avoid foreign-key violations
@@ -512,6 +521,9 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
           attendantId: body?.attendantId ?? undefined,
           totalAmount: total,
           paidAmount,
+          paymentStatus: (isPodDelivery || isStandardDelivery)
+            ? paidAmount >= total ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID"
+            : undefined,
         },
       });
 
@@ -603,7 +615,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       // Refresh commission earnings on edit, including per-product POS commissions.
       if (createdOrderItems.length) {
         await tx.commissionEarning.deleteMany({ where: { orderItem: { orderId: existing.orderId } } });
-        if (!isPodDelivery || isDeliveredPod) {
+        if ((!isPodDelivery || isDeliveredPod) && (!isStandardDelivery || isCompletedDelivery)) {
           const grossEarnings = createdOrderItems.map((it) => ({
               staffId: attendantId || existing.order?.attendantId || null,
               orderItemId: it.id,
@@ -671,7 +683,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         // best-effort audit log
       }
 
-      if ((!isPodDelivery || isDeliveredPod) && normalizedReceiptNumber && entryAttendantId && receiptItemsData.length) {
+      if ((!isPodDelivery || isDeliveredPod) && (!isStandardDelivery || isCompletedDelivery) && normalizedReceiptNumber && entryAttendantId && receiptItemsData.length) {
         let supportEntryId: string | null = null;
         if (tx.supportDailyEntry) {
           const supportEntry = await tx.supportDailyEntry.findFirst({
