@@ -273,8 +273,7 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
               </div>
               <div className="flex flex-col gap-2 border-t border-[#7a0000]/10 bg-[#fffaf2] p-5 text-sm font-bold sm:flex-row sm:flex-wrap sm:p-6">
                 <Link href="https://www.betech.co.ke/" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#7a0000] px-4 text-white">Betech Solar Online Store</Link>
-                <Link href="https://agents.betech.co.ke/" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#7a0000]/20 px-4 text-[#7a0000]">Agents portal</Link>
-                <Link href="https://ops.betech.co.ke/" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#7a0000]/20 px-4 text-[#7a0000]">Operations portal</Link>
+                <Link href="/account" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#7a0000]/20 px-4 text-center text-[#7a0000]">Log in to your account · See your recent orders</Link>
               </div>
             </section>
 
