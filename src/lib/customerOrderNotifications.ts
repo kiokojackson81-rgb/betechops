@@ -122,5 +122,6 @@ export async function notifyPodCustomer(input: { receiptId: string; event: Extra
       : null;
   const pickup = asRecord(pod.pickup);
   const total = Number(receipt.order.totalAmount);
-  return publish({ receiptId: receipt.id, customerName: receipt.order.customerName, customerPhone: receipt.order.customerPhone, customerEmail: receipt.order.customerEmail, reference: receipt.order.orderNumber || receipt.receiptNumber || receipt.id, total, paid: pod.paidAt ? total : Number(receipt.order.paidAmount), deliveryMethod: "Pay on Delivery", receiptLink, podDeliveryFee: Number(pod.deliveryFee || 0), pickupStation: clean(pickup.stationName), pickupAddress: clean(pickup.address), agentName: clean(pod.dispatchedByName), agentPhone: clean(pod.dispatchedByPhone) }, input.event, input.force);
+  const agentPhone = pod.dispatchedByPhoneSource === "ONE_VOICE" ? clean(pod.dispatchedByPhone) : null;
+  return publish({ receiptId: receipt.id, customerName: receipt.order.customerName, customerPhone: receipt.order.customerPhone, customerEmail: receipt.order.customerEmail, reference: receipt.order.orderNumber || receipt.receiptNumber || receipt.id, total, paid: pod.paidAt ? total : Number(receipt.order.paidAmount), deliveryMethod: "Pay on Delivery", receiptLink, podDeliveryFee: Number(pod.deliveryFee || 0), pickupStation: clean(pickup.stationName), pickupAddress: clean(pickup.address), agentName: clean(pod.dispatchedByName), agentPhone }, input.event, input.force);
 }

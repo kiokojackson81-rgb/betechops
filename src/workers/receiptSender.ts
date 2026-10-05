@@ -474,10 +474,10 @@ export async function sendReceiptChannels(
       order: {
         include: {
           items: { include: { product: { select: { name: true } } } },
-          attendant: { select: { id: true, name: true, email: true, notificationPhoneNumber: true } },
+          attendant: { select: { id: true, name: true, email: true, oneVoiceCustomerNumber: true } },
         },
       },
-      issuedBy: { select: { id: true, name: true, email: true, notificationPhoneNumber: true } },
+      issuedBy: { select: { id: true, name: true, email: true, oneVoiceCustomerNumber: true } },
     },
   });
   if (!receipt) throw new Error('Receipt not found');
@@ -1221,7 +1221,7 @@ export async function sendReceiptChannels(
         const amountText = formatCurrencyKes(Number(receipt.totalAmount ?? orderAny?.totalAmount ?? 0));
         const customerReceiptUrl = secureDocumentsUrl;
         const podSupportName = receipt.order?.attendant?.name || receipt.issuedBy?.name || "Betech support";
-        const podSupportNumber = String(receipt.order?.attendant?.notificationPhoneNumber || receipt.issuedBy?.notificationPhoneNumber || dataAny?.attendantVoicePhone || "").trim();
+        const podSupportNumber = String(receipt.order?.attendant?.oneVoiceCustomerNumber || receipt.issuedBy?.oneVoiceCustomerNumber || "").trim();
         const smsBody = isPodReceipt
           ? [
               `Hello ${customerName}, your Pay on Delivery order has been received and is being dispatched.`,

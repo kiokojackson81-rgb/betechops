@@ -30,6 +30,7 @@ model User {
   tillPaybillBusinessName              String?
   paybillAccountNumber                 String?
   notificationPhoneNumber              String?
+  oneVoiceCustomerNumber               String?
   image                                String?
   role                                 Role                            @default(ATTENDANT)
   isActive                             Boolean                         @default(true)

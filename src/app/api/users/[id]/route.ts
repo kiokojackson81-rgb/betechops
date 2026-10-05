@@ -29,6 +29,7 @@ export async function PATCH(request: Request) {
     tillPaybillBusinessName?: string | null;
     paybillAccountNumber?: string | null;
     notificationPhoneNumber?: string | null;
+    oneVoiceCustomerNumber?: string | null;
     categories?: string[];
   };
 
@@ -46,7 +47,8 @@ export async function PATCH(request: Request) {
     typeof body.tillPaybillNumber !== "undefined" ||
     typeof body.tillPaybillBusinessName !== "undefined" ||
     typeof body.paybillAccountNumber !== "undefined" ||
-    typeof body.notificationPhoneNumber !== "undefined";
+    typeof body.notificationPhoneNumber !== "undefined" ||
+    typeof body.oneVoiceCustomerNumber !== "undefined";
   const includesCategoryUpdate = Array.isArray(body.categories);
   if (!hasPrimitiveUpdate && !includesCategoryUpdate) {
     return NextResponse.json({ error: "no_updates" }, { status: 400 });
@@ -86,6 +88,7 @@ export async function PATCH(request: Request) {
       tillPaybillBusinessName: typeof body.tillPaybillBusinessName !== "undefined",
       paybillAccountNumber: typeof body.paybillAccountNumber !== "undefined",
       notificationPhoneNumber: typeof body.notificationPhoneNumber !== "undefined",
+      oneVoiceCustomerNumber: typeof body.oneVoiceCustomerNumber !== "undefined",
       categories: includesCategoryUpdate ? (body.categories?.length ?? 0) : null,
     },
   });
@@ -167,6 +170,9 @@ export async function PATCH(request: Request) {
       }
       if (typeof body.notificationPhoneNumber !== "undefined") {
         safeUserUpdate.notificationPhoneNumber = body.notificationPhoneNumber;
+      }
+      if (typeof body.oneVoiceCustomerNumber !== "undefined") {
+        safeUserUpdate.oneVoiceCustomerNumber = body.oneVoiceCustomerNumber;
       }
       if (desiredAssignments && desiredAssignments.length) {
         data.attendantCategory = desiredAssignments[0];

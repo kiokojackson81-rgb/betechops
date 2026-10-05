@@ -15,6 +15,7 @@ const OPTIONAL_USER_PROFILE_COLUMNS = [
   "tillPaybillBusinessName",
   "paybillAccountNumber",
   "notificationPhoneNumber",
+  "oneVoiceCustomerNumber",
   "referredByAgentId",
   "attributionCodeUsed",
   "referredAt",
@@ -56,6 +57,7 @@ type CustomerProfileInput = {
   tillPaybillBusinessName?: string | null;
   paybillAccountNumber?: string | null;
   notificationPhoneNumber?: string | null;
+  oneVoiceCustomerNumber?: string | null;
   referredByAgentId?: string | null;
   attributionCodeUsed?: string | null;
   referredAt?: string | Date | null;
@@ -80,6 +82,7 @@ type SafeCustomerProfile = {
   tillPaybillBusinessName?: string | null;
   paybillAccountNumber?: string | null;
   notificationPhoneNumber?: string | null;
+  oneVoiceCustomerNumber?: string | null;
   referredByAgentId?: string | null;
   attributionCodeUsed?: string | null;
   referredAt?: string | Date | null;
@@ -110,6 +113,7 @@ function defaultColumnMap(): UserProfileColumnMap {
     tillPaybillBusinessName: false,
     paybillAccountNumber: false,
     notificationPhoneNumber: false,
+    oneVoiceCustomerNumber: false,
     referredByAgentId: false,
     attributionCodeUsed: false,
     referredAt: false,
@@ -130,7 +134,7 @@ export async function getUserProfileColumnMap(forceRefresh = false): Promise<Use
         FROM information_schema.columns
         WHERE table_schema = current_schema()
           AND table_name = 'User'
-          AND column_name IN ('whatsappNumber', 'county', 'town', 'estateLandmark', 'locationNotes', 'bankName', 'bankAccountNumber', 'payoutMethod', 'payoutAccountName', 'mobileMoneyPhoneNumber', 'tillPaybillNumber', 'tillPaybillBusinessName', 'paybillAccountNumber', 'notificationPhoneNumber', 'referredByAgentId', 'attributionCodeUsed', 'referredAt')
+          AND column_name IN ('whatsappNumber', 'county', 'town', 'estateLandmark', 'locationNotes', 'bankName', 'bankAccountNumber', 'payoutMethod', 'payoutAccountName', 'mobileMoneyPhoneNumber', 'tillPaybillNumber', 'tillPaybillBusinessName', 'paybillAccountNumber', 'notificationPhoneNumber', 'oneVoiceCustomerNumber', 'referredByAgentId', 'attributionCodeUsed', 'referredAt')
       `,
     );
 
@@ -232,6 +236,9 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
   if (columns.notificationPhoneNumber && typeof input.notificationPhoneNumber !== "undefined") {
     updates.push(["notificationPhoneNumber", input.notificationPhoneNumber]);
   }
+  if (columns.oneVoiceCustomerNumber && typeof input.oneVoiceCustomerNumber !== "undefined") {
+    updates.push(["oneVoiceCustomerNumber", input.oneVoiceCustomerNumber]);
+  }
   if (columns.referredByAgentId && typeof input.referredByAgentId !== "undefined") {
     updates.push(["referredByAgentId", input.referredByAgentId]);
   }
@@ -276,6 +283,7 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
     tillPaybillBusinessName: columns.tillPaybillBusinessName ? (typeof input.tillPaybillBusinessName === "undefined" ? null : input.tillPaybillBusinessName) : null,
     paybillAccountNumber: columns.paybillAccountNumber ? (typeof input.paybillAccountNumber === "undefined" ? null : input.paybillAccountNumber) : null,
     notificationPhoneNumber: columns.notificationPhoneNumber ? (typeof input.notificationPhoneNumber === "undefined" ? null : input.notificationPhoneNumber) : null,
+    oneVoiceCustomerNumber: columns.oneVoiceCustomerNumber ? (typeof input.oneVoiceCustomerNumber === "undefined" ? null : input.oneVoiceCustomerNumber) : null,
     referredByAgentId: columns.referredByAgentId ? (typeof input.referredByAgentId === "undefined" ? null : input.referredByAgentId) : null,
     attributionCodeUsed: columns.attributionCodeUsed ? (typeof input.attributionCodeUsed === "undefined" ? null : input.attributionCodeUsed) : null,
     referredAt: columns.referredAt ? (typeof input.referredAt === "undefined" ? null : input.referredAt) : null,

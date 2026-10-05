@@ -22,6 +22,7 @@ type Attendant = {
   tillPaybillBusinessName?: string | null;
   paybillAccountNumber?: string | null;
   notificationPhoneNumber?: string | null;
+  oneVoiceCustomerNumber?: string | null;
   technicalProfile?: {
     teamRole?: string | null;
     positionTitle?: string | null;
@@ -95,6 +96,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
     tillPaybillBusinessName: attendant.tillPaybillBusinessName ?? "",
     paybillAccountNumber: attendant.paybillAccountNumber ?? "",
     notificationPhoneNumber: attendant.notificationPhoneNumber ?? attendant.phone ?? "",
+    oneVoiceCustomerNumber: attendant.oneVoiceCustomerNumber ?? "",
     technical: {
       teamRole: attendant.technicalProfile?.teamRole ?? "",
       positionTitle: attendant.technicalProfile?.positionTitle ?? "",
@@ -238,6 +240,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
           tillPaybillBusinessName: state.tillPaybillBusinessName.trim() || null,
           paybillAccountNumber: state.paybillAccountNumber.trim() || null,
           notificationPhoneNumber: state.notificationPhoneNumber.trim() || null,
+          oneVoiceCustomerNumber: state.oneVoiceCustomerNumber.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -351,10 +354,17 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
           </select>
           <input
             type="text"
-            placeholder="One Voice customer call number"
+            placeholder="Notification phone number"
             value={state.notificationPhoneNumber}
             onChange={(e) => setState((s) => ({ ...s, notificationPhoneNumber: e.target.value }))}
             className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+          />
+          <input
+            type="text"
+            placeholder="One Voice customer call number (shown to POD customers)"
+            value={state.oneVoiceCustomerNumber}
+            onChange={(e) => setState((s) => ({ ...s, oneVoiceCustomerNumber: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm sm:col-span-2"
           />
           <input
             type="text"

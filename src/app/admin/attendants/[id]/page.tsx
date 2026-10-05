@@ -39,6 +39,7 @@ export default async function AttendantEditPage({ params }: { params: { id: stri
       tillPaybillBusinessName: true,
       paybillAccountNumber: true,
       notificationPhoneNumber: true,
+      oneVoiceCustomerNumber: true,
       technicalProfile: true,
       employeeDocuments: {
         orderBy: [{ createdAt: "desc" }],
