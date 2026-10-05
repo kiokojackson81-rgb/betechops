@@ -111,13 +111,13 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   };
   const wasAlreadyDispatched = String(podDelivery.status || "").toLowerCase() === "dispatched";
   const dispatchAgent = actorId
-    ? await prisma.user.findUnique({ where: { id: actorId }, select: { name: true, phone: true, whatsappNumber: true } })
+    ? await prisma.user.findUnique({ where: { id: actorId }, select: { name: true, notificationPhoneNumber: true } })
     : null;
   Object.assign(nextPodDelivery, {
     dispatchedAt: (podDelivery.dispatchedAt as string | undefined) || new Date().toISOString(),
     dispatchedById: (podDelivery.dispatchedById as string | undefined) || actorId || null,
     dispatchedByName: (podDelivery.dispatchedByName as string | undefined) || dispatchAgent?.name || "Betech Customer Care",
-    dispatchedByPhone: (podDelivery.dispatchedByPhone as string | undefined) || dispatchAgent?.phone || dispatchAgent?.whatsappNumber || null,
+    dispatchedByPhone: (podDelivery.dispatchedByPhone as string | undefined) || dispatchAgent?.notificationPhoneNumber || null,
   });
 
   try {

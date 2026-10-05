@@ -351,7 +351,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
           </select>
           <input
             type="text"
-            placeholder="Notification phone number"
+            placeholder="One Voice customer call number"
             value={state.notificationPhoneNumber}
             onChange={(e) => setState((s) => ({ ...s, notificationPhoneNumber: e.target.value }))}
             className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"

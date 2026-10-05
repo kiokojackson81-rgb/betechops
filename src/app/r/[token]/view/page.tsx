@@ -15,7 +15,7 @@ export default async function CustomerReceiptPage({ params }: { params: Promise<
     where: { data: { path: ["publicReceiptToken"], equals: token } },
     select: { id: true, receiptNumber: true, data: true, discount: true, showDiscount: true, order: { select: {
       orderNumber: true, customerName: true, totalAmount: true, paidAmount: true,
-      attendant: { select: { name: true, phone: true } },
+      attendant: { select: { name: true, notificationPhoneNumber: true } },
       items: { select: { id: true, quantity: true, sellingPrice: true, product: { select: { name: true } } } },
       mpesaPayments: { where: { status: "SUCCESS", purpose: "ORDER_PAYMENT" }, select: { transactionAt: true } },
       layawayPlan: { select: { payments: { select: { paidAt: true } } } },
