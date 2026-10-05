@@ -95,6 +95,19 @@ type SupportItemDetail = {
   productName?: string | null;
 };
 
+type CustomerNotificationDetail = {
+  id: string;
+  eventType: string;
+  channel: string;
+  recipientAddress: string;
+  status: string;
+  attemptCount: number;
+  errorMessage: string | null;
+  createdAt: string;
+  sentAt: string | null;
+  failedAt: string | null;
+};
+
 type ReceiptDetailPayload = {
   receipt: any;
   supportItems?: SupportItemDetail[];
@@ -102,6 +115,7 @@ type ReceiptDetailPayload = {
   posCommissionTotal?: number;
   earnedPosCommissionTotal?: number;
   manualPosCommissionAmount?: number;
+  customerNotifications?: CustomerNotificationDetail[];
 };
 
 type ItemWithCost = {
@@ -3323,12 +3337,17 @@ export default function ReceiptsAdminClient({
 
                   {detail.receipt.data?.podDelivery && (
                     <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-yellow-100">
-                      <p className="text-xs uppercase tracking-[0.3em] text-yellow-300">
-                        POD{" "}
-                        {formatBadgeLabel(
-                          detail.receipt.data.podDelivery.status,
-                        )}
-                      </p>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs uppercase tracking-[0.3em] text-yellow-300">
+                          POD{" "}
+                          {formatBadgeLabel(
+                            detail.receipt.data.podDelivery.status,
+                          )}
+                        </p>
+                        <span className="text-[11px] text-yellow-200">
+                          SMS & customer notification history
+                        </span>
+                      </div>
                       {detail.receipt.data.podDelivery.note && (
                         <p className="mt-2 text-sm text-white">
                           {detail.receipt.data.podDelivery.note}
@@ -3352,6 +3371,40 @@ export default function ReceiptsAdminClient({
                           View delivery / return evidence
                         </a>
                       )}
+                      <div className="mt-4 border-t border-yellow-500/20 pt-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-yellow-200">
+                          Customer messages sent
+                        </p>
+                        {(detail.customerNotifications ?? []).length ? (
+                          <div className="mt-2 space-y-2">
+                            {(detail.customerNotifications ?? []).map((notification) => (
+                              <div
+                                key={notification.id}
+                                className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-200"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="font-semibold text-white">
+                                    {formatBadgeLabel(notification.channel)} · {formatBadgeLabel(notification.eventType)}
+                                  </span>
+                                  <span className={getStatusBadgeClass(notification.status)}>
+                                    {formatBadgeLabel(notification.status)}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-slate-300">
+                                  To {notification.recipientAddress} · {notification.sentAt ? `Sent ${formatDateTime(notification.sentAt)}` : `Created ${formatDateTime(notification.createdAt)}`}
+                                </p>
+                                {notification.status === "FAILED" && notification.errorMessage ? (
+                                  <p className="mt-1 text-rose-300">Failed: {notification.errorMessage}</p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-slate-400">
+                            No POD customer messages have been sent yet.
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
 

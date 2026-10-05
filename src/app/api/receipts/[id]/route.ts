@@ -190,6 +190,18 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
 
   let supportItems: Array<{ id: string; buyingPrice: number | null; productName?: string | null }> = [];
   let supportReceiptSummary: { id: string; buyingTotal?: number | null } | null = null;
+  let customerNotifications: Array<{
+    id: string;
+    eventType: string;
+    channel: string;
+    recipientAddress: string;
+    status: string;
+    attemptCount: number;
+    errorMessage: string | null;
+    createdAt: Date;
+    sentAt: Date | null;
+    failedAt: Date | null;
+  }> = [];
   const receiptData =
     receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
       ? (receipt.data as Record<string, unknown>)
@@ -200,6 +212,30 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
       : null;
   const isPodDelivery =
     String(receiptData.customerType ?? "").toLowerCase() === "pod" || Boolean(podDeliveryData);
+  if (isPodDelivery) {
+    try {
+      customerNotifications = await prisma.customerOrderNotificationLog.findMany({
+        where: { receiptId: receipt.id },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: {
+          id: true,
+          eventType: true,
+          channel: true,
+          recipientAddress: true,
+          status: true,
+          attemptCount: true,
+          errorMessage: true,
+          createdAt: true,
+          sentAt: true,
+          failedAt: true,
+        },
+      });
+    } catch (error) {
+      // The log is optional for older deployments; receipt details remain usable.
+      console.warn("[receipts] unable to load POD customer notifications", error);
+    }
+  }
   const isLayaway = String(receipt.docType ?? "").toUpperCase() === "LAYAWAY";
   const isLayawayComplete =
     !isLayaway ||
@@ -308,6 +344,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     receipt: receiptWithLinks,
     supportItems,
     supportReceiptSummary,
+    customerNotifications,
     posCommissionTotal,
     earnedPosCommissionTotal,
     manualPosCommissionAmount: Number.isFinite(manualPosCommission) ? manualPosCommission : 0,
