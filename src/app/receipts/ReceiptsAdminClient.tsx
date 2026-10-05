@@ -2725,6 +2725,7 @@ export default function ReceiptsAdminClient({
                   row.isPodDelivery &&
                   String(row.podDeliveryStatus ?? "").toLowerCase() ===
                     "pending";
+                const isPodDispatched = row.isPodDelivery && String(row.podDeliveryStatus ?? "").toLowerCase() === "dispatched";
                 const isSelected = row.id === selected?.id && drawerOpen;
                 const customerProfileHref = buildAdminCustomerProfileHref({
                   phone: row.customerPhone,
@@ -2848,7 +2849,9 @@ export default function ReceiptsAdminClient({
                           }
                           onPodAction={
                             isPodPending
-                              ? () => openPodOutcome(row.id)
+                              ? () => void addPodDeliveryFeeAndDispatch(row.id)
+                              : isPodDispatched
+                                ? () => openPodOutcome(row.id)
                               : undefined
                           }
                           onMarkPaid={
@@ -2876,7 +2879,7 @@ export default function ReceiptsAdminClient({
                                     : "Project saved"
                           }
                           projectActionProcessing={projectActionId === row.id}
-                          podActionLabel="Record POD outcome"
+                          podActionLabel={isPodPending ? "Add fee & dispatch" : "Record POD outcome"}
                           podActionProcessing={podActionId === row.id}
                           disabled={loading}
                         />
@@ -3788,7 +3791,7 @@ export default function ReceiptsAdminClient({
                         {podActionId === detail.receipt.id ? "Saving..." : detail.receipt.data.podDelivery.deliveryFee == null ? "Add delivery fee & dispatch" : "Edit delivery fee"}
                       </button>
                     )}
-                    {["pending", "dispatched"].includes(String(detail.receipt.data?.podDelivery?.status ?? "").toLowerCase()) && (
+                    {String(detail.receipt.data?.podDelivery?.status ?? "").toLowerCase() === "dispatched" && (
                       <button
                         type="button"
                         onClick={() => openPodOutcome(detail.receipt.id)}

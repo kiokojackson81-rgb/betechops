@@ -724,13 +724,13 @@ export default function DailyReportReceiptsPanel({
                       {receipt.customerName ?? "-"}
                     </Link>
                     <div className="mt-1 break-normal text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
-                    {!cancelled && receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
+                    {!cancelled && receipt.isPodDelivery && ["pending", "dispatched"].includes(String(receipt.podDeliveryStatus ?? "").toLowerCase()) && receipt.source === "pos" ? (
                       <button
                         type="button"
-                        onClick={() => openPodAction(receipt)}
+                        onClick={() => String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" ? openFeeAction(receipt) : openPodAction(receipt)}
                         className="mt-3 rounded-lg border border-yellow-400/40 bg-yellow-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-yellow-100 hover:bg-yellow-500/20"
                       >
-                        Record delivery outcome
+                        {String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" ? "Add fee & dispatch POD" : "Record delivery outcome"}
                       </button>
                     ) : null}
                   </div>
@@ -788,13 +788,13 @@ export default function DailyReportReceiptsPanel({
                   </div>
                   <div className="grid min-w-0 grid-cols-1 content-start gap-2 md:col-span-2 xl:col-span-1">
                     <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Actions</span>
-                    {!cancelled && receipt.isPodDelivery && receipt.source === "pos" ? (
+                    {!cancelled && receipt.isPodDelivery && receipt.source === "pos" && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "dispatched" ? (
                       <button
                         type="button"
                         onClick={() => openFeeAction(receipt)}
                         className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100 hover:bg-emerald-500/20"
                       >
-                        {receipt.podDeliveryFee != null ? "Edit delivery fee" : "Add delivery fee"}
+                        Edit delivery fee
                       </button>
                     ) : null}
                     {receipt.detailUrl ? (

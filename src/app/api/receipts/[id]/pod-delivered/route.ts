@@ -105,9 +105,9 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const lockTtlMs = Number(
     process.env.POD_FINALIZE_LOCK_TTL_MS || 5 * 60 * 1000,
   );
-  if (!["pending", "dispatched"].includes(String(podDelivery.status).toLowerCase())) {
+  if (String(podDelivery.status).toLowerCase() !== "dispatched") {
     return NextResponse.json(
-      { error: "POD receipt already finalized" },
+      { error: "Dispatch the POD by recording the Speedaf fee and tracking details before recording its outcome." },
       { status: 409 },
     );
   }
