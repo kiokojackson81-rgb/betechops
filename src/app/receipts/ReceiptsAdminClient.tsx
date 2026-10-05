@@ -1191,6 +1191,35 @@ export default function ReceiptsAdminClient({
       returnTrackingNumber: "",
     });
 
+  const addPodDeliveryFeeAndDispatch = async (receiptId: string, currentFee?: unknown) => {
+    const input = window.prompt(
+      "Delivery fee in KES. Saving this fee dispatches the POD order and sends the customer its receipt/status link.",
+      currentFee == null ? "" : String(currentFee),
+    );
+    if (input === null) return;
+    const amount = Number(input);
+    if (!Number.isFinite(amount) || amount < 0) {
+      showToast("Enter a valid delivery fee", "error");
+      return;
+    }
+    setPodActionId(receiptId);
+    try {
+      const response = await fetch(`/api/receipts/${receiptId}/pod-delivery-fee`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || "Failed to save delivery fee");
+      showToast(payload?.dispatched ? "POD dispatched and customer notified" : "Delivery fee saved", "success");
+      await loadRows(page, { silent: true });
+      await fetchSummary();
+      if (selected?.id === receiptId) await fetchReceiptDetail(receiptId);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to save delivery fee", "error");
+    } finally {
+      setPodActionId(null);
+    }
+  };
+
   const handleMarkPodPaid = useCallback(
     async (receiptId: string) => {
       setPodActionId(receiptId);
@@ -3752,7 +3781,12 @@ export default function ReceiptsAdminClient({
                         Resend POD
                       </button>
                     )}
-                    {detail.receipt.data?.podDelivery?.status === "pending" && (
+                    {detail.receipt.data?.podDelivery && ["pending", "dispatched"].includes(String(detail.receipt.data.podDelivery.status ?? "").toLowerCase()) && (
+                      <button type="button" onClick={() => void addPodDeliveryFeeAndDispatch(detail.receipt.id, detail.receipt.data.podDelivery.deliveryFee)} disabled={podActionId === detail.receipt.id} className="rounded-xl border border-emerald-500/70 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-50">
+                        {podActionId === detail.receipt.id ? "Saving..." : detail.receipt.data.podDelivery.deliveryFee == null ? "Add delivery fee & dispatch" : "Edit delivery fee"}
+                      </button>
+                    )}
+                    {["pending", "dispatched"].includes(String(detail.receipt.data?.podDelivery?.status ?? "").toLowerCase()) && (
                       <button
                         type="button"
                         onClick={() => openPodOutcome(detail.receipt.id)}

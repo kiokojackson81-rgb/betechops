@@ -3,6 +3,7 @@ import { sendTransactionalSms } from "@/lib/africasTalking";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { hasWhatsAppConfig, sendWhatsAppTextMessage } from "@/lib/notifications/whatsapp";
 import { prisma } from "@/lib/prisma";
+import { getPublicReceiptDocumentsUrl } from "@/lib/publicReceiptLinks";
 
 type NotificationEvent = keyof typeof CustomerOrderNotificationEventType;
 type RecipientContext = {
@@ -16,6 +17,11 @@ type RecipientContext = {
   paid: number;
   deliveryMethod?: string | null;
   receiptLink?: string | null;
+  podDeliveryFee?: number | null;
+  pickupStation?: string | null;
+  pickupAddress?: string | null;
+  agentName?: string | null;
+  agentPhone?: string | null;
 };
 
 const money = (value: number) => `KSh ${Math.max(0, Number(value || 0)).toLocaleString("en-KE")}`;
@@ -30,7 +36,9 @@ function messageFor(event: NotificationEvent, context: RecipientContext) {
     case "ORDER_PLACED": return `Hello ${name}, we have received your Betech order ${context.reference} for ${money(context.total)}. We will confirm availability, payment and delivery details shortly.${link}`;
     case "PAYMENT_REQUESTED": return `Hello ${name}, payment of ${money(balance || context.total)} is needed to confirm your Betech order ${context.reference}. Please use your secure payment link or contact us for assistance.`;
     case "PROCESSING": return `Hello ${name}, your Betech order ${context.reference} is confirmed and now being prepared. We will update you when it is dispatched.`;
-    case "DISPATCHED": return `Hello ${name}, your Betech order ${context.reference} has been dispatched. Delivery method: ${context.deliveryMethod || "delivery"}. Amount due: ${money(balance)}. We will contact you with delivery details.`;
+    case "DISPATCHED": return context.deliveryMethod === "Pay on Delivery"
+      ? `Hello ${name}, your Pay on Delivery order ${context.reference} has been dispatched. Expect it within 1-3 days. Delivery fee: ${money(context.podDeliveryFee || 0)}. Pickup: ${context.pickupStation || "Speedaf collection point"}${context.pickupAddress ? `, ${context.pickupAddress}` : ""}. View pickup information, receipt and order status here: ${context.receiptLink || "contact Betech"}. For help call ${context.agentName || "Betech Customer Care"}${context.agentPhone ? ` on ${context.agentPhone}` : ""}.`
+      : `Hello ${name}, your Betech order ${context.reference} has been dispatched. Delivery method: ${context.deliveryMethod || "delivery"}. Amount due: ${money(balance)}. We will contact you with delivery details.`;
     case "PAYMENT_CONFIRMED": return `Hello ${name}, we have received ${money(context.paid)} for Betech order ${context.reference}. Remaining balance: ${money(balance)}.${link}`;
     case "DELIVERED": return `Hello ${name}, your Betech order ${context.reference} has been marked delivered. Thank you for choosing Betech Solar Solutions.${link}`;
     case "DELIVERY_FAILED": return `Hello ${name}, we could not complete delivery for Betech order ${context.reference}. Please contact us to arrange a new delivery time.`;
@@ -101,12 +109,18 @@ export async function notifyWebsiteOrderCustomer(input: { websiteOrderId: string
   return publish({ websiteOrderId: order.id, receiptId: order.receiptId, customerName: order.customerName, customerPhone: order.customerPhone, customerEmail: order.customerEmail, reference: order.orderRef, total: Number(order.total), paid: Number(metadata.amountPaid ?? metadata.amountPaidNow ?? 0), deliveryMethod: order.deliveryMethod, receiptLink: token ? `https://www.betech.co.ke/r/${token}/view` : null }, input.event, input.force);
 }
 
-export async function notifyPodCustomer(input: { receiptId: string; event: Extract<NotificationEvent, "POD_ORDER_RECEIVED" | "POD_PAID" | "POD_DELIVERED" | "DELIVERY_FAILED">; force?: boolean }) {
+export async function notifyPodCustomer(input: { receiptId: string; event: Extract<NotificationEvent, "POD_ORDER_RECEIVED" | "POD_PAID" | "POD_DELIVERED" | "DELIVERY_FAILED" | "DISPATCHED">; force?: boolean }) {
   const receipt = await prisma.receipt.findUnique({ where: { id: input.receiptId }, select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, customerName: true, customerPhone: true, customerEmail: true, totalAmount: true, paidAmount: true } } } });
   if (!receipt?.order) return null;
   const data = asRecord(receipt.data);
   const pod = asRecord(data.podDelivery);
   const token = clean(data.publicReceiptToken);
+  const receiptLink = token
+    ? `https://www.betech.co.ke/r/${token}/view`
+    : input.event === "DISPATCHED"
+      ? await getPublicReceiptDocumentsUrl(receipt.id)
+      : null;
+  const pickup = asRecord(pod.pickup);
   const total = Number(receipt.order.totalAmount);
-  return publish({ receiptId: receipt.id, customerName: receipt.order.customerName, customerPhone: receipt.order.customerPhone, customerEmail: receipt.order.customerEmail, reference: receipt.order.orderNumber || receipt.receiptNumber || receipt.id, total, paid: pod.paidAt ? total : Number(receipt.order.paidAmount), deliveryMethod: "Pay on Delivery", receiptLink: token ? `https://www.betech.co.ke/r/${token}/view` : null }, input.event, input.force);
+  return publish({ receiptId: receipt.id, customerName: receipt.order.customerName, customerPhone: receipt.order.customerPhone, customerEmail: receipt.order.customerEmail, reference: receipt.order.orderNumber || receipt.receiptNumber || receipt.id, total, paid: pod.paidAt ? total : Number(receipt.order.paidAmount), deliveryMethod: "Pay on Delivery", receiptLink, podDeliveryFee: Number(pod.deliveryFee || 0), pickupStation: clean(pickup.stationName), pickupAddress: clean(pickup.address), agentName: clean(pod.dispatchedByName), agentPhone: clean(pod.dispatchedByPhone) }, input.event, input.force);
 }

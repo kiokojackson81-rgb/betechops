@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
+import { notifyPodCustomer } from "@/lib/customerOrderNotifications";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
@@ -89,11 +90,22 @@ export async function POST(req: NextRequest, context: ParamsContext) {
 
   const nextPodDelivery = {
     ...podDelivery,
+    status: "dispatched",
     deliveryFee: amount,
     deliveryFeeUpdatedAt: new Date().toISOString(),
     deliveryFeeUpdatedById: actorId || null,
     ...(note ? { deliveryFeeNote: note } : {}),
   };
+  const wasAlreadyDispatched = String(podDelivery.status || "").toLowerCase() === "dispatched";
+  const dispatchAgent = actorId
+    ? await prisma.user.findUnique({ where: { id: actorId }, select: { name: true, phone: true, whatsappNumber: true } })
+    : null;
+  Object.assign(nextPodDelivery, {
+    dispatchedAt: (podDelivery.dispatchedAt as string | undefined) || new Date().toISOString(),
+    dispatchedById: (podDelivery.dispatchedById as string | undefined) || actorId || null,
+    dispatchedByName: (podDelivery.dispatchedByName as string | undefined) || dispatchAgent?.name || "Betech Customer Care",
+    dispatchedByPhone: (podDelivery.dispatchedByPhone as string | undefined) || dispatchAgent?.phone || dispatchAgent?.whatsappNumber || null,
+  });
 
   try {
     await prisma.receipt.update({
@@ -124,5 +136,11 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     console.warn("[pod-fee] failed to write action log", error);
   }
 
-  return NextResponse.json({ ok: true, deliveryFee: amount, podDelivery: nextPodDelivery });
+  if (!wasAlreadyDispatched) {
+    await notifyPodCustomer({ receiptId, event: "DISPATCHED" }).catch((error) =>
+      console.error(`[pod-fee][${requestId}] customer dispatch notification failed`, error),
+    );
+  }
+
+  return NextResponse.json({ ok: true, dispatched: true, deliveryFee: amount, podDelivery: nextPodDelivery });
 }

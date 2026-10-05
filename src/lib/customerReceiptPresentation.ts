@@ -64,6 +64,7 @@ export function customerReceiptPresentation(receipt: {
   const isDelivery = isDeliveryReceipt(receipt);
   const currentDeliveryStatus = isDelivery ? deliveryStatus(receipt) : null;
   const podPickup = record(record(data.podDelivery).pickup);
+  const podDelivery = record(data.podDelivery);
   const paymentPendingOnDelivery = isDelivery && deliveryPaymentLabel(receipt) === "Pay on delivery" && paid <= 0;
   return {
     customerName: order.customerName,
@@ -82,8 +83,9 @@ export function customerReceiptPresentation(receipt: {
       ? {
           status: currentDeliveryStatus,
           paymentLabel: deliveryPaymentLabel(receipt),
-          servingAgentName: String(order.attendant?.name || data.attendantName || data.servedByName || data.salespersonName || "our sales team").trim(),
-          servingAgentPhone: String(order.attendant?.phone || data.attendantPhone || data.servedByPhone || "").trim() || null,
+          servingAgentName: String(podDelivery.dispatchedByName || order.attendant?.name || data.attendantName || data.servedByName || data.salespersonName || "our sales team").trim(),
+          servingAgentPhone: String(podDelivery.dispatchedByPhone || order.attendant?.phone || data.attendantPhone || data.servedByPhone || "").trim() || null,
+          deliveryFee: amount(podDelivery.deliveryFee),
           pickup: podPickup.stationName ? {
             county: String(podPickup.county || ""), area: String(podPickup.area || ""),
             stationName: String(podPickup.stationName), address: String(podPickup.address || ""), phone: String(podPickup.phone || ""),

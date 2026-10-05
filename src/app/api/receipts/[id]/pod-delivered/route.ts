@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const lockTtlMs = Number(
     process.env.POD_FINALIZE_LOCK_TTL_MS || 5 * 60 * 1000,
   );
-  if (podDelivery.status !== "pending") {
+  if (!["pending", "dispatched"].includes(String(podDelivery.status).toLowerCase())) {
     return NextResponse.json(
       { error: "POD receipt already finalized" },
       { status: 409 },

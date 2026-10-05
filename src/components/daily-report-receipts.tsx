@@ -908,7 +908,7 @@ export default function DailyReportReceiptsPanel({
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">POD delivery fee</p>
                 <h3 className="mt-1 text-xl font-semibold text-white">{feeReceipt.orderRef ?? feeReceipt.receiptNumber ?? feeReceipt.id}</h3>
-                <p className="mt-2 text-sm text-slate-400">Save the delivery charge so POD profit is reduced by the correct amount.</p>
+                <p className="mt-2 text-sm text-slate-400">Saving the delivery fee dispatches this POD order, sends the customer its tracking link, and records the fee against profit.</p>
               </div>
               <button type="button" onClick={closeFeeAction} aria-label="Close delivery fee" className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10">
                 Close
@@ -954,7 +954,7 @@ export default function DailyReportReceiptsPanel({
                 disabled={feeSaving}
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
               >
-                {feeSaving ? "Saving..." : "Save delivery fee"}
+                {feeSaving ? "Dispatching..." : "Save fee & dispatch POD"}
               </button>
             </div>
           </div>
