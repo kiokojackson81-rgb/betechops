@@ -77,6 +77,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   let note: string | null = null;
   let trackingNumbers: string[] = [];
   let speedafReceipts: Array<{ url: string; fileName: string; trackingNumbers: string[] }> = [];
+  let adminOverride = false;
+  let overrideReason = "";
   try {
     const body = (await req.json()) ?? {};
     amount = toFeeAmount(body.amount);
@@ -89,7 +91,9 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     trackingNumbers = Array.isArray(body.trackingNumbers) ? body.trackingNumbers.map((value: unknown) => String(value || "").trim()).filter(Boolean) : [];
     speedafReceipts = Array.isArray(body.speedafReceipts) ? body.speedafReceipts.map((item: any) => ({ url: String(item?.url || "").trim(), fileName: String(item?.fileName || "Speedaf receipt").trim(), trackingNumbers: Array.isArray(item?.trackingNumbers) ? item.trackingNumbers.map((value: unknown) => String(value || "").trim()).filter(Boolean) : [] })).filter((item) => item.url) : [];
     trackingNumbers = [...new Set([...trackingNumbers, ...speedafReceipts.flatMap((item) => item.trackingNumbers)])];
-    if (!trackingNumbers.length) return NextResponse.json({ error: "Upload a Speedaf receipt or enter at least one tracking number before dispatching." }, { status: 400 });
+    adminOverride = body.adminOverride === true;
+    overrideReason = typeof body.overrideReason === "string" ? body.overrideReason.trim() : "";
+    if (!trackingNumbers.length && !(adminOverride && canManageAnyReceipt && overrideReason)) return NextResponse.json({ error: "Upload a Speedaf receipt or enter at least one tracking number before dispatching. Admin override requires a reason." }, { status: 400 });
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -102,6 +106,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     deliveryFeeUpdatedById: actorId || null,
     speedafReceipts: speedafReceipts.length ? speedafReceipts : (Array.isArray(podDelivery.speedafReceipts) ? podDelivery.speedafReceipts : []),
     trackingNumbers,
+    ...(adminOverride && !trackingNumbers.length ? { dispatchOverride: { reason: overrideReason, byId: actorId || null, at: new Date().toISOString() } } : {}),
     ...(note ? { deliveryFeeNote: note } : {}),
   };
   const wasAlreadyDispatched = String(podDelivery.status || "").toLowerCase() === "dispatched";

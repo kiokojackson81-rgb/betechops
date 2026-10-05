@@ -1202,12 +1202,18 @@ export default function ReceiptsAdminClient({
       showToast("Enter a valid delivery fee", "error");
       return;
     }
-    const trackingNumber = window.prompt("Speedaf tracking number (required; separate multiple numbers with commas)", "");
-    if (!trackingNumber?.trim()) { showToast("Enter at least one Speedaf tracking number", "error"); return; }
+    const trackingNumber = window.prompt("Speedaf tracking number (separate multiple numbers with commas). Leave blank only for an authorised emergency override.", "");
+    let adminOverride = false;
+    let overrideReason = "";
+    if (!trackingNumber?.trim()) {
+      overrideReason = window.prompt("Admin override reason (required). This exception is recorded for audit.", "")?.trim() || "";
+      if (!overrideReason) { showToast("Tracking number or an admin override reason is required", "error"); return; }
+      adminOverride = true;
+    }
     setPodActionId(receiptId);
     try {
       const response = await fetch(`/api/receipts/${receiptId}/pod-delivery-fee`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount, trackingNumbers: trackingNumber.split(",").map((value) => value.trim()).filter(Boolean) }),
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount, trackingNumbers: (trackingNumber || "").split(",").map((value) => value.trim()).filter(Boolean), adminOverride, overrideReason: overrideReason || undefined }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || "Failed to save delivery fee");
