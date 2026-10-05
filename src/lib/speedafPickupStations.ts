@@ -96,10 +96,13 @@ const source = [
   "Kapsabet|Nandi|Kapsabet|Sogom Hotel Building, opposite Gariza Mall, Ground Floor Room 2|0719776372",
 ] as const;
 
-export const speedafPickupStations: SpeedafPickupStation[] = source.map(([name, county, area, address, phone], index) => ({
-  id: `speedaf-${index + 1}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`,
-  name, county, area, address, phone,
-}));
+export const speedafPickupStations: SpeedafPickupStation[] = source.map((row, index) => {
+  const [name, county, area, address, phone] = row.split("|");
+  return {
+    id: `speedaf-${index + 1}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`,
+    name, county, area, address, phone,
+  };
+});
 
 export const speedafCounties = [...new Set(speedafPickupStations.map((station) => station.county))].sort();
 export const speedafAreasForCounty = (county: string) => [...new Set(speedafPickupStations.filter((station) => station.county === county).map((station) => station.area))].sort();
