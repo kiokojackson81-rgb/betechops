@@ -99,7 +99,7 @@ type CustomerNotificationDetail = {
   id: string;
   eventType: string;
   channel: string;
-  recipientAddress: string;
+  recipientAddress: string | null;
   status: string;
   attemptCount: number;
   errorMessage: string | null;

@@ -194,7 +194,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     id: string;
     eventType: string;
     channel: string;
-    recipientAddress: string;
+    recipientAddress: string | null;
     status: string;
     attemptCount: number;
     errorMessage: string | null;
