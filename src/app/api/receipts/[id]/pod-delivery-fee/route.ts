@@ -75,6 +75,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
 
   let amount: number | null = null;
   let note: string | null = null;
+  let trackingNumbers: string[] = [];
+  let speedafReceipts: Array<{ url: string; fileName: string; trackingNumbers: string[] }> = [];
   try {
     const body = (await req.json()) ?? {};
     amount = toFeeAmount(body.amount);
@@ -84,6 +86,10 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     if (typeof body.note === "string" && body.note.trim()) {
       note = body.note.trim();
     }
+    trackingNumbers = Array.isArray(body.trackingNumbers) ? body.trackingNumbers.map((value: unknown) => String(value || "").trim()).filter(Boolean) : [];
+    speedafReceipts = Array.isArray(body.speedafReceipts) ? body.speedafReceipts.map((item: any) => ({ url: String(item?.url || "").trim(), fileName: String(item?.fileName || "Speedaf receipt").trim(), trackingNumbers: Array.isArray(item?.trackingNumbers) ? item.trackingNumbers.map((value: unknown) => String(value || "").trim()).filter(Boolean) : [] })).filter((item) => item.url) : [];
+    trackingNumbers = [...new Set([...trackingNumbers, ...speedafReceipts.flatMap((item) => item.trackingNumbers)])];
+    if (!trackingNumbers.length) return NextResponse.json({ error: "Upload a Speedaf receipt or enter at least one tracking number before dispatching." }, { status: 400 });
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -94,6 +100,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     deliveryFee: amount,
     deliveryFeeUpdatedAt: new Date().toISOString(),
     deliveryFeeUpdatedById: actorId || null,
+    speedafReceipts: speedafReceipts.length ? speedafReceipts : (Array.isArray(podDelivery.speedafReceipts) ? podDelivery.speedafReceipts : []),
+    trackingNumbers,
     ...(note ? { deliveryFeeNote: note } : {}),
   };
   const wasAlreadyDispatched = String(podDelivery.status || "").toLowerCase() === "dispatched";

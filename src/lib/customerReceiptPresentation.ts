@@ -86,6 +86,7 @@ export function customerReceiptPresentation(receipt: {
           servingAgentName: String(podDelivery.dispatchedByName || order.attendant?.name || data.attendantName || data.servedByName || data.salespersonName || "our sales team").trim(),
           servingAgentPhone: String(podDelivery.dispatchedByPhone || order.attendant?.phone || data.attendantPhone || data.servedByPhone || "").trim() || null,
           deliveryFee: amount(podDelivery.deliveryFee),
+          speedafReceipts: Array.isArray(podDelivery.speedafReceipts) ? podDelivery.speedafReceipts.map((item) => record(item)).filter((item) => typeof item.url === "string" && item.url).map((item) => ({ url: String(item.url), fileName: String(item.fileName || "Speedaf receipt"), trackingNumbers: Array.isArray(item.trackingNumbers) ? item.trackingNumbers.map(String) : [] })) : [],
           pickup: podPickup.stationName ? {
             county: String(podPickup.county || ""), area: String(podPickup.area || ""),
             stationName: String(podPickup.stationName), address: String(podPickup.address || ""), phone: String(podPickup.phone || ""),

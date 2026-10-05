@@ -213,6 +213,9 @@ export default function DailyReportReceiptsPanel({
   const [feeReceipt, setFeeReceipt] = useState<DailyReportReceiptRow | null>(null);
   const [feeAmount, setFeeAmount] = useState("");
   const [feeNote, setFeeNote] = useState("");
+  const [feeTrackingNumbers, setFeeTrackingNumbers] = useState("");
+  const [feeSpeedafReceipts, setFeeSpeedafReceipts] = useState<Array<{ url: string; fileName: string; trackingNumbers: string[] }>>([]);
+  const [feeUploading, setFeeUploading] = useState(false);
   const [feeSaving, setFeeSaving] = useState(false);
   const [feeError, setFeeError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -481,6 +484,8 @@ export default function DailyReportReceiptsPanel({
     setFeeReceipt(receipt);
     setFeeAmount(receipt.podDeliveryFee != null ? String(receipt.podDeliveryFee) : "");
     setFeeNote("");
+    setFeeTrackingNumbers("");
+    setFeeSpeedafReceipts([]);
     setFeeError(null);
   };
 
@@ -497,6 +502,8 @@ export default function DailyReportReceiptsPanel({
       setFeeError("Enter a valid delivery fee amount.");
       return;
     }
+    const trackingNumbers = feeTrackingNumbers.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean);
+    if (!trackingNumbers.length && !feeSpeedafReceipts.some((receipt) => receipt.trackingNumbers.length)) { setFeeError("Upload a Speedaf receipt or enter a tracking number before dispatching."); return; }
     setFeeSaving(true);
     setFeeError(null);
     try {
@@ -507,6 +514,8 @@ export default function DailyReportReceiptsPanel({
         body: JSON.stringify({
           amount: parsed,
           note: feeNote.trim() || undefined,
+          trackingNumbers,
+          speedafReceipts: feeSpeedafReceipts,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -520,6 +529,19 @@ export default function DailyReportReceiptsPanel({
     } finally {
       setFeeSaving(false);
     }
+  };
+
+  const uploadSpeedafReceipt = async (file: File) => {
+    setFeeUploading(true); setFeeError(null);
+    try {
+      const form = new FormData(); form.append("file", file);
+      const [uploadResponse, extractResponse] = await Promise.all([fetch("/api/receipts/pod-evidence-upload", { method: "POST", body: form, credentials: "same-origin" }), fetch("/api/receipts/pod-tracking-extract", { method: "POST", body: (() => { const data = new FormData(); data.append("file", file); return data; })(), credentials: "same-origin" })]);
+      const upload = await uploadResponse.json().catch(() => ({})); const extracted = await extractResponse.json().catch(() => ({}));
+      if (!uploadResponse.ok) throw new Error(upload?.error || "Failed to upload Speedaf receipt");
+      const trackingNumbers = Array.isArray(extracted?.trackingNumbers) ? extracted.trackingNumbers.map(String) : [];
+      setFeeSpeedafReceipts((current) => [...current, { url: upload.url, fileName: file.name, trackingNumbers }]);
+      if (trackingNumbers.length) setFeeTrackingNumbers((current) => [...new Set([...current.split(/[\s,]+/).filter(Boolean), ...trackingNumbers])].join(", "));
+    } catch (error) { setFeeError(error instanceof Error ? error.message : "Failed to upload Speedaf receipt"); } finally { setFeeUploading(false); }
   };
 
   const displayDate = (() => {
@@ -937,13 +959,23 @@ export default function DailyReportReceiptsPanel({
                   placeholder="Optional fee note"
                 />
               </label>
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                Speedaf tracking number <span className="text-rose-300">(required unless extracted from upload)</span>
+                <input value={feeTrackingNumbers} onChange={(event) => setFeeTrackingNumbers(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100" placeholder="e.g. KE030026421467002001, KE030026421467002002" />
+              </label>
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                Speedaf receipt(s) — upload one or more
+                <input type="file" accept="image/*,.pdf" multiple onChange={(event) => Array.from(event.target.files || []).forEach((file) => void uploadSpeedafReceipt(file))} className="mt-1 block w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100" />
+              </label>
+              {feeUploading ? <p className="text-xs text-slate-400">Uploading receipt and extracting tracking number…</p> : null}
+              {feeSpeedafReceipts.length ? <div className="space-y-1 text-xs text-emerald-300">{feeSpeedafReceipts.map((receipt) => <a key={receipt.url} href={receipt.url} target="_blank" rel="noreferrer" className="block underline">{receipt.fileName}{receipt.trackingNumbers.length ? ` — ${receipt.trackingNumbers.join(", ")}` : ""}</a>)}</div> : null}
               {feeError ? <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{feeError}</div> : null}
             </div>
             <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
               <button
                 type="button"
                 onClick={closeFeeAction}
-                disabled={feeSaving}
+                disabled={feeSaving || feeUploading}
                 className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5 disabled:opacity-60"
               >
                 Cancel
@@ -951,7 +983,7 @@ export default function DailyReportReceiptsPanel({
               <button
                 type="button"
                 onClick={() => void submitDeliveryFee()}
-                disabled={feeSaving}
+                disabled={feeSaving || feeUploading}
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
               >
                 {feeSaving ? "Dispatching..." : "Save fee & dispatch POD"}

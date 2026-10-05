@@ -1202,10 +1202,12 @@ export default function ReceiptsAdminClient({
       showToast("Enter a valid delivery fee", "error");
       return;
     }
+    const trackingNumber = window.prompt("Speedaf tracking number (required; separate multiple numbers with commas)", "");
+    if (!trackingNumber?.trim()) { showToast("Enter at least one Speedaf tracking number", "error"); return; }
     setPodActionId(receiptId);
     try {
       const response = await fetch(`/api/receipts/${receiptId}/pod-delivery-fee`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount }),
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount, trackingNumbers: trackingNumber.split(",").map((value) => value.trim()).filter(Boolean) }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || "Failed to save delivery fee");
