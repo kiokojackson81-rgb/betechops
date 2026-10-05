@@ -63,6 +63,7 @@ export function customerReceiptPresentation(receipt: {
   const showDiscount = Boolean(receipt.showDiscount || data.showDiscount || discount > 0);
   const isDelivery = isDeliveryReceipt(receipt);
   const currentDeliveryStatus = isDelivery ? deliveryStatus(receipt) : null;
+  const podPickup = record(record(data.podDelivery).pickup);
   const paymentPendingOnDelivery = isDelivery && deliveryPaymentLabel(receipt) === "Pay on delivery" && paid <= 0;
   return {
     customerName: order.customerName,
@@ -83,6 +84,10 @@ export function customerReceiptPresentation(receipt: {
           paymentLabel: deliveryPaymentLabel(receipt),
           servingAgentName: String(order.attendant?.name || data.attendantName || data.servedByName || data.salespersonName || "our sales team").trim(),
           servingAgentPhone: String(order.attendant?.phone || data.attendantPhone || data.servedByPhone || "").trim() || null,
+          pickup: podPickup.stationName ? {
+            county: String(podPickup.county || ""), area: String(podPickup.area || ""),
+            stationName: String(podPickup.stationName), address: String(podPickup.address || ""), phone: String(podPickup.phone || ""),
+          } : null,
         }
       : null,
     items,

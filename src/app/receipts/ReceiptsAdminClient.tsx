@@ -50,6 +50,8 @@ type ReceiptRow = {
   isPodDelivery?: boolean;
   podDeliveryStatus?: string | null;
   podDeliveryNote?: string | null;
+  podPickupStation?: string | null;
+  podPickupArea?: string | null;
   customerType?: string | null;
   isProjectReceipt?: boolean;
   projectStage?: string | null;
@@ -2782,6 +2784,9 @@ export default function ReceiptsAdminClient({
                           <p className="mt-1 text-xs text-yellow-200">
                             {row.podDeliveryNote}
                           </p>
+                        )}
+                        {row.podPickupStation && (
+                          <p className="mt-1 text-xs text-sky-300">Speedaf: {row.podPickupArea ? `${row.podPickupArea} · ` : ""}{row.podPickupStation}</p>
                         )}
                       </td>
                       <td className="px-3 py-3 text-slate-300">

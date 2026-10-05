@@ -29,6 +29,7 @@ import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { recordQuotationEvent } from "@/lib/quoteRequests";
+import { getSpeedafPickupStation } from "@/lib/speedafPickupStations";
 import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";
 import { shouldUseGenericReceiptNotifications } from "@/lib/receiptNotificationEligibility";
 import {
@@ -745,6 +746,8 @@ export async function GET(req: NextRequest) {
       isPodDelivery: Boolean(podDeliveryData?.status),
       podDeliveryStatus: podDeliveryData?.status ?? null,
       podDeliveryNote: podDeliveryData?.note ?? null,
+      podPickupStation: podDeliveryData?.pickup?.stationName ?? null,
+      podPickupArea: podDeliveryData?.pickup?.area ?? null,
       podEvidenceUrl: podDeliveryData?.evidenceUrl ?? null,
       podReturnTrackingNumber: podDeliveryData?.returnTrackingNumber ?? null,
       podDeliveryFee: podDeliveryFee > 0 ? podDeliveryFee : null,
@@ -1250,6 +1253,11 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  const podStationId = typeof payload?.podDelivery?.pickupStationId === "string" ? payload.podDelivery.pickupStationId.trim() : "";
+  const podPickupStation = isPodDelivery ? getSpeedafPickupStation(podStationId) : null;
+  if (isPodDelivery && !podPickupStation) {
+    return NextResponse.json({ ok: false, error: "Choose a valid Speedaf collection point for POD." }, { status: 400 });
+  }
 
   try {
     // allow linking when caller opts-in via ?link=1 or payload.link = true
@@ -1329,6 +1337,8 @@ export async function POST(req: NextRequest) {
               status: 'pending',
               type: 'pay_on_delivery',
               note: payload?.podDelivery?.note ?? null,
+              provider: 'Speedaf',
+              pickup: podPickupStation ? { stationId: podPickupStation.id, county: podPickupStation.county, area: podPickupStation.area, stationName: podPickupStation.name, address: podPickupStation.address, phone: podPickupStation.phone } : null,
               createdAt: entryDateIso,
               createdById: issuedById ?? null,
             },
@@ -1663,6 +1673,8 @@ export async function POST(req: NextRequest) {
                   status: 'pending',
                   type: 'pay_on_delivery',
                   note: payload?.podDelivery?.note ?? null,
+                  provider: 'Speedaf',
+                  pickup: podPickupStation ? { stationId: podPickupStation.id, county: podPickupStation.county, area: podPickupStation.area, stationName: podPickupStation.name, address: podPickupStation.address, phone: podPickupStation.phone } : null,
                   createdAt: entryDateIso,
                   createdById: issuedById ?? null,
                 },

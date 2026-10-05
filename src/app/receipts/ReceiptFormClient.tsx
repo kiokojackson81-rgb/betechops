@@ -14,6 +14,7 @@ import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
 import PosProductSelectorModal, { type PosCatalogProduct } from "@/components/receipts/PosProductSelectorModal";
 import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
+import { getSpeedafPickupStation, speedafAreasForCounty, speedafCounties, speedafStationsForArea } from "@/lib/speedafPickupStations";
 
 type ItemRow = {
   id: string;
@@ -185,6 +186,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
   const [deliveryPaymentTerm, setDeliveryPaymentTerm] = useState<"PAY_BEFORE_DELIVERY" | "PAY_ON_DELIVERY">("PAY_BEFORE_DELIVERY");
   const [podNote, setPodNote] = useState<string>("");
+  const [podCounty, setPodCounty] = useState("");
+  const [podArea, setPodArea] = useState("");
+  const [podStationId, setPodStationId] = useState("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>(createDefaultProjectDraft());
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(false);
@@ -334,6 +338,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       }
       if (parsed.podDelivery?.note) {
         setPodNote(String(parsed.podDelivery.note));
+      }
+      if (parsed.podDelivery?.pickup?.stationId) {
+        const station = getSpeedafPickupStation(String(parsed.podDelivery.pickup.stationId));
+        if (station) { setPodCounty(station.county); setPodArea(station.area); setPodStationId(station.id); }
       }
       if (parsed.paymentMethod === "MPESA_EXPRESS") {
         setIsMpesaExpress(true);
@@ -1102,6 +1110,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setCustomerEmail("");
     setCustomerType("");
     setDeliveryStatus("pending");
+    setPodNote("");
+    setPodCounty("");
+    setPodArea("");
+    setPodStationId("");
     setProjectDraft(createDefaultProjectDraft());
     setDeposit(0);
     setShowSerials(false);
@@ -1300,6 +1312,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (!customerName.trim()) return showToast("Customer name is required", "error");
     if (!customerPhone.trim()) return showToast("Customer phone is required", "error");
     if (!customerType) return showToast("Select a customer type", "error");
+    if (customerType === "pod" && !getSpeedafPickupStation(podStationId)) {
+      return showToast("Select a Speedaf collection point for this POD order", "error");
+    }
     if (customerType === "project" && !deliveryAddress?.trim()) {
       return showToast("Project address is required", "error");
     }
@@ -1390,7 +1405,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         customerType,
         deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
         deliveryPaymentTerm: customerType === "delivery" ? deliveryPaymentTerm : undefined,
-        podDelivery: customerType === "pod" ? { note: podNote || "" } : undefined,
+        podDelivery: customerType === "pod" ? { note: podNote || "", pickupStationId: podStationId } : undefined,
         projectFlow: projectFlow ?? undefined,
         notes,
         websiteOrderId: websiteOrderId || undefined,
@@ -1684,11 +1699,30 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </>
       )}
       {customerType === "pod" && (
-        <div className="mt-3 space-y-2 rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-3">
+        <div className="mt-3 space-y-3 rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-wide text-yellow-300">Pay on delivery note</p>
-            <span className="text-[10px] uppercase tracking-[0.3em] text-yellow-300">Outside Nairobi</span>
+            <p className="text-xs uppercase tracking-wide text-yellow-300">Speedaf collection point</p>
+            <span className="text-[10px] uppercase tracking-[0.3em] text-yellow-300">Required</span>
           </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className={labelClass}>County
+              <select value={podCounty} onChange={(e) => { setPodCounty(e.target.value); setPodArea(""); setPodStationId(""); }} className={fieldClass}>
+                <option value="">Select county</option>{speedafCounties.map((county) => <option key={county} value={county}>{county}</option>)}
+              </select>
+            </label>
+            <label className={labelClass}>Area / town
+              <select disabled={!podCounty} value={podArea} onChange={(e) => { setPodArea(e.target.value); setPodStationId(""); }} className={fieldClass}>
+                <option value="">Select area</option>{speedafAreasForCounty(podCounty).map((area) => <option key={area} value={area}>{area}</option>)}
+              </select>
+            </label>
+            <label className={labelClass}>Speedaf station
+              <select disabled={!podArea} value={podStationId} onChange={(e) => setPodStationId(e.target.value)} className={fieldClass}>
+                <option value="">Select station</option>{speedafStationsForArea(podCounty, podArea).map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}
+              </select>
+            </label>
+          </div>
+          {getSpeedafPickupStation(podStationId) ? <div className="rounded-xl border border-yellow-500/30 bg-slate-950/70 p-3 text-sm text-slate-100"><p className="font-semibold text-yellow-200">{getSpeedafPickupStation(podStationId)!.name} Speedaf Station</p><p className="mt-1">{getSpeedafPickupStation(podStationId)!.address}</p><p className="mt-1 text-slate-300">Station contact: {getSpeedafPickupStation(podStationId)!.phone}</p></div> : null}
+          <p className="text-xs uppercase tracking-wide text-yellow-300">Optional customer instructions</p>
           <textarea
             value={podNote}
             onChange={(e) => setPodNote(e.target.value)}
