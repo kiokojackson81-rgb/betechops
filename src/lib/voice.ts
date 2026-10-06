@@ -22,7 +22,11 @@ import {
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
 const CALLBACK_REQUEST_TOKEN_EXPIRY_DAYS = 14;
-const DEFAULT_QUICK_CALL_RECOVERY_WINDOW_SECONDS = 20;
+// Staff often need a moment to unlock a handset and redial after a network
+// drop. Keep the recovery token useful without allowing an old customer call
+// to be dialled: the call remains limited to the same staff member and can be
+// claimed once only.
+const DEFAULT_QUICK_CALL_RECOVERY_WINDOW_SECONDS = 120;
 const DEFAULT_VOICE_RECOVERY_API_NUMBER = "+254711082542";
 
 type VoicePayload = Record<string, string>;
@@ -134,9 +138,12 @@ export async function claimQuickCallRecovery(input: {
     10,
   );
   const windowSeconds = input.windowSeconds ??
-    (Number.isFinite(configuredWindow) && configuredWindow > 0
-      ? configuredWindow
-      : DEFAULT_QUICK_CALL_RECOVERY_WINDOW_SECONDS);
+    Math.max(
+      DEFAULT_QUICK_CALL_RECOVERY_WINDOW_SECONDS,
+      Number.isFinite(configuredWindow) && configuredWindow > 0
+        ? configuredWindow
+        : 0,
+    );
   const cutoff = new Date(now.getTime() - windowSeconds * 1000);
   return prisma.$transaction(async (tx) => {
     const previous = await tx.voiceCall.findFirst({

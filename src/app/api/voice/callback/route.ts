@@ -190,7 +190,7 @@ export async function POST(request: Request) {
       ) {
         return xmlResponse(
           buildVoiceMessageXmlResponse(
-            "There is no recoverable customer call from the last 20 seconds.",
+            "There is no recoverable customer call from the last two minutes.",
           ),
         );
       }
