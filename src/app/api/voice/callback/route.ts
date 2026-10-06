@@ -347,12 +347,9 @@ export async function POST(request: Request) {
       return xmlResponse(
         buildWorkingHoursIvrXml({
           callbackUrl: ivrUrl.toString(),
-          // Keep every customer-service destination in one sequential Dial.
-          // Africa's Talking then advances on busy/no-answer without waiting
-          // for a separate callback/Redirect cycle.
-          fallbackPhoneNumbers: effectiveRoutePlan.hops
-            .slice(hopIndex)
-            .map((hop) => hop.dialValue),
+          // With no menu selection the provider redirects to this dedicated
+          // IVR endpoint, which issues the whole sequential Dial list.
+          fallbackRedirectUrl: ivrUrl.toString(),
         }),
       );
     }

@@ -51,14 +51,15 @@ describe("voice sticky return routing", () => {
     );
   });
 
-  test("uses the same sequential fallback when the caller skips the IVR", () => {
+  test("redirects a caller who skips the IVR to the dedicated sequential-dial route", () => {
     const xml = buildWorkingHoursIvrXml({
       callbackUrl: "https://example.test/api/voice/ivr",
-      fallbackPhoneNumbers: ["+254711000001", "+254705663175"],
+      fallbackRedirectUrl: "https://example.test/api/voice/ivr?routePlan=abc",
     });
 
-    expect(xml).toContain('sequential="true"');
-    expect(xml).toContain('phoneNumbers="+254711000001,+254705663175"');
+    expect(xml).toContain('<GetDigits');
+    expect(xml).toContain('<Redirect>https://example.test/api/voice/ivr?routePlan=abc</Redirect>');
+    expect(xml).not.toContain('<Dial');
   });
 
   test("preserves the target user on encoded route-plan hops", () => {

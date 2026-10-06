@@ -128,15 +128,8 @@ export function buildDialAttemptXml(input: {
 
 export function buildWorkingHoursIvrXml(input: {
   callbackUrl: string;
-  fallbackPhoneNumbers?: string[];
   fallbackRedirectUrl?: string | null;
 }) {
-  const fallbackPhoneNumbers = Array.from(
-    new Set((input.fallbackPhoneNumbers || []).map(safeString).filter(Boolean)),
-  );
-  const fallbackDialPart = fallbackPhoneNumbers.length
-    ? `<Dial record="true" sequential="true" phoneNumbers="${escapeVoiceXml(fallbackPhoneNumbers.join(","))}" />`
-    : "";
   const fallbackRedirectPart = input.fallbackRedirectUrl
     ? `<Redirect>${escapeVoiceXml(input.fallbackRedirectUrl)}</Redirect>`
     : "";
@@ -147,7 +140,9 @@ export function buildWorkingHoursIvrXml(input: {
     `<GetDigits timeout="${BETECH_WORKING_HOURS_DIGITS_TIMEOUT_SECONDS}" numDigits="1" callbackUrl="${escapeVoiceXml(input.callbackUrl)}">` +
     `<Say voice="woman">${BETECH_WORKING_HOURS_GET_DIGITS_FILLER}</Say>` +
     `</GetDigits>` +
-    fallbackDialPart +
+    // Do not put a Dial directly after GetDigits. Some carrier outcomes
+    // terminate that mixed response after the first no-answer. Redirecting
+    // first makes the default path a fresh, dedicated sequential Dial.
     fallbackRedirectPart +
     `</Response>`
   );
