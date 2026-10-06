@@ -1190,13 +1190,17 @@ async function listVoiceAssignmentCandidates() {
   return prisma.user.findMany({
     where: {
       isActive: true,
-      phone: { not: null },
+      // Ownership of customer calls is only assignable to internal staff who
+      // have a Betech One Voice number. Never expose or route through an
+      // employee's payroll/personal phone from this control.
+      oneVoiceCustomerNumber: { not: null },
+      OR: [{ role: "ADMIN" }, buildStaffAttendantWhere()],
     },
     select: {
       id: true,
       name: true,
       email: true,
-      phone: true,
+      oneVoiceCustomerNumber: true,
       role: true,
       attendantCategory: true,
     },
@@ -2239,13 +2243,13 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     id: candidate.id,
     name: candidate.name,
     email: candidate.email,
-    phone: candidate.phone,
+    callNumber: candidate.oneVoiceCustomerNumber,
     role: candidate.role,
     attendantCategory: candidate.attendantCategory,
     label:
       String(candidate.name || "").trim() ||
       String(candidate.email || "").trim() ||
-      String(candidate.phone || "").trim() ||
+      String(candidate.oneVoiceCustomerNumber || "").trim() ||
       "Unnamed employee",
   }));
 
@@ -2709,6 +2713,32 @@ export async function reassignVoiceWork(input: {
   queueType?: "task" | "lead" | null;
   assignedToId: string;
 }) {
+  const assignee = await prisma.user.findUnique({
+    where: { id: input.assignedToId },
+    select: {
+      id: true,
+      isActive: true,
+      role: true,
+      attendantCategory: true,
+      oneVoiceCustomerNumber: true,
+      agentProfile: { select: { id: true } },
+    },
+  });
+  const hasOneVoiceNumber = Boolean(
+    normalizeKenyanPhone(assignee?.oneVoiceCustomerNumber || ""),
+  );
+  if (
+    !assignee?.isActive ||
+    !hasOneVoiceNumber ||
+    !isVoiceOverflowStaff({
+      role: assignee.role,
+      attendantCategory: assignee.attendantCategory,
+      hasAgentProfile: Boolean(assignee.agentProfile),
+    })
+  ) {
+    throw new Error("voice_assignment_target_must_be_active_staff_with_one_voice_number");
+  }
+
   if (input.callId) {
     const call = await prisma.voiceCall.update({
       where: { id: input.callId },

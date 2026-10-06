@@ -228,6 +228,29 @@ function getInitials(value: string | null | undefined) {
   return text || "VC";
 }
 
+function formatVoiceAssignmentCandidate(candidate: {
+  displayName?: string | null;
+  label?: string | null;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  callNumber?: string | null;
+}) {
+  const name =
+    String(
+      candidate.displayName ||
+        candidate.label ||
+        candidate.name ||
+        candidate.email ||
+        "Unnamed employee",
+    ).trim() || "Unnamed employee";
+  const role = String(candidate.role || "").toUpperCase() === "ADMIN"
+    ? "Admin"
+    : "Employee";
+  const callNumber = String(candidate.callNumber || "").trim();
+  return callNumber ? `${name} (${role}) — ${callNumber}` : `${name} (${role})`;
+}
+
 function normalizeVoiceTab(value: string | null): VoiceConsoleTab {
   return VOICE_CONSOLE_TABS.includes(value as VoiceConsoleTab)
     ? (value as VoiceConsoleTab)
@@ -3475,9 +3498,9 @@ export default function VoiceConsoleClient({
                                                                 key={agent.id}
                                                                 value={agent.id}
                                                               >
-                                                                {(agent as any)
-                                                                  .displayName ||
-                                                                  agent.name}
+                                                                {formatVoiceAssignmentCandidate(
+                                                                  agent,
+                                                                )}
                                                               </option>
                                                             ),
                                                           )}
@@ -4137,8 +4160,9 @@ export default function VoiceConsoleClient({
                                                 key={agent.id}
                                                 value={agent.id}
                                               >
-                                                {(agent as any).displayName ||
-                                                  agent.name}
+                                              {formatVoiceAssignmentCandidate(
+                                                agent,
+                                              )}
                                               </option>
                                             ))}
                                           </select>
@@ -5000,8 +5024,9 @@ export default function VoiceConsoleClient({
                                     <option value="">Select employee</option>
                                     {assignableEmployees.map((agent: any) => (
                                       <option key={agent.id} value={agent.id}>
-                                        {(agent as any).displayName ||
-                                          agent.name}
+                                        {formatVoiceAssignmentCandidate(
+                                          agent,
+                                        )}
                                       </option>
                                     ))}
                                   </select>
