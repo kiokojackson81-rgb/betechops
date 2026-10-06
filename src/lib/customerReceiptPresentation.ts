@@ -1,5 +1,6 @@
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { deliveryPaymentLabel, deliveryStatus, isDeliveryReceipt } from "@/lib/deliveryReceipt";
+import { getSpeedafPickupStation } from "@/lib/speedafPickupStations";
 
 export const receiptMoney = (value: number) => `KSh ${new Intl.NumberFormat("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 
@@ -63,8 +64,28 @@ export function customerReceiptPresentation(receipt: {
   const showDiscount = Boolean(receipt.showDiscount || data.showDiscount || discount > 0);
   const isDelivery = isDeliveryReceipt(receipt);
   const currentDeliveryStatus = isDelivery ? deliveryStatus(receipt) : null;
-  const podPickup = record(record(data.podDelivery).pickup);
   const podDelivery = record(data.podDelivery);
+  const savedPickup = record(podDelivery.pickup);
+  const pickupStationId = String(
+    savedPickup.stationId ||
+      podDelivery.pickupStationId ||
+      data.podPickupStationId ||
+      record(data.metadata).podPickupStationId ||
+      "",
+  ).trim();
+  const configuredPickup = pickupStationId ? getSpeedafPickupStation(pickupStationId) : null;
+  const podPickup = savedPickup.stationName
+    ? savedPickup
+    : configuredPickup
+      ? {
+          stationId: configuredPickup.id,
+          county: configuredPickup.county,
+          area: configuredPickup.area,
+          stationName: configuredPickup.name,
+          address: configuredPickup.address,
+          phone: configuredPickup.phone,
+        }
+      : {};
   const paymentPendingOnDelivery = isDelivery && deliveryPaymentLabel(receipt) === "Pay on delivery" && paid <= 0;
   return {
     customerName: order.customerName,
