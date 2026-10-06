@@ -1033,13 +1033,23 @@ function buildWorkingHoursSelection(input: {
 
 export function buildStickyVoiceTargetOrder(input: {
   stickyTarget: VoiceRouteTarget;
-  fallbackTarget: VoiceRouteTarget | null;
+  roundRobinTarget?: VoiceRouteTarget | null;
+  agentTargets?: VoiceRouteTarget[];
+  adminTarget?: VoiceRouteTarget | null;
+  fallbackTarget?: VoiceRouteTarget | null;
 }) {
   const seenNumbers = new Set<string>();
 
-  // A saved customer owner is exclusive. Do not spill the caller into the
-  // round-robin pool; only the admin-selected backup receiver is attempted.
-  return [input.stickyTarget, input.fallbackTarget].filter(
+  // Ownership decides who rings first; it must never turn one unanswered
+  // agent into a dead end. Continue through the enabled team, then Admin and
+  // finally any configured overflow line.
+  return [
+    input.stickyTarget,
+    input.roundRobinTarget ?? null,
+    ...(input.agentTargets ?? []),
+    input.adminTarget ?? null,
+    input.fallbackTarget ?? null,
+  ].filter(
     (target): target is VoiceRouteTarget => {
       if (!target) return false;
       const normalizedNumber = normalizeVoiceNumber(target.phoneNumber);
@@ -1199,11 +1209,10 @@ export async function getVoiceRouteTargets(
         preferredTarget: stickyTarget,
         orderedTargets: buildStickyVoiceTargetOrder({
           stickyTarget,
-          fallbackTarget: overflowTarget.phoneNumber
-            ? overflowTarget
-            : adminTarget.phoneNumber
-              ? adminTarget
-              : null,
+          roundRobinTarget,
+          agentTargets,
+          adminTarget,
+          fallbackTarget: overflowTarget,
         }),
         routeReason: quotationOwnerTarget
           ? ("quotation_owner" as const)

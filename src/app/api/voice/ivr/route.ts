@@ -3,7 +3,6 @@ import {
   type VoiceRoutePlan,
   buildVoiceRoutePlanFromPhoneNumbers,
   buildDialAttemptXml,
-  buildRoutePlanRedirectUrl,
   decodeRoutePlan,
   getAdminPhoneNumbers,
   getIvrDigits,
@@ -67,11 +66,10 @@ export async function POST(request: Request) {
   return xmlResponse(
     buildDialAttemptXml({
       preDialMessage: digits === "1" ? BETECH_WORKING_HOURS_DIGITS_PROMPT : null,
-      phoneNumber: currentHop.dialValue,
-      redirectUrl:
-        selectedRoutePlan.hops.length > 1
-          ? buildRoutePlanRedirectUrl(requestUrl, selectedRoutePlan, 1)
-          : null,
+      // Send the whole ordered list to Africa's Talking in one sequential
+      // dial. A busy/no-answer must proceed to the next destination, then
+      // Admin, rather than depend on a terminal no-answer webhook redirect.
+      phoneNumbers: selectedRoutePlan.hops.map((hop) => hop.dialValue),
     }),
   );
 }

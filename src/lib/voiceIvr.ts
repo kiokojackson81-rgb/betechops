@@ -79,12 +79,38 @@ export function buildRoutePlanRedirectUrl(
   return redirectUrl.toString();
 }
 
+function buildNoAgentAvailableXml() {
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<Response><Say voice="woman">${escapeVoiceXml(
+      toSpeechText("No agents are currently available. Please try again shortly."),
+    )}</Say></Response>`
+  );
+}
+
 export function buildDialAttemptXml(input: {
-  phoneNumber: string;
+  /**
+   * Africa's Talking only guarantees the next destination is tried when the
+   * destinations are supplied to one sequential Dial action.  Do not rely on
+   * a second webhook after a no-answer: that callback is terminal for some
+   * carrier outcomes.
+   */
+  phoneNumbers?: string[];
+  phoneNumber?: string;
   redirectUrl?: string | null;
   preDialMessage?: string | null;
   maxDurationSeconds?: number;
 }) {
+  const phoneNumbers = Array.from(
+    new Set(
+      (input.phoneNumbers?.length ? input.phoneNumbers : [input.phoneNumber])
+        .map((phoneNumber) => safeString(phoneNumber))
+        .filter(Boolean),
+    ),
+  );
+  if (!phoneNumbers.length) {
+    return buildNoAgentAvailableXml();
+  }
   const sayPart = input.preDialMessage
     ? `<Say voice="woman">${escapeVoiceXml(toSpeechText(input.preDialMessage))}</Say>`
     : "";
@@ -96,17 +122,20 @@ export function buildDialAttemptXml(input: {
     : "";
   return (
     `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<Response>${sayPart}<Dial record="true" phoneNumbers="${escapeVoiceXml(input.phoneNumber)}"${maxDurationPart} />${redirectPart}</Response>`
+    `<Response>${sayPart}<Dial record="true" sequential="true" phoneNumbers="${escapeVoiceXml(phoneNumbers.join(","))}"${maxDurationPart} />${redirectPart}</Response>`
   );
 }
 
 export function buildWorkingHoursIvrXml(input: {
   callbackUrl: string;
-  fallbackPhoneNumber?: string | null;
+  fallbackPhoneNumbers?: string[];
   fallbackRedirectUrl?: string | null;
 }) {
-  const fallbackDialPart = input.fallbackPhoneNumber
-    ? `<Dial record="true" phoneNumbers="${escapeVoiceXml(input.fallbackPhoneNumber)}" />`
+  const fallbackPhoneNumbers = Array.from(
+    new Set((input.fallbackPhoneNumbers || []).map(safeString).filter(Boolean)),
+  );
+  const fallbackDialPart = fallbackPhoneNumbers.length
+    ? `<Dial record="true" sequential="true" phoneNumbers="${escapeVoiceXml(fallbackPhoneNumbers.join(","))}" />`
     : "";
   const fallbackRedirectPart = input.fallbackRedirectUrl
     ? `<Redirect>${escapeVoiceXml(input.fallbackRedirectUrl)}</Redirect>`

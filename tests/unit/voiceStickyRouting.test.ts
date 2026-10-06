@@ -6,6 +6,8 @@ import {
   type VoiceRouteTarget,
 } from "@/lib/voice";
 import {
+  buildDialAttemptXml,
+  buildWorkingHoursIvrXml,
   decodeRoutePlan,
   encodeRoutePlan,
   type VoiceRoutePlan,
@@ -34,6 +36,31 @@ function target(
 }
 
 describe("voice sticky return routing", () => {
+  test("uses one sequential provider dial so a no-answer advances to every fallback", () => {
+    const xml = buildDialAttemptXml({
+      phoneNumbers: [
+        "+254711000001",
+        "+254711000002",
+        "+254705663175",
+      ],
+    });
+
+    expect(xml).toContain('sequential="true"');
+    expect(xml).toContain(
+      'phoneNumbers="+254711000001,+254711000002,+254705663175"',
+    );
+  });
+
+  test("uses the same sequential fallback when the caller skips the IVR", () => {
+    const xml = buildWorkingHoursIvrXml({
+      callbackUrl: "https://example.test/api/voice/ivr",
+      fallbackPhoneNumbers: ["+254711000001", "+254705663175"],
+    });
+
+    expect(xml).toContain('sequential="true"');
+    expect(xml).toContain('phoneNumbers="+254711000001,+254705663175"');
+  });
+
   test("preserves the target user on encoded route-plan hops", () => {
     const plan: VoiceRoutePlan = {
       hops: [

@@ -19,7 +19,6 @@ import {
   BETECH_AFTER_HOURS_WELCOME_MESSAGE,
   type VoiceRoutePlan,
   buildDialAttemptXml,
-  buildRoutePlanRedirectUrl,
   buildWorkingHoursIvrXml,
   decodeRoutePlan,
   encodeRoutePlan,
@@ -348,15 +347,12 @@ export async function POST(request: Request) {
       return xmlResponse(
         buildWorkingHoursIvrXml({
           callbackUrl: ivrUrl.toString(),
-          fallbackPhoneNumber: currentHop.dialValue,
-          fallbackRedirectUrl:
-            hopIndex + 1 < effectiveRoutePlan.hops.length
-              ? buildRoutePlanRedirectUrl(
-                  requestUrl,
-                  effectiveRoutePlan,
-                  hopIndex + 1,
-                )
-              : null,
+          // Keep every customer-service destination in one sequential Dial.
+          // Africa's Talking then advances on busy/no-answer without waiting
+          // for a separate callback/Redirect cycle.
+          fallbackPhoneNumbers: effectiveRoutePlan.hops
+            .slice(hopIndex)
+            .map((hop) => hop.dialValue),
         }),
       );
     }
@@ -379,15 +375,9 @@ export async function POST(request: Request) {
           hopIndex === 0 && effectiveRoutePlan.routeType === "AFTER_HOURS"
             ? BETECH_AFTER_HOURS_WELCOME_MESSAGE
             : null,
-        phoneNumber: currentHop.dialValue,
-        redirectUrl:
-          hopIndex + 1 < effectiveRoutePlan.hops.length
-            ? buildRoutePlanRedirectUrl(
-                requestUrl,
-                effectiveRoutePlan,
-                hopIndex + 1,
-              )
-            : null,
+        phoneNumbers: effectiveRoutePlan.hops
+          .slice(hopIndex)
+          .map((hop) => hop.dialValue),
       }),
     );
   } catch (error) {
