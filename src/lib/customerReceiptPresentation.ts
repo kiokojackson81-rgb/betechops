@@ -1,6 +1,6 @@
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { deliveryPaymentLabel, deliveryStatus, isDeliveryReceipt } from "@/lib/deliveryReceipt";
-import { getSpeedafPickupStation } from "@/lib/speedafPickupStations";
+import { getSpeedafPickupStation, speedafPickupStations } from "@/lib/speedafPickupStations";
 
 export const receiptMoney = (value: number) => `KSh ${new Intl.NumberFormat("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 
@@ -65,17 +65,36 @@ export function customerReceiptPresentation(receipt: {
   const isDelivery = isDeliveryReceipt(receipt);
   const currentDeliveryStatus = isDelivery ? deliveryStatus(receipt) : null;
   const podDelivery = record(data.podDelivery);
-  const savedPickup = record(podDelivery.pickup);
+  // POD records created before the station picker was standardised used a few
+  // different field names. Read them all so collection details are never lost
+  // when the receipt is later dispatched or edited.
+  const savedPickup = [
+    podDelivery.pickup,
+    podDelivery.collectionPoint,
+    podDelivery.speedafStation,
+    podDelivery.station,
+    data.podPickup,
+    data.pickup,
+  ].map(record).find((value) => Object.keys(value).length > 0) || {};
   const pickupStationId = String(
     savedPickup.stationId ||
       podDelivery.pickupStationId ||
+      podDelivery.stationId ||
+      savedPickup.id ||
       data.podPickupStationId ||
       record(data.metadata).podPickupStationId ||
       "",
   ).trim();
-  const configuredPickup = pickupStationId ? getSpeedafPickupStation(pickupStationId) : null;
+  const legacyStationName = String(
+    savedPickup.stationName || savedPickup.name || podDelivery.pickupStation || podDelivery.stationName || "",
+  ).trim().toLowerCase();
+  const configuredPickup = pickupStationId
+    ? getSpeedafPickupStation(pickupStationId)
+    : speedafPickupStations.find((station) => station.name.trim().toLowerCase() === legacyStationName) || null;
   const podPickup = savedPickup.stationName
     ? savedPickup
+    : legacyStationName && savedPickup.name
+      ? { ...savedPickup, stationName: savedPickup.name }
     : configuredPickup
       ? {
           stationId: configuredPickup.id,
