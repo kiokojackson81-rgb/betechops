@@ -16,6 +16,10 @@ const toFeeAmount = (value: unknown) => {
   return Math.max(0, Math.round(parsed));
 };
 
+const SPEEDAF_TRACKING_PATTERN = /^KE\d{18}$/;
+const normalizeSpeedafTrackingNumber = (value: unknown) =>
+  String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+
 export async function POST(req: NextRequest, context: ParamsContext) {
   const requestId = randomUUID();
   let receiptId = "";
@@ -77,6 +81,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   let note: string | null = null;
   let trackingNumbers: string[] = [];
   let speedafReceipts: Array<{ url: string; fileName: string; trackingNumbers: string[] }> = [];
+  let suppliedTrackingNumbers = false;
   let adminOverride = false;
   let overrideReason = "";
   try {
@@ -88,9 +93,13 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     if (typeof body.note === "string" && body.note.trim()) {
       note = body.note.trim();
     }
-    trackingNumbers = Array.isArray(body.trackingNumbers) ? body.trackingNumbers.map((value: unknown) => String(value || "").trim()).filter(Boolean) : [];
-    speedafReceipts = Array.isArray(body.speedafReceipts) ? body.speedafReceipts.map((item: any) => ({ url: String(item?.url || "").trim(), fileName: String(item?.fileName || "Speedaf receipt").trim(), trackingNumbers: Array.isArray(item?.trackingNumbers) ? item.trackingNumbers.map((value: unknown) => String(value || "").trim()).filter(Boolean) : [] })).filter((item) => item.url) : [];
+    suppliedTrackingNumbers = Array.isArray(body.trackingNumbers);
+    trackingNumbers = suppliedTrackingNumbers ? body.trackingNumbers.map(normalizeSpeedafTrackingNumber).filter(Boolean) : [];
+    speedafReceipts = Array.isArray(body.speedafReceipts) ? body.speedafReceipts.map((item: any) => ({ url: String(item?.url || "").trim(), fileName: String(item?.fileName || "Speedaf receipt").trim(), trackingNumbers: Array.isArray(item?.trackingNumbers) ? item.trackingNumbers.map(normalizeSpeedafTrackingNumber).filter(Boolean) : [] })).filter((item) => item.url) : [];
     trackingNumbers = [...new Set([...trackingNumbers, ...speedafReceipts.flatMap((item) => item.trackingNumbers)])];
+    if (trackingNumbers.some((value) => !SPEEDAF_TRACKING_PATTERN.test(value))) {
+      return NextResponse.json({ error: "Each Speedaf tracking number must start with KE and contain exactly 18 digits after it." }, { status: 400 });
+    }
     adminOverride = body.adminOverride === true;
     overrideReason = typeof body.overrideReason === "string" ? body.overrideReason.trim() : "";
     if (!trackingNumbers.length && !(adminOverride && canManageAnyReceipt && overrideReason)) return NextResponse.json({ error: "Upload a Speedaf receipt or enter at least one tracking number before dispatching. Admin override requires a reason." }, { status: 400 });
@@ -104,7 +113,11 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     deliveryFee: amount,
     deliveryFeeUpdatedAt: new Date().toISOString(),
     deliveryFeeUpdatedById: actorId || null,
-    speedafReceipts: speedafReceipts.length ? speedafReceipts : (Array.isArray(podDelivery.speedafReceipts) ? podDelivery.speedafReceipts : []),
+    speedafReceipts: speedafReceipts.length
+      ? speedafReceipts
+      : suppliedTrackingNumbers && trackingNumbers.length && Array.isArray(podDelivery.speedafReceipts) && podDelivery.speedafReceipts.length === 1
+        ? [{ ...(podDelivery.speedafReceipts[0] as Record<string, unknown>), trackingNumbers }]
+        : (Array.isArray(podDelivery.speedafReceipts) ? podDelivery.speedafReceipts : []),
     trackingNumbers,
     ...(adminOverride && !trackingNumbers.length ? { dispatchOverride: { reason: overrideReason, byId: actorId || null, at: new Date().toISOString() } } : {}),
     ...(note ? { deliveryFeeNote: note } : {}),
