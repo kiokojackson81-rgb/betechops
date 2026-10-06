@@ -1227,8 +1227,27 @@ export default function ReceiptsAdminClient({
     }
     setPodActionId(receiptId);
     try {
+      const speedafReceipts: Array<{ url: string; fileName: string }> = [];
+      if (window.confirm("Would you like to attach one or more Speedaf receipt images/PDFs as dispatch evidence?")) {
+        const picker = document.createElement("input");
+        picker.type = "file";
+        picker.accept = "image/*,.pdf";
+        picker.multiple = true;
+        const files = await new Promise<File[]>((resolve) => {
+          picker.onchange = () => resolve(Array.from(picker.files || []));
+          picker.click();
+        });
+        for (const file of files) {
+          const form = new FormData();
+          form.append("file", file);
+          const uploadResponse = await fetch("/api/receipts/pod-evidence-upload", { method: "POST", body: form, credentials: "same-origin" });
+          const upload = await uploadResponse.json().catch(() => ({}));
+          if (!uploadResponse.ok || !upload?.url) throw new Error(upload?.error || `Could not upload ${file.name}`);
+          speedafReceipts.push({ url: String(upload.url), fileName: file.name });
+        }
+      }
       const response = await fetch(`/api/receipts/${receiptId}/pod-delivery-fee`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount, trackingNumbers: (trackingNumber || "").split(",").map((value) => value.trim()).filter(Boolean), adminOverride, overrideReason: overrideReason || undefined }),
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount, trackingNumbers: (trackingNumber || "").split(",").map((value) => value.trim()).filter(Boolean), speedafReceipts, adminOverride, overrideReason: overrideReason || undefined }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || "Failed to save delivery fee");

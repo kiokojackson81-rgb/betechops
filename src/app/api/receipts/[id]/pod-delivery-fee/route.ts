@@ -16,7 +16,10 @@ const toFeeAmount = (value: unknown) => {
   return Math.max(0, Math.round(parsed));
 };
 
-const SPEEDAF_TRACKING_PATTERN = /^KE\d{18}$/;
+// Speedaf labels are not a fixed length across every service and route.
+// Keep a useful guard (a KE-prefixed identifier) without rejecting a valid
+// staff-entered label solely because its length differs.
+const SPEEDAF_TRACKING_PATTERN = /^KE[A-Z0-9]{4,}$/;
 const normalizeSpeedafTrackingNumber = (value: unknown) =>
   String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
@@ -101,7 +104,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     trackingNumbers = [...new Set(enteredTrackingNumbers.map(normalizeSpeedafTrackingNumber).filter((value) => value.length > 0))];
     speedafReceipts = Array.isArray(body.speedafReceipts) ? body.speedafReceipts.map((item: any) => ({ url: String(item?.url || "").trim(), fileName: String(item?.fileName || "Speedaf receipt").trim(), trackingNumbers: [] })).filter((item) => item.url) : [];
     if (trackingNumbers.some((value) => !SPEEDAF_TRACKING_PATTERN.test(value))) {
-      return NextResponse.json({ error: "Each Speedaf tracking number must start with KE and contain exactly 18 digits after it." }, { status: 400 });
+      return NextResponse.json({ error: "Each Speedaf tracking number must start with KE and contain its printed letters or numbers." }, { status: 400 });
     }
     adminOverride = body.adminOverride === true;
     overrideReason = typeof body.overrideReason === "string" ? body.overrideReason.trim() : "";
