@@ -20,6 +20,7 @@ import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
+import { speedafPickupStations } from "@/lib/speedafPickupStations";
 import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
@@ -1237,6 +1238,30 @@ export default function ReceiptsAdminClient({
       if (selected?.id === receiptId) await fetchReceiptDetail(receiptId);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to save delivery fee", "error");
+    } finally {
+      setPodActionId(null);
+    }
+  };
+
+  const correctPodPickupStation = async (receiptId: string) => {
+    const stationList = speedafPickupStations.map((station) => station.name).join(", ");
+    const stationName = window.prompt(`Enter the Speedaf station name exactly as shown below.\n\n${stationList}`, "");
+    if (!stationName?.trim()) return;
+    setPodActionId(receiptId);
+    try {
+      const response = await fetch(`/api/receipts/${receiptId}/pod-pickup-station`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ stationName: stationName.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || "Unable to update pickup station");
+      showToast("Speedaf pickup station saved. The customer receipt now shows its address and contact.", "success");
+      await loadRows(page, { silent: true });
+      if (selected?.id === receiptId) await fetchReceiptDetail(receiptId);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to update pickup station", "error");
     } finally {
       setPodActionId(null);
     }
@@ -3843,6 +3868,11 @@ export default function ReceiptsAdminClient({
                         className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:opacity-50"
                       >
                         Resend POD
+                      </button>
+                    )}
+                    {detail.receipt.data?.podDelivery && ["pending", "dispatched"].includes(String(detail.receipt.data.podDelivery.status ?? "").toLowerCase()) && (
+                      <button type="button" onClick={() => void correctPodPickupStation(detail.receipt.id)} disabled={podActionId === detail.receipt.id} className="rounded-xl border border-sky-500/70 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/30 disabled:opacity-50">
+                        {podActionId === detail.receipt.id ? "Saving..." : "Set Speedaf pickup station"}
                       </button>
                     )}
                     {detail.receipt.data?.podDelivery && ["pending", "dispatched"].includes(String(detail.receipt.data.podDelivery.status ?? "").toLowerCase()) && (
