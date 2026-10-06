@@ -1,4 +1,5 @@
-import { CalendarDays, Check, CircleDot, Clock, Download, FileText, MessageCircle, Phone, Star } from "lucide-react";
+import { CalendarDays, Check, CircleDot, Clock, Download, FileText, LogIn, MessageCircle, PackageSearch, Phone, Star } from "lucide-react";
+import Link from "next/link";
 import { footerGroups } from "@/app/shop/shopData";
 import { receiptMoney, type CustomerReceiptPresentation } from "@/lib/customerReceiptPresentation";
 import type { ReceiptReferralOffer } from "@/lib/reviewsReferrals";
@@ -14,8 +15,12 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
   const paid = receipt.status === "Paid in full";
   return <div className={styles.page}>
     <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm max-[480px]:rounded-none max-[480px]:border-x-0">
-      <header className="border-b border-slate-200 px-5 py-5 sm:px-8">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-8">
         <a href="https://www.betech.co.ke" aria-label="Betech Solar Solutions home" className="inline-block"><span className="block text-4xl font-black leading-none tracking-tight text-[#870000]">BETECH</span><span className="mt-1 block text-[10px] font-bold tracking-[.3em]">SOLAR SOLUTIONS</span><span className="mt-1 block text-[10px] italic tracking-wider text-slate-500">Powering a Brighter Kenya</span></a>
+        <nav aria-label="Customer account" className="flex flex-wrap items-center justify-end gap-2 text-sm font-semibold">
+          <Link href="/account/orders" className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-slate-700 transition hover:bg-slate-100 hover:text-[#870000]"><PackageSearch size={18} aria-hidden="true" />Order history</Link>
+          <Link href="/login/phone?callbackUrl=%2Faccount" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#870000] px-3 text-white transition hover:bg-[#690000]"><LogIn size={18} aria-hidden="true" />Log in</Link>
+        </nav>
       </header>
       <div className="p-5 sm:p-8">
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Your receipt</h1>
