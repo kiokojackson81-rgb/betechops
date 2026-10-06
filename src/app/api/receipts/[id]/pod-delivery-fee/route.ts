@@ -94,15 +94,17 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       note = body.note.trim();
     }
     suppliedTrackingNumbers = Array.isArray(body.trackingNumbers);
-    trackingNumbers = suppliedTrackingNumbers ? body.trackingNumbers.map(normalizeSpeedafTrackingNumber).filter(Boolean) : [];
-    speedafReceipts = Array.isArray(body.speedafReceipts) ? body.speedafReceipts.map((item: any) => ({ url: String(item?.url || "").trim(), fileName: String(item?.fileName || "Speedaf receipt").trim(), trackingNumbers: Array.isArray(item?.trackingNumbers) ? item.trackingNumbers.map(normalizeSpeedafTrackingNumber).filter(Boolean) : [] })).filter((item) => item.url) : [];
-    trackingNumbers = [...new Set([...trackingNumbers, ...speedafReceipts.flatMap((item) => item.trackingNumbers)])];
+    // Tracking numbers are entered by staff from the printed Speedaf label.
+    // Uploaded receipts are evidence only: never let OCR determine the code
+    // shown to a customer or used for dispatch.
+    trackingNumbers = suppliedTrackingNumbers ? [...new Set(body.trackingNumbers.map(normalizeSpeedafTrackingNumber).filter(Boolean))] : [];
+    speedafReceipts = Array.isArray(body.speedafReceipts) ? body.speedafReceipts.map((item: any) => ({ url: String(item?.url || "").trim(), fileName: String(item?.fileName || "Speedaf receipt").trim(), trackingNumbers: [] })).filter((item) => item.url) : [];
     if (trackingNumbers.some((value) => !SPEEDAF_TRACKING_PATTERN.test(value))) {
       return NextResponse.json({ error: "Each Speedaf tracking number must start with KE and contain exactly 18 digits after it." }, { status: 400 });
     }
     adminOverride = body.adminOverride === true;
     overrideReason = typeof body.overrideReason === "string" ? body.overrideReason.trim() : "";
-    if (!trackingNumbers.length && !(adminOverride && canManageAnyReceipt && overrideReason)) return NextResponse.json({ error: "Upload a Speedaf receipt or enter at least one tracking number before dispatching. Admin override requires a reason." }, { status: 400 });
+    if (!trackingNumbers.length && !(adminOverride && canManageAnyReceipt && overrideReason)) return NextResponse.json({ error: "Enter at least one Speedaf tracking number manually before dispatching. Admin override requires a reason." }, { status: 400 });
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -114,7 +116,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     deliveryFeeUpdatedAt: new Date().toISOString(),
     deliveryFeeUpdatedById: actorId || null,
     speedafReceipts: speedafReceipts.length
-      ? speedafReceipts
+      ? speedafReceipts.map((receipt, index) => ({ ...receipt, trackingNumbers: index === 0 ? trackingNumbers : [] }))
       : suppliedTrackingNumbers && trackingNumbers.length && Array.isArray(podDelivery.speedafReceipts) && podDelivery.speedafReceipts.length === 1
         ? [{ ...(podDelivery.speedafReceipts[0] as Record<string, unknown>), trackingNumbers }]
         : (Array.isArray(podDelivery.speedafReceipts) ? podDelivery.speedafReceipts : []),
