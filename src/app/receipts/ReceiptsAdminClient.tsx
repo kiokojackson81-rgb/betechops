@@ -1234,7 +1234,19 @@ export default function ReceiptsAdminClient({
         picker.accept = "image/*,.pdf";
         picker.multiple = true;
         const files = await new Promise<File[]>((resolve) => {
-          picker.onchange = () => resolve(Array.from(picker.files || []));
+          let settled = false;
+          const finish = (nextFiles: File[]) => {
+            if (settled) return;
+            settled = true;
+            picker.remove();
+            resolve(nextFiles);
+          };
+          picker.addEventListener("change", () => finish(Array.from(picker.files || [])), { once: true });
+          // Closing the native file picker without choosing a file must not
+          // leave the POD action in a permanent Saving state.
+          picker.addEventListener("cancel", () => finish([]), { once: true });
+          picker.className = "sr-only";
+          document.body.appendChild(picker);
           picker.click();
         });
         for (const file of files) {
