@@ -6,7 +6,7 @@ import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const DOCUMENT_ACCESS_MS = 24 * 60 * 60 * 1000;
 export type DocumentKind = "receipt" | "certificate";
-export type DocumentAccess = { kind: DocumentKind; token: string; receiptId: string; phone: string | null; issuedAt: Date | null; publicWhileProjectActive?: boolean };
+export type DocumentAccess = { kind: DocumentKind; token: string; receiptId: string; phone: string | null; issuedAt: Date | null; publicWhileActive?: boolean };
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 function secret() {
   const value = process.env.DOCUMENT_ACCESS_SECRET || process.env.NEXTAUTH_SECRET;
@@ -38,6 +38,13 @@ export async function resolveDocument(kind: string, token: string): Promise<Docu
     if (!receipt) return null;
     const data = receipt.data as Record<string, unknown> | null;
     const projectFlow = readReceiptProjectFlow(data?.projectFlow);
+    const podDelivery = data?.podDelivery && typeof data.podDelivery === "object" && !Array.isArray(data.podDelivery)
+      ? data.podDelivery as Record<string, unknown>
+      : {};
+    const isPod = String(data?.customerType || "").trim().toLowerCase() === "pod" || Boolean(data?.podDelivery);
+    const podDelivered = String(podDelivery.status || data?.deliveryStatus || "").trim().toLowerCase() === "delivered";
+    const podDeliveredAt = typeof podDelivery.deliveredAt === "string" ? new Date(podDelivery.deliveredAt) : null;
+    const completedPodAt = podDeliveredAt && !Number.isNaN(podDeliveredAt.getTime()) ? podDeliveredAt : null;
     const projectCompletedAt = projectFlow?.stage === "COMPLETED_POSTED"
       ? new Date(projectFlow.completedAt || projectFlow.updatedAt || "")
       : null;
@@ -47,12 +54,16 @@ export async function resolveDocument(kind: string, token: string): Promise<Docu
       token,
       receiptId: receipt.id,
       phone: normalizeKenyanPhone(receipt.order.customerPhone || ""),
-      // Project assignment links must remain usable throughout installation.
-      // The 24-hour grace period starts only after the project is completed.
-      issuedAt: projectFlow ? completedAt : (typeof data?.publicReceiptTokenIssuedAt === "string" ? new Date(data.publicReceiptTokenIssuedAt) : null),
-      publicWhileProjectActive: Boolean(
-        projectFlow &&
-          !["COMPLETED_POSTED", "CANCELLED"].includes(projectFlow.stage),
+      // Project links remain available during installation. POD links remain
+      // available until delivery; their 24-hour privacy window begins then.
+      issuedAt: projectFlow
+        ? completedAt
+        : isPod
+          ? completedPodAt
+          : (typeof data?.publicReceiptTokenIssuedAt === "string" ? new Date(data.publicReceiptTokenIssuedAt) : null),
+      publicWhileActive: Boolean(
+        (projectFlow && !["COMPLETED_POSTED", "CANCELLED"].includes(projectFlow.stage)) ||
+        (isPod && !podDelivered),
       ),
     };
   }
@@ -64,7 +75,7 @@ export async function resolveDocument(kind: string, token: string): Promise<Docu
   return null;
 }
 export async function canAccessDocument(doc: DocumentAccess) {
-  if (doc.publicWhileProjectActive) return true;
+  if (doc.publicWhileActive) return true;
   if (withinDocumentWindow(doc.issuedAt)) return true;
   return validDocumentGrant(doc, (await cookies()).get(documentCookieName(doc))?.value || "");
 }
