@@ -1241,7 +1241,13 @@ export default function ReceiptsAdminClient({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || "Failed to save delivery fee");
-      showToast(payload?.dispatched ? "POD dispatched and customer notified" : "Delivery fee saved", "success");
+      if (payload?.notification?.sms === "SENT") {
+        showToast("POD dispatched and dispatch SMS sent to the customer", "success");
+      } else if (payload?.dispatched && payload?.notification) {
+        showToast(`POD dispatched, but SMS was not sent: ${payload.notification.detail || payload.notification.sms}. Check the notification history and resend after correcting the issue.`, "error");
+      } else {
+        showToast("Delivery fee saved", "success");
+      }
       setPodDispatch(null);
       await loadRows(page, { silent: true });
       await fetchSummary();

@@ -174,11 +174,20 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     console.warn("[pod-fee] failed to write action log", error);
   }
 
+  let notification: { sms: string; detail?: string } | null = null;
   if (!wasAlreadyDispatched) {
-    await notifyPodCustomer({ receiptId, event: "DISPATCHED" }).catch((error) =>
-      console.error(`[pod-fee][${requestId}] customer dispatch notification failed`, error),
-    );
+    try {
+      // A dispatch event must create a fresh SMS attempt. Do not silently
+      // accept an earlier idempotent log as proof that the customer was told.
+      const result = await notifyPodCustomer({ receiptId, event: "DISPATCHED", force: true });
+      const sms = result?.results.find((item) => item.channel === "SMS");
+      notification = { sms: sms?.status || "FAILED", ...(sms && "reason" in sms && sms.reason ? { detail: sms.reason } : {}) };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[pod-fee][${requestId}] customer dispatch notification failed`, error);
+      notification = { sms: "FAILED", detail };
+    }
   }
 
-  return NextResponse.json({ ok: true, dispatched: true, deliveryFee: amount, podDelivery: nextPodDelivery });
+  return NextResponse.json({ ok: true, dispatched: true, deliveryFee: amount, podDelivery: nextPodDelivery, notification });
 }
