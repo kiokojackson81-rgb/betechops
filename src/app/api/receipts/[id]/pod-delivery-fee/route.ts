@@ -97,7 +97,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     // Tracking numbers are entered by staff from the printed Speedaf label.
     // Uploaded receipts are evidence only: never let OCR determine the code
     // shown to a customer or used for dispatch.
-    trackingNumbers = suppliedTrackingNumbers ? [...new Set(body.trackingNumbers.map(normalizeSpeedafTrackingNumber).filter(Boolean))] : [];
+    const enteredTrackingNumbers: unknown[] = suppliedTrackingNumbers ? body.trackingNumbers : [];
+    trackingNumbers = [...new Set(enteredTrackingNumbers.map(normalizeSpeedafTrackingNumber).filter((value) => value.length > 0))];
     speedafReceipts = Array.isArray(body.speedafReceipts) ? body.speedafReceipts.map((item: any) => ({ url: String(item?.url || "").trim(), fileName: String(item?.fileName || "Speedaf receipt").trim(), trackingNumbers: [] })).filter((item) => item.url) : [];
     if (trackingNumbers.some((value) => !SPEEDAF_TRACKING_PATTERN.test(value))) {
       return NextResponse.json({ error: "Each Speedaf tracking number must start with KE and contain exactly 18 digits after it." }, { status: 400 });
