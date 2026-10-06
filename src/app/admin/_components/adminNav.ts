@@ -43,6 +43,7 @@ export const NAV: AdminNavItem[] = [
     icon: WalletCards,
     children: [
       { href: "/admin/receipts", label: "Receipts" },
+      { href: "/admin/pod", label: "POD Delivery Centre" },
       { href: "/admin/pos-management", label: "Catalogue" },
       { href: "/admin/product-contributors/withdrawals", label: "Contributor withdrawals" },
       { href: "/admin/customers", label: "Customers" },

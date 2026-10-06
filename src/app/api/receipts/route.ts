@@ -750,6 +750,14 @@ export async function GET(req: NextRequest) {
       podPickupArea: podDeliveryData?.pickup?.area ?? null,
       podEvidenceUrl: podDeliveryData?.evidenceUrl ?? null,
       podReturnTrackingNumber: podDeliveryData?.returnTrackingNumber ?? null,
+      podTrackingNumbers: Array.isArray(podDeliveryData?.trackingNumbers)
+        ? podDeliveryData.trackingNumbers
+            .filter((trackingNumber: unknown) => typeof trackingNumber === "string")
+            .map((trackingNumber: string) => trackingNumber.trim())
+            .filter(Boolean)
+        : typeof podDeliveryData?.trackingNumbers === "string"
+          ? [podDeliveryData.trackingNumbers.trim()].filter(Boolean)
+          : [],
       podDeliveryFee: podDeliveryFee > 0 ? podDeliveryFee : null,
       isProjectReceipt: Boolean(projectFlowData?.isProject),
       projectStage: effectiveProjectStage,

@@ -95,6 +95,12 @@ export default async function AdminReceiptsPage({
             >
               Staff Quotations
             </Link>
+            <Link
+              href="/admin/pod"
+              className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300"
+            >
+              POD Delivery Centre
+            </Link>
           </div>
           <ReceiptsAdminClient
             initial={receipts as never[]}
