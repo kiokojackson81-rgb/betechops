@@ -152,6 +152,14 @@ type PodOutcomeDraft = {
   returnTrackingNumber: string;
 };
 
+type PodDispatchDraft = {
+  receiptId: string;
+  amount: string;
+  trackingNumbers: string;
+  evidenceFiles: File[];
+  error: string | null;
+};
+
 const CANCELLATION_REASONS = [
   { code: "CUSTOMER_CHANGED_MIND", label: "Customer changed mind" },
   { code: "DUPLICATE_ORDER", label: "Duplicate order or receipt" },
@@ -600,6 +608,7 @@ export default function ReceiptsAdminClient({
   const [exporting, setExporting] = useState(false);
   const [podActionId, setPodActionId] = useState<string | null>(null);
   const [podOutcome, setPodOutcome] = useState<PodOutcomeDraft | null>(null);
+  const [podDispatch, setPodDispatch] = useState<PodDispatchDraft | null>(null);
   const [projectActionId, setProjectActionId] = useState<string | null>(null);
   const [projectEditor, setProjectEditor] = useState<{
     stage: ReceiptProjectStage;
@@ -1206,69 +1215,39 @@ export default function ReceiptsAdminClient({
       returnTrackingNumber: "",
     });
 
-  const addPodDeliveryFeeAndDispatch = async (receiptId: string, currentFee?: unknown) => {
-    const input = window.prompt(
-      "Delivery fee in KES. Saving this fee dispatches the POD order and sends the customer its receipt/status link.",
-      currentFee == null ? "" : String(currentFee),
-    );
-    if (input === null) return;
-    const amount = Number(input);
-    if (!Number.isFinite(amount) || amount < 0) {
-      showToast("Enter a valid delivery fee", "error");
-      return;
-    }
-    const trackingNumber = window.prompt("Speedaf tracking number (separate multiple numbers with commas). Leave blank only for an authorised emergency override.", "");
-    let adminOverride = false;
-    let overrideReason = "";
-    if (!trackingNumber?.trim()) {
-      overrideReason = window.prompt("Admin override reason (required). This exception is recorded for audit.", "")?.trim() || "";
-      if (!overrideReason) { showToast("Tracking number or an admin override reason is required", "error"); return; }
-      adminOverride = true;
-    }
-    setPodActionId(receiptId);
+  const addPodDeliveryFeeAndDispatch = (receiptId: string, currentFee?: unknown) => {
+    setPodDispatch({ receiptId, amount: currentFee == null ? "" : String(currentFee), trackingNumbers: "", evidenceFiles: [], error: null });
+  };
+
+  const submitPodDeliveryFee = async () => {
+    if (!podDispatch) return;
+    const amount = Number(podDispatch.amount);
+    const trackingNumbers = podDispatch.trackingNumbers.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean);
+    if (!Number.isFinite(amount) || amount < 0) return setPodDispatch((current) => current ? { ...current, error: "Enter a valid delivery fee." } : current);
+    if (!trackingNumbers.length) return setPodDispatch((current) => current ? { ...current, error: "Enter at least one Speedaf tracking number." } : current);
+    setPodActionId(podDispatch.receiptId);
+    setPodDispatch((current) => current ? { ...current, error: null } : current);
     try {
       const speedafReceipts: Array<{ url: string; fileName: string }> = [];
-      if (window.confirm("Would you like to attach one or more Speedaf receipt images/PDFs as dispatch evidence?")) {
-        const picker = document.createElement("input");
-        picker.type = "file";
-        picker.accept = "image/*,.pdf";
-        picker.multiple = true;
-        const files = await new Promise<File[]>((resolve) => {
-          let settled = false;
-          const finish = (nextFiles: File[]) => {
-            if (settled) return;
-            settled = true;
-            picker.remove();
-            resolve(nextFiles);
-          };
-          picker.addEventListener("change", () => finish(Array.from(picker.files || [])), { once: true });
-          // Closing the native file picker without choosing a file must not
-          // leave the POD action in a permanent Saving state.
-          picker.addEventListener("cancel", () => finish([]), { once: true });
-          picker.className = "sr-only";
-          document.body.appendChild(picker);
-          picker.click();
-        });
-        for (const file of files) {
-          const form = new FormData();
-          form.append("file", file);
-          const uploadResponse = await fetch("/api/receipts/pod-evidence-upload", { method: "POST", body: form, credentials: "same-origin" });
-          const upload = await uploadResponse.json().catch(() => ({}));
-          if (!uploadResponse.ok || !upload?.url) throw new Error(upload?.error || `Could not upload ${file.name}`);
-          speedafReceipts.push({ url: String(upload.url), fileName: file.name });
-        }
+      for (const file of podDispatch.evidenceFiles) {
+        const form = new FormData(); form.append("file", file);
+        const uploadResponse = await fetch("/api/receipts/pod-evidence-upload", { method: "POST", body: form, credentials: "same-origin" });
+        const upload = await uploadResponse.json().catch(() => ({}));
+        if (!uploadResponse.ok || !upload?.url) throw new Error(upload?.error || `Could not upload ${file.name}`);
+        speedafReceipts.push({ url: String(upload.url), fileName: file.name });
       }
-      const response = await fetch(`/api/receipts/${receiptId}/pod-delivery-fee`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount, trackingNumbers: (trackingNumber || "").split(",").map((value) => value.trim()).filter(Boolean), speedafReceipts, adminOverride, overrideReason: overrideReason || undefined }),
+      const response = await fetch(`/api/receipts/${podDispatch.receiptId}/pod-delivery-fee`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ amount, trackingNumbers, speedafReceipts }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || "Failed to save delivery fee");
       showToast(payload?.dispatched ? "POD dispatched and customer notified" : "Delivery fee saved", "success");
+      setPodDispatch(null);
       await loadRows(page, { silent: true });
       await fetchSummary();
-      if (selected?.id === receiptId) await fetchReceiptDetail(receiptId);
+      if (selected?.id === podDispatch.receiptId) await fetchReceiptDetail(podDispatch.receiptId);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to save delivery fee", "error");
+      setPodDispatch((current) => current ? { ...current, error: error instanceof Error ? error.message : "Failed to save delivery fee" } : current);
     } finally {
       setPodActionId(null);
     }
@@ -4015,6 +3994,13 @@ export default function ReceiptsAdminClient({
           if (podOutcome) void finalizePodOutcome(podOutcome);
         }}
       />
+      <PodDispatchModal
+        draft={podDispatch}
+        processing={podActionId === podDispatch?.receiptId}
+        onChange={(patch) => setPodDispatch((current) => current ? { ...current, ...patch } : current)}
+        onClose={() => { if (!podActionId) setPodDispatch(null); }}
+        onSubmit={() => void submitPodDeliveryFee()}
+      />
       <EditModal
         open={editState.open}
         draft={editState.draft}
@@ -4036,6 +4022,32 @@ export default function ReceiptsAdminClient({
         onSubmit={() => void submitCancellation()}
       />
     </main>
+  );
+}
+
+function PodDispatchModal({ draft, processing, onChange, onClose, onSubmit }: {
+  draft: PodDispatchDraft | null;
+  processing: boolean;
+  onChange: (patch: Partial<PodDispatchDraft>) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  if (!draft) return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Dispatch POD order">
+      <section className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-6 text-slate-100 shadow-2xl">
+        <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-emerald-300">POD dispatch</p><h2 className="mt-1 text-xl font-semibold">Record delivery fee and Speedaf evidence</h2><p className="mt-2 text-sm text-slate-400">Enter the tracking number manually from the printed label. Uploading receipts is optional evidence and never changes that number.</p></div><button type="button" onClick={onClose} disabled={processing} className="rounded-lg border border-white/15 px-3 py-1 text-sm disabled:opacity-50">Close</button></div>
+        <div className="mt-5 space-y-4">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-300">Delivery fee (KES)<input type="number" min="0" step="1" value={draft.amount} onChange={(event) => onChange({ amount: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-base" placeholder="0" /></label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-300">Speedaf tracking number <span className="text-rose-300">(required)</span><input value={draft.trackingNumbers} onChange={(event) => onChange({ trackingNumbers: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-base" placeholder="Enter from the Speedaf label; separate multiple numbers with commas" /></label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-300">Speedaf receipt evidence <span className="normal-case text-slate-400">(optional; image or PDF, one or more)</span><input type="file" accept="image/*,.pdf" multiple onChange={(event) => onChange({ evidenceFiles: Array.from(event.target.files || []) })} className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" /></label>
+          {draft.evidenceFiles.length ? <p className="text-sm text-emerald-300">Attached: {draft.evidenceFiles.map((file) => file.name).join(", ")}</p> : null}
+          {draft.error ? <p className="rounded-xl border border-rose-500/50 bg-rose-950/40 p-3 text-sm text-rose-200">{draft.error}</p> : null}
+        </div>
+        <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={onClose} disabled={processing} className="rounded-xl border border-white/15 px-4 py-2 text-sm disabled:opacity-50">Cancel</button><button type="button" onClick={onSubmit} disabled={processing} className="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50">{processing ? "Saving dispatch…" : "Save fee & dispatch POD"}</button></div>
+      </section>
+    </div>,
+    document.body,
   );
 }
 
