@@ -3,6 +3,7 @@ jest.mock("server-only", () => ({}), { virtual: true });
 import {
   buildStickyVoiceTargetOrder,
   hasAnsweredVoiceBridge,
+  isQuickCallRecoveryApiCall,
   type VoiceRouteTarget,
 } from "@/lib/voice";
 import {
@@ -36,6 +37,24 @@ function target(
 }
 
 describe("voice sticky return routing", () => {
+  test("recognizes only the dedicated API line as a quick-recovery call", () => {
+    const original = process.env.BETECH_VOICE_RECOVERY_API_NUMBER;
+    process.env.BETECH_VOICE_RECOVERY_API_NUMBER = "0711082542";
+
+    expect(
+      isQuickCallRecoveryApiCall({ destinationNumber: "+254711082542" }),
+    ).toBe(true);
+    expect(
+      isQuickCallRecoveryApiCall({ destinationNumber: "+254722151083" }),
+    ).toBe(false);
+
+    if (original === undefined) {
+      delete process.env.BETECH_VOICE_RECOVERY_API_NUMBER;
+    } else {
+      process.env.BETECH_VOICE_RECOVERY_API_NUMBER = original;
+    }
+  });
+
   test("uses one sequential provider dial so a no-answer advances to every fallback", () => {
     const xml = buildDialAttemptXml({
       phoneNumbers: [

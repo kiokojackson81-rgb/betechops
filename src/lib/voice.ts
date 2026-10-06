@@ -22,7 +22,8 @@ import {
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
 const CALLBACK_REQUEST_TOKEN_EXPIRY_DAYS = 14;
-const DEFAULT_QUICK_CALL_RECOVERY_WINDOW_SECONDS = 30;
+const DEFAULT_QUICK_CALL_RECOVERY_WINDOW_SECONDS = 20;
+const DEFAULT_VOICE_RECOVERY_API_NUMBER = "+254711082542";
 
 type VoicePayload = Record<string, string>;
 type VoiceRouteLabel =
@@ -167,6 +168,44 @@ export async function claimQuickCallRecovery(input: {
     });
     return { ...previous, agentId, agentName: target.label.toLowerCase() };
   });
+}
+
+/** True only when the inbound call reached the dedicated One Voice API line. */
+export function isQuickCallRecoveryApiCall(payload: VoicePayload) {
+  const recoveryLine = normalizeVoiceNumber(
+    process.env.BETECH_VOICE_RECOVERY_API_NUMBER ||
+      process.env.AFRICASTALKING_VOICE_NUMBER ||
+      DEFAULT_VOICE_RECOVERY_API_NUMBER,
+  );
+  if (!recoveryLine) return false;
+
+  return [
+    payload.destinationNumber,
+    payload.DestinationNumber,
+    payload.dialedNumber,
+    payload.DialedNumber,
+    payload.calledNumber,
+    payload.CalledNumber,
+    payload.to,
+    payload.To,
+  ].some((number) => normalizeVoiceNumber(number) === recoveryLine);
+}
+
+/**
+ * Used to stop an employee's unsuccessful recovery attempt being treated as
+ * a fresh customer call and routed around the team.
+ */
+export async function isQuickCallRecoveryStaffCaller(agentPhone: string) {
+  const normalizedPhone = normalizeVoiceNumber(agentPhone);
+  if (!normalizedPhone) return false;
+  const targets = await buildVoiceTargets();
+  return [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN]
+    .some(
+      (target) =>
+        Boolean(target.userId) &&
+        target.routingEnabled &&
+        normalizeVoiceNumber(target.phoneNumber) === normalizedPhone,
+    );
 }
 
 export async function recordQuickCallRecoveryAvailability(input: {

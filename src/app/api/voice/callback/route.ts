@@ -9,6 +9,8 @@ import {
   getVoiceRouteTargets,
   hasAnsweredVoiceBridge,
   inferVoiceCompletionStatus,
+  isQuickCallRecoveryApiCall,
+  isQuickCallRecoveryStaffCaller,
   isVoiceCallActive,
   parseVoicePayloadFromRequest,
   safeString,
@@ -149,18 +151,20 @@ export async function POST(request: Request) {
       );
     }
 
-    // A staff member calling the public number shortly after their customer
+    // A staff member calling the dedicated recovery API number shortly after their customer
     // call ends is a deliberate recovery action, not a new inbound customer
     // call. This is checked before ordinary routing and is scoped to that
     // staff member, so agents can never receive each other's last customer.
     if (!routePlanFromQuery && hopIndex === 0) {
-      const recovery = await claimQuickCallRecovery({
-        agentPhone:
-          normalizedPayload.callerNumber ||
-          normalizedPayload.caller ||
-          normalizedPayload.from ||
-          "",
-      });
+      const recoveryAgentPhone =
+        normalizedPayload.callerNumber ||
+        normalizedPayload.caller ||
+        normalizedPayload.from ||
+        "";
+      const isRecoveryApiCall = isQuickCallRecoveryApiCall(normalizedPayload);
+      const recovery = isRecoveryApiCall
+        ? await claimQuickCallRecovery({ agentPhone: recoveryAgentPhone })
+        : null;
       if (recovery) {
         const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload, {
           routeType: "QUICK_CALL_RECOVERY",
@@ -178,6 +182,16 @@ export async function POST(request: Request) {
         );
         return xmlResponse(
           buildDialAttemptXml({ phoneNumber: recovery.callerNumber }),
+        );
+      }
+      if (
+        isRecoveryApiCall &&
+        (await isQuickCallRecoveryStaffCaller(recoveryAgentPhone))
+      ) {
+        return xmlResponse(
+          buildVoiceMessageXmlResponse(
+            "There is no recoverable customer call from the last 20 seconds.",
+          ),
         );
       }
     }
