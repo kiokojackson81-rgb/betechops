@@ -86,6 +86,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   let speedafReceipts: Array<{ url: string; fileName: string; trackingNumbers: string[] }> = [];
   let suppliedTrackingNumbers = false;
   let adminOverride = false;
+  let editOnly = false;
   let overrideReason = "";
   try {
     const body = (await req.json()) ?? {};
@@ -107,15 +108,25 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       return NextResponse.json({ error: "Each Speedaf tracking number must start with KE and contain its printed letters or numbers." }, { status: 400 });
     }
     adminOverride = body.adminOverride === true;
+    editOnly = body.editOnly === true;
     overrideReason = typeof body.overrideReason === "string" ? body.overrideReason.trim() : "";
-    if (!trackingNumbers.length && !(adminOverride && canManageAnyReceipt && overrideReason)) return NextResponse.json({ error: "Enter at least one Speedaf tracking number manually before dispatching. Admin override requires a reason." }, { status: 400 });
+    if (editOnly && !canManageAnyReceipt) {
+      return NextResponse.json({ error: "Only an administrator can edit a saved POD delivery fee" }, { status: 403 });
+    }
+    if (!trackingNumbers.length && editOnly && Array.isArray(podDelivery.trackingNumbers)) {
+      trackingNumbers = [...new Set(podDelivery.trackingNumbers.map(normalizeSpeedafTrackingNumber).filter((value) => value.length > 0))];
+    }
+    if (!trackingNumbers.length && !(editOnly || (adminOverride && canManageAnyReceipt && overrideReason))) return NextResponse.json({ error: "Enter at least one Speedaf tracking number manually before dispatching. Admin override requires a reason." }, { status: 400 });
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
   const nextPodDelivery = {
     ...podDelivery,
-    status: "dispatched",
+    // Editing a recorded fee must never roll a delivered, failed, or
+    // cancelled POD back into dispatch. Only the initial pending state moves
+    // to dispatched.
+    status: String(podDelivery.status || "").toLowerCase() === "pending" ? "dispatched" : podDelivery.status,
     deliveryFee: amount,
     deliveryFeeUpdatedAt: new Date().toISOString(),
     deliveryFeeUpdatedById: actorId || null,
@@ -128,7 +139,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     ...(adminOverride && !trackingNumbers.length ? { dispatchOverride: { reason: overrideReason, byId: actorId || null, at: new Date().toISOString() } } : {}),
     ...(note ? { deliveryFeeNote: note } : {}),
   };
-  const wasAlreadyDispatched = String(podDelivery.status || "").toLowerCase() === "dispatched";
+  const wasAlreadyDispatched = String(podDelivery.status || "").toLowerCase() !== "pending";
   const dispatchAgent = actorId
     ? await prisma.user.findUnique({ where: { id: actorId }, select: { name: true, oneVoiceCustomerNumber: true } })
     : null;
@@ -189,5 +200,5 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     }
   }
 
-  return NextResponse.json({ ok: true, dispatched: true, deliveryFee: amount, podDelivery: nextPodDelivery, notification });
+  return NextResponse.json({ ok: true, dispatched: !wasAlreadyDispatched, deliveryFee: amount, podDelivery: nextPodDelivery, notification });
 }
