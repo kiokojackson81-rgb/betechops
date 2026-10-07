@@ -560,10 +560,10 @@ function MarketingReceiptsPageInner() {
             type="button"
             onClick={() => {
               setReceiptViewMode("receipts");
-              setPodFilter("pod_all");
+              setPodFilter("pod_pending");
             }}
             className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3 text-left transition hover:border-amber-300/40 hover:bg-slate-900"
-            title="Show all POD receipts"
+            title="Show pending POD receipts"
           >
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               POD Pending
@@ -573,7 +573,7 @@ function MarketingReceiptsPageInner() {
             <div className="mt-1 text-[11px] text-slate-500">
               Current period {dashboardCounts.podPendingCurrentPeriod} · Carried forward {dashboardCounts.podPendingCarriedForward}
             </div>
-            <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-amber-200">View all PODs →</div>
+            <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-amber-200">View pending PODs →</div>
           </button>
           <Link
             href="/attendant/voice?tab=followups"
