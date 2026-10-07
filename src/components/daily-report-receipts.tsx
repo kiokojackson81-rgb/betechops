@@ -23,7 +23,9 @@ type DailyReportReceiptRow = {
   podDeliveryNote?: string | null;
   podEvidenceUrl?: string | null;
   podReturnTrackingNumber?: string | null;
+  podTrackingNumbers?: string[];
   podDeliveryFee?: number | null;
+  publicReceiptToken?: string | null;
   detailUrl?: string | null;
   isProjectReceipt?: boolean;
   projectStage?: string | null;
@@ -131,6 +133,13 @@ function buildCustomerProfileHref(receipt: Pick<DailyReportReceiptRow, "customer
     displayName: receipt.customerName,
   });
 }
+
+const getPodWaybills = (receipt: DailyReportReceiptRow) =>
+  (receipt.podTrackingNumbers?.filter(Boolean) ?? []).length
+    ? receipt.podTrackingNumbers!.filter(Boolean)
+    : receipt.podReturnTrackingNumber
+      ? [receipt.podReturnTrackingNumber]
+      : [];
 
 const NAIROBI_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+03:00
 
@@ -693,6 +702,7 @@ export default function DailyReportReceiptsPanel({
               const projectPaymentLabel = receipt.isProjectReceipt
                 ? String(receipt.projectPaymentStatus ?? "").replace(/_/g, " ").trim()
                 : "";
+              const waybills = getPodWaybills(receipt);
               return (
               <div
                 key={receipt.id}
@@ -703,7 +713,7 @@ export default function DailyReportReceiptsPanel({
                 }`}
               >
                 <div className="xl:overflow-x-auto xl:pb-1">
-                  <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start xl:min-w-[1240px] xl:grid-cols-[84px_minmax(150px,1.35fr)_minmax(135px,1fr)_minmax(105px,.7fr)_minmax(96px,.65fr)_minmax(96px,.7fr)_minmax(128px,.85fr)_minmax(140px,.9fr)_minmax(138px,.9fr)] xl:items-stretch">
+                  <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start xl:min-w-[1360px] xl:grid-cols-[84px_minmax(150px,1.35fr)_minmax(135px,1fr)_minmax(105px,.7fr)_minmax(96px,.65fr)_minmax(210px,1.2fr)_minmax(128px,.85fr)_minmax(140px,.9fr)_minmax(138px,.9fr)] xl:items-stretch">
                   <div className="xl:border-r xl:border-white/10 xl:pr-4">
                     <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Type</span>
                     <span
@@ -749,8 +759,41 @@ export default function DailyReportReceiptsPanel({
                     ) : null}
                   </div>
                   <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
-                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">Email</span>
-                    <div className="mt-1 break-all text-sm text-slate-300">{receipt.customerEmail || "—"}</div>
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">POD waybill</span>
+                    {receipt.isPodDelivery ? (
+                      <div className="mt-1 space-y-2">
+                        <div className="break-all text-sm font-semibold text-slate-100">{waybills.length ? waybills.join(" · ") : "Not entered"}</div>
+                        {waybills.length ? (
+                          <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                            <button
+                              type="button"
+                              onClick={() => void navigator.clipboard?.writeText(waybills.join(", "))}
+                              className="rounded-full border border-cyan-400/30 px-2 py-1 text-cyan-100 hover:bg-cyan-500/10"
+                            >
+                              Copy
+                            </button>
+                            <a
+                              href="https://speedaf.com/cn-en/send-parcel"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full border border-emerald-400/30 px-2 py-1 text-emerald-100 hover:bg-emerald-500/10"
+                            >
+                              Track ↗
+                            </a>
+                          </div>
+                        ) : null}
+                        {receipt.publicReceiptToken ? (
+                          <a
+                            href={`/receipts/${receipt.id}/customer-view`}
+                            className="inline-flex text-[11px] font-semibold uppercase tracking-wide text-cyan-200 underline hover:text-cyan-100"
+                          >
+                            Customer receipt
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-sm text-slate-500">—</div>
+                    )}
                   </div>
                   <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
                     <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">POD status</span>
