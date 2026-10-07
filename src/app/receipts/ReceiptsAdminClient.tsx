@@ -1341,6 +1341,33 @@ export default function ReceiptsAdminClient({
     [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
   );
 
+  const handleAdminMarkPaid = useCallback(
+    async (row: ReceiptRow) => {
+      const reference = row.orderRef || row.id;
+      if (!window.confirm(`Mark ${reference} as paid in full? This records an admin payment confirmation and recalculates its financial totals.`)) return;
+      setPodActionId(row.id);
+      try {
+        const response = await fetch(`/api/receipts/${row.id}/manual-paid`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: "{}",
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.error || "Unable to mark receipt paid.");
+        showToast("Receipt marked paid and financial totals recalculated.", "success");
+        await loadRows(page, { silent: true });
+        await fetchSummary();
+        if (selected?.id === row.id) await fetchReceiptDetail(row.id);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Unable to mark receipt paid.", "error");
+      } finally {
+        setPodActionId(null);
+      }
+    },
+    [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
+  );
+
   const handleRowClick = (row: ReceiptRow, forceOpen = false) => {
     if (!canTreatAsSalesReceipt(row)) {
       showToast(
@@ -2787,6 +2814,7 @@ export default function ReceiptsAdminClient({
                   String(row.podDeliveryStatus ?? "").toLowerCase() ===
                     "pending";
                 const isPodDispatched = row.isPodDelivery && String(row.podDeliveryStatus ?? "").toLowerCase() === "dispatched";
+                const hasPendingPayment = ["PENDING", "UNPAID", "PARTIAL"].includes(String(row.paymentStatus ?? "").toUpperCase());
                 const isSelected = row.id === selected?.id && drawerOpen;
                 const customerProfileHref = buildAdminCustomerProfileHref({
                   phone: row.customerPhone,
@@ -2919,6 +2947,8 @@ export default function ReceiptsAdminClient({
                             row.isPodDelivery &&
                             row.podDeliveryStatus === "delivered"
                               ? () => void handleMarkPodPaid(row.id)
+                              : !row.isPodDelivery && hasPendingPayment
+                                ? () => void handleAdminMarkPaid(row)
                               : undefined
                           }
                           onProjectAction={
