@@ -743,6 +743,10 @@ export async function GET(req: NextRequest) {
       paymentCollectionMethod,
       paymentStatus: effectivePaymentStatus,
       detailUrl: `/receipts/${r.id}`,
+      publicReceiptToken:
+        typeof rawData.publicReceiptToken === "string"
+          ? rawData.publicReceiptToken.trim() || null
+          : null,
       isPodDelivery: Boolean(podDeliveryData?.status),
       podDeliveryStatus: podDeliveryData?.status ?? null,
       podDeliveryNote: podDeliveryData?.note ?? null,
