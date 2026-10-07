@@ -123,14 +123,29 @@ export async function claimQuickCallRecovery(input: {
       target.routingEnabled &&
       normalizeVoiceNumber(target.phoneNumber) === agentPhone,
     );
+  let agentId: string | null = matchingTargets[0]?.userId ?? null;
+  let agentLabel: VoiceRouteLabel | null = matchingTargets[0]?.label ?? null;
+
+  // An administrator may call from their authenticated account line even if
+  // it is not the single fallback number in the routing configuration.
   if (matchingTargets.length !== 1) {
     if (matchingTargets.length > 1) {
       console.error("[voice.quick_recovery.ambiguous_agent_phone]", { agentPhone });
+      return null;
     }
-    return null;
+    const matchingAdmins = await prisma.user.findMany({
+      where: { isActive: true, role: "ADMIN" },
+      select: { id: true, phone: true },
+    });
+    const adminsForPhone = matchingAdmins.filter(
+      (admin) => normalizeVoiceNumber(admin.phone || "") === agentPhone,
+    );
+    if (adminsForPhone.length !== 1) return null;
+    agentId = adminsForPhone[0].id;
+    agentLabel = "ADMIN";
   }
-  const target = matchingTargets[0];
-  const agentId = target.userId!;
+  if (!agentId || !agentLabel) return null;
+  const isAdminRecovery = agentLabel === "ADMIN";
 
   const now = input.now ?? new Date();
   const configuredWindow = Number.parseInt(
@@ -150,14 +165,32 @@ export async function claimQuickCallRecovery(input: {
       where: {
         direction: "INBOUND",
         isActive: false,
-        endedAt: { gte: cutoff, lte: now },
         callerNumber: { not: agentPhone },
-        // A completed record is not enough: recovery is only for a genuine
-        // bridge to this configured voice-routing number.
+        // Africa's Talking can leave an ended bridge as "answered" and omit
+        // endTime. In that case updatedAt is the authoritative completion
+        // timestamp because isActive is already false.
+        AND: [
+          {
+            OR: [
+              { endedAt: { gte: cutoff, lte: now } },
+              { endedAt: null, updatedAt: { gte: cutoff, lte: now } },
+            ],
+          },
+          isAdminRecovery
+            ? {
+                // Admin recovery is intentionally team-wide but remains
+                // limited to the last eligible call and one claim.
+                answeredAt: { not: null },
+                answeredNumber: { not: null },
+              }
+            : {
+                answeredAt: { not: null },
+                answeredNumber: agentPhone,
+                OR: [{ assignedToId: agentId }, { answeredById: agentId }],
+              },
+        ],
         answeredAt: { not: null },
-        answeredNumber: agentPhone,
-        status: { in: ["completed", "complete", "success", "successful", "bridged"] },
-        OR: [{ assignedToId: agentId }, { answeredById: agentId }],
+        status: { in: ["answered", "completed", "complete", "success", "successful", "bridged"] },
         events: { none: { eventType: "QUICK_CALL_RECOVERY_CLAIMED" } },
       },
       orderBy: [{ endedAt: "desc" }, { updatedAt: "desc" }],
@@ -173,7 +206,7 @@ export async function claimQuickCallRecovery(input: {
         payloadJson: { agentId, claimedAt: now.toISOString() },
       },
     });
-    return { ...previous, agentId, agentName: target.label.toLowerCase() };
+    return { ...previous, agentId, agentName: agentLabel.toLowerCase() };
   });
 }
 
@@ -206,13 +239,19 @@ export async function isQuickCallRecoveryStaffCaller(agentPhone: string) {
   const normalizedPhone = normalizeVoiceNumber(agentPhone);
   if (!normalizedPhone) return false;
   const targets = await buildVoiceTargets();
-  return [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN]
+  const isConfiguredTarget = [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN]
     .some(
       (target) =>
         Boolean(target.userId) &&
         target.routingEnabled &&
         normalizeVoiceNumber(target.phoneNumber) === normalizedPhone,
     );
+  if (isConfiguredTarget) return true;
+  const admins = await prisma.user.findMany({
+    where: { isActive: true, role: "ADMIN" },
+    select: { phone: true },
+  });
+  return admins.some((admin) => normalizeVoiceNumber(admin.phone || "") === normalizedPhone);
 }
 
 export async function recordQuickCallRecoveryAvailability(input: {
