@@ -29,6 +29,7 @@ type PodFilterValue =
   | "all"
   | "normal_only"
   | "settled"
+  | "pod_all"
   | "pod_pending"
   | "pod_delivered"
   | "pod_failed";
@@ -102,6 +103,7 @@ const RECEIPT_STATUS_FILTERS: Array<{ key: PodFilterValue; label: string }> = [
   { key: "all", label: "All POS Receipts" },
   { key: "normal_only", label: "Normal Only" },
   { key: "settled", label: "Settled Receipts" },
+  { key: "pod_all", label: "All PODs" },
   { key: "pod_pending", label: "POD Pending" },
   { key: "pod_delivered", label: "POD Delivered" },
   { key: "pod_failed", label: "POD Failed" },
@@ -219,7 +221,8 @@ function MarketingReceiptsPageInner() {
           ? "quote-requests"
           : "receipts";
     setViewMode((current) => (current === resolvedViewMode ? current : resolvedViewMode));
-    setPodFilter(searchParams.get("pod") === "pending" ? "pod_pending" : "all");
+    const pod = searchParams.get("pod");
+    setPodFilter(pod === "all" ? "pod_all" : pod === "pending" ? "pod_pending" : "all");
   }, [searchParams]);
 
   function setReceiptViewMode(nextMode: ViewMode) {
@@ -553,7 +556,15 @@ function MarketingReceiptsPageInner() {
             <div className="mt-2 text-2xl font-semibold text-white">{summary.receiptsCount}</div>
             <div className="mt-1 text-xs text-slate-400">POS receipts in selected range</div>
           </div>
-          <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
+          <button
+            type="button"
+            onClick={() => {
+              setReceiptViewMode("receipts");
+              setPodFilter("pod_all");
+            }}
+            className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3 text-left transition hover:border-amber-300/40 hover:bg-slate-900"
+            title="Show all POD receipts"
+          >
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               POD Pending
             </div>
@@ -562,7 +573,8 @@ function MarketingReceiptsPageInner() {
             <div className="mt-1 text-[11px] text-slate-500">
               Current period {dashboardCounts.podPendingCurrentPeriod} · Carried forward {dashboardCounts.podPendingCarriedForward}
             </div>
-          </div>
+            <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-amber-200">View all PODs →</div>
+          </button>
           <Link
             href="/attendant/voice?tab=followups"
             className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3 transition hover:border-cyan-400/30 hover:bg-slate-900"
