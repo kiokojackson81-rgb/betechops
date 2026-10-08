@@ -37,6 +37,7 @@ type ReceiptRow = {
   createdAt: string;
   customerName?: string | null;
   customerPhone?: string | null;
+  attendantId?: string | null;
   attendantName?: string | null;
   total?: number | string | null;
   buyingTotal?: number | string | null;
@@ -561,6 +562,8 @@ export default function ReceiptsAdminClient({
     makeDefaultFilters(),
   );
   const [staffList, setStaffList] = useState<StaffOption[]>([]);
+  const [ownerEditReceiptId, setOwnerEditReceiptId] = useState<string | null>(null);
+  const [ownerSavingReceiptId, setOwnerSavingReceiptId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState<ReceiptRow | null>(null);
@@ -1366,6 +1369,38 @@ export default function ReceiptsAdminClient({
       }
     },
     [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
+  );
+
+  const reassignReceiptOwner = useCallback(
+    async (row: ReceiptRow, attendantId: string) => {
+      if (!attendantId || attendantId === row.attendantId) {
+        setOwnerEditReceiptId(null);
+        return;
+      }
+      const owner = staffList.find((staff) => staff.id === attendantId);
+      if (!window.confirm(`Reassign ${row.orderRef || "this receipt"} to ${owner?.name || "this staff member"}? Existing sales and commission credit will move away from the current owner.`)) return;
+      setOwnerSavingReceiptId(row.id);
+      try {
+        const response = await fetch(`/api/receipts/${row.id}/owner`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ attendantId }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.error || "Unable to reassign receipt owner.");
+        showToast("Receipt owner and commission credit reassigned.", "success");
+        setOwnerEditReceiptId(null);
+        await loadRows(page, { silent: true });
+        await fetchSummary();
+        if (selected?.id === row.id) await fetchReceiptDetail(row.id);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Unable to reassign receipt owner.", "error");
+      } finally {
+        setOwnerSavingReceiptId(null);
+      }
+    },
+    [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast, staffList],
   );
 
   const handleRowClick = (row: ReceiptRow, forceOpen = false) => {
@@ -2873,7 +2908,30 @@ export default function ReceiptsAdminClient({
                         </Link>
                       </td>
                       <td className="px-3 py-3 text-slate-300">
-                        {row.attendantName || "-"}
+                        {ownerEditReceiptId === row.id ? (
+                          <select
+                            autoFocus
+                            value={row.attendantId || ""}
+                            disabled={ownerSavingReceiptId === row.id}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => void reassignReceiptOwner(row, event.target.value)}
+                            onBlur={() => ownerSavingReceiptId !== row.id && setOwnerEditReceiptId(null)}
+                            className="max-w-44 rounded-lg border border-cyan-400/40 bg-slate-950 px-2 py-1 text-sm text-white"
+                            aria-label="Reassign receipt owner"
+                          >
+                            <option value="">Choose staff</option>
+                            {staffList.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(event) => { event.stopPropagation(); setOwnerEditReceiptId(row.id); }}
+                            className="text-left transition hover:text-cyan-200 hover:underline"
+                            title="Change receipt owner"
+                          >
+                            {ownerSavingReceiptId === row.id ? "Saving..." : row.attendantName || "Unassigned"}
+                          </button>
+                        )}
                       </td>
                       <td className="px-3 py-3 font-semibold text-emerald-300">
                         {formatCurrency(row.total)}

@@ -729,6 +729,7 @@ export async function GET(req: NextRequest) {
       total,
       buyingTotal: resolvedBuyingTotal > 0 ? resolvedBuyingTotal : null,
       profit,
+      attendantId: (r.order as any)?.attendantId ?? (rawData.attendantId as string | null | undefined) ?? r.issuedById ?? null,
       attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
       // Correctly label historical M-Pesa Express records created before the
       // counter-sale completion status was introduced.
