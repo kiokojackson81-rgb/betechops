@@ -468,6 +468,8 @@ export async function summarizePosReceiptsForPeriod(period: {
   const periodLabel = `${period.start.toISOString()}_${period.end.toISOString()}`;
   let totalSales = 0;
   let totalProfit = 0;
+  let deliveredUnpaidPodProfit = 0;
+  let deliveredUnpaidPodCount = 0;
   let totalItems = 0;
   let totalReceipts = 0;
   const paymentStats = {
@@ -604,9 +606,20 @@ export async function summarizePosReceiptsForPeriod(period: {
     const eligible = reason === "Eligible";
     const sales = extractSales(receipt);
     const support = supportProfitByReceipt.get(key);
-    const profit = eligible ? (support && support.buyingTotal > 0 && Math.round(support.sellingTotal) === Math.round(sales)
+    const calculatedProfit = support && support.buyingTotal > 0 && Math.round(support.sellingTotal) === Math.round(sales)
       ? adjustProfitForPodDeliveryFee(support.profit - (Number(receipt.data?.agentSale && (receipt.data.agentSale as any).commissionAmount) || 0), getPodDeliveryFee(receipt.data))
-      : computeProfitFromCosts(receipt)) : 0;
+      : computeProfitFromCosts(receipt);
+    const profit = eligible ? calculatedProfit : 0;
+    // A delivered POD can still be unpaid (normally cash on collection).
+    // Keep it out of recognised profit, but make the priced value visible.
+    const isDeliveredUnpaidPod =
+      isPodReceipt(receipt) &&
+      podStatusOf(receipt) === "delivered" &&
+      reason === "Payment outstanding or refunded";
+    if (isDeliveredUnpaidPod && calculatedProfit !== 0) {
+      deliveredUnpaidPodProfit += calculatedProfit;
+      deliveredUnpaidPodCount += 1;
+    }
     receiptBreakdown.push({ receiptId: receipt.id, receiptKey: receipt.receiptNumber || receipt.order?.orderNumber || receipt.id,
       customerName: receipt.order?.customerName || "", source: "POS", docType: receipt.docType || "RECEIPT",
       salesDate: date, createdAt: created, sales, eligibleSales: eligible ? sales : 0, profit, buyingTotal: eligible ? sales - profit - getPodDeliveryFee(receipt.data) - (Number((receipt.data as any)?.agentSale?.commissionAmount) || 0) : 0, itemCount: countItems(receipt),
@@ -621,6 +634,8 @@ export async function summarizePosReceiptsForPeriod(period: {
     totalProfit,
     totalItems,
     totalReceipts,
+    deliveredUnpaidPodProfit,
+    deliveredUnpaidPodCount,
     receiptKeys: Array.from(seen.entries())
       .filter(([receiptId]) => {
         const row = filteredReceipts.find((receipt) => canonicalKeyForRow(receipt) === receiptId);

@@ -63,6 +63,9 @@ export type AdminReceiptSummary = {
   itemsCount: number;
   hasCompleteCosts: boolean;
   awaitingPricingCount: number;
+  /** Delivery is complete but collection has not yet been recorded. */
+  deliveredUnpaidPodProfit?: number;
+  deliveredUnpaidPodCount?: number;
   paymentTotals: PaymentTotals;
   profitContributors?: ProfitReceiptContributor[];
   debug?: {
@@ -230,6 +233,8 @@ async function computePosOnlyReceiptSummary(options: SummaryOptions): Promise<Po
     receiptsCount: isOperationalPodQueue ? podQueueRows.length : summary.totalReceipts, posReceiptsCount: isOperationalPodQueue ? podQueueRows.length : summary.totalReceipts, posTotalSales: isOperationalPodQueue ? podQueueValue : summary.totalSales,
     itemsCount: isOperationalPodQueue ? podQueueItems : summary.totalItems, hasCompleteCosts: awaitingPricingCount === 0, awaitingPricingCount,
     paymentTotals: isOperationalPodQueue ? podQueuePaymentTotals : { mpesa: { totalSales: summary.paymentStats.totalSalesMpesa, count: summary.paymentStats.countMpesaReceipts }, cash: { totalSales: summary.paymentStats.totalSalesCash, count: summary.paymentStats.countCashReceipts } },
+    deliveredUnpaidPodProfit: summary.deliveredUnpaidPodProfit,
+    deliveredUnpaidPodCount: summary.deliveredUnpaidPodCount,
     profitReceiptIds: contributors.map(row => row.id!), profitContributors: contributors,
   };
 }

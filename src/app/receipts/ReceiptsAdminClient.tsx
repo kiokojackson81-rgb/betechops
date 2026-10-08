@@ -545,6 +545,8 @@ export default function ReceiptsAdminClient({
     itemsCount: number;
     hasCompleteCosts: boolean;
     awaitingPricingCount?: number;
+    deliveredUnpaidPodProfit?: number;
+    deliveredUnpaidPodCount?: number;
     paymentTotals: {
       mpesa: { totalSales: number; count: number };
       cash: { totalSales: number; count: number };
@@ -866,6 +868,8 @@ export default function ReceiptsAdminClient({
           itemsCount: Number(data.itemsCount ?? 0),
           hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
           awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
+          deliveredUnpaidPodProfit: Number(data.deliveredUnpaidPodProfit ?? 0),
+          deliveredUnpaidPodCount: Number(data.deliveredUnpaidPodCount ?? 0),
           paymentTotals: data?.paymentTotals ?? {
             mpesa: { totalSales: 0, count: 0 },
             cash: { totalSales: 0, count: 0 },
@@ -2399,6 +2403,8 @@ export default function ReceiptsAdminClient({
       itemsCount,
       hasCompleteCosts: filtered.length === 0,
       awaitingPricingCount: 0,
+      deliveredUnpaidPodProfit: 0,
+      deliveredUnpaidPodCount: 0,
       paymentTotals,
     };
   }, [rows]);

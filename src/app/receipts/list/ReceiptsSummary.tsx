@@ -10,6 +10,8 @@ type Summary = {
   itemsCount: number;
   hasCompleteCosts: boolean;
   awaitingPricingCount?: number;
+  deliveredUnpaidPodProfit?: number;
+  deliveredUnpaidPodCount?: number;
 };
 
 export default function ReceiptsSummary({
@@ -40,6 +42,9 @@ export default function ReceiptsSummary({
     : summary?.hasCompleteCosts
     ? "All priced receipts"
     : (summary?.awaitingPricingCount ? `${summary.awaitingPricingCount} awaiting pricing` : "Based on priced receipts only");
+  const deliveredUnpaidPodProfit = Number(summary?.deliveredUnpaidPodProfit ?? 0);
+  const deliveredUnpaidPodCount = Number(summary?.deliveredUnpaidPodCount ?? 0);
+  const potentialProfit = Number(summary?.totalProfit ?? 0) + deliveredUnpaidPodProfit;
 
   const receiptsLabel = loading ? "Loading..." : String(summary?.receiptsCount ?? 0);
   const itemsLabel = loading ? "Loading..." : String(summary?.itemsCount ?? 0);
@@ -127,6 +132,11 @@ export default function ReceiptsSummary({
             </p>
             {profitNote && (
               <p className="text-[11px] text-slate-400">{profitNote}</p>
+            )}
+            {deliveredUnpaidPodCount > 0 && (
+              <p className="mt-1 text-[11px] text-amber-300">
+                +{formatCurrency(deliveredUnpaidPodProfit)} from {deliveredUnpaidPodCount} delivered POD{deliveredUnpaidPodCount === 1 ? "" : "s"} awaiting payment · potential {formatCurrency(potentialProfit)}
+              </p>
             )}
             {onProfitClick && (
               <p className="text-[11px] text-emerald-300">
