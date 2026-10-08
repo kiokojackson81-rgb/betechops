@@ -202,7 +202,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     // A POD delivery confirmation means the customer collected and paid at
     // the station. Persist the payment marker as well as the order payment.
     updatedPodDeliveryBase.paidAt = podDelivery.paidAt || updatedPodDeliveryBase.deliveredAt;
-    updatedPodDeliveryBase.paidById = podDelivery.paidById || guard?.user?.id ?? null;
+    updatedPodDeliveryBase.paidById = (podDelivery.paidById || guard?.user?.id) ?? null;
     updatedPodDeliveryBase.paidBy = podDelivery.paidBy || guard?.user?.name || guard?.user?.email || null;
     updatedPodDeliveryBase.paymentConfirmedByDelivery = true;
     if (finalReason) updatedPodDeliveryBase.deliveredReason = finalReason;
