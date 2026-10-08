@@ -487,8 +487,9 @@ export async function computeAdminReceiptSummary({
   };
   const isPodSettledForSales = (r: any) => {
     if (!isPodReceipt(r)) return false;
-    if (podStatusOf(r) === "pending") return false;
-    return isPodPaid(r) || isPosPaid(r);
+    // POD collection is confirmed by the Delivered outcome. Older PODs may
+    // predate the paidAt marker, so delivery itself is authoritative.
+    return podStatusOf(r) === "delivered";
   };
 
   let excludedUnpaidPos = 0;
