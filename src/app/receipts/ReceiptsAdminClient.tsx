@@ -1290,64 +1290,6 @@ export default function ReceiptsAdminClient({
     }
   };
 
-  const handleMarkPodPaid = useCallback(
-    async (receiptId: string) => {
-      setPodActionId(receiptId);
-      // Confirm action with the user to avoid accidental marks
-      try {
-        const proceed = window.confirm(
-          "Mark this POD as paid? This will record an admin-paid flag.",
-        );
-        if (!proceed) {
-          setPodActionId(null);
-          return;
-        }
-      } catch (e) {
-        // If window.confirm is unavailable for any reason, continue.
-      }
-      try {
-        console.info("[receipts][client] marking POD paid", { receiptId });
-        const res = await fetch(`/api/receipts/${receiptId}/pod-paid`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({}),
-        });
-        let payload: any = {};
-        try {
-          payload = await res.json();
-        } catch (e) {
-          console.warn("[receipts][client] pod-paid: failed to parse JSON", e);
-        }
-        console.info("[receipts][client] pod-paid response", {
-          status: res.status,
-          body: payload,
-        });
-        if (!res.ok) {
-          const errMsg =
-            payload?.error ||
-            payload?.message ||
-            `Failed to mark POD paid (status ${res.status})`;
-          throw new Error(errMsg);
-        }
-        showToast("POD marked paid", "success");
-        await loadRows(page, { silent: true });
-        await fetchSummary();
-        if (selected?.id === receiptId) {
-          await fetchReceiptDetail(receiptId);
-        }
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to mark POD paid";
-        console.error("[receipts][client] pod-paid error", message);
-        showToast(message, "error");
-      } finally {
-        setPodActionId(null);
-      }
-    },
-    [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
-  );
-
   const handleAdminMarkPaid = useCallback(
     async (row: ReceiptRow) => {
       const reference = row.orderRef || row.id;
@@ -3008,12 +2950,9 @@ export default function ReceiptsAdminClient({
                               : undefined
                           }
                           onMarkPaid={
-                            row.isPodDelivery &&
-                            row.podDeliveryStatus === "delivered"
-                              ? () => void handleMarkPodPaid(row.id)
-                              : !row.isPodDelivery && hasPendingPayment
+                            !row.isPodDelivery && hasPendingPayment
                                 ? () => void handleAdminMarkPaid(row)
-                              : undefined
+                                : undefined
                           }
                           onProjectAction={
                             row.isProjectReceipt &&
@@ -4002,19 +3941,6 @@ export default function ReceiptsAdminClient({
                           : "Record POD outcome"}
                       </button>
                     )}
-                    {detail.receipt.data?.podDelivery?.status === "delivered" &&
-                      !detail.receipt.data?.podDelivery?.paidAt && (
-                        <button
-                          type="button"
-                          onClick={() => handleMarkPodPaid(detail.receipt.id)}
-                          disabled={podActionId === detail.receipt.id}
-                          className="rounded-xl border border-emerald-500/70 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/40 disabled:opacity-50"
-                        >
-                          {podActionId === detail.receipt.id
-                            ? "Processing..."
-                            : "Mark Paid"}
-                        </button>
-                      )}
                     {allowEdit && (
                       <button
                         type="button"

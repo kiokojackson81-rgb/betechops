@@ -35,10 +35,14 @@ export function customerReceiptPresentation(receipt: {
   const { order } = receipt;
   const data = record(receipt.data);
   const projectFlow = readReceiptProjectFlow(data.projectFlow ?? record(data.metadata).projectFlow);
-  const paid = amount(order.paidAmount);
   const total = amount(order.totalAmount);
+  const podDelivery = record(data.podDelivery);
+  const deliveredPod = String(podDelivery.status || "").trim().toLowerCase() === "delivered";
+  // A completed POD handover confirms collection at the station. Keep legacy
+  // receipts consistent even if they were created before `paidAt` was saved.
+  const paid = deliveredPod ? total : amount(order.paidAmount);
   const balance = Math.round(Math.max(0, total - paid) * 100) / 100;
-  const dates = [data.paymentDate, record(data.podDelivery).paidAt, record(data.externalPayment).confirmedAt,
+  const dates = [data.paymentDate, podDelivery.paidAt, deliveredPod ? podDelivery.deliveredAt : null, record(data.externalPayment).confirmedAt,
     record(data.adminPaymentConfirmation).confirmedAt, record(data.commissioningPaymentConfirmation).confirmedAt,
     ...(order.mpesaPayments || []).map(p => p.transactionAt), ...(order.layawayPlan?.payments || []).map(p => p.paidAt)]
     .filter((value): value is Date | string | number => value instanceof Date || typeof value === "string" || typeof value === "number")
@@ -64,7 +68,6 @@ export function customerReceiptPresentation(receipt: {
   const showDiscount = Boolean(receipt.showDiscount || data.showDiscount || discount > 0);
   const isDelivery = isDeliveryReceipt(receipt);
   const currentDeliveryStatus = isDelivery ? deliveryStatus(receipt) : null;
-  const podDelivery = record(data.podDelivery);
   // POD records created before the station picker was standardised used a few
   // different field names. Read them all so collection details are never lost
   // when the receipt is later dispatched or edited.
@@ -105,7 +108,7 @@ export function customerReceiptPresentation(receipt: {
           phone: configuredPickup.phone,
         }
       : {};
-  const paymentPendingOnDelivery = isDelivery && deliveryPaymentLabel(receipt) === "Pay on delivery" && paid <= 0;
+  const paymentPendingOnDelivery = isDelivery && !deliveredPod && deliveryPaymentLabel(receipt) === "Pay on delivery" && paid <= 0;
   return {
     customerName: order.customerName,
     receiptNumber: receipt.receiptNumber || order.orderNumber,

@@ -11,6 +11,11 @@ export function receiptSalesOwner(receipt: any): string | null {
 }
 
 export function receiptIsFullyPaid(receipt: any): boolean {
+  // POD is collected at the Speedaf station. Recording delivery is the
+  // operational confirmation that collection succeeded, so it is also the
+  // payment confirmation. This also keeps older delivered PODs consistent
+  // with the current workflow without requiring a second admin action.
+  if (receipt?.data?.podDelivery && isDeliveryReceipt(receipt) && isDeliveryCompleted(receipt)) return true;
   const order = receipt?.order;
   if (order?.paidAmount != null && order?.totalAmount != null) {
     return Number.isFinite(Number(order.paidAmount)) && Number(order.paidAmount) >= Number(order.totalAmount);
