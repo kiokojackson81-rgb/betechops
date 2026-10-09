@@ -49,6 +49,10 @@ const normal = (value: string | null | undefined) =>
   String(value || "pending")
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
+const speedafPaymentIsRequired = (status: string | null | undefined) =>
+  !["cancelled", "canceled", "delivery_failed", "failed"].includes(
+    normal(status),
+  );
 const dateTime = (value: string | null | undefined) => {
   if (!value) return "Not dispatched";
   const date = new Date(value);
@@ -106,7 +110,7 @@ export default function PodDeliveryCentreClient({
             !number(row.podDeliveryFee)) ||
           (filter === "speedaf_paid" && speedafPaid) ||
           (filter === "speedaf_unpaid" &&
-            state === "delivered" &&
+            speedafPaymentIsRequired(state) &&
             !speedafPaid);
         const text =
           `${row.orderRef} ${row.customerName} ${row.customerPhone} ${row.podPickupStation} ${row.attendantName}`.toLowerCase();
@@ -124,7 +128,10 @@ export default function PodDeliveryCentreClient({
     const delivered = initialRows.filter(
       (row) => normal(row.podDeliveryStatus) === "delivered",
     );
-    const speedafPaid = delivered.filter(
+    const speedafPaymentRows = initialRows.filter((row) =>
+      speedafPaymentIsRequired(row.podDeliveryStatus),
+    );
+    const speedafPaid = speedafPaymentRows.filter(
       (row) => normal(row.podSpeedafSettlementStatus) === "paid",
     );
     return {
@@ -138,7 +145,7 @@ export default function PodDeliveryCentreClient({
         normal(row.podDeliveryStatus).includes("fail"),
       ).length,
       speedafPaid: speedafPaid.length,
-      speedafUnpaid: delivered.length - speedafPaid.length,
+      speedafUnpaid: speedafPaymentRows.length - speedafPaid.length,
       fees: initialRows.reduce(
         (sum, row) => sum + number(row.podDeliveryFee),
         0,
@@ -492,7 +499,7 @@ export default function PodDeliveryCentreClient({
                 const busy = saving === row.id;
                 const speedafPaid =
                   normal(row.podSpeedafSettlementStatus) === "paid";
-                const speedafPaymentRequired = state === "delivered";
+                const speedafPaymentRequired = speedafPaymentIsRequired(state);
                 return (
                   <tr key={row.id} className="border-b border-white/5">
                     <td className="p-3 font-semibold">
