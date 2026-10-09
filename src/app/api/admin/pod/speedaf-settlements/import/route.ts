@@ -14,7 +14,7 @@ const trackingPattern = /^KE\d{18}$/;
 const trackingNumbersIn = (value: unknown) =>
   [...new Set(String(value ?? "").toUpperCase().match(/K\s*E(?:[\s:.-]*\d){18}/g)?.map((match) => match.replace(/[^A-Z0-9]/g, "")).filter((match) => trackingPattern.test(match)) ?? [])];
 
-async function extractTrackingNumbers(file: File) {
+async function extractPaymentSheetText(file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const name = file.name.toLowerCase();
   if (file.type.startsWith("image/")) {
@@ -24,22 +24,32 @@ async function extractTrackingNumbers(file: File) {
       model: "gpt-4.1",
       temperature: 0,
       messages: [
-        { role: "system", content: "Extract only Speedaf Kenya tracking numbers from this payment sheet. A valid number is KE followed by exactly 18 digits. Return one tracking number per line. Do not return dates, amounts, settlement references, or any uncertain value." },
+        { role: "system", content: "Transcribe the visible rows of this Speedaf payment sheet exactly enough to preserve customer names and KE tracking numbers. A valid tracking number is KE followed by exactly 18 digits. Return plain text only; do not invent missing values." },
         { role: "user", content: [{ type: "image_url", image_url: { url: image, detail: "high" } }] },
       ],
     });
-    return trackingNumbersIn(response.choices[0]?.message?.content);
+    return String(response.choices[0]?.message?.content ?? "");
   }
   if (name.endsWith(".csv") || file.type === "text/csv") {
     const parsed = Papa.parse<string[]>(buffer.toString("utf8"), { skipEmptyLines: true });
-    return trackingNumbersIn((parsed.data ?? []).flat().join("\n"));
+    return (parsed.data ?? []).flat().join("\n");
   }
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const workbook = XLSX.read(buffer, { type: "buffer" });
-    return trackingNumbersIn(workbook.SheetNames.flatMap((sheet) => XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheet], { header: 1, raw: false }).flat()).join("\n"));
+    return workbook.SheetNames.flatMap((sheet) => XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheet], { header: 1, raw: false }).flat()).join("\n");
   }
   throw new Error("Upload a Speedaf payment image, CSV, XLSX, or XLS file.");
 }
+
+const nameTokens = (value: unknown) => String(value ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((token) => token.length >= 2);
+
+// A name fallback is deliberately conservative: all meaningful name tokens
+// must occur in the imported payment sheet. Tracking-number matches always win.
+const customerNameMatchesSheet = (customerName: unknown, sheetText: string) => {
+  const tokens = nameTokens(customerName);
+  const sheetTokens = new Set(nameTokens(sheetText));
+  return tokens.length >= 2 && tokens.every((token) => sheetTokens.has(token));
+};
 
 export async function POST(request: Request) {
   const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
@@ -49,17 +59,19 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) return NextResponse.json({ error: "Choose a Speedaf payment file to import." }, { status: 400 });
 
   try {
-    const trackingNumbers = await extractTrackingNumbers(file);
-    if (!trackingNumbers.length) return NextResponse.json({ error: "No valid Speedaf tracking numbers were found. Check that each number starts with KE and has 18 digits after it." }, { status: 400 });
+    const sheetText = await extractPaymentSheetText(file);
+    const trackingNumbers = trackingNumbersIn(sheetText);
+    if (!sheetText.trim()) return NextResponse.json({ error: "No readable payment details were found in this file." }, { status: 400 });
 
     const receipts = await prisma.receipt.findMany({
       where: { data: { path: ["podDelivery"], not: Prisma.JsonNull } },
-      select: { id: true, data: true },
+      select: { id: true, data: true, order: { select: { customerName: true } } },
     });
     const receivedAt = new Date().toISOString();
     const actorId = String((auth.session?.user as { id?: string } | undefined)?.id ?? "").trim() || null;
     const matched = new Set<string>();
     let markedPaid = 0;
+    let matchedByName = 0;
 
     for (const receipt of receipts) {
       const data = receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data) ? { ...(receipt.data as Record<string, unknown>) } : null;
@@ -67,7 +79,8 @@ export async function POST(request: Request) {
       if (!data || !pod || String(pod.status ?? "").toLowerCase() !== "delivered") continue;
       const receiptTracking = Array.isArray(pod.trackingNumbers) ? pod.trackingNumbers.flatMap(trackingNumbersIn) : trackingNumbersIn(pod.trackingNumbers);
       const matching = receiptTracking.filter((tracking) => trackingNumbers.includes(tracking));
-      if (!matching.length) continue;
+      const matchedByCustomerName = !matching.length && customerNameMatchesSheet(receipt.order?.customerName, sheetText);
+      if (!matching.length && !matchedByCustomerName) continue;
       matching.forEach((tracking) => matched.add(tracking));
       if ((pod.speedafSettlement as Record<string, unknown> | undefined)?.status === "paid") continue;
       data.podDelivery = {
@@ -78,13 +91,15 @@ export async function POST(request: Request) {
           settledById: actorId,
           sourceFileName: file.name,
           trackingNumbers: matching,
+          matchedBy: matching.length ? "tracking_number" : "customer_name",
         },
       };
       await prisma.receipt.update({ where: { id: receipt.id }, data: { data: data as Prisma.InputJsonValue } });
       markedPaid += 1;
+      if (matchedByCustomerName) matchedByName += 1;
     }
 
-    return NextResponse.json({ ok: true, found: trackingNumbers.length, markedPaid, alreadyPaid: matched.size - markedPaid, unmatchedTrackingNumbers: trackingNumbers.filter((tracking) => !matched.has(tracking)) });
+    return NextResponse.json({ ok: true, found: trackingNumbers.length, markedPaid, matchedByName, alreadyPaid: Math.max(0, matched.size - markedPaid), unmatchedTrackingNumbers: trackingNumbers.filter((tracking) => !matched.has(tracking)) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to import the Speedaf settlement file." }, { status: 400 });
   }
