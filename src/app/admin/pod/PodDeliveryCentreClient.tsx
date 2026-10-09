@@ -492,6 +492,7 @@ export default function PodDeliveryCentreClient({
                 const busy = saving === row.id;
                 const speedafPaid =
                   normal(row.podSpeedafSettlementStatus) === "paid";
+                const speedafPaymentRequired = state === "delivered";
                 return (
                   <tr key={row.id} className="border-b border-white/5">
                     <td className="p-3 font-semibold">
@@ -520,12 +521,16 @@ export default function PodDeliveryCentreClient({
                         className={
                           speedafPaid
                             ? "font-semibold text-emerald-300"
-                            : "font-semibold text-amber-300"
+                            : speedafPaymentRequired
+                              ? "font-semibold text-amber-300"
+                              : "font-semibold text-slate-500"
                         }
                       >
                         {speedafPaid
                           ? "PAID BY SPEEDAF"
-                          : "AWAITING SPEEDAF PAYMENT"}
+                          : speedafPaymentRequired
+                            ? "AWAITING SPEEDAF PAYMENT"
+                            : "SPEEDAF PAYMENT NOT REQUIRED"}
                       </span>
                       {speedafPaid ? (
                         <div className="mt-1 text-slate-400">
