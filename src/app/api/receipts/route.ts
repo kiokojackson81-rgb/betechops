@@ -750,6 +750,11 @@ export async function GET(req: NextRequest) {
           : null,
       isPodDelivery: Boolean(podDeliveryData?.status),
       podDeliveryStatus: podDeliveryData?.status ?? null,
+      // Keep the operational timestamps separate from financial recognition.
+      // POD revenue is recognized on delivery, while the POD desk needs to
+      // show when the order entered the queue and when it left for delivery.
+      podCreatedAt: r.generatedAt ?? r.createdAt,
+      podDispatchedAt: podDeliveryData?.dispatchedAt ?? null,
       podDeliveryNote: podDeliveryData?.note ?? null,
       podPickupStation: podDeliveryData?.pickup?.stationName ?? null,
       podPickupArea: podDeliveryData?.pickup?.area ?? null,

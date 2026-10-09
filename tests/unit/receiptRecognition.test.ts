@@ -37,9 +37,14 @@ test("POD financials stay on delivery day even if costs are entered the followin
     expect(summary.totalProfit).toBe(day === "2026-09-22" ? 4000 : 0);
   }
 });
-test.each(["pending", "delivery_failed"])("POD %s never recognizes a financial sale", status => {
+test.each(["pending", "dispatched", "delivery_failed"])("POD %s never recognizes a financial sale", async status => {
   receipt.data.podDelivery = { status, deliveredAt: today.toISOString() };
   expect(getReceiptRecognitionDate(receipt)).toBeNull();
+  for (const summarize of [computeAdminReceiptSummary, summarizePosReceiptsForPeriod]) {
+    const summary = await summarize({ ...range("2026-09-22"), onlyPos: true, scope: "global" } as any);
+    expect(summary.totalSales).toBe(0);
+    expect(summary.totalProfit).toBe(0);
+  }
 });
 test("incomplete ordinary pricing never manufactures a sale", () => {
   receipt.totals = { total: 10000 };
