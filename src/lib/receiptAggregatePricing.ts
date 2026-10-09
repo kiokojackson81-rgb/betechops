@@ -27,10 +27,40 @@ export function readReceiptAggregatePricing(receipt: unknown): ReceiptAggregateP
     totals.buyingTotal ?? dataTotals.buyingTotal ?? data.buyingTotal ?? row.buyingTotal,
   );
 
+  // Older completed receipts were saved with an aggregate buying total and
+  // profit but before `buyingPriceMode` was introduced.  Recalculating those
+  // receipts from a product's *current* cost changes historical profit after
+  // the fact.  Treat the aggregate as authoritative only when its saved
+  // profit proves that the figures belong together; this deliberately does
+  // not promote incomplete/unpriced legacy receipts.
+  const sellingTotal = toFiniteNumber(
+    totals.total ??
+      totals.sellingTotal ??
+      totals.grandTotal ??
+      dataTotals.total ??
+      data.total ??
+      data.amount ??
+      row.totalAmount,
+  );
+  const savedProfit = toFiniteNumber(totals.profit ?? dataTotals.profit ?? data.profit ?? row.profit);
+  const commissionTotal = toFiniteNumber(
+    data.agentSale && typeof data.agentSale === "object"
+      ? asRecord(data.agentSale).commissionAmount
+      : 0,
+  );
+  const hasCompleteLegacyAggregate =
+    buyingTotal > 0 &&
+    sellingTotal > 0 &&
+    data.needsPricing !== true &&
+    totals.needsPricing !== true &&
+    dataTotals.needsPricing !== true &&
+    Math.abs(savedProfit - (sellingTotal - buyingTotal - commissionTotal)) < 0.01;
+  const isAuthoritativeTotal = (mode === "TOTAL" && buyingTotal > 0) || hasCompleteLegacyAggregate;
+
   return {
     buyingTotal,
-    mode,
-    isAuthoritativeTotal: mode === "TOTAL" && buyingTotal > 0,
+    mode: mode ?? (hasCompleteLegacyAggregate ? "TOTAL" : null),
+    isAuthoritativeTotal,
   };
 }
 
