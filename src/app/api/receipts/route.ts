@@ -750,6 +750,8 @@ export async function GET(req: NextRequest) {
           : null,
       isPodDelivery: Boolean(podDeliveryData?.status),
       podDeliveryStatus: podDeliveryData?.status ?? null,
+      podSpeedafSettlementStatus: (podDeliveryData?.speedafSettlement as Record<string, unknown> | undefined)?.status ?? null,
+      podSpeedafSettledAt: (podDeliveryData?.speedafSettlement as Record<string, unknown> | undefined)?.settledAt ?? null,
       // Keep the operational timestamps separate from financial recognition.
       // POD revenue is recognized on delivery, while the POD desk needs to
       // show when the order entered the queue and when it left for delivery.
