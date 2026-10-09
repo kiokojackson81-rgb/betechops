@@ -48,6 +48,24 @@ describe('GET /api/receipts', () => {
     });
   });
 
+  it('does not let a shared POD queue request bypass the logged-in owner filter', async () => {
+    (prisma as any).receipt.findMany.mockResolvedValue([]);
+    (prisma as any).marketingReceipt.findMany.mockResolvedValue([]);
+    (prisma as any).supportReceipt.findMany.mockResolvedValue([]);
+
+    const res = await GET(new Request('http://localhost/api/receipts?scope=mine&onlyPos=1&customerType=pod&status=pending&sharedPodQueue=1') as any);
+
+    expect(res.status).toBe(200);
+    const where = (prisma as any).receipt.findMany.mock.calls[0][0].where;
+    expect(where.AND).toContainEqual({
+      OR: [
+        { order: { attendantId: 'u1' } },
+        { data: { path: ["attendantId"], equals: 'u1' } },
+        { data: { path: ["projectFlow", "handlerStaffId"], equals: 'u1' } },
+      ],
+    });
+  });
+
   it('does not expose profit or completed payment status for an unpaid completed project', async () => {
     (prisma as any).receipt.findMany.mockResolvedValue([{
       id: 'project-unpaid', receiptNumber: 'BETECH2026091412548', docType: 'RECEIPT',
