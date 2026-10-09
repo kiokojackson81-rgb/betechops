@@ -557,8 +557,16 @@ export async function summarizePosReceiptsForPeriod(period: {
       canonicalReceiptNumber(receipt.receiptNumber ?? undefined) ??
       null;
     const supportContextCandidate = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
+    const aggregatePricing = readReceiptAggregatePricing(receipt);
+    // A completed receipt's locked aggregate pricing is the source of truth.
+    // Support-ledger rows are a fallback for receipts without that snapshot;
+    // allowing one to override it can attach an unrelated historical cost to
+    // the receipt and turn a genuine profit into a false loss.
     const supportContext =
-      supportContextCandidate && supportContextCandidate.buyingTotal > 0 && Math.round(supportContextCandidate.sellingTotal) === Math.round(sales)
+      !aggregatePricing.isAuthoritativeTotal &&
+      supportContextCandidate &&
+      supportContextCandidate.buyingTotal > 0 &&
+      Math.round(supportContextCandidate.sellingTotal) === Math.round(sales)
         ? supportContextCandidate
         : undefined;
     const profit =
