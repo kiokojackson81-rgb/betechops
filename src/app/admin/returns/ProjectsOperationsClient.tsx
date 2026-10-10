@@ -1219,6 +1219,15 @@ export default function ProjectsOperationsClient({
       );
     });
   }, [assignmentModal, assignmentSearch, externalAgents, staff]);
+  const matchingExternalAgents = useMemo(() => {
+    const term = assignmentSearch.trim().toLowerCase();
+    return externalAgents.filter((agent) =>
+      !term ||
+      [agent.name, agent.whatsappNumber].some((value) =>
+        String(value).toLowerCase().includes(term),
+      ),
+    );
+  }, [assignmentSearch, externalAgents]);
 
   return (
     <div className="mx-auto max-w-[1700px] p-4 sm:p-6">
@@ -2422,7 +2431,7 @@ export default function ProjectsOperationsClient({
         <ModalShell
           title={
             assignmentModal.type === "staff"
-              ? "Change technician assignment"
+              ? "Change project assignment"
               : "Change external agent"
           }
           description={`Update assignments for ${modalRow.orderRef || modalRow.customerName || "this project"}. Saving here writes the selected technicians or external agents directly to the project.`}
@@ -2434,7 +2443,7 @@ export default function ProjectsOperationsClient({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-slate-500">
                 {assignmentModal.type === "staff"
-                  ? `${modalEditor.handlerStaffIds.length} technician${modalEditor.handlerStaffIds.length === 1 ? "" : "s"} selected`
+                  ? `${modalEditor.handlerStaffIds.length} technician${modalEditor.handlerStaffIds.length === 1 ? "" : "s"} and ${modalEditor.externalAgentIds.length} agent${modalEditor.externalAgentIds.length === 1 ? "" : "s"} selected`
                   : `${modalEditor.externalAgentIds.length} external agent${modalEditor.externalAgentIds.length === 1 ? "" : "s"} selected`}
               </div>
               <div className="flex justify-end gap-3">
@@ -2469,7 +2478,7 @@ export default function ProjectsOperationsClient({
               onChange={(event) => setAssignmentSearch(event.target.value)}
               placeholder={
                 assignmentModal.type === "staff"
-                  ? "Search technician"
+                  ? "Search technician or agent"
                   : "Search external agent"
               }
               className="mt-1.5 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
@@ -2481,8 +2490,10 @@ export default function ProjectsOperationsClient({
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {assignmentModal.type === "staff" ? (
-                modalEditor.handlerStaffIds.length > 0 ? (
-                  modalEditor.handlerStaffIds.map((staffId) => {
+                modalEditor.handlerStaffIds.length > 0 ||
+                modalEditor.externalAgentIds.length > 0 ? (
+                  <>
+                    {modalEditor.handlerStaffIds.map((staffId) => {
                     const member = staff.find((entry) => entry.id === staffId);
                     return (
                       <span
@@ -2492,10 +2503,24 @@ export default function ProjectsOperationsClient({
                         {member?.name || "Technician"}
                       </span>
                     );
-                  })
+                    })}
+                    {modalEditor.externalAgentIds.map((agentId) => {
+                      const agent = externalAgents.find(
+                        (entry) => entry.id === agentId,
+                      );
+                      return (
+                        <span
+                          key={agentId}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200"
+                        >
+                          {agent?.name || "External agent"}
+                        </span>
+                      );
+                    })}
+                  </>
                 ) : (
                   <span className="text-sm text-slate-500">
-                    No technicians selected.
+                    No technician or agent selected.
                   </span>
                 )
               ) : modalEditor.externalAgentIds.length > 0 ? (
@@ -2521,7 +2546,8 @@ export default function ProjectsOperationsClient({
           </div>
           <div className="mt-3 grid max-h-[40vh] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
             {assignmentModal.type === "staff"
-              ? assignmentOptions.map((option) => {
+              ? <>
+                  {assignmentOptions.map((option) => {
                   const member = option as StaffOption;
                   return (
                     <label
@@ -2556,7 +2582,37 @@ export default function ProjectsOperationsClient({
                       </span>
                     </label>
                   );
-                })
+                  })}
+                  {matchingExternalAgents.map((agent) => (
+                    <label
+                      key={agent.id}
+                      className="flex items-start gap-3 rounded-[20px] border border-white/10 bg-[#08111d] px-4 py-3 text-sm text-white"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={modalEditor.externalAgentIds.includes(agent.id)}
+                        onChange={() =>
+                          setEditorValue(modalRow.id, {
+                            externalAgentIds: toggleValue(
+                              modalEditor.externalAgentIds,
+                              agent.id,
+                            ),
+                          })
+                        }
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block font-semibold">
+                          {agent.name}
+                          <span className="ml-2 text-xs font-normal text-slate-400">External agent</span>
+                        </span>
+                        <span className="mt-0.5 block text-xs text-slate-400">
+                          {agent.whatsappNumber || "No phone saved"}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </>
               : assignmentOptions.map((option) => {
                   const agent = option as ExternalAgentOption;
                   return (
