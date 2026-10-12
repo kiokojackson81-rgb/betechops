@@ -135,6 +135,7 @@ const BANK_ACCOUNT_TYPE_ALIASES = new Map<string, string>([
   ["CO OP", "Co-op Bank"],
   ["CO OP BANK", "Co-op Bank"],
   ["CO-OP BANK", "Co-op Bank"],
+  ["COOPERATIVE BANK", "Co-op Bank"],
   ["COOPERATIVE BANK OF KENYA", "Co-op Bank"],
   ["CO OPERATIVE BANK OF KENYA", "Co-op Bank"],
   ["COOP BANK", "Co-op Bank"],
@@ -181,7 +182,7 @@ const EMPLOYEE_ACCOUNT_TYPE_OVERRIDES = new Map<string, string>([
   ["BRENDAH ACHIENG OWINO", "Co-op Bank"],
   ["BENJAMIN MUTUI MWENDWA", "CFC Stanbic Bank"],
   ["STEPHEN MUSEMBI KINGOLA", "Access Bank Kenya"],
-  ["JONATHAN MUGIIRA", "NCBA Bank"],
+  ["JONATHAN MUGIIRA", "Co-op Bank"],
   ["JUSTUS", "Mpesa"],
 ]);
 
