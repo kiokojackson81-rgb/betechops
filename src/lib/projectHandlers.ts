@@ -26,7 +26,7 @@ const STAFF_PHONE_OVERRIDES: Array<{
 }> = [
   {
     match: ["jonathan mugira", "jonathan"],
-    phone: "+254731601259",
+    phone: "+254717241877",
   },
   {
     match: ["kyalo", "evans"],
@@ -51,17 +51,20 @@ export function resolveProjectStaffPhone(input: {
   phone?: string | null;
   technicalPhoneNumber?: string | null;
 }) {
+  const normalizedName = normalizeName(input.name);
+  // Corrected staff contact numbers take priority over stale profile fields so
+  // assignment and commissioning notifications reach the intended technician.
+  const matchedOverride = STAFF_PHONE_OVERRIDES.find((entry) =>
+    entry.match.some((candidate) => normalizedName.includes(candidate)),
+  );
+  if (matchedOverride) return matchedOverride.phone;
+
   const direct =
     normalizeProjectHandlerPhone(input.whatsappNumber) ||
     normalizeProjectHandlerPhone(input.phone) ||
     normalizeProjectHandlerPhone(input.technicalPhoneNumber);
   if (direct) return direct;
-
-  const normalizedName = normalizeName(input.name);
-  const matchedOverride = STAFF_PHONE_OVERRIDES.find((entry) =>
-    entry.match.some((candidate) => normalizedName.includes(candidate)),
-  );
-  return matchedOverride ? matchedOverride.phone : null;
+  return null;
 }
 
 export function buildProjectHandlerSignature(assignment: ProjectHandlerAssignment) {

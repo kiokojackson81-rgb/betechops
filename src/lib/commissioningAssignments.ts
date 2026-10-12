@@ -5,6 +5,7 @@ import { appendCommissioningAudit, commissioningExpiry, commissioningUrl, create
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { technicianCommissioningSms } from "@/lib/projectDocumentMessages";
 import { sendCommissioningSms } from "@/lib/commissioningSms";
+import { resolveProjectStaffPhone } from "@/lib/projectHandlers";
 
 const record = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
@@ -58,7 +59,16 @@ export async function technicianMessagePreview(receiptId: string, origin: string
   ]);
   const link = commissioningUrl(decryptCommissioningToken(session.tokenCiphertext), origin);
   const recipients = [
-    ...staff.map(user => ({ id: `staff:${user.id}`, name: user.name || "Technician", phone: user.technicalProfile?.phoneNumber || user.phone || user.whatsappNumber || "" })),
+    ...staff.map(user => ({
+      id: `staff:${user.id}`,
+      name: user.name || "Technician",
+      phone: resolveProjectStaffPhone({
+        name: user.name,
+        technicalPhoneNumber: user.technicalProfile?.phoneNumber,
+        phone: user.phone,
+        whatsappNumber: user.whatsappNumber,
+      }) || "",
+    })),
     ...agents.map(agent => ({ id: `agent:${agent.id}`, name: agent.name, phone: agent.whatsappNumber || "" })),
   ].map(recipient => ({ ...recipient, message: technicianCommissioningSms({ name: recipient.name, reference: summary.reference, customer: summary.customerName, location: summary.location, link }) }));
   const recipient = recipientId ? recipients.find(item => item.id === recipientId) : recipients[0];
