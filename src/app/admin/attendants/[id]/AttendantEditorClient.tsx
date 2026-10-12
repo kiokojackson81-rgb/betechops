@@ -83,6 +83,7 @@ function formatDocumentType(value: string) {
 export default function AttendantEditorClient({ attendant }: { attendant: Attendant }) {
   const router = useRouter();
   const [state, setState] = useState({
+    name: attendant.name ?? "",
     category: attendant.attendantCategory ?? "",
     isActive: attendant.isActive,
     password: "",
@@ -228,6 +229,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          name: state.name.trim() || undefined,
           attendantCategory: state.category || undefined,
           isActive: state.isActive,
           phone: state.phone.trim() || null,
@@ -269,7 +271,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
             teamRole: state.technical.teamRole || null,
             positionTitle: state.technical.positionTitle || null,
             employeeNumber: state.technical.employeeNumber || null,
-            phoneNumber: state.technical.phoneNumber || state.phone.trim() || null,
+            phoneNumber: state.phone.trim() || state.technical.phoneNumber || null,
             epraLicenseNumber: state.technical.epraLicenseNumber || null,
             epraLicenseClass: state.technical.epraLicenseClass || null,
             signatureUrl: state.technical.signatureUrl || null,
@@ -304,7 +306,15 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
   return (
     <div className="p-6">
       <h2 className="text-xl font-semibold mb-2">Edit attendant</h2>
-      <div className="mb-4">Name: <strong>{attendant.name || "-"}</strong></div>
+      <label className="mb-4 block">
+        <span className="text-sm text-slate-300">Name</span>
+        <input
+          type="text"
+          value={state.name}
+          onChange={(e) => setState((s) => ({ ...s, name: e.target.value }))}
+          className="mt-1 w-full rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+        />
+      </label>
       <div className="mb-4">Email: <strong>{attendant.email || "-"}</strong></div>
       <div className="mb-4">Category: <strong>{attendant.categoryLabel ?? (attendant.attendantCategory ?? "Unassigned")}</strong></div>
 
@@ -332,7 +342,15 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
           type="text"
           placeholder="Phone number"
           value={state.phone}
-          onChange={(e) => setState((s) => ({ ...s, phone: e.target.value }))}
+          onChange={(e) => {
+            const phone = e.target.value;
+            setState((s) => ({
+              ...s,
+              phone,
+              notificationPhoneNumber: phone,
+              technical: { ...s.technical, phoneNumber: phone },
+            }));
+          }}
           className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
         />
       </div>
