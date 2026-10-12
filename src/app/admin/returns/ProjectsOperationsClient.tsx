@@ -437,6 +437,7 @@ export default function ProjectsOperationsClient({
   const [newAgentPhone, setNewAgentPhone] = useState("");
   const [agentSaving, setAgentSaving] = useState(false);
   const [sendingReceiptId, setSendingReceiptId] = useState<string | null>(null);
+  const [openingCustomerReceiptId, setOpeningCustomerReceiptId] = useState<string | null>(null);
   const [commissioningLinks, setCommissioningLinks] = useState<
     Record<string, CommissioningLinkState>
   >({});
@@ -1124,6 +1125,37 @@ export default function ProjectsOperationsClient({
     }
   };
 
+  const openCustomerReceipt = async (receiptId: string) => {
+    // Open synchronously from the click event so browser popup protection does
+    // not block the customer receipt after the secure-link request completes.
+    const receiptWindow = window.open("", "_blank");
+    setOpeningCustomerReceiptId(receiptId);
+    try {
+      const response = await fetch(
+        `/api/receipts/${encodeURIComponent(receiptId)}/customer-receipt-link`,
+        { method: "POST", credentials: "same-origin" },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.url) {
+        throw new Error(payload?.error || "Unable to open the customer receipt.");
+      }
+      if (receiptWindow) {
+        receiptWindow.opener = null;
+        receiptWindow.location.assign(String(payload.url));
+      } else {
+        window.location.assign(String(payload.url));
+      }
+    } catch (error) {
+      receiptWindow?.close();
+      showToast(
+        error instanceof Error ? error.message : "Unable to open the customer receipt.",
+        "error",
+      );
+    } finally {
+      setOpeningCustomerReceiptId(null);
+    }
+  };
+
   const manageCommissioningLink = async (
     row: ProjectRow,
     action:
@@ -1794,6 +1826,16 @@ export default function ProjectsOperationsClient({
                                     >
                                       Preview Receipt
                                     </Link>
+                                    <button
+                                      type="button"
+                                      onClick={() => void openCustomerReceipt(row.id)}
+                                      disabled={openingCustomerReceiptId === row.id}
+                                      className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      {openingCustomerReceiptId === row.id
+                                        ? "Opening customer receipt..."
+                                        : "Open Customer Receipt"}
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() =>
