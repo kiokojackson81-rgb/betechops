@@ -1137,7 +1137,8 @@ function suggestWarrantyForItem(itemName: string) {
   if (/\b(pump|borehole|water heater|purifier|cctv)\b/.test(normalized)) {
     return "Manufacturer warranty";
   }
-  return "Manufacturer warranty";
+  // Do not invent a warranty for items where no warranty was selected.
+  return "";
 }
 
 function createServiceFeeItems(input: {
