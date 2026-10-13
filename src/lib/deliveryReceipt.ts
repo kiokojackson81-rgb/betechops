@@ -27,6 +27,14 @@ export function isDeliveryReceipt(receipt: ReceiptLike): boolean {
 export function deliveryStatus(receipt: ReceiptLike): string {
   const data = record(receipt?.data);
   const pod = record(data.podDelivery);
+  const order = record(receipt?.order);
+  // Website/countrywide orders are completed from the order desk. Older
+  // receipt snapshots can retain `deliveryStatus: pending` after that update,
+  // so treating the canonical DELIVERED order state as pending incorrectly
+  // hides an already completed sale from commission and reporting.
+  if (String(order.status || "").trim().toUpperCase() === "DELIVERED") {
+    return "delivered";
+  }
   return String(pod.status || data.deliveryStatus || "pending").trim().toLowerCase() || "pending";
 }
 
