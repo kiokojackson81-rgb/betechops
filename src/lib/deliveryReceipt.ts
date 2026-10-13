@@ -28,14 +28,30 @@ export function deliveryStatus(receipt: ReceiptLike): string {
   const data = record(receipt?.data);
   const pod = record(data.podDelivery);
   const order = record(receipt?.order);
+  const customerType = String(data.customerType || "").trim().toLowerCase();
+  const recordedStatus = String(pod.status || data.deliveryStatus || "").trim().toLowerCase();
+  // An explicitly failed/cancelled delivery must never be upgraded by its
+  // payment/order state. This keeps unsuccessful deliveries out of sales and
+  // commission reporting.
+  if (["failed", "delivery_failed", "cancelled", "canceled"].includes(recordedStatus)) {
+    return recordedStatus;
+  }
   // Website/countrywide orders are completed from the order desk. Older
   // receipt snapshots can retain `deliveryStatus: pending` after that update,
   // so treating the canonical DELIVERED order state as pending incorrectly
   // hides an already completed sale from commission and reporting.
-  if (String(order.status || "").trim().toUpperCase() === "DELIVERED") {
+  const orderStatus = String(order.status || "").trim().toUpperCase();
+  if (orderStatus === "DELIVERED") {
     return "delivered";
   }
-  return String(pod.status || data.deliveryStatus || "pending").trim().toLowerCase() || "pending";
+  // Standard prepaid deliveries are completed from the receipt desk as
+  // COMPLETED. They do not use the separate POD collection workflow, so that
+  // completed state is the final delivery confirmation unless staff have
+  // explicitly recorded a failed/cancelled delivery above.
+  if (customerType === "delivery" && orderStatus === "COMPLETED") {
+    return "delivered";
+  }
+  return recordedStatus || "pending";
 }
 
 export function isDeliveryCompleted(receipt: ReceiptLike): boolean {
