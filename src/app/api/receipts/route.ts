@@ -174,6 +174,14 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const q = url.searchParams.get("q") || undefined;
+    // Receipt references are commonly pasted without their display hyphens
+    // (for example BETECH2026092856523). Search both forms so the desk finds
+    // the same receipt whether the stored reference is hyphenated or not.
+    const normalizedReceiptSearch = canonicalReceiptNumber(q);
+    const hyphenatedReceiptSearch = normalizedReceiptSearch?.match(/^([A-Z]+)(\d{8})([A-Z0-9]+)$/)
+      ? `${normalizedReceiptSearch.replace(/^([A-Z]+)(\d{8})([A-Z0-9]+)$/, "$1-$2-$3")}`
+      : null;
+    const receiptSearchTerms = Array.from(new Set([q, normalizedReceiptSearch, hyphenatedReceiptSearch].filter((value): value is string => Boolean(value))));
   const phoneParam = url.searchParams.get("phone") || undefined;
   const docTypeParam = url.searchParams.get("docType") || undefined;
   const includeLedgerParam = url.searchParams.get("includeLedger");
@@ -294,6 +302,12 @@ export async function GET(req: NextRequest) {
       { order: { attendant: { name: { contains: q, mode: "insensitive" } } } },
       { issuedBy: { name: { contains: q, mode: "insensitive" } } },
     );
+    for (const reference of receiptSearchTerms) {
+      searchOr.push(
+        { receiptNumber: { contains: reference, mode: "insensitive" } },
+        { order: { orderNumber: { contains: reference, mode: "insensitive" } } },
+      );
+    }
   }
 
   if (phoneParam) {
@@ -904,7 +918,7 @@ export async function GET(req: NextRequest) {
   if (paymentMethodParam) marketingFilter.paymentMethod = paymentMethodParam;
   if (q) {
     marketingFilter.OR = [
-      { receiptNumber: { contains: q, mode: "insensitive" } },
+      ...receiptSearchTerms.map((reference) => ({ receiptNumber: { contains: reference, mode: "insensitive" as const } })),
       { dailyEntry: { submittedByName: { contains: q, mode: "insensitive" } } },
       { items: { some: { productName: { contains: q, mode: "insensitive" } } } },
     ];
@@ -920,7 +934,7 @@ export async function GET(req: NextRequest) {
   if (paymentMethodParam) supportFilter.paymentMethod = paymentMethodParam;
   if (q) {
     supportFilter.OR = [
-      { receiptNumber: { contains: q, mode: "insensitive" } },
+      ...receiptSearchTerms.map((reference) => ({ receiptNumber: { contains: reference, mode: "insensitive" as const } })),
       {
         dailyEntry: {
           submittedBy: { name: { contains: q, mode: "insensitive" } },
