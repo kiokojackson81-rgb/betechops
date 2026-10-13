@@ -7,6 +7,7 @@ import CertificateReviewPanel from "./CertificateReviewPanel";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 import { buildAdminCustomerPortalLoginHref } from "@/lib/adminCustomerPortalLink";
+import CustomerSmsComposer from "@/components/CustomerSmsComposer";
 
 type StaffOption = {
   id: string;
@@ -1623,6 +1624,14 @@ export default function ProjectsOperationsClient({
                           <div className="mt-1 text-sm text-slate-400">
                             {row.customerPhone || "No phone"}
                           </div>
+                          <CustomerSmsComposer
+                            customerName={row.customerName}
+                            customerPhone={row.customerPhone}
+                            entityType="PROJECT"
+                            entityId={row.id}
+                            reference={row.orderRef}
+                            className="mt-2 rounded-lg border border-cyan-400/25 px-2 py-1 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/10"
+                          />
                         </td>
                         <td className="px-4 py-5">
                           <div className="text-lg font-semibold text-white">

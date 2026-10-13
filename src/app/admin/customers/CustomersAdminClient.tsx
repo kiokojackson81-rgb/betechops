@@ -18,6 +18,7 @@ import {
 import type { AdminCustomerRow } from "@/lib/adminCustomers";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { buildAdminCustomerPortalLoginHref } from "@/lib/adminCustomerPortalLink";
+import CustomerSmsComposer from "@/components/CustomerSmsComposer";
 
 type CustomerRow = Omit<AdminCustomerRow, "firstPurchaseAt" | "lastPurchaseAt" | "orders"> & {
   firstPurchaseAt: string | null;
@@ -449,6 +450,14 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                             >
                               Open customer account
                             </a>
+                            <CustomerSmsComposer
+                              customerName={customer.displayName}
+                              customerPhone={customer.primaryPhone}
+                              entityType="CUSTOMER"
+                              entityId={customer.customerUserId || customer.id}
+                              label="Send SMS"
+                              className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 font-semibold text-cyan-100 transition hover:border-cyan-300/35"
+                            />
                           </div>
                         </div>
                       </div>

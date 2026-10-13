@@ -30,6 +30,7 @@ import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { summarizeVoiceQueueItems } from "@/lib/operationsWorkQueue";
 import { normalizeKenyanPhone } from "@/lib/phone";
+import CustomerSmsComposer from "@/components/CustomerSmsComposer";
 import {
   getVoiceHistoryDateRange,
   normalizeVoiceHistoryRange,
@@ -3260,12 +3261,14 @@ export default function VoiceConsoleClient({
                                                   >
                                                     Call back
                                                   </a>
-                                                  <a
-                                                    href={`sms:${call.callerNumber}`}
+                                                  <CustomerSmsComposer
+                                                    customerName={call.customer?.customerName}
+                                                    customerPhone={call.callerNumber}
+                                                    entityType="VOICE_CALL"
+                                                    entityId={call.id}
+                                                    reference={call.id}
                                                     className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                                                  >
-                                                    Send SMS
-                                                  </a>
+                                                  />
                                                   <Link
                                                     href={call.links.customer}
                                                     className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"

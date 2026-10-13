@@ -19,6 +19,7 @@ import MarkdownRendererClient, {
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
+import CustomerSmsComposer from "@/components/CustomerSmsComposer";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 import { speedafPickupStations } from "@/lib/speedafPickupStations";
 import {
@@ -2854,6 +2855,14 @@ export default function ReceiptsAdminClient({
                         >
                           {row.customerName || "Walk-in"}
                         </Link>
+                        <CustomerSmsComposer
+                          customerName={row.customerName}
+                          customerPhone={row.customerPhone}
+                          entityType="RECEIPT"
+                          entityId={row.id}
+                          reference={row.orderRef}
+                          className="mt-2 rounded-md border border-cyan-400/25 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-100 hover:bg-cyan-400/10"
+                        />
                       </td>
                       <td className="px-3 py-3 text-slate-300">
                         {ownerEditReceiptId === row.id ? (
