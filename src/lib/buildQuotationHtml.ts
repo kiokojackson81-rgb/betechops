@@ -806,23 +806,27 @@ export function buildQuotationHtml(
         <div class="full-card">
           <div class="section-head">
             <div class="section-head-icon">${iconSvg("shield")}</div>
-            <div class="section-head-title">Regulatory Compliance &amp; Licence Verification</div>
+            <div class="section-head-title">Regulatory Compliance, Company Licences &amp; Professional Credentials</div>
           </div>
           <div class="section-body">
             <div class="licence-notice">
               <div class="licence-notice-copy">
-                <div class="licence-notice-lead">Betech Solar Solutions is licensed and regulated for solar PV work in Kenya.</div>
-                <p>Our installation work is undertaken by qualified engineers and technical personnel who hold the required professional registrations. Engineer registration and supporting verification documents can be provided on request.</p>
+                <div class="licence-company-title">Betech Company EPRA Licences</div>
+                <p>These licences are held by Betech Solar Solutions for authorised solar PV contracting, vending, manufacturing and importing activities.</p>
                 <div class="licence-list" aria-label="Betech Solar Solutions EPRA licences">
                   <div><strong>EPRA/SPVC/02578</strong><span>Solar PV Contractor/Vendor &mdash; Class C1</span></div>
                   <div><strong>EPRA/SPVM/0001089</strong><span>Solar PV Manufacturer/Importer &mdash; Class V1</span></div>
                   <div><strong>EPRA/SPVM/0001088</strong><span>Solar PV Manufacturer/Importer &mdash; Class V2</span></div>
                 </div>
+                <div class="professional-credentials">
+                  <div class="professional-credentials-title">Qualified Professional Team</div>
+                  <p>Betech&apos;s solar PV technicians and engineers are EPRA-licensed and registered as required for their professional roles. Engineering work is undertaken or supervised by engineers registered with the Engineers Board of Kenya (EBK). Individual professional registration and supporting verification documents are available on request.</p>
+                </div>
                 <div class="licence-verify-link"><strong>Official EPRA verification:</strong> <a href="${EPRA_LICENCE_VERIFICATION_URL}">portal.epra.go.ke/site/verify-licence</a></div>
               </div>
               <a class="licence-qr" href="${EPRA_LICENCE_VERIFICATION_URL}" aria-label="Open the official EPRA licence verification portal">
                 ${epraLicenceQrSvg}
-                <span>Scan to verify<br />Betech EPRA licences</span>
+                <span>Scan to verify Betech&apos;s<br />company EPRA licences</span>
               </a>
             </div>
           </div>
@@ -1764,10 +1768,10 @@ export function buildQuotationHtml(
     gap: 3mm;
     align-items: center;
     padding: 2.4mm 2.8mm;
-    border: 1px solid #d7e5dd;
-    border-left: 1.5mm solid #0f7a43;
+    border: 1px solid #ead4d4;
+    border-left: 1.5mm solid #9b1111;
     border-radius: 10px;
-    background: linear-gradient(135deg, #f7fffa, #ffffff 70%);
+    background: linear-gradient(135deg, #fffafa, #ffffff 70%);
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -1777,8 +1781,8 @@ export function buildQuotationHtml(
     line-height: 1.28;
   }
   .licence-notice-copy p { margin: 1mm 0 0; }
-  .licence-notice-lead {
-    color: #1b3b2b;
+  .licence-company-title {
+    color: #9b1111;
     font-size: 8px;
     line-height: 1.3;
     font-weight: 800;
@@ -1795,17 +1799,27 @@ export function buildQuotationHtml(
     align-items: baseline;
     padding: .65mm 1mm;
     border-radius: 4px;
-    background: rgba(15,122,67,.055);
+    background: rgba(155,17,17,.055);
   }
-  .licence-list strong { color: #0f7a43; font-size: 7.4px; }
+  .licence-list strong { color: #9b1111; font-size: 7.4px; }
   .licence-list span { color: #2b2b2b; font-size: 7.2px; font-weight: 600; }
-  .licence-verify-link { margin-top: 1.2mm; color: #0f7a43; }
-  .licence-verify-link a { color: #0f7a43; font-weight: 800; text-decoration: underline; }
+  .professional-credentials {
+    margin-top: 1.5mm;
+    padding: 1.4mm 1.6mm;
+    border: 1px solid #d9e1ec;
+    border-left: 1mm solid #1e3a5f;
+    border-radius: 5px;
+    background: #f7faff;
+  }
+  .professional-credentials-title { color: #1e3a5f; font-size: 7.5px; font-weight: 900; text-transform: uppercase; }
+  .professional-credentials p { margin: .6mm 0 0; color: #263a52; font-size: 7.2px; line-height: 1.3; }
+  .licence-verify-link { margin-top: 1.2mm; color: #9b1111; }
+  .licence-verify-link a { color: #9b1111; font-weight: 800; text-decoration: underline; }
   .licence-qr {
     display: grid;
     justify-items: center;
     gap: .8mm;
-    color: #0f7a43;
+    color: #9b1111;
     font-size: 6.8px;
     line-height: 1.2;
     font-weight: 900;
@@ -1817,7 +1831,7 @@ export function buildQuotationHtml(
     display: block;
     width: 22mm;
     height: 22mm;
-    border: 1px solid #cde1d4;
+    border: 1px solid #e5d5d5;
     border-radius: 5px;
   }
   .terms-notice-lead {
