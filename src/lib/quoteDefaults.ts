@@ -1,7 +1,7 @@
 export const BETECH_COMPANY = {
   name: "Betech Solar Solution Limited",
-  registrationNo: "BN-X2CLZGP5",
-  kraPin: "P052448598C",
+  registrationNo: "PVT-LVESKB",
+  kraPin: "EPRA/SPVC/02578",
   office: "Pramukh Plaza, 3rd Floor, Shop No. 3, Nairobi CBD",
   salesDesk: "0722 151 083",
   email: "info@betech.co.ke",

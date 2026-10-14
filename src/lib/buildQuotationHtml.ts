@@ -2065,7 +2065,7 @@ export function buildQuotationHtml(
         ${renderRows([
           ["building", "Company", data.company.name],
           ["id", "Registration", data.company.registrationNo],
-          ["file", "KRA PIN", data.company.kraPin],
+          ["file", "EPRA Licence", data.company.kraPin],
           ["location", "Office", data.company.office.replace(/,\s*/g, ",\n")],
         ], "wrap")}
       </div>

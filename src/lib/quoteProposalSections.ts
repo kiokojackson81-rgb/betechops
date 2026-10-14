@@ -46,8 +46,8 @@ const DEFAULT_VISIBILITY: QuoteSectionVisibility = {
 
 export const QUOTATION_COMPANY_DETAILS = [
   "BETECH SOLAR SOLUTION LIMITED",
-  "Business Registration No.: BN-X2CLZGP5",
-  "KRA PIN: P052448598C",
+  "Business Registration No.: PVT-LVESKB",
+  "EPRA Licence: EPRA/SPVC/02578",
   "Location: Pramukh Plaza, 3rd Floor, Shop No. 3, Nairobi CBD",
   "Phone: 0722 151 083 / 0705 663 175",
   "Email: info@betech.co.ke",
