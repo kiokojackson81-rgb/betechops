@@ -36,8 +36,10 @@ type IconName =
   | "book"
   | "clipboard";
 
-function createTermsQrSvg(size = 116) {
-  const qr = QRCode.create(TERMS_URL, { errorCorrectionLevel: "M" });
+const EPRA_LICENCE_VERIFICATION_URL = "https://portal.epra.go.ke:8443/site/verify-licence";
+
+function createQrSvg(url: string, label: string, size = 116) {
+  const qr = QRCode.create(url, { errorCorrectionLevel: "M" });
   const cells = qr.modules.size;
   const margin = 2;
   const cellSize = Math.max(2, Math.floor(size / (cells + margin * 2)));
@@ -53,7 +55,11 @@ function createTermsQrSvg(size = 116) {
     }
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${dimension}" height="${dimension}" viewBox="0 0 ${dimension} ${dimension}" role="img" aria-label="QR code linking to the full Betech Solar Terms and Conditions"><rect width="${dimension}" height="${dimension}" fill="#ffffff" />${rects.join("")}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${dimension}" height="${dimension}" viewBox="0 0 ${dimension} ${dimension}" role="img" aria-label="${escapeHtml(label)}"><rect width="${dimension}" height="${dimension}" fill="#ffffff" />${rects.join("")}</svg>`;
+}
+
+function createTermsQrSvg(size = 116) {
+  return createQrSvg(TERMS_URL, "QR code linking to the full Betech Solar Terms and Conditions", size);
 }
 
 function iconSvg(name: IconName, className = "icon-svg") {
@@ -496,6 +502,10 @@ export function buildQuotationHtml(
   const projectQrCopy = getProjectQrCopy(featuredProjectUrl);
   const featuredProjectQr = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(featuredProjectUrl)}`;
   const termsQrSvg = createTermsQrSvg();
+  const epraLicenceQrSvg = createQrSvg(
+    EPRA_LICENCE_VERIFICATION_URL,
+    "QR code linking to the EPRA licence verification portal",
+  );
   const feeStateNotes = [
     data.deliveryMode === "INCLUDED"
       ? "Delivery included."
@@ -785,6 +795,35 @@ export function buildQuotationHtml(
               <strong>Full Terms Apply</strong> &mdash; View at
               <a href="${TERMS_URL}">${TERMS_DISPLAY_URL}</a>
               <span>|</span> Scan QR Code
+            </div>
+          </div>
+        </div>
+      `,
+    },
+    {
+      id: "regulatory-compliance",
+      html: `
+        <div class="full-card">
+          <div class="section-head">
+            <div class="section-head-icon">${iconSvg("shield")}</div>
+            <div class="section-head-title">Regulatory Compliance &amp; Licence Verification</div>
+          </div>
+          <div class="section-body">
+            <div class="licence-notice">
+              <div class="licence-notice-copy">
+                <div class="licence-notice-lead">Betech Solar Solutions is licensed and regulated for solar PV work in Kenya.</div>
+                <p>Our installation work is undertaken by qualified engineers and technical personnel who hold the required professional registrations. Engineer registration and supporting verification documents can be provided on request.</p>
+                <div class="licence-list" aria-label="Betech Solar Solutions EPRA licences">
+                  <div><strong>EPRA/SPVC/02578</strong><span>Solar PV Contractor/Vendor &mdash; Class C1</span></div>
+                  <div><strong>EPRA/SPVM/0001089</strong><span>Solar PV Manufacturer/Importer &mdash; Class V1</span></div>
+                  <div><strong>EPRA/SPVM/0001088</strong><span>Solar PV Manufacturer/Importer &mdash; Class V2</span></div>
+                </div>
+                <div class="licence-verify-link"><strong>Official EPRA verification:</strong> <a href="${EPRA_LICENCE_VERIFICATION_URL}">portal.epra.go.ke/site/verify-licence</a></div>
+              </div>
+              <a class="licence-qr" href="${EPRA_LICENCE_VERIFICATION_URL}" aria-label="Open the official EPRA licence verification portal">
+                ${epraLicenceQrSvg}
+                <span>Scan to verify<br />Betech EPRA licences</span>
+              </a>
             </div>
           </div>
         </div>
@@ -1719,6 +1758,68 @@ export function buildQuotationHtml(
     line-height: 1.28;
   }
   .terms-notice-copy p { margin: 1mm 0 0; }
+  .licence-notice {
+    display: grid;
+    grid-template-columns: 1fr 28mm;
+    gap: 3mm;
+    align-items: center;
+    padding: 2.4mm 2.8mm;
+    border: 1px solid #d7e5dd;
+    border-left: 1.5mm solid #0f7a43;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f7fffa, #ffffff 70%);
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .licence-notice-copy {
+    color: #353535;
+    font-size: 7.6px;
+    line-height: 1.28;
+  }
+  .licence-notice-copy p { margin: 1mm 0 0; }
+  .licence-notice-lead {
+    color: #1b3b2b;
+    font-size: 8px;
+    line-height: 1.3;
+    font-weight: 800;
+  }
+  .licence-list {
+    display: grid;
+    gap: .7mm;
+    margin-top: 1.5mm;
+  }
+  .licence-list div {
+    display: grid;
+    grid-template-columns: 32mm 1fr;
+    gap: 1.5mm;
+    align-items: baseline;
+    padding: .65mm 1mm;
+    border-radius: 4px;
+    background: rgba(15,122,67,.055);
+  }
+  .licence-list strong { color: #0f7a43; font-size: 7.4px; }
+  .licence-list span { color: #2b2b2b; font-size: 7.2px; font-weight: 600; }
+  .licence-verify-link { margin-top: 1.2mm; color: #0f7a43; }
+  .licence-verify-link a { color: #0f7a43; font-weight: 800; text-decoration: underline; }
+  .licence-qr {
+    display: grid;
+    justify-items: center;
+    gap: .8mm;
+    color: #0f7a43;
+    font-size: 6.8px;
+    line-height: 1.2;
+    font-weight: 900;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  .licence-qr svg {
+    display: block;
+    width: 22mm;
+    height: 22mm;
+    border: 1px solid #cde1d4;
+    border-radius: 5px;
+  }
   .terms-notice-lead {
     color: #202833;
     font-size: 8px;
