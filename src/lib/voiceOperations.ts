@@ -744,6 +744,18 @@ function buildReceiptHref(
   return `${url.pathname}?${url.searchParams.toString()}`;
 }
 
+function buildWebOrderHref(
+  orderId: string | null | undefined,
+  impersonateId?: string | null,
+) {
+  const url = new URL("https://voice.local/marketing/receipts");
+  url.pathname = "/marketing/receipts";
+  url.searchParams.set("tab", "web-orders");
+  if (orderId) url.searchParams.set("orderId", orderId);
+  if (impersonateId) url.searchParams.set("impersonateId", impersonateId);
+  return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
 function buildQuoteHref(
   quoteId: string | null | undefined,
   impersonateId?: string | null,
@@ -1282,6 +1294,7 @@ function serializeCustomerContextSummary(
       notes: context.recentNotes.length,
     },
     latestReceiptId: context.recentReceipts[0]?.id ?? null,
+    latestWebOrderId: context.recentWebOrders[0]?.id ?? null,
     latestQuotationId: context.recentQuotations[0]?.id ?? null,
     recentQuotations: context.recentQuotations.slice(0, 4).map((quotation) => {
       const quotationData =
@@ -1771,6 +1784,10 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
             contextSummary.latestReceiptId,
             viewer.impersonateId,
           ),
+          order: buildWebOrderHref(
+            contextSummary.latestWebOrderId,
+            viewer.impersonateId,
+          ),
           quote: buildQuoteHref(
             contextSummary.latestQuotationId,
             viewer.impersonateId,
@@ -1847,6 +1864,10 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
             contextSummary.latestReceiptId,
             viewer.impersonateId,
           ),
+          order: buildWebOrderHref(
+            contextSummary.latestWebOrderId,
+            viewer.impersonateId,
+          ),
           quote: buildQuoteHref(
             contextSummary.latestQuotationId,
             viewer.impersonateId,
@@ -1914,6 +1935,10 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           ),
           receipt: buildReceiptHref(
             contextSummary.latestReceiptId,
+            viewer.impersonateId,
+          ),
+          order: buildWebOrderHref(
+            contextSummary.latestWebOrderId,
             viewer.impersonateId,
           ),
           quote: buildQuoteHref(
@@ -2001,6 +2026,10 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
             contextSummary.latestReceiptId,
             viewer.impersonateId,
           ),
+          order: buildWebOrderHref(
+            contextSummary.latestWebOrderId,
+            viewer.impersonateId,
+          ),
           callBack: `tel:${task.phone}`,
         },
         assignedAgentLabel:
@@ -2070,11 +2099,15 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
               contextSummary.latestQuotationId,
               viewer.impersonateId,
             ),
-            receipt: buildReceiptHref(
-              contextSummary.latestReceiptId,
-              viewer.impersonateId,
-            ),
-            callBack: `tel:${lead.phone}`,
+          receipt: buildReceiptHref(
+            contextSummary.latestReceiptId,
+            viewer.impersonateId,
+          ),
+          order: buildWebOrderHref(
+            contextSummary.latestWebOrderId,
+            viewer.impersonateId,
+          ),
+          callBack: `tel:${lead.phone}`,
           },
           assignedAgentLabel:
             lead.assignedTo?.name ??

@@ -573,6 +573,7 @@ export default function VoiceConsoleClient({
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [presencePending, setPresencePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [liveStatus, setLiveStatus] = useState<
     "connecting" | "live" | "offline"
   >("connecting");
@@ -1045,11 +1046,21 @@ export default function VoiceConsoleClient({
     if (data.viewer.impersonateId)
       quoteParams.set("impersonateId", data.viewer.impersonateId);
 
+    const orderParams = new URLSearchParams();
+    orderParams.set("tab", "web-orders");
+    if (data.selectedContext?.latestWebOrderId)
+      orderParams.set("orderId", data.selectedContext.latestWebOrderId);
+    if (data.viewer.impersonateId)
+      orderParams.set("impersonateId", data.viewer.impersonateId);
+
     return {
       customer: selectedCall?.links.customer || customerHref,
       receipt:
         selectedCall?.links.receipt ||
         `/marketing/receipts?${receiptParams.toString()}`,
+      order:
+        selectedCall?.links.order ||
+        `/marketing/receipts?${orderParams.toString()}`,
       quote:
         selectedCall?.links.quote ||
         `/marketing/receipts?${quoteParams.toString()}`,
@@ -1641,6 +1652,29 @@ export default function VoiceConsoleClient({
     softphone.registrationStatus,
     softphone.transportMode,
   ]);
+
+  async function copyCustomerPhone(phone: string | null | undefined) {
+    const value = String(phone || "").trim();
+    if (!value) return;
+
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = value;
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      textArea.remove();
+    }
+
+    setCopiedPhone(value);
+    window.setTimeout(() => {
+      setCopiedPhone((current) => (current === value ? null : current));
+    }, 1800);
+  }
 
   const assignableEmployees = useMemo(
     () =>
@@ -3257,23 +3291,49 @@ export default function VoiceConsoleClient({
                                                   </button>
                                                   <a
                                                     href={call.links.callBack}
-                                                    className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                                    className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
                                                   >
                                                     Call back
                                                   </a>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      void copyCustomerPhone(
+                                                        call.callerNumber,
+                                                      )
+                                                    }
+                                                    className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                                  >
+                                                    {copiedPhone ===
+                                                    call.callerNumber
+                                                      ? "Phone copied"
+                                                      : "Copy phone"}
+                                                  </button>
                                                   <CustomerSmsComposer
                                                     customerName={call.customer?.customerName}
                                                     customerPhone={call.callerNumber}
                                                     entityType="VOICE_CALL"
                                                     entityId={call.id}
                                                     reference={call.id}
-                                                    className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                                    className="inline-flex min-h-11 whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
                                                   />
                                                   <Link
                                                     href={call.links.customer}
-                                                    className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                                    className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
                                                   >
                                                     Open customer
+                                                  </Link>
+                                                  <Link
+                                                    href={call.links.order}
+                                                    className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-violet-100 transition hover:border-violet-400"
+                                                  >
+                                                    Open order
+                                                  </Link>
+                                                  <Link
+                                                    href={call.links.receipt}
+                                                    className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                                                  >
+                                                    Open receipt
                                                   </Link>
                                                   <button
                                                     type="button"
@@ -3284,7 +3344,7 @@ export default function VoiceConsoleClient({
                                                       );
                                                       switchTab("operations");
                                                     }}
-                                                    className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                                                    className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
                                                   >
                                                     Open live desk
                                                   </button>
@@ -4600,7 +4660,7 @@ export default function VoiceConsoleClient({
                             <div className="text-lg font-semibold text-white">
                               Quick Actions
                             </div>
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -4608,7 +4668,7 @@ export default function VoiceConsoleClient({
                                     selectedCustomerLinks.customer,
                                   )
                                 }
-                                className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
+                                className="min-h-12 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
                               >
                                 Open CRM
                               </button>
@@ -4617,7 +4677,7 @@ export default function VoiceConsoleClient({
                                 onClick={() =>
                                   openWorkspaceHref(selectedCustomerLinks.quote)
                                 }
-                                className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400"
+                                className="min-h-12 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400"
                               >
                                 Create Quote
                               </button>
@@ -4628,9 +4688,39 @@ export default function VoiceConsoleClient({
                                     selectedCustomerLinks.receipt,
                                   )
                                 }
-                                className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
+                                className="min-h-12 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
                               >
-                                Create Receipt
+                                Open Receipt
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openWorkspaceHref(selectedCustomerLinks.order)
+                                }
+                                className="min-h-12 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-center text-sm font-semibold text-violet-100 transition hover:border-violet-400"
+                              >
+                                Open Order
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void copyCustomerPhone(
+                                    selectedCall?.callerNumber || selectedPhone,
+                                  )
+                                }
+                                disabled={
+                                  !String(
+                                    selectedCall?.callerNumber ||
+                                      selectedPhone ||
+                                      "",
+                                  ).trim()
+                                }
+                                className="min-h-12 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center text-sm font-semibold text-slate-100 transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {copiedPhone ===
+                                (selectedCall?.callerNumber || selectedPhone)
+                                  ? "Phone Copied"
+                                  : "Copy Phone"}
                               </button>
                               <button
                                 type="button"
@@ -4638,7 +4728,7 @@ export default function VoiceConsoleClient({
                                   setDetailModalOpen(false);
                                   switchTab("followups");
                                 }}
-                                className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
+                                className="min-h-12 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
                               >
                                 Open Follow-ups
                               </button>
