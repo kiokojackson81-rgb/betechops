@@ -40,7 +40,7 @@ export default function ReceiptsSummary({
   const profitNote = loading
     ? ""
     : summary?.hasCompleteCosts
-    ? "All priced receipts"
+    ? "Profit follows completed pricing date"
     : (summary?.awaitingPricingCount ? `${summary.awaitingPricingCount} awaiting pricing` : "Based on priced receipts only");
   const deliveredUnpaidPodProfit = Number(summary?.deliveredUnpaidPodProfit ?? 0);
   const deliveredUnpaidPodCount = Number(summary?.deliveredUnpaidPodCount ?? 0);

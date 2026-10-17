@@ -1,4 +1,7 @@
-import { getReceiptRecognitionDate } from "@/lib/receiptRecognition";
+import {
+  getReceiptProfitRecognitionDate,
+  getReceiptRecognitionDate,
+} from "@/lib/receiptRecognition";
 import { attachReceiptPricingEvidence } from "@/lib/receiptRecognitionData";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
@@ -593,7 +596,11 @@ export async function summarizePosReceiptsForPeriod(period: {
       }
     }
 
-    const profitIncluded = salesIncluded;
+    const profitDate =
+      period.profitRecognitionMode === "recognizedDate"
+        ? getReceiptProfitRecognitionDate(receipt)
+        : salesDate;
+    const profitIncluded = isDateInRange(profitDate, period.start, period.end);
     if (profit && profitIncluded) {
       totalProfit += profit;
     }

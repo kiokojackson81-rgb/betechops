@@ -201,6 +201,9 @@ async function computePosOnlyReceiptSummary(options: SummaryOptions): Promise<Po
     start: options.start, end: options.end,
     userId: options.attendantId ?? (options.scope === "mine" ? options.currentUserId : null),
     ownershipMode: "staffOnly", supportPricingScope: "any", paymentScope: options.salesOnly === false ? "all" : "paidOnly",
+    // Sales stay on their completed-sale date. Profit enters this admin
+    // dashboard on the date complete buying-price evidence was recorded.
+    profitRecognitionMode: "recognizedDate",
     docType: options.docType, paymentMethod: options.paymentMethod, search: options.search,
     customerType: options.customerType, podStatus: options.podStatus,
   });

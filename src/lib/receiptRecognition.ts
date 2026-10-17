@@ -12,11 +12,10 @@ export const recognitionDate = (value: unknown): Date | null => {
 };
 
 /**
- * One immutable business-event date for sales, costs, profit and commissions.
+ * One immutable business-event date for sales and sales-based commissions.
  *
- * Cost/pricing information is an eligibility requirement, not a new sale event.
- * A later price entry must never move a completed receipt into a later trading
- * period, otherwise the same sale can be counted twice across payroll periods.
+ * Cost/pricing information must never move a completed receipt into a later
+ * sales period. Profit reporting may separately use the completed pricing date.
  */
 export function getReceiptRecognitionDate(receipt: any): Date | null {
   if (!receipt || isReceiptCancelledForSales(receipt)) return null;
@@ -52,6 +51,40 @@ export function getReceiptRecognitionDate(receipt: any): Date | null {
   // financialRecognitionAt, buyingPriceUpdatedAt, support pricedAt, or order-cost
   // timestamps here: those are subsequent accounting actions, not completion.
   return recognitionDate(receipt.generatedAt ?? receipt.createdAt);
+}
+
+/**
+ * The date on which a receipt's profit becomes reportable.
+ *
+ * This is deliberately separate from `getReceiptRecognitionDate`: the sale
+ * remains in the period in which it was completed, but profit for a sale that
+ * needed buying prices later belongs to the day that pricing was completed.
+ * When no later pricing action exists, profit remains on the sale date.
+ */
+export function getReceiptProfitRecognitionDate(receipt: any): Date | null {
+  const salesDate = getReceiptRecognitionDate(receipt);
+  if (!salesDate) return null;
+
+  const data = record(receipt?.data);
+  const totals = record(receipt?.totals);
+  const dataTotals = record(data.totals);
+  const evidence = record(receipt?.financialPricingEvidence);
+  const pricingDates: Date[] = [
+    recognitionDate(data.financialRecognitionAt),
+    recognitionDate(data.buyingPriceUpdatedAt),
+    recognitionDate(totals.buyingPriceUpdatedAt),
+    recognitionDate(dataTotals.buyingPriceUpdatedAt),
+    recognitionDate(evidence.pricedAt),
+    ...(receipt?.order?.items ?? []).flatMap((item: any) =>
+      (item?.orderCosts ?? []).map((cost: any) => recognitionDate(cost?.createdAt)),
+    ),
+  ].filter((value): value is Date => value instanceof Date);
+
+  if (!pricingDates.length) return salesDate;
+  return pricingDates.reduce(
+    (latest, value) => (value.getTime() > latest.getTime() ? value : latest),
+    salesDate,
+  );
 }
 
 export function recognitionDay(date: Date) {
