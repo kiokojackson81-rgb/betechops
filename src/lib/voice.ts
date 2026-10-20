@@ -1173,7 +1173,25 @@ export async function getVoiceRouteTargets(
   const agentTargets = [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN].filter(
     (target) => target.phoneNumber && target.routingEnabled,
   );
-  const adminTarget = targets.ADMIN;
+  // This is the final, emergency destination for every inbound call. It must
+  // stay diallable even when the admin browser is offline or an automated
+  // compliance restriction is active; the provider will ring the configured
+  // admin mobile number after all eligible agents are exhausted.
+  const adminTarget: VoiceRouteTarget = {
+    ...targets.ADMIN,
+    routingEnabled: true,
+    isAvailable: true,
+    skipReasons: targets.ADMIN.skipReasons.filter(
+      (reason) =>
+        reason !== "routing_disabled" &&
+        reason !== "compliance_restricted" &&
+        !reason.startsWith("status_") &&
+        reason !== "stale_presence" &&
+        reason !== "missing_presence" &&
+        reason !== "missing_last_seen" &&
+        reason !== "active_call_in_progress",
+    ),
+  };
   const overflowTarget = targets.OVERFLOW;
   const quotationOwnerTargets = [
     targets.BRENDAH,
@@ -1249,7 +1267,7 @@ export async function getVoiceRouteTargets(
     findStickyOwnerTarget(callerNumber, agentTargets),
     findLastAnsweredTarget(
       callerNumber,
-      [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN, targets.OVERFLOW].filter(
+      [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, adminTarget, targets.OVERFLOW].filter(
         (target) => target.phoneNumber && target.routingEnabled,
       ),
       date,
@@ -1328,9 +1346,9 @@ export async function getVoiceRouteTargets(
     targets.BRENDAH,
     targets.JENNIFER,
     targets.STEPHEN,
-    targets.ADMIN,
+    adminTarget,
     ...(quotationOwnerTarget &&
-    ![targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN].some(
+    ![targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, adminTarget].some(
       (target) => target.userId === quotationOwnerTarget.userId,
     )
       ? [quotationOwnerTarget]

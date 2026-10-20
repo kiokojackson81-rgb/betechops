@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
+import { sendTransactionalSms } from "@/lib/africasTalking";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 
 const OVERDUE_CALLBACK_LIMIT = 3;
@@ -18,8 +20,41 @@ function eventPayload(input: Record<string, unknown>) {
   return input as Record<string, never>;
 }
 
-function isOpenFollowUpStatus(status: string | null | undefined) {
-  return !["resolved", "closed"].includes(String(status || "").toLowerCase());
+async function notifyComplianceRestriction(input: {
+  eventId: string;
+  userId: string;
+  reason: string | null;
+  overdueCallbackCount: number;
+}) {
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { name: true, phone: true },
+  });
+  const agentLabel = user?.name || "The assigned agent";
+  const reason = input.reason || "overdue customer callback work";
+  const actionPath = "/admin/communications/voice?tab=agents";
+
+  await Promise.allSettled([
+    notifyAdminCriticalSms({
+      eventType: "VOICE_COMPLIANCE_RESTRICTED",
+      entityId: input.eventId,
+      title: "Voice routing paused",
+      details: [
+        `Agent: ${agentLabel}`,
+        `Reason: ${reason}`,
+        `Overdue callbacks: ${input.overdueCallbackCount}`,
+        "New inbound calls are being sent to the emergency admin fallback.",
+      ],
+      actionPath,
+      payload: { userId: input.userId, reason, overdueCallbackCount: input.overdueCallbackCount },
+    }),
+    user?.phone
+      ? sendTransactionalSms(
+          user.phone,
+          `[BETECH VOICE] Your inbound-call routing has been paused: ${reason} Complete or update your callback tasks, then contact an admin if you need routing restored.`,
+        )
+      : Promise.resolve(),
+  ]);
 }
 
 export async function evaluateVoiceAgentCompliance(userId: string, now = new Date()) {
@@ -152,7 +187,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
   });
 
   if (changed) {
-    await prisma.voiceComplianceEvent.create({
+    const complianceEvent = await prisma.voiceComplianceEvent.create({
       data: {
         complianceId: compliance.id,
         type: status === "RESTRICTED" ? "RESTRICTION_EVALUATED" : "STATUS_EVALUATED",
@@ -173,6 +208,18 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
       reason: "voice_compliance_updated",
       userId,
     });
+    if (status === "RESTRICTED" && existing?.status !== "RESTRICTED") {
+      try {
+        await notifyComplianceRestriction({
+          eventId: complianceEvent.id,
+          userId,
+          reason: restrictionReason,
+          overdueCallbackCount,
+        });
+      } catch (error) {
+        console.error("[voice.compliance.notification_failed]", error);
+      }
+    }
   }
 
   return compliance;
@@ -228,7 +275,7 @@ export async function setVoiceComplianceAdminDecision(input: {
             restrictedAt: now,
           },
   });
-  await prisma.voiceComplianceEvent.create({
+  const complianceEvent = await prisma.voiceComplianceEvent.create({
     data: {
       complianceId: compliance.id,
       type: input.action === "restore" ? "ADMIN_ROUTING_RESTORED" : "ADMIN_RESTRICTION_APPLIED",
@@ -237,6 +284,18 @@ export async function setVoiceComplianceAdminDecision(input: {
     },
   });
   publishVoiceLiveEvent({ type: "presence", reason: "voice_compliance_admin_decision", userId: input.userId });
+  if (input.action === "restrict") {
+    try {
+      await notifyComplianceRestriction({
+        eventId: complianceEvent.id,
+        userId: input.userId,
+        reason: compliance.restrictionReason,
+        overdueCallbackCount: compliance.overdueCallbackCount,
+      });
+    } catch (error) {
+      console.error("[voice.compliance.notification_failed]", error);
+    }
+  }
   return compliance;
 }
 
