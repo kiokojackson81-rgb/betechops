@@ -58,6 +58,28 @@ type CatalogProduct = {
   availability: string;
 };
 type RecommendationType = "CATALOG_PRODUCT" | "CUSTOM_QUOTATION";
+type SiteAssessmentDraft = Partial<{
+  visitId: string;
+  loads: Load[];
+  home: typeof emptyHome;
+  electrical: typeof emptyElectrical;
+  siteDetails: typeof emptySiteDetails;
+  projectDetails: Record<string, string>;
+  aiReview: AssessmentAiReview;
+  activeStep: number;
+  completedSteps: Record<number, boolean>;
+  skippedSteps: Record<number, boolean>;
+  evidenceNames: Record<string, string>;
+  expandedLoadKinds: Record<string, boolean>;
+  recommendationType: RecommendationType;
+  selectedProduct: CatalogProduct;
+  recommendationNotes: string;
+  tiktokUrl: string;
+  customerSignatureName: string;
+  customerAcceptedReport: boolean;
+  technicianSignatureName: string;
+  technicianAcceptedReport: boolean;
+}>;
 
 const presets: LoadPreset[] = [
   { key: "lights", name: "Lights", watts: 10, group: "Lighting" },
@@ -461,6 +483,7 @@ export default function SiteAssessmentPublicClient({
   assessmentToken: string;
 }) {
   const assessmentRootRef = useRef<HTMLElement | null>(null);
+  const clearingDraftRef = useRef(false);
   const storageKey = draftStorageKey(visit.id);
   const initialHome = { ...emptyHome, type: visit.propertyType || emptyHome.type };
   const [loads, setLoads] = useState<Load[]>([]);
@@ -469,6 +492,7 @@ export default function SiteAssessmentPublicClient({
   const [siteDetails, setSiteDetails] = useState(emptySiteDetails);
   const [projectDetails, setProjectDetails] = useState<Record<string, string>>(defaultProjectDetails);
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftSyncStatus, setDraftSyncStatus] = useState<"loading" | "saving" | "saved" | "device-only">("loading");
   const [aiReview, setAiReview] = useState<AssessmentAiReview | null>(null);
   const [isAnalysing, setIsAnalysing] = useState(false);
   const [aiStatus, setAiStatus] = useState<"pending" | "analysing" | "updated" | "unavailable">("pending");
@@ -510,75 +534,66 @@ export default function SiteAssessmentPublicClient({
   );
   const [publishError, setPublishError] = useState("");
   useEffect(() => {
-    try {
-      // Never import legacy/unscoped browser drafts. Each saved assessment is
-      // bound to one SiteVisit, so one customer's loads cannot appear on
-      // another customer's assessment.
-      const draft = localStorage.getItem(storageKey);
-      if (draft) {
-        const parsed = JSON.parse(draft) as Partial<{
-          visitId: string;
-          loads: Load[];
-          home: typeof emptyHome;
-          electrical: typeof emptyElectrical;
-          siteDetails: typeof emptySiteDetails;
-          projectDetails: Record<string, string>;
-          aiReview: AssessmentAiReview;
-          activeStep: number;
-          completedSteps: Record<number, boolean>;
-          skippedSteps: Record<number, boolean>;
-          evidenceNames: Record<string, string>;
-          expandedLoadKinds: Record<string, boolean>;
-          recommendationType: RecommendationType;
-          selectedProduct: CatalogProduct;
-          recommendationNotes: string;
-          tiktokUrl: string;
-          customerSignatureName: string;
-          customerAcceptedReport: boolean;
-          technicianSignatureName: string;
-          technicianAcceptedReport: boolean;
-        }>;
-        if (parsed.visitId === visit.id) {
-          if (parsed.loads) setLoads(parsed.loads);
-          if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
-          if (parsed.electrical)
-            setElectrical({ ...emptyElectrical, ...parsed.electrical });
-          if (parsed.siteDetails)
-            setSiteDetails({ ...emptySiteDetails, ...parsed.siteDetails });
-          if (parsed.projectDetails) setProjectDetails({ ...defaultProjectDetails, ...parsed.projectDetails });
-          if (parsed.aiReview) setAiReview(parsed.aiReview);
-          if (typeof parsed.activeStep === "number")
-            setActiveStep(Math.min(assessmentSteps.length - 1, Math.max(0, parsed.activeStep)));
-          if (parsed.completedSteps) setCompletedSteps(parsed.completedSteps);
-          if (parsed.skippedSteps) setSkippedSteps(parsed.skippedSteps);
-          if (parsed.evidenceNames) setEvidenceNames(parsed.evidenceNames);
-          if (parsed.expandedLoadKinds)
-            setExpandedLoadKinds(parsed.expandedLoadKinds);
-          if (parsed.recommendationType) setRecommendationType(parsed.recommendationType);
-          if (parsed.selectedProduct) setSelectedProduct(parsed.selectedProduct);
-          if (parsed.recommendationNotes) setRecommendationNotes(parsed.recommendationNotes);
-          if (parsed.tiktokUrl) setTiktokUrl(parsed.tiktokUrl);
-          if (parsed.customerSignatureName)
-            setCustomerSignatureName(parsed.customerSignatureName);
-          if (typeof parsed.customerAcceptedReport === "boolean")
-            setCustomerAcceptedReport(parsed.customerAcceptedReport);
-          if (parsed.technicianSignatureName)
-            setTechnicianSignatureName(parsed.technicianSignatureName);
-          if (typeof parsed.technicianAcceptedReport === "boolean")
-            setTechnicianAcceptedReport(parsed.technicianAcceptedReport);
-        }
+    let cancelled = false;
+    const restore = (parsed: SiteAssessmentDraft | null) => {
+      if (!parsed || parsed.visitId !== visit.id) return;
+      if (parsed.loads) setLoads(parsed.loads);
+      if (parsed.home) setHome({ ...emptyHome, ...parsed.home });
+      if (parsed.electrical) setElectrical({ ...emptyElectrical, ...parsed.electrical });
+      if (parsed.siteDetails) setSiteDetails({ ...emptySiteDetails, ...parsed.siteDetails });
+      if (parsed.projectDetails) setProjectDetails({ ...defaultProjectDetails, ...parsed.projectDetails });
+      if (parsed.aiReview) setAiReview(parsed.aiReview);
+      if (typeof parsed.activeStep === "number") setActiveStep(Math.min(assessmentSteps.length - 1, Math.max(0, parsed.activeStep)));
+      if (parsed.completedSteps) setCompletedSteps(parsed.completedSteps);
+      if (parsed.skippedSteps) setSkippedSteps(parsed.skippedSteps);
+      if (parsed.evidenceNames) setEvidenceNames(parsed.evidenceNames);
+      if (parsed.expandedLoadKinds) setExpandedLoadKinds(parsed.expandedLoadKinds);
+      if (parsed.recommendationType) setRecommendationType(parsed.recommendationType);
+      if (parsed.selectedProduct) setSelectedProduct(parsed.selectedProduct);
+      if (parsed.recommendationNotes) setRecommendationNotes(parsed.recommendationNotes);
+      if (parsed.tiktokUrl) setTiktokUrl(parsed.tiktokUrl);
+      if (parsed.customerSignatureName) setCustomerSignatureName(parsed.customerSignatureName);
+      if (typeof parsed.customerAcceptedReport === "boolean") setCustomerAcceptedReport(parsed.customerAcceptedReport);
+      if (parsed.technicianSignatureName) setTechnicianSignatureName(parsed.technicianSignatureName);
+      if (typeof parsed.technicianAcceptedReport === "boolean") setTechnicianAcceptedReport(parsed.technicianAcceptedReport);
+    };
+    const loadDraft = async () => {
+      let localDraft: SiteAssessmentDraft | null = null;
+      try {
+        const draft = localStorage.getItem(storageKey);
+        if (draft) localDraft = JSON.parse(draft) as SiteAssessmentDraft;
+      } catch {
+        localStorage.removeItem(storageKey);
       }
-    } catch {
-      localStorage.removeItem(storageKey);
-    } finally {
-      setDraftLoaded(true);
-    }
-  }, [storageKey, visit.id]);
+      try {
+        const response = await fetch("/api/site-assessment/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: assessmentToken, action: "load" }),
+        });
+        const data = await response.json().catch(() => null);
+        if (!cancelled && response.ok && data?.draft) {
+          restore(data.draft as SiteAssessmentDraft);
+          setDraftSyncStatus("saved");
+        } else if (!cancelled) {
+          restore(localDraft);
+          setDraftSyncStatus(localDraft ? "device-only" : "saved");
+        }
+      } catch {
+        if (!cancelled) {
+          restore(localDraft);
+          setDraftSyncStatus(localDraft ? "device-only" : "saved");
+        }
+      } finally {
+        if (!cancelled) setDraftLoaded(true);
+      }
+    };
+    void loadDraft();
+    return () => { cancelled = true; };
+  }, [assessmentToken, storageKey, visit.id]);
   useEffect(() => {
-    if (draftLoaded)
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({
+    if (!draftLoaded || reportShared || clearingDraftRef.current) return;
+    const draft = {
           visitId: visit.id,
           loads,
           home,
@@ -599,8 +614,20 @@ export default function SiteAssessmentPublicClient({
           customerAcceptedReport,
           technicianSignatureName,
           technicianAcceptedReport,
-        }),
-      );
+        } satisfies SiteAssessmentDraft;
+    localStorage.setItem(storageKey, JSON.stringify(draft));
+    setDraftSyncStatus("saving");
+    const timeout = window.setTimeout(() => {
+      void fetch("/api/site-assessment/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: assessmentToken, action: "save", draft }),
+      }).then((response) => {
+        if (response.ok) setDraftSyncStatus("saved");
+        else setDraftSyncStatus("device-only");
+      }).catch(() => setDraftSyncStatus("device-only"));
+    }, 800);
+    return () => window.clearTimeout(timeout);
   }, [
     activeStep,
     aiReview,
@@ -624,9 +651,11 @@ export default function SiteAssessmentPublicClient({
     technicianSignatureName,
     technicianAcceptedReport,
     visit.id,
+    assessmentToken,
+    reportShared,
   ]);
   const clearDraft = () => {
-    if (!window.confirm("Clear the saved site-assessment draft from this device? This cannot be undone.")) return;
+    if (!window.confirm("Clear the saved site-assessment draft everywhere? This cannot be undone.")) return;
     setLoads([]);
     setHome(initialHome);
     setElectrical(emptyElectrical);
@@ -650,7 +679,16 @@ export default function SiteAssessmentPublicClient({
     setCustomerAcceptedReport(true);
     setTechnicianSignatureName(visit.assignedTechnicianName || "");
     setTechnicianAcceptedReport(true);
+    clearingDraftRef.current = true;
     localStorage.removeItem(storageKey);
+    void fetch("/api/site-assessment/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: assessmentToken, action: "clear" }),
+    }).finally(() => {
+      clearingDraftRef.current = false;
+      setDraftSyncStatus("saved");
+    });
   };
   const openLoad = (load: Load) => {
     setLoadEditorSnapshot(structuredClone(load));
@@ -1169,7 +1207,11 @@ export default function SiteAssessmentPublicClient({
         <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3 text-sm text-cyan-100 sm:flex-row sm:items-center sm:justify-between">
           <span className="min-w-0 break-words">
             {draftLoaded
-              ? "Assessment details save automatically on this device."
+              ? draftSyncStatus === "saving"
+                ? "Saving your assessment securely..."
+                : draftSyncStatus === "saved"
+                  ? "Assessment saved securely. You can resume this link from another browser."
+                  : "Saved on this device. It will sync securely when your connection returns."
               : "Loading saved assessment..."}
           </span>
           <button
@@ -1177,7 +1219,7 @@ export default function SiteAssessmentPublicClient({
             onClick={clearDraft}
             className="min-h-11 w-full rounded-lg border border-rose-300/50 px-3 py-2 font-bold text-rose-200 touch-manipulation sm:w-auto"
           >
-            Clear saved draft
+            Clear saved draft everywhere
           </button>
         </div>
         <div hidden={activeStep !== 0}>

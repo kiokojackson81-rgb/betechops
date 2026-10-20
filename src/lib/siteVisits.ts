@@ -169,6 +169,9 @@ const SITE_VISIT_SCHEMA_SQL = [
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "cancellationRequestedAt" TIMESTAMP(3)`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "cancellationReason" TEXT`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReport" JSONB`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentDraft" JSONB`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentDraftSavedAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentDraftSavedById" TEXT`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReportPdfUrl" TEXT`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReportPublishedAt" TIMESTAMP(3)`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "assessmentReportPublishedById" TEXT`,
@@ -1270,6 +1273,9 @@ export async function publishSiteAssessmentReport(
     UPDATE "SiteVisit"
     SET
       "assessmentReport" = ${report as unknown as Prisma.JsonObject},
+      "assessmentDraft" = NULL,
+      "assessmentDraftSavedAt" = NULL,
+      "assessmentDraftSavedById" = NULL,
       "assessmentReportPdfUrl" = ${`/account/site-visits/${visitId}/report`},
       "assessmentReportPublishedAt" = CURRENT_TIMESTAMP,
       "assessmentReportPublishedById" = ${actor.id},
@@ -1310,6 +1316,63 @@ export async function publishSiteAssessmentReport(
     });
   });
   return visit;
+}
+
+/**
+ * Drafts are intentionally stored on the visit, rather than in browser
+ * storage alone, so a technician can safely resume the signed assessment link
+ * from another phone or browser. Drafts never change the published report.
+ */
+export async function getSiteAssessmentDraft(visitId: string) {
+  await ensureSiteVisitsSchema();
+  const rows = await prisma.$queryRaw<Array<{
+    assessmentDraft: Prisma.JsonValue | null;
+    assessmentDraftSavedAt: Date | string | null;
+  }>>(Prisma.sql`
+    SELECT "assessmentDraft", "assessmentDraftSavedAt"
+    FROM "SiteVisit"
+    WHERE "id" = ${visitId}
+    LIMIT 1
+  `);
+  const row = rows[0];
+  return row
+    ? { draft: row.assessmentDraft, savedAt: toIso(row.assessmentDraftSavedAt) }
+    : null;
+}
+
+export async function saveSiteAssessmentDraft(
+  visitId: string,
+  draft: Prisma.JsonObject,
+  technicianId: string,
+) {
+  await ensureSiteVisitsSchema();
+  const rows = await prisma.$queryRaw<Array<{ assessmentDraftSavedAt: Date | string }>>(Prisma.sql`
+    UPDATE "SiteVisit"
+    SET
+      "assessmentDraft" = ${draft},
+      "assessmentDraftSavedAt" = CURRENT_TIMESTAMP,
+      "assessmentDraftSavedById" = ${technicianId},
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${visitId}
+      AND "assessmentReport" IS NULL
+      AND "status" <> 'CANCELLED'
+    RETURNING "assessmentDraftSavedAt"
+  `);
+  return rows[0] ? toIso(rows[0].assessmentDraftSavedAt) : null;
+}
+
+export async function clearSiteAssessmentDraft(visitId: string, technicianId: string) {
+  await ensureSiteVisitsSchema();
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "SiteVisit"
+    SET
+      "assessmentDraft" = NULL,
+      "assessmentDraftSavedAt" = NULL,
+      "assessmentDraftSavedById" = NULL,
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${visitId}
+      AND "assessmentDraftSavedById" = ${technicianId}
+  `);
 }
 
 export async function updateSiteVisit(
