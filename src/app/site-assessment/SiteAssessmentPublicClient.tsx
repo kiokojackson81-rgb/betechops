@@ -65,14 +65,14 @@ type SiteAssessmentDraft = Partial<{
   electrical: typeof emptyElectrical;
   siteDetails: typeof emptySiteDetails;
   projectDetails: Record<string, string>;
-  aiReview: AssessmentAiReview;
+  aiReview: AssessmentAiReview | null;
   activeStep: number;
   completedSteps: Record<number, boolean>;
   skippedSteps: Record<number, boolean>;
   evidenceNames: Record<string, string>;
   expandedLoadKinds: Record<string, boolean>;
   recommendationType: RecommendationType;
-  selectedProduct: CatalogProduct;
+  selectedProduct: CatalogProduct | null;
   recommendationNotes: string;
   tiktokUrl: string;
   customerSignatureName: string;
@@ -190,6 +190,10 @@ const numberOrBlank = (value: string): NumericField =>
   value === "" ? "" : Number(value);
 const draftStorageKey = (visitId: string) =>
   `betech-site-assessment-draft-v3:${visitId}`;
+// Vercel rejects an oversized multipart request before the publish route can
+// run. Keep the signed report small enough to publish reliably on mobile; the
+// evidence names remain in the report and large originals can be added later.
+const INLINE_EVIDENCE_MAX_BYTES = 3 * 1024 * 1024;
 const assessmentSteps = [
   "Project",
   "Loads",
@@ -1113,7 +1117,9 @@ export default function SiteAssessmentPublicClient({
           panelCount,
         },
       }));
-      evidenceFiles().forEach((file) => form.append("photos", file));
+      const files = evidenceFiles();
+      const attachPhotos = files.reduce((total, file) => total + file.size, 0) <= INLINE_EVIDENCE_MAX_BYTES;
+      if (attachPhotos) files.forEach((file) => form.append("photos", file));
       const response = await fetch("/api/site-assessment/submit", { method: "POST", body: form });
       const data = await response.json().catch(() => null);
       if (
@@ -1132,7 +1138,11 @@ export default function SiteAssessmentPublicClient({
       localStorage.removeItem(storageKey);
       setReportShared(true);
       setIsRevisingReport(false);
-      setPublishMessage("Report shared. The customer has been notified by SMS and, when an email address is available, by email with the PDF attached.");
+      setPublishMessage(
+        attachPhotos
+          ? "Report shared. The customer has been notified by SMS and, when an email address is available, by email with the PDF attached."
+          : "Report shared. Large evidence files were kept out of the mobile submission so they could not block publication; their recorded names remain in the report.",
+      );
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : "Could not publish the site assessment report.");
     } finally {
