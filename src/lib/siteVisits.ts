@@ -1287,6 +1287,9 @@ export async function publishSiteAssessmentReport(
   const visit = publishedRows[0] ? serializeSiteVisit(publishedRows[0]) : null;
   if (!visit) return null;
 
+  // The report has already been persisted. An audit-log outage must never
+  // make the field technician think publication failed or invite a duplicate
+  // submission from a mobile connection.
   await recordSiteVisitEvent({
     siteVisitId: visit.id,
     eventType: options.allowRevision ? "SITE_ASSESSMENT_REPORT_REGENERATED" : "SITE_ASSESSMENT_REPORT_PUBLISHED",
@@ -1300,6 +1303,11 @@ export async function publishSiteAssessmentReport(
       tiktokUrl: report.recommendation.tiktokUrl || null,
       version: report.version,
     },
+  }).catch((error) => {
+    console.error("[site-assessment] audit event failed after publication", {
+      visitId: visit.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
   });
   return visit;
 }

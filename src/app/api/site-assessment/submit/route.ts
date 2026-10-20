@@ -149,7 +149,23 @@ export async function POST(request: Request) {
     attachmentFailures.push("Evidence could not be uploaded because blob storage is not configured.");
   }
 
-  const notification = await dispatchSiteAssessmentReportPublished(published, report);
+  // Delivery happens after persistence and must never reverse a published
+  // report in the technician's browser. A supervisor can resend it later.
+  let notification: Awaited<ReturnType<typeof dispatchSiteAssessmentReportPublished>> | {
+    sms: string;
+    email: string;
+    error: string;
+  };
+  try {
+    notification = await dispatchSiteAssessmentReportPublished(published, report);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Customer delivery failed.";
+    console.error("[site-assessment] delivery failed after publication", {
+      visitId: published.id,
+      error: detail,
+    });
+    notification = { sms: "FAILED", email: "FAILED", error: detail };
+  }
   return NextResponse.json({
     ok: true,
     visit: published,

@@ -1078,6 +1078,18 @@ export default function SiteAssessmentPublicClient({
       evidenceFiles().forEach((file) => form.append("photos", file));
       const response = await fetch("/api/site-assessment/submit", { method: "POST", body: form });
       const data = await response.json().catch(() => null);
+      if (
+        response.status === 409 &&
+        String(data?.error || "").toLowerCase().includes("already been published")
+      ) {
+        // A previous request may have persisted the report but lost its mobile
+        // response while optional email/SMS delivery was still running.
+        localStorage.removeItem(storageKey);
+        setReportShared(true);
+        setIsRevisingReport(false);
+        setPublishMessage("This assessment was already published. Open the Site Visit workspace to review or resend the customer report.");
+        return;
+      }
       if (!response.ok) throw new Error(data?.error || "Could not publish the site assessment report.");
       localStorage.removeItem(storageKey);
       setReportShared(true);
