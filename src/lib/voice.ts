@@ -18,6 +18,7 @@ import {
   getVoiceAdminTestNumber,
   isVoiceAdminTestPhone,
 } from "@/lib/voiceTestNumbers";
+import { isVoiceComplianceRestricted } from "@/lib/voiceCompliance";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
@@ -499,19 +500,7 @@ async function buildVoiceTargets(): Promise<
     adminUserId,
     overflowUserId,
   ].filter((value): value is string => Boolean(value));
-  const [presences, routingPreferences]: [
-    Array<{
-      userId: string;
-      status: string;
-      lastSeenAt: Date;
-      currentCallId: string | null;
-    }>,
-    Array<{
-      userId: string;
-      routingEnabled: boolean;
-      allowAfterHoursCalls: boolean;
-    }>,
-  ] = await Promise.all([
+  const [presences, routingPreferences, complianceRows] = await Promise.all([
     userIds.length
       ? prisma.voiceAgentPresence.findMany({
           where: { userId: { in: userIds } },
@@ -533,6 +522,12 @@ async function buildVoiceTargets(): Promise<
           },
         })
       : Promise.resolve([]),
+    userIds.length
+      ? prisma.voiceAgentCompliance.findMany({
+          where: { userId: { in: userIds } },
+          select: { userId: true, status: true, overrideActive: true },
+        })
+      : Promise.resolve([]),
   ]);
   const presenceByUserId = new Map<string, (typeof presences)[number]>();
   for (const presence of presences) {
@@ -544,6 +539,10 @@ async function buildVoiceTargets(): Promise<
   >();
   for (const preference of routingPreferences) {
     routingPreferenceByUserId.set(preference.userId, preference);
+  }
+  const complianceByUserId = new Map<string, (typeof complianceRows)[number]>();
+  for (const compliance of complianceRows) {
+    complianceByUserId.set(compliance.userId, compliance);
   }
   const activeCalls = userIds.length
     ? await prisma.voiceCall.findMany({
@@ -596,6 +595,7 @@ async function buildVoiceTargets(): Promise<
     const routingPreference = userId
       ? routingPreferenceByUserId.get(userId)
       : null;
+    const compliance = userId ? complianceByUserId.get(userId) : null;
     const webRtcRegistration = userId ? isVoiceWebrtcClientReady(userId) : null;
     const presenceStatus =
       safeString(presence?.status).toUpperCase() || "OFFLINE";
@@ -605,13 +605,16 @@ async function buildVoiceTargets(): Promise<
       ? (activeCallByUserId.get(userId) ?? null)
       : null;
     const hasBusyCall = Boolean(currentCallId || assignedActiveCallId);
-    const routingEnabled = routingPreference?.routingEnabled ?? true;
+    const inboundRestricted = isVoiceComplianceRestricted(compliance);
+    const routingEnabled =
+      (routingPreference?.routingEnabled ?? true) && !inboundRestricted;
     const allowAfterHoursCalls =
       routingPreference?.allowAfterHoursCalls ??
       Boolean(options?.defaultAllowAfterHoursCalls);
     const skipReasons: string[] = [];
     if (!phoneNumber) skipReasons.push("missing_mobile_fallback");
-    if (!routingEnabled) skipReasons.push("routing_disabled");
+    if (!routingEnabled)
+      skipReasons.push(inboundRestricted ? "compliance_restricted" : "routing_disabled");
     if (!userId && label !== "OVERFLOW")
       skipReasons.push("missing_routing_user");
     if (!options?.alwaysDial) {
@@ -725,13 +728,17 @@ async function buildQuotationOwnerVoiceTarget(
   ownerId: string,
   options?: { alwaysDialMobile?: boolean },
 ): Promise<VoiceRouteTarget | null> {
-  const [user, presence, routingPreference, activeCall] = await Promise.all([
+  const [user, presence, routingPreference, compliance, activeCall] = await Promise.all([
     prisma.user.findFirst({
       where: { id: ownerId, isActive: true },
       select: { phone: true },
     }),
     prisma.voiceAgentPresence.findUnique({ where: { userId: ownerId } }),
     prisma.voiceAgentRoutingPreference.findUnique({ where: { userId: ownerId } }),
+    prisma.voiceAgentCompliance.findUnique({
+      where: { userId: ownerId },
+      select: { status: true, overrideActive: true },
+    }),
     prisma.voiceCall.findFirst({
       where: {
         assignedToId: ownerId,
@@ -758,7 +765,9 @@ async function buildQuotationOwnerVoiceTarget(
     }),
   ]);
   const phoneNumber = normalizeVoiceNumber(user?.phone || "");
-  const routingEnabled = routingPreference?.routingEnabled ?? true;
+  const routingEnabled =
+    (routingPreference?.routingEnabled ?? true) &&
+    !isVoiceComplianceRestricted(compliance);
   if (!phoneNumber || !routingEnabled) return null;
 
   const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";

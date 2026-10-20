@@ -129,6 +129,7 @@ model User {
   customerVoiceLeads                   VoiceLead[]                     @relation("VoiceLeadCustomer")
   voicePresence                        VoiceAgentPresence?             @relation("VoicePresenceUser")
   voiceRoutingPreference               VoiceAgentRoutingPreference?    @relation("VoiceRoutingPreferenceUser")
+  voiceCompliance                      VoiceAgentCompliance?           @relation("VoiceComplianceUser")
   voiceRoutingOverflowConfigs          VoiceRoutingConfig[]            @relation("VoiceRoutingOverflowUser")
   authoredVoiceCallNotes               VoiceCallNote[]                 @relation("VoiceCallNoteAuthor")
   customerVoiceCallNotes               VoiceCallNote[]                 @relation("VoiceCallNoteCustomer")
@@ -2222,6 +2223,51 @@ model VoiceAgentRoutingPreference {
   user                 User     @relation("VoiceRoutingPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([routingEnabled, allowAfterHoursCalls])
+}
+
+/// Voice-only customer-care compliance. This is intentionally separate from a
+/// manual routing preference so a manager can distinguish an operational
+/// choice from an automatic callback-work restriction.
+model VoiceAgentCompliance {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  status                 String   @default("NORMAL")
+  overdueCallbackCount   Int      @default(0)
+  oldestOverdueAt        DateTime?
+  lowRatingCount30d      Int      @default(0)
+  feedbackResponseCount30d Int    @default(0)
+  averageRating30d       Float    @default(0)
+  qualityReviewRequired  Boolean  @default(false)
+  restrictionReason      String?
+  restrictedAt           DateTime?
+  manualRestriction      Boolean  @default(false)
+  manualRestrictionReason String?
+  manualRestrictedAt     DateTime?
+  overrideActive         Boolean  @default(false)
+  overrideReason         String?
+  overrideById           String?
+  overrideAt             DateTime?
+  overrideBaselineAt     DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  user                   User     @relation("VoiceComplianceUser", fields: [userId], references: [id], onDelete: Cascade)
+  events                 VoiceComplianceEvent[]
+
+  @@index([status, updatedAt])
+  @@index([qualityReviewRequired, updatedAt])
+}
+
+model VoiceComplianceEvent {
+  id           String               @id @default(cuid())
+  complianceId String
+  type         String
+  reason       String?
+  payload      Json?
+  createdAt    DateTime             @default(now())
+  compliance   VoiceAgentCompliance @relation(fields: [complianceId], references: [id], onDelete: Cascade)
+
+  @@index([complianceId, createdAt])
+  @@index([type, createdAt])
 }
 
 model VoiceRoutingConfig {

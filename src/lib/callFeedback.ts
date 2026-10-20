@@ -4,6 +4,7 @@ import { generateFeedbackToken } from "@/lib/feedbackToken";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { getShopBaseUrl } from "@/lib/runtimeUrls";
+import { evaluateVoiceAgentCompliance } from "@/lib/voiceCompliance";
 
 export const CALL_FEEDBACK_STAFF_HELPFUL_OPTIONS = [
   "Very helpful",
@@ -242,7 +243,7 @@ export async function submitFeedbackByToken(input: CallFeedbackInput) {
     return { ok: false, error: "invalid_token" } as const;
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const session = await tx.voiceCallFeedback.findUnique({
       where: { token },
       select: {
@@ -286,11 +287,16 @@ export async function submitFeedbackByToken(input: CallFeedbackInput) {
         id: true,
         token: true,
         submittedAt: true,
+        agentId: true,
       },
     });
 
     return { ok: true, feedback } as const;
   });
+  if (result.ok && result.feedback.agentId) {
+    await evaluateVoiceAgentCompliance(result.feedback.agentId);
+  }
+  return result;
 }
 
 export async function createReplacementFeedbackSession(phone: string) {

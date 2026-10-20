@@ -9,6 +9,77 @@ import {
 } from "@/lib/voiceOperations";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+const PROVIDER_TIMEOUT_MS = 10_000;
+
+function getTransferEndpoint(username: string) {
+  return username.toLowerCase() === "sandbox"
+    ? "https://voice.sandbox.africastalking.com/call/transfer"
+    : "https://voice.africastalking.com/call/transfer";
+}
+
+async function transferActiveProviderCall(input: {
+  sessionId: string;
+  phoneNumber: string;
+  holdMusicUrl: string | null;
+}) {
+  const username = String(process.env.AFRICASTALKING_USERNAME || "").trim();
+  const apiKey = String(process.env.AFRICASTALKING_API_KEY || "").trim();
+  if (!username || !apiKey) {
+    throw new Error("voice_transfer_provider_not_configured");
+  }
+
+  const form = new URLSearchParams({
+    username,
+    sessionId: input.sessionId,
+    phoneNumber: input.phoneNumber,
+    // The agent is the callee on the existing two-legged customer call.
+    // Replacing that leg keeps the customer connected during the handoff.
+    callLeg: "callee",
+  });
+  if (input.holdMusicUrl) form.set("holdMusicUrl", input.holdMusicUrl);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort("voice_transfer_provider_timeout"),
+    PROVIDER_TIMEOUT_MS,
+  );
+  try {
+    const response = await fetch(getTransferEndpoint(username), {
+      method: "POST",
+      headers: {
+        apiKey,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: form.toString(),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const rawBody = await response.text().catch(() => "");
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : {};
+    } catch {}
+    const providerResult =
+      payload.callTransferResponse && typeof payload.callTransferResponse === "object"
+        ? (payload.callTransferResponse as Record<string, unknown>)
+        : payload;
+    const status = String(providerResult.status || "").toLowerCase();
+    if (!response.ok || (status && status !== "success")) {
+      console.error("[voice.transfer.provider_rejected]", {
+        status: response.status,
+        providerStatus: providerResult.status || null,
+        errorMessage: providerResult.errorMessage || null,
+      });
+      throw new Error("voice_transfer_provider_rejected");
+    }
+    return { holdMusicApplied: Boolean(input.holdMusicUrl) };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function isActiveVoiceCallStatus(status: string | null | undefined) {
   return ["queued", "ringing", "initiated", "dialing", "in_progress", "answered", "connected", "transferred"].includes(
@@ -32,6 +103,7 @@ export async function POST(request: Request) {
       targetUserId?: string | null;
       targetPhone?: string | null;
       targetLabel?: string | null;
+      holdMusicUrl?: string | null;
     };
 
     if (!body.callId) {
@@ -45,6 +117,7 @@ export async function POST(request: Request) {
         assignedToId: true,
         isActive: true,
         status: true,
+        sessionId: true,
       },
     });
 
@@ -82,20 +155,34 @@ export async function POST(request: Request) {
       }
     }
 
+    if (!normalizedTargetPhone) {
+      return NextResponse.json({ ok: false, error: "transfer_phone_required" }, { status: 400 });
+    }
+
+    const requestedHoldMusicUrl = String(body.holdMusicUrl || "").trim();
+    const configuredHoldMusicUrl = String(
+      process.env.AFRICASTALKING_TRANSFER_HOLD_MUSIC_URL || "",
+    ).trim();
+    const holdMusicUrl = requestedHoldMusicUrl || configuredHoldMusicUrl || null;
+    if (holdMusicUrl && !/^https?:\/\//i.test(holdMusicUrl)) {
+      return NextResponse.json({ ok: false, error: "invalid_hold_music_url" }, { status: 400 });
+    }
+
+    const providerTransfer = await transferActiveProviderCall({
+      sessionId: call.sessionId,
+      phoneNumber: normalizedTargetPhone,
+      holdMusicUrl,
+    });
+
     let reassignmentResult: Awaited<ReturnType<typeof reassignVoiceWork>> | null = null;
     if (targetUserId) {
-      reassignmentResult = await reassignVoiceWork({
-        callId: call.id,
-        assignedToId: targetUserId,
-      });
+      reassignmentResult = await reassignVoiceWork({ callId: call.id, assignedToId: targetUserId });
     }
 
     await addVoiceCallNote({
       voiceCallId: call.id,
       authorId: viewer.actorUserId,
-      note: targetUserId
-        ? `Call transferred to ${targetLabel}.`
-        : `External transfer requested to ${targetLabel}.`,
+      note: `Live call transferred to ${targetLabel}${providerTransfer.holdMusicApplied ? " with transfer hold audio." : "."}`,
     });
 
     return NextResponse.json(
@@ -107,6 +194,7 @@ export async function POST(request: Request) {
           targetPhone: normalizedTargetPhone || null,
           targetLabel,
           reassigned: Boolean(reassignmentResult),
+          holdMusicApplied: providerTransfer.holdMusicApplied,
         },
       },
       { status: 200 },

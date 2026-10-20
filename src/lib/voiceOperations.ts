@@ -16,6 +16,11 @@ import {
 } from "@/lib/voiceHistoryRange";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 import { getVoiceWebrtcRegistryEntry } from "@/lib/voiceWebrtc/registry";
+import {
+  evaluateAllVoiceCompliance,
+  evaluateVoiceAgentCompliance,
+  isVoiceComplianceRestricted,
+} from "@/lib/voiceCompliance";
 
 export const VOICE_ALLOWED_ATTENDANT_CATEGORIES = [
   "DIRECT_SALES_OPS",
@@ -59,6 +64,7 @@ export function isVoiceOperationsSchemaMissingError(error: unknown) {
     message.includes("VoiceCallNote") ||
     message.includes("VoiceFollowUp") ||
     message.includes("VoiceAgentRoutingPreference") ||
+    message.includes("VoiceAgentCompliance") ||
     message.includes("VoiceRoutingConfig")
   );
 }
@@ -1171,6 +1177,25 @@ async function listVoiceAgents() {
           updatedAt: true,
         },
       },
+      voiceCompliance: {
+        select: {
+          status: true,
+          overdueCallbackCount: true,
+          oldestOverdueAt: true,
+          lowRatingCount30d: true,
+          feedbackResponseCount30d: true,
+          averageRating30d: true,
+          qualityReviewRequired: true,
+          restrictionReason: true,
+          restrictedAt: true,
+          overrideActive: true,
+          overrideReason: true,
+          overrideById: true,
+          overrideAt: true,
+          manualRestriction: true,
+          manualRestrictionReason: true,
+        },
+      },
     },
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });
@@ -1378,7 +1403,10 @@ function serializePresenceRow(
   const webRtcRegistry = getVoiceWebrtcRegistryEntry(agent.id);
 
   const effectiveStatus = effectivePresenceStatus(agent.voicePresence?.status);
-  const routingEnabled = agent.voiceRoutingPreference?.routingEnabled ?? true;
+  const complianceRestricted = isVoiceComplianceRestricted(agent.voiceCompliance);
+  const routingEnabled =
+    (agent.voiceRoutingPreference?.routingEnabled ?? true) &&
+    !complianceRestricted;
   const allowAfterHoursCalls =
     agent.voiceRoutingPreference?.allowAfterHoursCalls ?? false;
 
@@ -1409,6 +1437,15 @@ function serializePresenceRow(
     dismissedPopupCallId: agent.voicePresence?.dismissedPopupCallId ?? null,
     dismissedPopupAt: toIso(agent.voicePresence?.dismissedPopupAt),
     routingEnabled,
+    compliance: agent.voiceCompliance
+      ? {
+          ...agent.voiceCompliance,
+          oldestOverdueAt: toIso(agent.voiceCompliance.oldestOverdueAt),
+          restrictedAt: toIso(agent.voiceCompliance.restrictedAt),
+          overrideAt: toIso(agent.voiceCompliance.overrideAt),
+          inboundRestricted: complianceRestricted,
+        }
+      : null,
     allowAfterHoursCalls,
     routingPreferenceUpdatedAt: toIso(agent.voiceRoutingPreference?.updatedAt),
     activeCallCount,
@@ -1432,6 +1469,7 @@ function serializePresenceRow(
 
 export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   const { viewer } = input;
+  await evaluateAllVoiceCompliance();
   const todayWindow = getVoiceHistoryDateRange("today");
   const historyWindow = getVoiceHistoryDateRange(
     normalizeVoiceHistoryRange(input.historyRange),
@@ -2975,6 +3013,7 @@ export async function saveVoiceFollowUp(input: {
       callId: followUp.voiceCallId,
       userId: followUp.assignedToId,
     });
+    if (followUp.assignedToId) await evaluateVoiceAgentCompliance(followUp.assignedToId);
     return followUp;
   }
 
@@ -3035,6 +3074,7 @@ export async function saveVoiceFollowUp(input: {
     callId: followUp.voiceCallId,
     userId: followUp.assignedToId,
   });
+  if (followUp.assignedToId) await evaluateVoiceAgentCompliance(followUp.assignedToId);
   return followUp;
 }
 
@@ -3068,6 +3108,7 @@ export async function updateVoiceQueueStatus(input: {
       callId: followUp.voiceCallId,
       userId: followUp.assignedToId,
     });
+    if (followUp.assignedToId) await evaluateVoiceAgentCompliance(followUp.assignedToId);
 
     return {
       type: "follow_up" as const,

@@ -569,6 +569,7 @@ export default function VoiceConsoleClient({
   const [followUpTitle, setFollowUpTitle] = useState("");
   const [followUpDueAt, setFollowUpDueAt] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
+  const [followUpAssignedToId, setFollowUpAssignedToId] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [presencePending, setPresencePending] = useState(false);
@@ -588,6 +589,7 @@ export default function VoiceConsoleClient({
   const [showTransferPanel, setShowTransferPanel] = useState(false);
   const [transferAssigneeId, setTransferAssigneeId] = useState("");
   const [transferPhone, setTransferPhone] = useState("");
+  const [transferHoldMusicUrl, setTransferHoldMusicUrl] = useState("");
   const [transferPending, setTransferPending] = useState(false);
   const [recentSearch, setRecentSearch] = useState("");
   const [recentFilter, setRecentFilter] = useState<
@@ -632,6 +634,7 @@ export default function VoiceConsoleClient({
   const [routingPreferencePendingKey, setRoutingPreferencePendingKey] =
     useState<string | null>(null);
   const [routingConfigPending, setRoutingConfigPending] = useState(false);
+  const [compliancePendingKey, setCompliancePendingKey] = useState<string | null>(null);
   const [overflowUserIdDraft, setOverflowUserIdDraft] = useState(
     initialData.routingConfig?.overflowUserId ?? "",
   );
@@ -954,6 +957,7 @@ export default function VoiceConsoleClient({
     setShowTransferPanel(false);
     setTransferAssigneeId("");
     setTransferPhone("");
+    setTransferHoldMusicUrl("");
   }, [activeInteractionCall]);
 
   useEffect(() => {
@@ -1295,12 +1299,29 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const handleEndLiveCall = () => {
+    const liveCallDisposition =
+      activeInteractionCall?.id === selectedCall?.id
+        ? (data.selectedCallDetail as any)?.disposition
+        : null;
+    if (activeInteractionCall && !liveCallDisposition) {
+      setError("Select a disposition before ending the call. This is required for call wrap-up.");
+      setSelectedCallId(activeInteractionCall.id);
+      setSelectedPhone(activeInteractionCall.callerNumber);
+      setDetailModalOpen(true);
+      setContextTab("customer");
+      return;
+    }
+    softphone.hangUp();
+  };
+
   const createFollowUpTask = async (input: {
     voiceCallId?: string | null;
     phone?: string | null;
     title: string;
     dueAt?: string | null;
     notes?: string | null;
+    assignedToId?: string | null;
   }) => {
     const response = await fetch(
       `${pollBaseHref.replace("/live", "/follow-ups")}`,
@@ -1313,6 +1334,7 @@ export default function VoiceConsoleClient({
           title: input.title,
           dueAt: input.dueAt || null,
           notes: input.notes || null,
+          assignedToId: input.assignedToId || null,
         }),
       },
     );
@@ -1333,10 +1355,12 @@ export default function VoiceConsoleClient({
         title: followUpTitle.trim(),
         dueAt: followUpDueAt || null,
         notes: followUpNotes.trim() || null,
+        assignedToId: followUpAssignedToId || null,
       });
       setFollowUpTitle("");
       setFollowUpDueAt("");
       setFollowUpNotes("");
+      setFollowUpAssignedToId("");
       await refreshSnapshot(selectedCallId, selectedPhone);
     } catch (followUpError) {
       console.error("[voice.console.follow_up_failed]", followUpError);
@@ -1449,6 +1473,7 @@ export default function VoiceConsoleClient({
                 selectedAgent.name ||
                 selectedAgent.phone
               : normalizedTransferPhone || null,
+            holdMusicUrl: transferHoldMusicUrl.trim() || null,
           }),
         },
       );
@@ -1459,6 +1484,7 @@ export default function VoiceConsoleClient({
       setShowTransferPanel(false);
       setTransferAssigneeId("");
       setTransferPhone("");
+      setTransferHoldMusicUrl("");
       await refreshSnapshot(selectedCallId, selectedPhone);
     } catch (transferError) {
       console.error("[voice.console.transfer_failed]", transferError);
@@ -1525,6 +1551,26 @@ export default function VoiceConsoleClient({
       setError("Could not save the overflow routing target.");
     } finally {
       setRoutingConfigPending(false);
+    }
+  };
+
+  const handleComplianceDecision = async (userId: string, action: "restore" | "restrict") => {
+    setCompliancePendingKey(userId);
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/compliance")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.error || "voice_compliance_failed"));
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (complianceError) {
+      console.error("[voice.console.compliance_failed]", complianceError);
+      setError("Could not update the inbound-call restriction.");
+    } finally {
+      setCompliancePendingKey(null);
     }
   };
 
@@ -2041,12 +2087,25 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const viewerCompliance = (data.agents as any[]).find(
+    (agent) => agent.id === data.viewer.targetUserId,
+  )?.compliance;
+
   return (
     <div className="relative z-0 w-full overflow-x-hidden bg-slate-950 text-slate-100">
       <main className="relative z-0 mx-auto box-border max-w-[1500px] overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
         {error ? (
           <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
             {error}
+          </div>
+        ) : null}
+        {viewerCompliance?.inboundRestricted ? (
+          <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            New inbound calls are temporarily paused because callback work is overdue. Complete or update your callback tasks to restore routing; you can still call customers back.
+          </div>
+        ) : viewerCompliance?.qualityReviewRequired ? (
+          <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Recent customer feedback needs attention. Review your call quality and complete any service-recovery callbacks.
           </div>
         ) : null}
 
@@ -2453,7 +2512,7 @@ export default function VoiceConsoleClient({
                           <div className="mt-3 flex flex-wrap gap-2.5">
                             <button
                               type="button"
-                              onClick={softphone.hangUp}
+                              onClick={handleEndLiveCall}
                               className="min-w-[150px] rounded-full border border-rose-500/40 bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-500"
                             >
                               End Call
@@ -2482,12 +2541,11 @@ export default function VoiceConsoleClient({
                               <div className="flex flex-col gap-3">
                                 <div>
                                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                    Transfer Call
+                                    Live Transfer
                                   </div>
                                   <div className="mt-1 text-sm text-slate-300">
-                                    Reassign this live call to admin, another
-                                    routing agent, or log an external transfer
-                                    number.
+                                    The customer stays on the line while the
+                                    selected agent or external number is dialled.
                                   </div>
                                 </div>
                                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
@@ -2530,6 +2588,27 @@ export default function VoiceConsoleClient({
                                       ? "Transferring..."
                                       : "Confirm Transfer"}
                                   </button>
+                                </div>
+                                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
+                                  <label className="block text-xs font-semibold text-amber-100">
+                                    Transfer hold-audio URL (optional)
+                                  </label>
+                                  <input
+                                    value={transferHoldMusicUrl}
+                                    onChange={(event) =>
+                                      setTransferHoldMusicUrl(event.target.value)
+                                    }
+                                    type="url"
+                                    placeholder="https://…/please-wait-while-we-connect-you.mp3"
+                                    className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-500"
+                                  />
+                                  <p className="mt-2 text-xs leading-5 text-slate-400">
+                                    Use an approved public MP3/WAV that says:
+                                    “Please wait while we connect you to the
+                                    appropriate agent to assist you.” Leave this
+                                    blank to use the centre-wide configured
+                                    hold audio.
+                                  </p>
                                 </div>
                               </div>
                             </div>
@@ -4351,6 +4430,7 @@ export default function VoiceConsoleClient({
                           const row = agent as any;
                           const routingPending =
                             routingPreferencePendingKey === row.id;
+                          const compliancePending = compliancePendingKey === row.id;
                           return (
                             <div
                               key={row.id}
@@ -4411,6 +4491,15 @@ export default function VoiceConsoleClient({
                                 </div>
                               </div>
                               <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                {row.compliance ? (
+                                  <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-slate-300">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span>Compliance</span>
+                                      <span className="font-semibold uppercase tracking-wide text-amber-200">{String(row.compliance.status).replaceAll("_", " ")}</span>
+                                    </div>
+                                    <div className="mt-1 text-slate-400">{row.compliance.overdueCallbackCount} overdue callbacks · {row.compliance.lowRatingCount30d} low ratings (30 days)</div>
+                                  </div>
+                                ) : null}
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                                   Today
                                 </div>
@@ -4436,6 +4525,20 @@ export default function VoiceConsoleClient({
                                 </div>
                               </div>
                               <div className="mt-4 space-y-3 border-t border-slate-800 pt-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="text-sm font-semibold text-white">Inbound compliance</div>
+                                    <div className="text-xs text-slate-500">Restricted staff can still complete callbacks.</div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={compliancePending}
+                                    onClick={() => void handleComplianceDecision(row.id, row.compliance?.inboundRestricted ? "restore" : "restrict")}
+                                    className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide ${row.compliance?.inboundRestricted ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100" : "border-rose-500/30 bg-rose-500/10 text-rose-100"}`}
+                                  >
+                                    {compliancePending ? "Saving..." : row.compliance?.inboundRestricted ? "Restore" : "Restrict"}
+                                  </button>
+                                </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
                                     <div className="text-sm font-semibold text-white">
@@ -4982,6 +5085,22 @@ export default function VoiceConsoleClient({
                             type="datetime-local"
                             className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-500/40"
                           />
+                          {mode === "admin" ? (
+                            <select
+                              value={followUpAssignedToId}
+                              onChange={(event) =>
+                                setFollowUpAssignedToId(event.target.value)
+                              }
+                              className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-500/40"
+                            >
+                              <option value="">Assign to current call owner</option>
+                              {visibleAgents.map((agent) => (
+                                <option key={agent.id} value={agent.id}>
+                                  {(agent as any).displayName || agent.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
                           <textarea
                             value={followUpNotes}
                             onChange={(event) =>
