@@ -8,6 +8,7 @@ const SINGLE_CALLBACK_RESTRICTION_MS = 2 * 60 * 60 * 1000;
 const LOW_RATING_LIMIT = 2;
 const QUALITY_RESPONSE_MINIMUM = 5;
 const QUALITY_AVERAGE_THRESHOLD = 3;
+const ADMIN_OVERRIDE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 export type VoiceComplianceStatus =
   | "NORMAL"
@@ -57,11 +58,33 @@ async function notifyComplianceRestriction(input: {
   ]);
 }
 
+function formatOverrideDeadline(value: Date) {
+  return value.toLocaleString("en-KE", {
+    timeZone: "Africa/Nairobi",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function notifyOverrideGrace(input: { userId: string; deadline: Date }) {
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { phone: true },
+  });
+  if (!user?.phone) return;
+  await sendTransactionalSms(
+    user.phone,
+    `[BETECH VOICE] An admin has temporarily restored your inbound-call routing. You have until ${formatOverrideDeadline(input.deadline)} (EAT) to complete or update your overdue callback tasks. If the work remains overdue after this deadline, routing will be restricted again automatically.`,
+  );
+}
+
 export async function evaluateVoiceAgentCompliance(userId: string, now = new Date()) {
   const windowStart = new Date(now);
   windowStart.setDate(windowStart.getDate() - 30);
 
-  const [existing, overdueTasks, feedbackStats, lowRatingCount, newestViolation] =
+  const [existing, overdueTasks, feedbackStats, lowRatingCount] =
     await Promise.all([
       prisma.voiceAgentCompliance.findUnique({ where: { userId } }),
       prisma.voiceFollowUp.findMany({
@@ -71,7 +94,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
           status: { notIn: ["resolved", "closed"] },
         },
         orderBy: { dueAt: "asc" },
-        select: { id: true, dueAt: true, updatedAt: true },
+        select: { id: true, dueAt: true },
       }),
       prisma.voiceCallFeedback.aggregate({
         where: { agentId: userId, submitted: true, submittedAt: { gte: windowStart } },
@@ -85,11 +108,6 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
           submittedAt: { gte: windowStart },
           rating: { lte: LOW_RATING_LIMIT },
         },
-      }),
-      prisma.voiceCallFeedback.findFirst({
-        where: { agentId: userId, submitted: true, submittedAt: { gte: windowStart } },
-        orderBy: { submittedAt: "desc" },
-        select: { submittedAt: true },
       }),
     ]);
 
@@ -109,15 +127,14 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
         now.getTime() - oldestOverdueAt.getTime() >=
           SINGLE_CALLBACK_RESTRICTION_MS,
     );
-  const hasNewViolationAfterOverride = Boolean(
-    existing?.overrideBaselineAt &&
-      ((overdueTasks.some(
-        (task) => task.updatedAt.getTime() > existing.overrideBaselineAt!.getTime(),
-      ) ||
-        (newestViolation?.submittedAt?.getTime() ?? 0) >
-          existing.overrideBaselineAt.getTime())),
+  const overrideGraceEndsAt = existing?.overrideAt
+    ? new Date(existing.overrideAt.getTime() + ADMIN_OVERRIDE_GRACE_MS)
+    : null;
+  const overrideActive = Boolean(
+    existing?.overrideActive &&
+      overrideGraceEndsAt &&
+      now.getTime() < overrideGraceEndsAt.getTime(),
   );
-  const overrideActive = Boolean(existing?.overrideActive && !hasNewViolationAfterOverride);
   const manualRestriction = Boolean(existing?.manualRestriction);
 
   const status: VoiceComplianceStatus = manualRestriction ||
@@ -180,9 +197,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
         status === "RESTRICTED"
           ? existing?.restrictedAt ?? now
           : null,
-      overrideActive: hasNewViolationAfterOverride
-        ? false
-        : existing?.overrideActive ?? false,
+      overrideActive,
     },
   });
 
@@ -246,6 +261,7 @@ export async function setVoiceComplianceAdminDecision(input: {
   reason?: string | null;
 }) {
   const now = new Date();
+  const overrideGraceEndsAt = new Date(now.getTime() + ADMIN_OVERRIDE_GRACE_MS);
   const reason = String(input.reason || "").trim() || null;
   const current = await evaluateVoiceAgentCompliance(input.userId, now);
   const compliance = await prisma.voiceAgentCompliance.update({
@@ -280,7 +296,12 @@ export async function setVoiceComplianceAdminDecision(input: {
       complianceId: compliance.id,
       type: input.action === "restore" ? "ADMIN_ROUTING_RESTORED" : "ADMIN_RESTRICTION_APPLIED",
       reason,
-      payload: eventPayload({ adminId: input.adminId, action: input.action }),
+      payload: eventPayload({
+        adminId: input.adminId,
+        action: input.action,
+        overrideGraceEndsAt:
+          input.action === "restore" ? overrideGraceEndsAt.toISOString() : null,
+      }),
     },
   });
   publishVoiceLiveEvent({ type: "presence", reason: "voice_compliance_admin_decision", userId: input.userId });
@@ -294,6 +315,12 @@ export async function setVoiceComplianceAdminDecision(input: {
       });
     } catch (error) {
       console.error("[voice.compliance.notification_failed]", error);
+    }
+  } else {
+    try {
+      await notifyOverrideGrace({ userId: input.userId, deadline: overrideGraceEndsAt });
+    } catch (error) {
+      console.error("[voice.compliance.override_notification_failed]", error);
     }
   }
   return compliance;

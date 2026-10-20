@@ -4498,6 +4498,11 @@ export default function VoiceConsoleClient({
                                       <span className="font-semibold uppercase tracking-wide text-amber-200">{String(row.compliance.status).replaceAll("_", " ")}</span>
                                     </div>
                                     <div className="mt-1 text-slate-400">{row.compliance.overdueCallbackCount} overdue callbacks · {row.compliance.lowRatingCount30d} low ratings (30 days)</div>
+                                    {row.compliance.overrideGraceEndsAt ? (
+                                      <div className="mt-1 text-amber-100">
+                                        Grace period ends {formatDateTime(row.compliance.overrideGraceEndsAt)}
+                                      </div>
+                                    ) : null}
                                   </div>
                                 ) : null}
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">

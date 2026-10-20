@@ -1443,6 +1443,9 @@ function serializePresenceRow(
           oldestOverdueAt: toIso(agent.voiceCompliance.oldestOverdueAt),
           restrictedAt: toIso(agent.voiceCompliance.restrictedAt),
           overrideAt: toIso(agent.voiceCompliance.overrideAt),
+          overrideGraceEndsAt: agent.voiceCompliance.overrideActive && agent.voiceCompliance.overrideAt
+            ? new Date(agent.voiceCompliance.overrideAt.getTime() + 24 * 60 * 60 * 1000).toISOString()
+            : null,
           inboundRestricted: complianceRestricted,
         }
       : null,
