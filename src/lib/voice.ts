@@ -1173,25 +1173,10 @@ export async function getVoiceRouteTargets(
   const agentTargets = [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN].filter(
     (target) => target.phoneNumber && target.routingEnabled,
   );
-  // This is the final, emergency destination for every inbound call. It must
-  // stay diallable even when the admin browser is offline or an automated
-  // compliance restriction is active; the provider will ring the configured
-  // admin mobile number after all eligible agents are exhausted.
-  const adminTarget: VoiceRouteTarget = {
-    ...targets.ADMIN,
-    routingEnabled: true,
-    isAvailable: true,
-    skipReasons: targets.ADMIN.skipReasons.filter(
-      (reason) =>
-        reason !== "routing_disabled" &&
-        reason !== "compliance_restricted" &&
-        !reason.startsWith("status_") &&
-        reason !== "stale_presence" &&
-        reason !== "missing_presence" &&
-        reason !== "missing_last_seen" &&
-        reason !== "active_call_in_progress",
-    ),
-  };
+  // An administrator's Receive calls switch is authoritative. In particular,
+  // it must not be turned back on by an emergency-routing shortcut; the
+  // separately configured overflow line is the no-missed-call destination.
+  const adminTarget = targets.ADMIN;
   const overflowTarget = targets.OVERFLOW;
   const quotationOwnerTargets = [
     targets.BRENDAH,
@@ -1199,22 +1184,24 @@ export async function getVoiceRouteTargets(
     targets.STEPHEN,
     targets.ADMIN,
   ].filter((target) => target.phoneNumber && target.routingEnabled);
-  const directFallbackTargets = [adminTarget, overflowTarget].filter(
+  // Keep the designated overflow number first. Admin is only a final option
+  // when that admin has explicitly left Receive calls enabled.
+  const directFallbackTargets = [overflowTarget, adminTarget].filter(
     (target) => target.phoneNumber && target.routingEnabled,
   );
 
-  if (isVoiceAdminTestPhone(callerNumber) && adminTarget.phoneNumber) {
+  if (isVoiceAdminTestPhone(callerNumber) && directFallbackTargets.length) {
     return {
       routeType: "DIRECT_FALLBACK",
-      orderedTargets: [adminTarget],
-      primaryTarget: adminTarget,
-      availableTargets: adminTarget.isAvailable ? [adminTarget] : [],
+      orderedTargets: directFallbackTargets,
+      primaryTarget: directFallbackTargets[0] ?? null,
+      availableTargets: directFallbackTargets.filter((target) => target.isAvailable),
       unavailableTargets: allConfiguredTargets.filter(
-        (target) => target.label !== "ADMIN",
+        (target) => !directFallbackTargets.includes(target),
       ),
-      hasAvailableTarget: adminTarget.isAvailable,
+      hasAvailableTarget: directFallbackTargets.some((target) => target.isAvailable),
       hasRoutableTarget: true,
-      usedMobileFallback: false,
+      usedMobileFallback: directFallbackTargets.some((target) => target.label === "OVERFLOW"),
       routeReason: "admin_only" as const,
     };
   }
