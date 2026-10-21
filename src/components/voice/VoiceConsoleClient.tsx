@@ -635,6 +635,7 @@ export default function VoiceConsoleClient({
     useState<string | null>(null);
   const [routingConfigPending, setRoutingConfigPending] = useState(false);
   const [compliancePendingKey, setCompliancePendingKey] = useState<string | null>(null);
+  const [bulkResolvePending, setBulkResolvePending] = useState(false);
   const [overflowUserIdDraft, setOverflowUserIdDraft] = useState(
     initialData.routingConfig?.overflowUserId ?? "",
   );
@@ -1571,6 +1572,32 @@ export default function VoiceConsoleClient({
       setError("Could not update the inbound-call restriction.");
     } finally {
       setCompliancePendingKey(null);
+    }
+  };
+
+  const handleResolveAllOverdueCallbacks = async () => {
+    const overdueCount = visibleAgents.reduce(
+      (total, agent: any) => total + Number(agent.compliance?.overdueCallbackCount || 0),
+      0,
+    );
+    if (!overdueCount) return;
+    if (!window.confirm(`Mark all ${overdueCount} overdue callback tasks as resolved? Their history will be retained.`)) return;
+    setBulkResolvePending(true);
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/follow-ups")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resolve_all_overdue" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.error || "voice_bulk_resolve_failed"));
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (resolveError) {
+      console.error("[voice.console.bulk_resolve_overdue_failed]", resolveError);
+      setError("Could not resolve all overdue callbacks.");
+    } finally {
+      setBulkResolvePending(false);
     }
   };
 
@@ -4374,9 +4401,19 @@ export default function VoiceConsoleClient({
                           Routing status for active voice operators
                         </h2>
                       </div>
-                      <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
-                        {visibleAgents.length}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={bulkResolvePending || !visibleAgents.some((agent: any) => Number(agent.compliance?.overdueCallbackCount || 0) > 0)}
+                          onClick={() => void handleResolveAllOverdueCallbacks()}
+                          className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {bulkResolvePending ? "Clearing..." : "Clear overdue callbacks"}
+                        </button>
+                        <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
+                          {visibleAgents.length}
+                        </span>
+                      </div>
                     </div>
                     <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">

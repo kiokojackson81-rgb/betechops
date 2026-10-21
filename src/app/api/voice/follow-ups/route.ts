@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   isVoiceOperationsSchemaMissingError,
   resolveVoiceViewer,
+  resolveAllOverdueVoiceFollowUps,
   saveVoiceFollowUp,
   updateVoiceQueueStatus,
 } from "@/lib/voiceOperations";
@@ -31,7 +32,18 @@ export async function POST(request: Request) {
       dueAt?: string | null;
       notes?: string | null;
       queueType?: "task" | "lead" | null;
+      action?: "resolve_all_overdue" | null;
     };
+
+    if (body.action === "resolve_all_overdue") {
+      if (!viewer.isAdmin) {
+        return NextResponse.json({ error: "admin_required" }, { status: 403 });
+      }
+      const result = await resolveAllOverdueVoiceFollowUps({
+        adminId: viewer.actorUserId,
+      });
+      return NextResponse.json({ ok: true, result });
+    }
 
     if (body.status && ((body.id && body.queueType === "task") || (body.voiceLeadId && body.queueType === "lead"))) {
       const result = await updateVoiceQueueStatus({

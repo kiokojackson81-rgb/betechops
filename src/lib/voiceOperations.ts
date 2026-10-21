@@ -3145,3 +3145,57 @@ export async function updateVoiceQueueStatus(input: {
 
   throw new Error("queue_status_target_required");
 }
+
+/** Resolve overdue callback work without deleting its customer or call history. */
+export async function resolveAllOverdueVoiceFollowUps(input: {
+  adminId: string;
+}) {
+  const now = new Date();
+  const overdue = await prisma.voiceFollowUp.findMany({
+    where: {
+      dueAt: { lte: now },
+      status: { notIn: ["resolved", "closed"] },
+    },
+    select: { id: true, assignedToId: true, voiceCallId: true },
+  });
+  if (!overdue.length) return { resolvedCount: 0, affectedAgentCount: 0 };
+
+  await prisma.voiceFollowUp.updateMany({
+    where: { id: { in: overdue.map((followUp) => followUp.id) } },
+    data: { status: "resolved" },
+  });
+
+  const assignedUserIds = Array.from(
+    new Set(
+      overdue
+        .map((followUp) => followUp.assignedToId)
+        .filter((userId): userId is string => Boolean(userId)),
+    ),
+  );
+  const compliances = await Promise.all(
+    assignedUserIds.map((userId) => evaluateVoiceAgentCompliance(userId, now)),
+  );
+
+  await Promise.all(
+    compliances.map(async (compliance) => {
+      const resolvedCount = overdue.filter(
+        (followUp) => followUp.assignedToId === compliance.userId,
+      ).length;
+      await prisma.voiceComplianceEvent.create({
+        data: {
+          complianceId: compliance.id,
+          type: "OVERDUE_CALLBACKS_BULK_RESOLVED",
+          reason: "All overdue callback tasks marked resolved by an administrator.",
+          payload: { adminId: input.adminId, resolvedCount, resolvedAt: now.toISOString() },
+        },
+      });
+      publishVoiceLiveEvent({
+        type: "follow_up",
+        reason: "voice_overdue_callbacks_bulk_resolved",
+        userId: compliance.userId,
+      });
+    }),
+  );
+
+  return { resolvedCount: overdue.length, affectedAgentCount: assignedUserIds.length };
+}
