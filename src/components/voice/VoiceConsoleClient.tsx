@@ -4567,7 +4567,7 @@ export default function VoiceConsoleClient({
                                 </div>
                               </div>
                               <div className="mt-4 space-y-3 border-t border-slate-800 pt-4">
-                                <div className="flex items-center justify-between gap-3">
+                                {row.role !== "ADMIN" ? <div className="flex items-center justify-between gap-3">
                                   <div>
                                     <div className="text-sm font-semibold text-white">Inbound compliance</div>
                                     <div className="text-xs text-slate-500">Restricted staff can still complete callbacks.</div>
@@ -4580,7 +4580,7 @@ export default function VoiceConsoleClient({
                                   >
                                     {compliancePending ? "Saving..." : row.compliance?.inboundRestricted ? "Restore" : "Restrict"}
                                   </button>
-                                </div>
+                                </div> : null}
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
                                     <div className="text-sm font-semibold text-white">

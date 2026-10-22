@@ -90,6 +90,17 @@ async function notifyComplianceRestored(userId: string) {
 }
 
 export async function evaluateVoiceAgentCompliance(userId: string, now = new Date()) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!user) throw new Error("VOICE_USER_NOT_FOUND");
+  // Admin/fallback staff must always remain reachable. Their callback work is
+  // still visible, but it never participates in automated inbound restrictions.
+  if (user.role === "ADMIN") {
+    return prisma.voiceAgentCompliance.upsert({
+      where: { userId },
+      create: { userId, status: "NORMAL", overdueCallbackCount: 0, lowRatingCount30d: 0, feedbackResponseCount30d: 0, averageRating30d: 0, qualityReviewRequired: false },
+      update: { status: "NORMAL", overdueCallbackCount: 0, oldestOverdueAt: null, restrictionReason: null, restrictedAt: null, overrideActive: false, manualRestriction: false, manualRestrictionReason: null, manualRestrictedAt: null },
+    });
+  }
   const windowStart = new Date(now);
   windowStart.setDate(windowStart.getDate() - 30);
 
@@ -276,6 +287,8 @@ export async function setVoiceComplianceAdminDecision(input: {
   action: "restore" | "restrict";
   reason?: string | null;
 }) {
+  const target = await prisma.user.findUnique({ where: { id: input.userId }, select: { role: true } });
+  if (target?.role === "ADMIN") throw new Error("ADMIN_VOICE_COMPLIANCE_EXEMPT");
   const now = new Date();
   const overrideGraceEndsAt = new Date(now.getTime() + ADMIN_OVERRIDE_GRACE_MS);
   const reason = String(input.reason || "").trim() || null;

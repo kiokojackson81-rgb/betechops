@@ -1437,7 +1437,7 @@ function serializePresenceRow(
     dismissedPopupCallId: agent.voicePresence?.dismissedPopupCallId ?? null,
     dismissedPopupAt: toIso(agent.voicePresence?.dismissedPopupAt),
     routingEnabled,
-    compliance: agent.voiceCompliance
+    compliance: agent.role === "ADMIN" ? null : agent.voiceCompliance
       ? {
           ...agent.voiceCompliance,
           oldestOverdueAt: toIso(agent.voiceCompliance.oldestOverdueAt),
