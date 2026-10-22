@@ -1770,6 +1770,7 @@ export default function LipaPolePoleAdminClient({
                                   onConvertToPos={() => void handleConvertToPos()}
                                   onConvertToProject={() => void handleConvertToProject()}
                                   onReversePayment={handleReversePayment}
+                                  onEditPayment={handleEditPayment}
                                   onVerifyPayment={(paymentId) => void handleReviewPayment(paymentId, "VERIFY")}
                                   onRejectPayment={(paymentId) => void handleReviewPayment(paymentId, "REJECT")}
                                   canReviewPayments={canReviewPayments}
@@ -2411,6 +2412,7 @@ function ExpandedRowDetails({
   onConvertToPos,
   onConvertToProject,
   onReversePayment,
+  onEditPayment,
   onVerifyPayment,
   onRejectPayment,
   canReviewPayments,
@@ -2430,6 +2432,7 @@ function ExpandedRowDetails({
   onConvertToPos: () => void;
   onConvertToProject: () => void;
   onReversePayment: (paymentId: string) => void;
+  onEditPayment: (payment: LppDetail["payments"][number]) => void;
   onVerifyPayment: (paymentId: string) => void;
   onRejectPayment: (paymentId: string) => void;
   canReviewPayments: boolean;
@@ -2688,7 +2691,7 @@ function ExpandedRowDetails({
                           </span>
                         </td>
                         <td className="py-3 text-right">
-                          {canReviewPayments && payment.status !== "REVERSED" ? <button type="button" className="mr-3 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200 hover:text-cyan-100" onClick={() => void handleEditPayment(payment)}>Edit</button> : null}
+                          {canReviewPayments && payment.status !== "REVERSED" ? <button type="button" className="mr-3 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200 hover:text-cyan-100" onClick={() => void onEditPayment(payment)}>Edit</button> : null}
                           {payment.status === "PENDING" && canReviewPayments ? (
                             <div className="flex justify-end gap-3">
                               <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300 hover:text-emerald-200" onClick={() => onVerifyPayment(payment.id)}>Verify</button>
