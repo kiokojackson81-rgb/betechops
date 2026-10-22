@@ -1117,6 +1117,21 @@ export default function LipaPolePoleAdminClient({
     }
   }
 
+  async function handleEditPayment(payment: LppDetail["payments"][number]) {
+    if (!selectedId) return;
+    const method = window.prompt("Payment method (MPESA, CASH, BANK, CARD or OTHER)", payment.method);
+    if (!method) return;
+    const reference = window.prompt("Payment reference", payment.reference || "");
+    if (reference === null) return;
+    const notes = window.prompt("Payment notes", payment.notes || "");
+    if (notes === null) return;
+    try {
+      await readJson(`/api/lipa-pole-pole/${selectedId}/payments/${payment.id}`, { method: "PATCH", body: JSON.stringify({ method: method.toUpperCase(), reference: reference.trim() || null, notes: notes.trim() || null, receivedAt: payment.receivedAt }) });
+      await refreshList(selectedId);
+      setBanner({ tone: "success", text: "Payment details updated. The change was recorded in the audit log." });
+    } catch (error) { showError(error); }
+  }
+
   async function handleReviewPayment(paymentId: string, action: "VERIFY" | "REJECT") {
     if (!selectedId) return;
     const reason = action === "REJECT" ? window.prompt("Enter rejection reason") : null;
@@ -2673,6 +2688,7 @@ function ExpandedRowDetails({
                           </span>
                         </td>
                         <td className="py-3 text-right">
+                          {canReviewPayments && payment.status !== "REVERSED" ? <button type="button" className="mr-3 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200 hover:text-cyan-100" onClick={() => void handleEditPayment(payment)}>Edit</button> : null}
                           {payment.status === "PENDING" && canReviewPayments ? (
                             <div className="flex justify-end gap-3">
                               <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300 hover:text-emerald-200" onClick={() => onVerifyPayment(payment.id)}>Verify</button>
