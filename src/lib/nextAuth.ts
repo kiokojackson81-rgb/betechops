@@ -9,6 +9,7 @@ import { readVerifiedPhoneToken } from "@/lib/phoneOtpAuth";
 import { Prisma } from "@prisma/client";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { PRODUCT_CONTRIBUTOR_EMAIL } from "@/lib/productContributorConfig";
+import { isStephenOtpProtectedUser, verifyStephenLoginOtp } from "@/lib/stephenLoginOtp";
 
 type ExtendedToken = {
   email?: string;
@@ -147,6 +148,10 @@ export const authOptions = {
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) return null;
 
+        // Stephen's password verifies the first factor only. The dedicated OTP
+        // provider below is the only path that may create his session.
+        if (isStephenOtpProtectedUser(user)) return null;
+
         return {
           id: user.id,
           email: user.email,
@@ -155,6 +160,47 @@ export const authOptions = {
           isAgent: isAgentUser,
           agentStatus: user.agentProfile?.status ?? null,
         };
+      },
+    }),
+    CredentialsProvider({
+      id: "stephen-sms-otp",
+      name: "SMS verification",
+      credentials: {
+        challengeId: { label: "SMS challenge", type: "text" },
+        code: { label: "Verification code", type: "text" },
+      },
+      async authorize(credentials) {
+        try {
+          const userId = await verifyStephenLoginOtp(
+            String(credentials?.challengeId || ""),
+            String(credentials?.code || ""),
+          );
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              role: true,
+              isActive: true,
+              agentProfile: { select: { id: true, status: true } },
+            },
+          });
+          if (!user || !user.isActive || !isStephenOtpProtectedUser(user)) return null;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            isAgent: Boolean(user.agentProfile),
+            agentStatus: user.agentProfile?.status ?? null,
+          };
+        } catch (error) {
+          console.warn("[stephen-login-otp] verification rejected", {
+            reason: error instanceof Error ? error.message : "unknown",
+          });
+          return null;
+        }
       },
     }),
     CredentialsProvider({
@@ -172,7 +218,9 @@ export const authOptions = {
           where: { id: payload.userId },
           select: nextAuthOtpUserSelect,
         });
-        if (!resolved || !resolved.isActive) return null;
+        // Stephen must use password plus the dedicated SMS challenge; a generic
+        // phone OTP cannot be used as an alternate way around that policy.
+        if (!resolved || !resolved.isActive || isStephenOtpProtectedUser(resolved)) return null;
 
         const resolvedAgent = await resolveAgentProfileForAuth({
           userId: resolved.id,

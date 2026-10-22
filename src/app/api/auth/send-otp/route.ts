@@ -71,7 +71,6 @@ export async function POST(req: NextRequest) {
     console.info("[send-otp] OTP persisted", {
       channel: identifierType,
       identifier: otpPayload.normalizedIdentifier,
-      code: otpPayload.code,
     });
 
     if (identifierType === "email") {
