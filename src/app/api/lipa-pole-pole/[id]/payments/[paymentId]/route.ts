@@ -29,6 +29,7 @@ export async function PATCH(request: Request, { params }: Context) {
   `);
   if (!before[0]) return noStoreJson({ error: "Payment not found." }, { status: 404 });
   if (before[0].status === "REVERSED") return noStoreJson({ error: "A reversed payment cannot be edited." }, { status: 409 });
+  const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId()) ?? undefined;
 
   await prisma.$transaction([
     prisma.$executeRaw(Prisma.sql`
@@ -36,7 +37,7 @@ export async function PATCH(request: Request, { params }: Context) {
       WHERE "id" = ${paymentId} AND "lipaPolePoleId" = ${id}
     `),
     prisma.actionLog.create({ data: {
-      actorId: (auth.session?.user as { id?: string } | undefined)?.id ?? await getActorId(), entity: "LipaPolePole", entityId: id, action: "PAYMENT_DETAILS_EDITED",
+      actorId, entity: "LipaPolePole", entityId: id, action: "PAYMENT_DETAILS_EDITED",
       before: { paymentId, amount: before[0].amount.toString(), method: before[0].method, reference: before[0].reference, notes: before[0].notes, receivedAt: before[0].receivedAt.toISOString() },
       after: { paymentId, method: parsed.data.method, reference: parsed.data.reference || null, notes: parsed.data.notes || null, receivedAt: receivedAt.toISOString() },
     }}),
