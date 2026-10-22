@@ -1119,6 +1119,8 @@ export default function LipaPolePoleAdminClient({
 
   async function handleEditPayment(payment: LppDetail["payments"][number]) {
     if (!selectedId) return;
+    const amount = window.prompt("Payment amount (KES)", String(payment.amount));
+    if (!amount) return;
     const method = window.prompt("Payment method (MPESA, CASH, BANK, CARD or OTHER)", payment.method);
     if (!method) return;
     const reference = window.prompt("Payment reference", payment.reference || "");
@@ -1126,7 +1128,7 @@ export default function LipaPolePoleAdminClient({
     const notes = window.prompt("Payment notes", payment.notes || "");
     if (notes === null) return;
     try {
-      await readJson(`/api/lipa-pole-pole/${selectedId}/payments/${payment.id}`, { method: "PATCH", body: JSON.stringify({ method: method.toUpperCase(), reference: reference.trim() || null, notes: notes.trim() || null, receivedAt: payment.receivedAt }) });
+      await readJson(`/api/lipa-pole-pole/${selectedId}/payments/${payment.id}`, { method: "PATCH", body: JSON.stringify({ amount, method: method.toUpperCase(), reference: reference.trim() || null, notes: notes.trim() || null, receivedAt: payment.receivedAt }) });
       await refreshList(selectedId);
       setBanner({ tone: "success", text: "Payment details updated. The change was recorded in the audit log." });
     } catch (error) { showError(error); }

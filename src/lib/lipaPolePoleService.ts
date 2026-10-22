@@ -401,6 +401,17 @@ export type ReviewLppPaymentInput = {
   rejectionReason?: string | null;
 };
 
+export type UpdateLppPaymentInput = {
+  lipaPolePoleId: string;
+  paymentId: string;
+  amount: number | string | Prisma.Decimal;
+  method: LipaPolePolePaymentMethod;
+  reference?: string | null;
+  notes?: string | null;
+  receivedAt: Date | string;
+  updatedById: string;
+};
+
 export type ReverseLppPaymentInput = {
   lipaPolePoleId: string;
   paymentId: string;
@@ -1514,6 +1525,35 @@ export async function recordLppPayment(
         : "PAYMENT_RECEIVED",
     });
   }
+  return result;
+}
+
+export async function updateLppPayment(input: UpdateLppPaymentInput, db: DbClient = prisma) {
+  const amount = toMoney(input.amount);
+  if (amount.lte(0)) throw new Error("INVALID_PAYMENT_AMOUNT");
+  const receivedAt = normalizeOptionalDate(input.receivedAt);
+  if (!receivedAt || receivedAt.getTime() > Date.now() + 5 * 60 * 1000) throw new Error("PAYMENT_DATE_IN_FUTURE");
+  const reference = normalizeLppPaymentReference(input.method, input.reference);
+  const result = await withLppTransaction(db, async (tx) => {
+    const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
+    const payments = await getLppPayments(tx, input.lipaPolePoleId);
+    const payment = payments.find((entry) => entry.id === input.paymentId);
+    if (!payment) throw new Error("LPP_PAYMENT_NOT_FOUND");
+    if (payment.status === "REVERSED") throw new Error("LPP_PAYMENT_NOT_EDITABLE");
+    if (reference) {
+      const duplicate = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT "id" FROM "LipaPolePolePayment" WHERE UPPER(BTRIM("reference")) = UPPER(${reference}) AND "id" <> ${input.paymentId} LIMIT 1`);
+      if (duplicate[0]) throw new Error("DUPLICATE_PAYMENT_REFERENCE");
+    }
+    const updatedPayments = payments.map((entry) => entry.id === payment.id ? { ...entry, amount, method: input.method, reference, notes: trimToNull(input.notes ?? null), receivedAt } : entry);
+    const nextSummary = computeLppFinancialSummary({ agreedTotal: lpp.agreedTotal, payments: updatedPayments });
+    if (nextSummary.totalPaid.gt(lpp.agreedTotal)) throw new Error("LPP_OVERPAYMENT_NOT_ALLOWED");
+    await tx.$executeRaw(Prisma.sql`UPDATE "LipaPolePolePayment" SET "amount" = ${amount}, "method" = ${input.method}::"LipaPolePolePaymentMethod", "reference" = ${reference}, "notes" = ${trimToNull(input.notes ?? null)}, "receivedAt" = ${receivedAt} WHERE "id" = ${input.paymentId}`);
+    const completion = await updateLppStatusAndCompletion(tx, { lpp, payments: await getLppPayments(tx, input.lipaPolePoleId), now: receivedAt });
+    await writeLppEvent(tx, { lipaPolePoleId: input.lipaPolePoleId, eventType: "PAYMENT_DETAILS_EDITED", actorId: input.updatedById, metadata: { paymentId: payment.id, previousAmount: payment.amount.toString(), amount: amount.toString(), reference } });
+    await writeActionLog(tx, { actorId: input.updatedById, entity: "LipaPolePole", entityId: input.lipaPolePoleId, action: "PAYMENT_DETAILS_EDITED", before: { paymentId: payment.id, amount: payment.amount.toString(), method: payment.method, reference: payment.reference, notes: payment.notes, receivedAt: payment.receivedAt.toISOString() }, after: { paymentId: payment.id, amount: amount.toString(), method: input.method, reference, notes: trimToNull(input.notes ?? null), receivedAt: receivedAt.toISOString(), totalPaid: completion.summary.totalPaid.toString(), balance: completion.summary.balance.toString() } });
+    return { paymentId: payment.id, summary: completion.summary };
+  });
+  if (db === prisma && input.method === "MPESA") await syncLppMpesaPaymentToLedger(result.paymentId).catch(() => undefined);
   return result;
 }
 
