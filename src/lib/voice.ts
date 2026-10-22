@@ -18,7 +18,7 @@ import {
   getVoiceAdminTestNumber,
   isVoiceAdminTestPhone,
 } from "@/lib/voiceTestNumbers";
-import { isVoiceComplianceRestricted } from "@/lib/voiceCompliance";
+import { evaluateVoiceAgentCompliance, isVoiceComplianceRestricted } from "@/lib/voiceCompliance";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
@@ -2077,6 +2077,11 @@ async function closeVoiceCallbackWorkForAnsweredCall(call: {
   const phoneVariants = getCustomerContactPhones(call);
   if (!phoneVariants.length) return;
 
+  const affectedTasks = await prisma.voiceFollowUp.findMany({
+    where: { phone: { in: phoneVariants }, status: { in: ["pending", "contacted"] } },
+    select: { assignedToId: true },
+  });
+
   const followUpResult = await prisma.voiceFollowUp.updateMany({
     where: {
       phone: { in: phoneVariants },
@@ -2106,6 +2111,14 @@ async function closeVoiceCallbackWorkForAnsweredCall(call: {
       callId: call.id,
       userId: call.assignedToId ?? null,
     });
+    // A later answered call is a real customer contact. Re-check every owner
+    // immediately so a cleared callback restriction is restored without
+    // waiting for the next scheduled compliance sweep.
+    await Promise.allSettled(
+      [...new Set(affectedTasks.map((task) => task.assignedToId).filter((id): id is string => Boolean(id)))].map((userId) =>
+        evaluateVoiceAgentCompliance(userId),
+      ),
+    );
   }
 }
 

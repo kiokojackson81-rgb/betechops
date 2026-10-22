@@ -80,6 +80,15 @@ async function notifyOverrideGrace(input: { userId: string; deadline: Date }) {
   );
 }
 
+async function notifyComplianceRestored(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
+  if (!user?.phone) return;
+  await sendTransactionalSms(
+    user.phone,
+    "[BETECH VOICE] Your overdue call tasks have been cleared. Your inbound-call routing has been restored automatically. Thank you for completing the customer follow-up.",
+  );
+}
+
 export async function evaluateVoiceAgentCompliance(userId: string, now = new Date()) {
   const windowStart = new Date(now);
   windowStart.setDate(windowStart.getDate() - 30);
@@ -233,6 +242,13 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
         });
       } catch (error) {
         console.error("[voice.compliance.notification_failed]", error);
+      }
+    }
+    if (status === "NORMAL" && existing?.status === "RESTRICTED") {
+      try {
+        await notifyComplianceRestored(userId);
+      } catch (error) {
+        console.error("[voice.compliance.restore_notification_failed]", error);
       }
     }
   }
