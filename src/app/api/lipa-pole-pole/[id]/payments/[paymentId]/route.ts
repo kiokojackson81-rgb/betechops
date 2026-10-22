@@ -30,6 +30,7 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!before[0]) return noStoreJson({ error: "Payment not found." }, { status: 404 });
   if (before[0].status === "REVERSED") return noStoreJson({ error: "A reversed payment cannot be edited." }, { status: 409 });
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId()) ?? undefined;
+  if (!actorId) return noStoreJson({ error: "Unable to identify the administrator making this change." }, { status: 401 });
 
   await prisma.$transaction([
     prisma.$executeRaw(Prisma.sql`
