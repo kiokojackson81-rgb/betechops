@@ -1707,19 +1707,22 @@ async function resolveVoiceCallbackOwnerIdForPhone(
   phone: string,
   assignedToId?: string | null,
 ) {
-  const routingUsers = await resolveRoutingUsers();
   const routingTargets = await buildVoiceTargets();
   const candidateTargets = [
     routingTargets.BRENDAH,
     routingTargets.JENNIFER,
+    routingTargets.STEPHEN,
   ].filter((target) => target.label !== "ADMIN" && target.userId);
 
   if (!candidateTargets.length) return null;
-  if (assignedToId && assignedToId !== routingUsers.ADMIN) {
-    return (
-      candidateTargets.find((target) => target.userId === assignedToId)
-        ?.userId ?? assignedToId
+  // A callback is operational work, not emergency routing.  Only the sales
+  // callback pool may own it; an admin (or any other arbitrary call target)
+  // must never become its owner.
+  if (assignedToId) {
+    const assignedCandidate = candidateTargets.find(
+      (target) => target.userId === assignedToId,
     );
+    if (assignedCandidate?.userId) return assignedCandidate.userId;
   }
 
   const stickyTarget = await findStickyOwnerTarget(phone, candidateTargets);
@@ -2022,6 +2025,10 @@ async function ensureAutoCallbackFollowUp(input: {
     },
     orderBy: [{ updatedAt: "desc" }],
   });
+  const callbackOwnerId = await resolveVoiceCallbackOwnerIdForPhone(
+    input.phone,
+    input.assignedToId,
+  );
 
   const notes =
     input.notes?.trim() ||
@@ -2036,7 +2043,7 @@ async function ensureAutoCallbackFollowUp(input: {
       data: {
         voiceCallId: input.voiceCallId,
         voiceLeadId: input.voiceLeadId ?? existing.voiceLeadId,
-        assignedToId: input.assignedToId ?? existing.assignedToId,
+        assignedToId: callbackOwnerId,
         title,
         // Keep the earliest SLA deadline and consolidate repeat misses into
         // the same customer task instead of creating callback duplicates.
@@ -2052,7 +2059,7 @@ async function ensureAutoCallbackFollowUp(input: {
     data: {
       voiceCallId: input.voiceCallId,
       voiceLeadId: input.voiceLeadId ?? null,
-      assignedToId: input.assignedToId ?? null,
+      assignedToId: callbackOwnerId,
       phone: input.phone,
       title,
       status: "pending",
@@ -2078,14 +2085,14 @@ async function closeVoiceCallbackWorkForAnsweredCall(call: {
   if (!phoneVariants.length) return;
 
   const affectedTasks = await prisma.voiceFollowUp.findMany({
-    where: { phone: { in: phoneVariants }, status: { in: ["pending", "contacted"] } },
+    where: { phone: { in: phoneVariants }, status: { notIn: ["resolved", "closed"] } },
     select: { assignedToId: true },
   });
 
   const followUpResult = await prisma.voiceFollowUp.updateMany({
     where: {
       phone: { in: phoneVariants },
-      status: { in: ["pending", "contacted"] },
+      status: { notIn: ["resolved", "closed"] },
     },
     data: {
       status: "resolved",

@@ -1759,6 +1759,15 @@ export default function VoiceConsoleClient({
       ),
     [data.assignmentCandidates],
   );
+  // The admin is a live-call fallback only.  Queue ownership must remain with
+  // sales/marketing agents so missed callers cannot be stranded with admin.
+  const callbackAssignableEmployees = useMemo(
+    () =>
+      assignableEmployees.filter(
+        (agent: any) => String(agent.role || "").toUpperCase() !== "ADMIN",
+      ),
+    [assignableEmployees],
+  );
 
   const queueItems = useMemo(() => {
     const query = queueSearch.trim().toLowerCase();
@@ -4324,7 +4333,7 @@ export default function VoiceConsoleClient({
                                             className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
                                           >
                                             <option value="">Reassign</option>
-                                            {assignableEmployees.map((agent: any) => (
+                                            {callbackAssignableEmployees.map((agent: any) => (
                                               <option
                                                 key={agent.id}
                                                 value={agent.id}

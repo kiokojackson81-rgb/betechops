@@ -1245,6 +1245,94 @@ async function listVoiceAssignmentCandidates() {
   });
 }
 
+/**
+ * Callback work belongs to active sales/marketing agents, never the admin
+ * fallback line.  Calls may still be transferred to the admin, but missed
+ * callers and follow-ups are distributed to this operational pool.
+ */
+async function listVoiceCallbackAssignmentCandidates() {
+  return prisma.user.findMany({
+    where: {
+      isActive: true,
+      role: { not: "ADMIN" },
+      oneVoiceCustomerNumber: { not: null },
+      attendantCategory: { in: [...VOICE_ALLOWED_ATTENDANT_CATEGORIES] },
+    },
+    select: { id: true },
+    orderBy: [{ name: "asc" }, { email: "asc" }],
+  });
+}
+
+/** Move legacy callback work away from the admin fallback, balancing it by
+ * each agent's current open workload.  It is idempotent and runs before the
+ * console snapshot is built, so a refresh repairs older records as well. */
+async function redistributeAdminCallbackWork() {
+  const [admins, candidates] = await Promise.all([
+    prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } }),
+    listVoiceCallbackAssignmentCandidates(),
+  ]);
+  const adminIds = admins.map((user) => user.id);
+  const candidateIds = candidates.map((user) => user.id);
+  if (!adminIds.length || !candidateIds.length) return;
+
+  const [openTasks, openLeads, workload] = await Promise.all([
+    prisma.voiceFollowUp.findMany({
+      where: {
+        assignedToId: { in: adminIds },
+        status: { notIn: ["resolved", "closed"] },
+      },
+      select: { id: true, phone: true },
+      orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.voiceLead.findMany({
+      where: {
+        assignedToId: { in: adminIds },
+        status: { in: ["open", "pending_follow_up"] },
+      },
+      select: { id: true, phone: true },
+      orderBy: [{ updatedAt: "asc" }],
+    }),
+    prisma.voiceFollowUp.groupBy({
+      by: ["assignedToId"],
+      where: {
+        assignedToId: { in: candidateIds },
+        status: { notIn: ["resolved", "closed"] },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+  if (!openTasks.length && !openLeads.length) return;
+
+  const loadByUserId = new Map(candidateIds.map((id) => [id, 0]));
+  for (const row of workload) {
+    if (row.assignedToId) loadByUserId.set(row.assignedToId, row._count._all);
+  }
+  const phoneOwners = new Map<string, string>();
+  const nextOwner = (phone: string) => {
+    const existing = phoneOwners.get(phone);
+    if (existing) return existing;
+    const owner = [...candidateIds].sort((a, b) => {
+      const loadDifference = (loadByUserId.get(a) ?? 0) - (loadByUserId.get(b) ?? 0);
+      return loadDifference || a.localeCompare(b);
+    })[0];
+    if (!owner) return null;
+    phoneOwners.set(phone, owner);
+    loadByUserId.set(owner, (loadByUserId.get(owner) ?? 0) + 1);
+    return owner;
+  };
+
+  for (const item of openLeads) {
+    const owner = nextOwner(item.phone);
+    if (!owner) continue;
+    await prisma.voiceLead.update({ where: { id: item.id }, data: { assignedToId: owner } });
+  }
+  for (const item of openTasks) {
+    const owner = nextOwner(item.phone);
+    if (!owner) continue;
+    await prisma.voiceFollowUp.update({ where: { id: item.id }, data: { assignedToId: owner } });
+  }
+}
+
 async function getVoiceRoutingConfig() {
   return prisma.voiceRoutingConfig.findUnique({
     where: { key: "default" },
@@ -1274,11 +1362,11 @@ function buildFollowUpWhere(
   scope: "all" | "mine" = "all",
 ) {
   if (viewer.isAdmin && scope !== "mine") {
-    return { status: { in: ["pending", "contacted"] } };
+    return { status: { notIn: ["resolved", "closed"] } };
   }
   return {
     assignedToId: viewer.targetUserId,
-    status: { in: ["pending", "contacted"] },
+    status: { notIn: ["resolved", "closed"] },
   };
 }
 
@@ -1472,6 +1560,7 @@ function serializePresenceRow(
 
 export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   const { viewer } = input;
+  await redistributeAdminCallbackWork();
   await evaluateAllVoiceCompliance();
   const todayWindow = getVoiceHistoryDateRange("today");
   const historyWindow = getVoiceHistoryDateRange(
@@ -2812,6 +2901,10 @@ export async function reassignVoiceWork(input: {
   ) {
     throw new Error("voice_assignment_target_must_be_active_staff_with_one_voice_number");
   }
+  const isAdminFallback = assignee.role === "ADMIN";
+  if (isAdminFallback && input.queueId) {
+    throw new Error("admin_cannot_own_missed_call_or_follow_up_work");
+  }
 
   if (input.callId) {
     const call = await prisma.voiceCall.update({
@@ -2821,13 +2914,17 @@ export async function reassignVoiceWork(input: {
       },
     });
 
-    await prisma.voiceFollowUp.updateMany({
-      where: {
-        voiceCallId: input.callId,
-        status: { in: ["pending", "contacted"] },
-      },
-      data: { assignedToId: input.assignedToId },
-    });
+    // An admin may receive a live emergency transfer, but must never inherit
+    // the associated missed-call/callback queue item.
+    if (!isAdminFallback) {
+      await prisma.voiceFollowUp.updateMany({
+        where: {
+          voiceCallId: input.callId,
+          status: { notIn: ["resolved", "closed"] },
+        },
+        data: { assignedToId: input.assignedToId },
+      });
+    }
 
     const callContext = await prisma.voiceCall.findUnique({
       where: { id: input.callId },
