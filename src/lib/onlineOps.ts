@@ -724,10 +724,15 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
         dueAt: { gte: period.start, lte: period.end },
       },
     }),
-    prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } }),
+    prisma.user.findUnique({ where: { id: attendantId }, select: { email: true, attendantCategory: true } }),
   ]);
 
   const payoutJumiaSales = marketplaceSalesSummary.totals.jumiaSales;
+  // General User Ops can use the general dashboard but is not a sales or
+  // technical commission category. Do not revive a stale ledger amount here.
+  const commissionEligible = ["JUMIA_KILIMALL_OPS", "BETECH_OPS"].includes(
+    String(user?.attendantCategory ?? "").trim(),
+  );
   const payoutKilimallSales = marketplaceSalesSummary.totals.kilimallSales;
   const marketplaceSales = marketplaceSalesSummary.totals.sales;
 
@@ -846,7 +851,8 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const baseSalary = plan?.baseSalary ?? 0;
   const transportAllowance = plan?.defaultTransportAllowance ?? 0;
 
-  const totalEarnings = baseSalary + transportAllowance + grossCommission + summed.bonusTotal + summed.commissionTopUpTotal;
+  const appliedGrossCommission = commissionEligible ? grossCommission : 0;
+  const totalEarnings = baseSalary + transportAllowance + appliedGrossCommission + summed.bonusTotal + summed.commissionTopUpTotal;
   const totalDeductions = summed.chamaTotal + summed.latenessTotal + summed.disciplineTotal + summed.otherDeductionsTotal;
   const netPay = totalEarnings - totalDeductions;
 
@@ -869,6 +875,10 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     commissionTotal = grossCommission;
     commissionSourceLabel = "computed-gross";
   }
+  if (!commissionEligible) {
+    commissionTotal = 0;
+    commissionSourceLabel = "category-ineligible";
+  }
 
   const brendahDebug = isBrendah ? ` dedupSales=${brendahMergedSales} dedupProfit=${brendahMergedProfit}` : "";
   console.info(
@@ -883,14 +893,14 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     directSales: directCommissionMode === "PROFIT_10" ? effectiveDirectSales : directStats.sales,
     directProfit: effectiveDirectProfit,
     marketplaceSales,
-    directCommission: directSalesCommission,
-    commissionDirect: directSalesCommission,
-    commissionMarketplaceJumia: marketplaceCommissionSplit.jumiaCommission,
-    commissionMarketplaceKilimall: marketplaceCommissionSplit.kilimallCommission,
-    marketplaceCommission,
-    supervisorBonus,
+    directCommission: commissionEligible ? directSalesCommission : 0,
+    commissionDirect: commissionEligible ? directSalesCommission : 0,
+    commissionMarketplaceJumia: commissionEligible ? marketplaceCommissionSplit.jumiaCommission : 0,
+    commissionMarketplaceKilimall: commissionEligible ? marketplaceCommissionSplit.kilimallCommission : 0,
+    marketplaceCommission: commissionEligible ? marketplaceCommission : 0,
+    supervisorBonus: commissionEligible ? supervisorBonus : 0,
     returnsDeduction,
-    grossCommission,
+    grossCommission: appliedGrossCommission,
     baseSalary,
     transportAllowance,
     bonusTotal: summed.bonusTotal,

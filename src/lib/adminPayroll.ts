@@ -205,6 +205,7 @@ async function buildPayrollRowResolved(
     ]);
 
     const directMode = resolveDirectCommissionMode(attendant.email);
+    const commissionEligible = attendant.attendantCategory !== "GENERAL_OPS";
     let directCommission = Number(onlineSummary.commissionDirect ?? onlineSummary.directCommission ?? 0);
     let jumiaCommission = Number(onlineSummary.commissionMarketplaceJumia ?? 0);
     let kilimallCommission = Number(onlineSummary.commissionMarketplaceKilimall ?? 0);
@@ -213,7 +214,7 @@ async function buildPayrollRowResolved(
     // Only let the reviewed ledger override when it is not one of the POS-profit-share
     // users, because for PROFIT_10 users the live online summary carries the rescued
     // POS sales/profit fallback that stale ledgers can miss.
-    if (directMode !== "PROFIT_10" && ledger && Number(ledger.commissionTotal ?? 0) > 0) {
+    if (commissionEligible && directMode !== "PROFIT_10" && ledger && Number(ledger.commissionTotal ?? 0) > 0) {
       commissionTotal = Number(ledger.commissionTotal ?? commissionTotal);
       if (Number(ledger.commissionDirect ?? 0) > 0) {
         directCommission = Number(ledger.commissionDirect ?? directCommission);
@@ -224,6 +225,12 @@ async function buildPayrollRowResolved(
       if (Number(ledger.commissionMarketplaceKilimall ?? 0) > 0) {
         kilimallCommission = Number(ledger.commissionMarketplaceKilimall ?? kilimallCommission);
       }
+    }
+    if (!commissionEligible) {
+      directCommission = 0;
+      jumiaCommission = 0;
+      kilimallCommission = 0;
+      commissionTotal = 0;
     }
     const bonusTotal = adjustmentSummary.totalBonus;
     const totalDeductions = adjustmentSummary.totalDeduction + penalties;
