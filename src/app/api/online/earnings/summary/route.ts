@@ -16,7 +16,7 @@ const parseDateParam = (value: string | null) => {
 };
 
 export async function GET(req: Request) {
-  const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "SUPERVISOR", "ADMIN"]);
+  const auth = await requireAttendant(req, ["JUMIA_KILIMALL_OPS", "BETECH_OPS", "GENERAL_OPS", "SUPERVISOR", "ADMIN"]);
   if (!auth.ok) return auth.res;
 
   const identity = await resolveTargetUserId(req);

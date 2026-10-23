@@ -1343,6 +1343,7 @@ function PayrollEarningsCard({
   const earningLines = breakdown.lines.filter((row) => row.category === "earning");
   const commissionLines = breakdown.lines.filter((row) => row.category === "commission");
   const deductionLines = breakdown.lines.filter((row) => row.category === "deduction");
+  const isGeneralOps = summary?.attendantCategory === "GENERAL_OPS";
   const { locked, toggle } = useCardLock("onlineops:earnings");
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -1374,7 +1375,10 @@ function PayrollEarningsCard({
           </div>
         ))}
         {earningLines.length === 0 && (
-          <div className="text-sm text-slate-400">{loading ? "Loading..." : "No earnings data"}</div>
+          <div className="flex items-center justify-between rounded-2xl bg-slate-950/60 px-3 py-3 text-sm text-slate-300">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400">{loading ? "Loading" : "Approved earnings"}</span>
+            <span className="text-base font-semibold text-emerald-300">{locked ? "•••" : formatKES(0)}</span>
+          </div>
         )}
       </div>
       <div id="commissions" className="scroll-mt-36 space-y-2 sm:scroll-mt-6">
@@ -1387,7 +1391,7 @@ function PayrollEarningsCard({
             </span>
           </div>
         ))}
-        {commissionLines.length === 0 ? <div className="rounded-2xl bg-slate-950/40 px-3 py-3 text-sm text-slate-500">No commissions this period</div> : null}
+        {commissionLines.length === 0 ? <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-3 py-3 text-sm text-slate-500"><span>{isGeneralOps ? "Sales commission (not eligible for General User Ops)" : "No commissions this period"}</span><span className="font-semibold text-amber-200">{locked ? "•••" : formatKES(0)}</span></div> : null}
       </div>
       <div id="deductions" className="scroll-mt-36 space-y-2 sm:scroll-mt-6">
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200/70">Deductions</div>
