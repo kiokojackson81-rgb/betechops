@@ -15,6 +15,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
+import { recomputeOrderEconomics } from "@/lib/recomputeOrderEconomics";
 import { randomUUID } from "crypto";
 import { notifyPodCustomer } from "@/lib/customerOrderNotifications";
 
@@ -235,7 +236,9 @@ export async function POST(req: NextRequest, context: ParamsContext) {
                     product: {
                       select: {
                         id: true,
+                        name: true,
                         lastBuyingPrice: true,
+                        variableCost: true,
                         commissionEnabled: true,
                         commissionAmount: true,
                         commissionRequiresApproval: true,
@@ -246,12 +249,42 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               },
             })
           : null;
+      const catalogueCostByOrderItemId = new Map<string, number>();
+      // Delivery is the financial completion point for POD sales. Freeze a
+      // known fixed catalogue cost onto each item now, rather than merely
+      // using it as a display fallback. This makes the receipt profit
+      // immediately reportable and keeps it out of the manual-pricing queue.
+      if (desiredStatus === "delivered" && deliveredOrder) {
+        for (const item of deliveredOrder.items) {
+          const existingUnitCost = Number(item.orderCosts?.[0]?.unitCost ?? 0);
+          const catalogueUnitCost = Number(item.product?.lastBuyingPrice ?? 0);
+          if (
+            existingUnitCost > 0 ||
+            item.product?.variableCost ||
+            !Number.isFinite(catalogueUnitCost) ||
+            catalogueUnitCost <= 0
+          ) {
+            if (existingUnitCost > 0) {
+              catalogueCostByOrderItemId.set(item.id, existingUnitCost);
+            }
+            continue;
+          }
+          await tx.orderCost.create({
+            data: {
+              orderItemId: item.id,
+              unitCost: catalogueUnitCost,
+              costSource: "POD_DELIVERY_CATALOGUE_COST",
+            },
+          });
+          catalogueCostByOrderItemId.set(item.id, catalogueUnitCost);
+        }
+      }
       const deliveredReceiptItems = (deliveredOrder?.items || []).map(
         (it: any) => ({
           productName: String(it.title || it.productName || "Item").trim(),
           buyingPrice: Math.max(
             0,
-            Math.round(Number(it.orderCosts?.[0]?.unitCost ?? it.product?.lastBuyingPrice ?? it.costPrice ?? it.buyingPrice ?? 0) * Math.max(1, Number(it.quantity ?? 1))),
+            Math.round(Number(it.orderCosts?.[0]?.unitCost ?? catalogueCostByOrderItemId.get(it.id) ?? it.product?.lastBuyingPrice ?? it.costPrice ?? it.buyingPrice ?? 0) * Math.max(1, Number(it.quantity ?? 1))),
           ),
         }),
       );
@@ -690,6 +723,17 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       { error: "Failed to mark POD delivery" },
       { status: 500 },
     );
+  }
+
+  // Persist receipt totals and profit from the cost snapshots written during
+  // delivery confirmation. This also refreshes linked support/marketing
+  // reporting, without requiring an admin to enter buying prices again.
+  if (desiredStatus === "delivered" && receipt.orderId) {
+    try {
+      await recomputeOrderEconomics(receipt.orderId);
+    } catch (economicsError) {
+      console.warn(`[pod][${requestId}] failed to recalculate delivered POD profit`, economicsError);
+    }
   }
 
   // Ensure we don't leave a stale lock in receipt.data.podDelivery.lockedAt
