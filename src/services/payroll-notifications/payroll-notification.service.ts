@@ -78,46 +78,50 @@ function describeAdjustment(args: {
 }) {
   const formattedAmount = formatKes(args.amount);
   const safeLabel = String(args.label || "").trim();
+  // The label is the human explanation entered by payroll (for example
+  // "October performance bonus" or "Cash advance repayment").  It must be
+  // present in every notification, regardless of adjustment type.
+  const labelSnippet = safeLabel ? ` (Label: ${safeLabel})` : "";
+  const labelHtml = safeLabel
+    ? ` <strong>Label:</strong> ${escapeHtml(safeLabel)}`
+    : "";
 
   if (args.adjustmentKind === "ADDITION") {
     if (args.adjustmentType === "COMMISSION_TOPUP") {
       return {
         subject: "Commission applied to your account",
-        shortText: `a commission of ${formattedAmount} has been applied to your account`,
-        longText: `A commission of <strong>${formattedAmount}</strong> has been applied to your payroll account.`,
+        shortText: `a commission of ${formattedAmount} has been applied to your account${labelSnippet}`,
+        longText: `A commission of <strong>${formattedAmount}</strong> has been applied to your payroll account.${labelHtml}`,
       };
     }
 
     if (args.adjustmentType === "BONUS") {
       return {
         subject: "Bonus applied to your account",
-        shortText: `a bonus of ${formattedAmount} has been applied to your account`,
-        longText: `A bonus of <strong>${formattedAmount}</strong> has been applied to your payroll account.`,
+        shortText: `a bonus of ${formattedAmount} has been applied to your account${labelSnippet}`,
+        longText: `A bonus of <strong>${formattedAmount}</strong> has been applied to your payroll account.${labelHtml}`,
       };
     }
 
     return {
       subject: "Payroll addition applied to your account",
-      shortText: `a payroll addition of ${formattedAmount} has been applied to your account`,
-      longText: `A payroll addition of <strong>${formattedAmount}</strong> has been applied to your payroll account.`,
+      shortText: `a payroll addition of ${formattedAmount} has been applied to your account${labelSnippet}`,
+      longText: `A payroll addition of <strong>${formattedAmount}</strong> has been applied to your payroll account.${labelHtml}`,
     };
   }
 
   if (args.adjustmentType === "DISCIPLINE") {
     return {
       subject: "Fine applied to your account",
-      shortText: `a fine of ${formattedAmount} has been applied to your account`,
-      longText: `A fine of <strong>${formattedAmount}</strong> has been applied to your payroll account.`,
+      shortText: `a fine of ${formattedAmount} has been applied to your account${labelSnippet}`,
+      longText: `A fine of <strong>${formattedAmount}</strong> has been applied to your payroll account.${labelHtml}`,
     };
   }
 
-  const labelSnippet = safeLabel ? ` for ${safeLabel}` : "";
   return {
     subject: "Deduction applied to your account",
     shortText: `a deduction of ${formattedAmount} has been applied to your account${labelSnippet}`,
-    longText: `A deduction of <strong>${formattedAmount}</strong> has been applied to your payroll account${
-      labelSnippet ? ` for <strong>${escapeHtml(safeLabel)}</strong>` : ""
-    }.`,
+    longText: `A deduction of <strong>${formattedAmount}</strong> has been applied to your payroll account.${labelHtml}`,
   };
 }
 
