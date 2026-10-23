@@ -333,7 +333,10 @@ export async function GET(req: NextRequest) {
   const metaWithScope = { ...meta, scope };
 
   const customerType = requestedCustomerType || undefined;
-  const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
+  const rawPodStatus = url.searchParams.get('status') || undefined;
+  // Accept the legacy `failed` value too, but use one canonical state in all
+  // POD queues and receipt lists.
+  const podStatus = rawPodStatus === "failed" ? "delivery_failed" : rawPodStatus; // expected values: 'pending'|'delivered'|'delivery_failed'
   // POD ownership is never bypassed for an attendant. Pending PODs must only
   // be visible to their receipt owner; administrators can explicitly use the
   // global scope when they need the shared operational queue.
@@ -656,6 +659,8 @@ export async function GET(req: NextRequest) {
         ? (r.data as Record<string, unknown>)
         : {};
     const podDeliveryData = (r.data as any)?.podDelivery;
+    const normalizedPodDeliveryStatus = String(podDeliveryData?.status ?? "").trim().toLowerCase();
+    const podDeliveryFailed = ["delivery_failed", "failed"].includes(normalizedPodDeliveryStatus);
     const projectFlowData = readReceiptProjectFlow((r.data as any)?.projectFlow);
     const agentSaleCommission = Number((r.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
     const podDeliveryFee = getPodDeliveryFee(r.data);
@@ -747,11 +752,16 @@ export async function GET(req: NextRequest) {
       attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
       // Correctly label historical M-Pesa Express records created before the
       // counter-sale completion status was introduced.
-      status: completedCounterSale
-        ? "COMPLETED"
-        : projectFlowData?.isProject && projectFlowData.stage === "COMPLETED_POSTED" && !fullyPaid
-          ? "PENDING"
-          : r.order?.status ?? r.order?.paymentStatus ?? null,
+      // POD outcome takes precedence in operational lists. A failed POD must
+      // never be presented as a generic Pending order simply because payment
+      // remains outstanding after the unsuccessful delivery attempt.
+      status: podDeliveryFailed
+        ? "POD_DELIVERY_FAILED"
+        : completedCounterSale
+          ? "COMPLETED"
+          : projectFlowData?.isProject && projectFlowData.stage === "COMPLETED_POSTED" && !fullyPaid
+            ? "PENDING"
+            : r.order?.status ?? r.order?.paymentStatus ?? null,
       customerType: String((r.data as any)?.customerType ?? "").trim() || null,
       items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
       paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
@@ -763,7 +773,7 @@ export async function GET(req: NextRequest) {
           ? rawData.publicReceiptToken.trim() || null
           : null,
       isPodDelivery: Boolean(podDeliveryData?.status),
-      podDeliveryStatus: podDeliveryData?.status ?? null,
+      podDeliveryStatus: podDeliveryFailed ? "delivery_failed" : podDeliveryData?.status ?? null,
       podSpeedafSettlementStatus: (podDeliveryData?.speedafSettlement as Record<string, unknown> | undefined)?.status ?? null,
       podSpeedafSettledAt: (podDeliveryData?.speedafSettlement as Record<string, unknown> | undefined)?.settledAt ?? null,
       // Keep the operational timestamps separate from financial recognition.
