@@ -85,6 +85,21 @@ type PaymentTotals = {
   cash: { totalSales: number; count: number };
 };
 
+type AdminReceiptSummaryTotals = {
+  totalSales: number;
+  totalProfit: number;
+  totalCost: number;
+  totalProfitPriced?: number;
+  totalProfitInclusive?: number;
+  receiptsCount: number;
+  itemsCount: number;
+  hasCompleteCosts: boolean;
+  awaitingPricingCount?: number;
+  deliveredUnpaidPodProfit?: number;
+  deliveredUnpaidPodCount?: number;
+  paymentTotals: PaymentTotals;
+};
+
 type StaffOption = { id: string; name: string };
 
 type AdminQuickRangeKey =
@@ -362,6 +377,26 @@ const buildDateParam = (value: string, endOfDay: boolean) => {
   return endOfDay ? `${value}T23:59:59.999+03:00` : `${value}T00:00:00+03:00`;
 };
 
+const getPreviousEqualLengthRange = (start: string, end: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    return null;
+  }
+  const startDate = new Date(`${start}T00:00:00.000Z`);
+  const endDate = new Date(`${end}T00:00:00.000Z`);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < startDate) {
+    return null;
+  }
+  const durationDays = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+  const previousEnd = new Date(startDate);
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setUTCDate(previousStart.getUTCDate() - durationDays + 1);
+  return {
+    start: previousStart.toISOString().slice(0, 10),
+    end: previousEnd.toISOString().slice(0, 10),
+  };
+};
+
 const csvEscape = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) return "";
   const str = String(value);
@@ -536,23 +571,9 @@ export default function ReceiptsAdminClient({
   const [rows, setRows] = useState<ReceiptRow[]>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summaryTotals, setSummaryTotals] = useState<{
-    totalSales: number;
-    totalProfit: number;
-    totalCost: number;
-    totalProfitPriced?: number;
-    totalProfitInclusive?: number;
-    receiptsCount: number;
-    itemsCount: number;
-    hasCompleteCosts: boolean;
-    awaitingPricingCount?: number;
-    deliveredUnpaidPodProfit?: number;
-    deliveredUnpaidPodCount?: number;
-    paymentTotals: {
-      mpesa: { totalSales: number; count: number };
-      cash: { totalSales: number; count: number };
-    };
-  } | null>(null);
+  const [summaryTotals, setSummaryTotals] = useState<AdminReceiptSummaryTotals | null>(null);
+  const [previousPeriodTotals, setPreviousPeriodTotals] = useState<AdminReceiptSummaryTotals | null>(null);
+  const [previousPeriodRange, setPreviousPeriodRange] = useState<{ start: string; end: string } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryView, setSummaryView] = useState<SummaryViewMode>("all");
   const [profitReceipts, setProfitReceipts] = useState<ReceiptRow[]>([]);
@@ -885,6 +906,64 @@ export default function ReceiptsAdminClient({
     },
     [appliedFilters, scopeMode, onlyPos, ledgerEnabled],
   );
+
+  useEffect(() => {
+    const previousRange = getPreviousEqualLengthRange(appliedFilters.start, appliedFilters.end);
+    const isAllPeriodPodQueue = appliedFilters.customerType === "pod";
+    if (!previousRange || isAllPeriodPodQueue) {
+      setPreviousPeriodTotals(null);
+      setPreviousPeriodRange(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadPreviousPeriod = async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("start", buildDateParam(previousRange.start, false)!);
+        params.set("end", buildDateParam(previousRange.end, true)!);
+        if (appliedFilters.paymentMethod) params.set("paymentMethod", appliedFilters.paymentMethod);
+        if (appliedFilters.attendantId) params.set("attendantId", appliedFilters.attendantId);
+        if (appliedFilters.docType) params.set("docType", appliedFilters.docType);
+        if (appliedFilters.q.trim()) params.set("q", appliedFilters.q.trim());
+        if (appliedFilters.customerType) params.set("customerType", appliedFilters.customerType);
+        if (appliedFilters.podStatus) params.set("status", appliedFilters.podStatus);
+        params.set("scope", scopeMode);
+        if (onlyPos) params.set("onlyPos", "1");
+        if (!ledgerEnabled) params.set("includeLedger", "false");
+
+        const response = await fetch(`/api/admin/receipts/summary?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || "Failed to load prior period summary");
+        setPreviousPeriodTotals({
+          totalSales: Number(data.totalSales ?? 0),
+          totalProfit: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
+          totalCost: Number(data.totalCost ?? 0),
+          totalProfitPriced: Number(data.totalProfitPriced ?? 0),
+          totalProfitInclusive: Number(data.totalProfitInclusive ?? data.totalProfit ?? 0),
+          receiptsCount: Number(data.receiptsCount ?? 0),
+          itemsCount: Number(data.itemsCount ?? 0),
+          hasCompleteCosts: Boolean(data.hasCompleteCosts ?? false),
+          awaitingPricingCount: Number(data.awaitingPricingCount ?? 0),
+          deliveredUnpaidPodProfit: Number(data.deliveredUnpaidPodProfit ?? 0),
+          deliveredUnpaidPodCount: Number(data.deliveredUnpaidPodCount ?? 0),
+          paymentTotals: data?.paymentTotals ?? { mpesa: { totalSales: 0, count: 0 }, cash: { totalSales: 0, count: 0 } },
+        });
+        setPreviousPeriodRange(previousRange);
+      } catch (error) {
+        if ((error as Error)?.name !== "AbortError") {
+          console.warn("[receipts] prior period summary error", error);
+          setPreviousPeriodTotals(null);
+          setPreviousPeriodRange(null);
+        }
+      }
+    };
+    void loadPreviousPeriod();
+    return () => controller.abort();
+  }, [appliedFilters, scopeMode, onlyPos, ledgerEnabled]);
 
   const handleTriggerSummary = useCallback(async () => {
     if (triggerSummaryLoading) return;
@@ -2435,6 +2514,10 @@ export default function ReceiptsAdminClient({
               rangeLabel={rangeDisplay}
               profitViewActive={profitViewActive}
               onProfitClick={handleProfitSummaryClick}
+              comparison={previousPeriodTotals && previousPeriodRange ? {
+                previous: previousPeriodTotals,
+                previousRangeLabel: `${formatRangeLabel(previousPeriodRange.start)} - ${formatRangeLabel(previousPeriodRange.end)}`,
+              } : null}
             />
             <PaymentMethodFilterCard
               totals={summaryForDisplay?.paymentTotals ?? null}

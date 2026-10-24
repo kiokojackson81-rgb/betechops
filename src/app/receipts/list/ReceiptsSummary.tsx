@@ -14,6 +14,14 @@ type Summary = {
   deliveredUnpaidPodCount?: number;
 };
 
+type PeriodComparison = {
+  previous: Pick<
+    Summary,
+    "totalSales" | "totalProfit" | "receiptsCount" | "itemsCount"
+  >;
+  previousRangeLabel: string;
+};
+
 export default function ReceiptsSummary({
   summary,
   loading,
@@ -22,6 +30,7 @@ export default function ReceiptsSummary({
   rangeLabel,
   profitViewActive = false,
   onProfitClick,
+  comparison,
 }: {
   summary: Summary | null;
   loading: boolean;
@@ -30,6 +39,7 @@ export default function ReceiptsSummary({
   rangeLabel: string;
   profitViewActive?: boolean;
   onProfitClick?: () => void;
+  comparison?: PeriodComparison | null;
 }) {
 
   const formatCurrency = (value: number) =>
@@ -48,6 +58,14 @@ export default function ReceiptsSummary({
 
   const receiptsLabel = loading ? "Loading..." : String(summary?.receiptsCount ?? 0);
   const itemsLabel = loading ? "Loading..." : String(summary?.itemsCount ?? 0);
+  const comparisonMetrics = comparison
+    ? [
+        { label: "Sales", current: Number(summary?.totalSales ?? 0), previous: comparison.previous.totalSales, money: true },
+        { label: "Profit", current: Number(summary?.totalProfit ?? 0), previous: comparison.previous.totalProfit, money: true },
+        { label: "Receipts", current: Number(summary?.receiptsCount ?? 0), previous: comparison.previous.receiptsCount, money: false },
+        { label: "Products", current: Number(summary?.itemsCount ?? 0), previous: comparison.previous.itemsCount, money: false },
+      ]
+    : [];
 
   return (
     <section className="rounded-2xl border border-white/15 bg-slate-900/70 p-4 shadow-inner shadow-black/30">
@@ -154,6 +172,37 @@ export default function ReceiptsSummary({
           <p className="text-xl font-semibold text-white">{itemsLabel}</p>
         </div>
       </div>
+      {comparison && !loading && (
+        <div className="mt-4 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.04] p-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Period comparison</p>
+              <p className="mt-1 text-xs text-slate-400">Compared with {comparison.previousRangeLabel}</p>
+            </div>
+            <p className="text-[11px] text-slate-500">Current period vs previous equal-length period</p>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {comparisonMetrics.map((metric) => {
+              const delta = metric.current - metric.previous;
+              const percentage = metric.previous
+                ? Math.round((delta / Math.abs(metric.previous)) * 100)
+                : null;
+              const up = delta >= 0;
+              const value = (amount: number) => metric.money ? formatCurrency(amount) : amount.toLocaleString("en-KE");
+              return (
+                <div key={metric.label} className="rounded-lg border border-white/5 bg-slate-950/40 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">{metric.label}</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{value(metric.current)}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">Previous: {value(metric.previous)}</p>
+                  <p className={`mt-1 text-[11px] font-semibold ${up ? "text-emerald-300" : "text-rose-300"}`}>
+                    {up ? "+" : ""}{value(delta)}{percentage === null ? " · New activity" : ` · ${up ? "+" : ""}${percentage}%`}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="mt-3 text-xs text-slate-400">Range: <span className="font-semibold text-white">{rangeLabel}</span></div>
     </section>
   );
