@@ -2180,6 +2180,59 @@ async function closeVoiceCallbackWorkForAnsweredCall(call: {
   }
 }
 
+/**
+ * Provider callbacks are not guaranteed to arrive in chronological order. If
+ * an answered call for the same customer has already been recorded after a
+ * missed/attempted call, do not leave (or recreate) callback work behind when
+ * the late failure event is eventually received.
+ */
+async function closeVoiceCallbackWorkIfCustomerAlreadyContacted(input: {
+  id: string;
+  callerNumber: string;
+  destinationNumber?: string | null;
+  startedAt?: Date | null;
+}) {
+  if (!input.startedAt) return;
+
+  const phoneVariants = getCustomerContactPhones(input);
+  if (!phoneVariants.length) return;
+
+  const answeredCall = await prisma.voiceCall.findFirst({
+    where: {
+      id: { not: input.id },
+      status: {
+        in: [
+          "answered",
+          "connected",
+          "completed",
+          "complete",
+          "successful",
+          "success",
+          "transferred",
+        ],
+      },
+      startedAt: { gte: input.startedAt },
+      OR: [
+        { callerNumber: { in: phoneVariants } },
+        { destinationNumber: { in: phoneVariants } },
+      ],
+    },
+    orderBy: { startedAt: "asc" },
+    select: {
+      id: true,
+      callerNumber: true,
+      destinationNumber: true,
+      assignedToId: true,
+      status: true,
+      durationInSeconds: true,
+    },
+  });
+
+  if (!answeredCall) return;
+
+  await closeVoiceCallbackWorkForAnsweredCall(answeredCall);
+}
+
 export async function syncVoiceCallAutomation(input: {
   id: string;
   direction: string;
@@ -2252,6 +2305,7 @@ export async function syncVoiceCallAutomation(input: {
         if (followUp.assignedToId) {
           await evaluateVoiceAgentCompliance(followUp.assignedToId);
         }
+        await closeVoiceCallbackWorkIfCustomerAlreadyContacted(input);
       }
     }
 
@@ -2291,6 +2345,7 @@ export async function syncVoiceCallAutomation(input: {
         if (followUp.assignedToId) {
           await evaluateVoiceAgentCompliance(followUp.assignedToId);
         }
+        await closeVoiceCallbackWorkIfCustomerAlreadyContacted(input);
       }
     }
 
