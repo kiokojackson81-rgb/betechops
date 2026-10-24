@@ -3,8 +3,6 @@ import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import { sendTransactionalSms } from "@/lib/africasTalking";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 
-const OVERDUE_CALLBACK_LIMIT = 3;
-const SINGLE_CALLBACK_RESTRICTION_MS = 2 * 60 * 60 * 1000;
 const LOW_RATING_LIMIT = 2;
 const QUALITY_RESPONSE_MINIMUM = 5;
 const QUALITY_AVERAGE_THRESHOLD = 3;
@@ -58,6 +56,45 @@ async function notifyComplianceRestriction(input: {
   ]);
 }
 
+function formatCallbackDeadline(value: Date) {
+  return value.toLocaleString("en-KE", {
+    timeZone: "Africa/Nairobi",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatTimeRemaining(value: Date, now: Date) {
+  const milliseconds = Math.max(0, value.getTime() - now.getTime());
+  const minutes = Math.ceil(milliseconds / 60_000);
+  if (minutes <= 0) return "now";
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return hours ? `${hours}h${remainder ? ` ${remainder}m` : ""}` : `${remainder}m`;
+}
+
+async function notifyComplianceWarning(input: {
+  userId: string;
+  pendingCallbackCount: number;
+  nextDueAt: Date | null;
+  now: Date;
+}) {
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { phone: true },
+  });
+  if (!user?.phone || !input.pendingCallbackCount) return;
+  const deadline = input.nextDueAt
+    ? ` Your next deadline is ${formatCallbackDeadline(input.nextDueAt)} EAT (${formatTimeRemaining(input.nextDueAt, input.now)} left).`
+    : "";
+  await sendTransactionalSms(
+    user.phone,
+    `[BETECH VOICE] You have ${input.pendingCallbackCount} customer follow-up${input.pendingCallbackCount === 1 ? "" : "s"} to complete.${deadline} If a follow-up becomes overdue, new inbound calls will be routed to the fallback until all overdue work is resolved.`,
+  );
+}
+
 function formatOverrideDeadline(value: Date) {
   return value.toLocaleString("en-KE", {
     timeZone: "Africa/Nairobi",
@@ -104,13 +141,12 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
   const windowStart = new Date(now);
   windowStart.setDate(windowStart.getDate() - 30);
 
-  const [existing, overdueTasks, feedbackStats, lowRatingCount] =
+  const [existing, pendingTasks, feedbackStats, lowRatingCount] =
     await Promise.all([
       prisma.voiceAgentCompliance.findUnique({ where: { userId } }),
       prisma.voiceFollowUp.findMany({
         where: {
           assignedToId: userId,
-          dueAt: { lte: now },
           status: { notIn: ["resolved", "closed"] },
         },
         orderBy: { dueAt: "asc" },
@@ -131,8 +167,13 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
       }),
     ]);
 
+  const overdueTasks = pendingTasks.filter(
+    (task) => Boolean(task.dueAt && task.dueAt <= now),
+  );
   const oldestOverdueAt = overdueTasks[0]?.dueAt ?? null;
   const overdueCallbackCount = overdueTasks.length;
+  const pendingCallbackCount = pendingTasks.length;
+  const nextCallbackDueAt = pendingTasks.find((task) => task.dueAt && task.dueAt > now)?.dueAt ?? null;
   const feedbackResponseCount30d = Number(feedbackStats._count.rating ?? 0);
   const averageRating30d = Number(feedbackStats._avg.rating ?? 0);
   const qualityReviewRequired =
@@ -140,13 +181,10 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
     (feedbackResponseCount30d >= QUALITY_RESPONSE_MINIMUM &&
       averageRating30d > 0 &&
       averageRating30d < QUALITY_AVERAGE_THRESHOLD);
-  const callbackRestrictionRequired =
-    overdueCallbackCount >= OVERDUE_CALLBACK_LIMIT ||
-    Boolean(
-      oldestOverdueAt &&
-        now.getTime() - oldestOverdueAt.getTime() >=
-          SINGLE_CALLBACK_RESTRICTION_MS,
-    );
+  // Automatic callback tasks are due after two active working hours. Once a
+  // task is overdue, inbound calls go to fallback until that overdue work is
+  // resolved. The count remains visible for escalation and audit.
+  const callbackRestrictionRequired = overdueCallbackCount >= 1;
   const overrideGraceEndsAt = existing?.overrideAt
     ? new Date(existing.overrideAt.getTime() + ADMIN_OVERRIDE_GRACE_MS)
     : null;
@@ -162,7 +200,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
     ? "RESTRICTED"
     : overrideActive
       ? "ADMIN_OVERRIDE"
-      : overdueCallbackCount >= 2
+      : pendingCallbackCount > 0
         ? "WARNING"
         : qualityReviewRequired
           ? "QUALITY_REVIEW"
@@ -170,9 +208,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
   const restrictionReason = manualRestriction
     ? existing?.manualRestrictionReason || "Restricted by an administrator."
     : callbackRestrictionRequired
-      ? overdueCallbackCount >= OVERDUE_CALLBACK_LIMIT
-        ? `${overdueCallbackCount} overdue customer callback tasks.`
-        : "A customer callback has been overdue for more than two hours."
+      ? `${overdueCallbackCount} overdue customer callback task${overdueCallbackCount === 1 ? "" : "s"}.`
       : null;
   const changed =
     !existing ||
@@ -231,6 +267,8 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
           previousStatus: existing?.status ?? null,
           status,
           overdueCallbackCount,
+          pendingCallbackCount,
+          nextCallbackDueAt: nextCallbackDueAt?.toISOString() ?? null,
           lowRatingCount30d: lowRatingCount,
           feedbackResponseCount30d,
           averageRating30d,
@@ -255,7 +293,27 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
         console.error("[voice.compliance.notification_failed]", error);
       }
     }
-    if (status === "NORMAL" && existing?.status === "RESTRICTED") {
+    if (
+      status === "WARNING" &&
+      existing?.status !== "WARNING" &&
+      !manualRestriction
+    ) {
+      try {
+        await notifyComplianceWarning({
+          userId,
+          pendingCallbackCount,
+          nextDueAt: nextCallbackDueAt,
+          now,
+        });
+      } catch (error) {
+        console.error("[voice.compliance.warning_notification_failed]", error);
+      }
+    }
+    if (
+      status !== "RESTRICTED" &&
+      existing?.status === "RESTRICTED" &&
+      !manualRestriction
+    ) {
       try {
         await notifyComplianceRestored(userId);
       } catch (error) {

@@ -22,6 +22,7 @@ import { evaluateVoiceAgentCompliance, isVoiceComplianceRestricted } from "@/lib
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
+const CALLBACK_FOLLOW_UP_WORKING_HOURS_MS = 2 * 60 * 60 * 1000;
 const CALLBACK_REQUEST_TOKEN_EXPIRY_DAYS = 14;
 // Staff often need a moment to unlock a handset and redial after a network
 // drop. Keep the recovery token useful without allowing an old customer call
@@ -331,6 +332,55 @@ export function isWithinVoiceWorkingHours(date = new Date()) {
     return totalMinutes >= 9 * 60 && totalMinutes <= 15 * 60;
   }
   return totalMinutes >= 9 * 60 && totalMinutes <= 17 * 60 + 30;
+}
+
+function getNairobiWorkdayWindow(date: Date) {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: NAIROBI_TIMEZONE,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  const weekday = String(parts.weekday || "");
+  if (weekday === "Sun") return null;
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  const day = Number(parts.day);
+  const startMinutes = 9 * 60;
+  const endMinutes = weekday === "Sat" ? 15 * 60 : 17 * 60 + 30;
+  // Nairobi is UTC+3 all year; construct business boundaries explicitly so
+  // callback time never runs overnight or outside the working day.
+  const atMinutes = (minutes: number) =>
+    new Date(Date.UTC(year, month - 1, day, 0, minutes - 3 * 60));
+  return { start: atMinutes(startMinutes), end: atMinutes(endMinutes) };
+}
+
+/** Two working hours for a customer follow-up; after-hours time never counts. */
+export function getVoiceCallbackDueAt(now = new Date()) {
+  let cursor = new Date(now);
+  let remaining = CALLBACK_FOLLOW_UP_WORKING_HOURS_MS;
+  for (let guard = 0; guard < 10 && remaining > 0; guard += 1) {
+    const window = getNairobiWorkdayWindow(cursor);
+    if (!window) {
+      cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+      continue;
+    }
+    if (cursor < window.start) cursor = window.start;
+    if (cursor >= window.end) {
+      cursor = new Date(window.end.getTime() + 12 * 60 * 60 * 1000);
+      continue;
+    }
+    const usable = window.end.getTime() - cursor.getTime();
+    if (usable >= remaining) return new Date(cursor.getTime() + remaining);
+    remaining -= usable;
+    cursor = new Date(window.end.getTime() + 12 * 60 * 60 * 1000);
+  }
+  // Defensive fallback; normal calendar paths always return inside the loop.
+  return new Date(now.getTime() + CALLBACK_FOLLOW_UP_WORKING_HOURS_MS);
 }
 
 function normalizeVoiceNumber(input: string | undefined) {
@@ -2033,8 +2083,9 @@ async function ensureAutoCallbackFollowUp(input: {
   const notes =
     input.notes?.trim() ||
     `Auto-created after ${safeString(input.status).replace(/_/g, " ") || "missed"} call.`;
-  // Missed callers receive an owned callback task with a ten-minute SLA.
-  const dueAt = new Date(Date.now() + 10 * 60 * 1000);
+  // Missed and attempted callers receive two active working hours. Time after
+  // close of business never shortens their customer follow-up window.
+  const dueAt = getVoiceCallbackDueAt();
   const title = input.title?.trim() || "Call back customer";
 
   if (existing) {
@@ -2175,6 +2226,35 @@ export async function syncVoiceCallAutomation(input: {
       );
     }
 
+    // A short/failed bridge is still a customer-contact obligation. Create an
+    // owned callback task immediately (rather than only after the customer
+    // requests one by SMS) and give the assigned sales agent two working hours.
+    const callbackPhone = getCustomerContactPhones({
+      callerNumber: input.callerNumber,
+      destinationNumber: input.destinationNumber,
+    })[0];
+    if (callbackPhone) {
+      const followUp = await ensureAutoCallbackFollowUp({
+        voiceCallId: input.id,
+        phone: callbackPhone,
+        assignedToId: input.assignedToId ?? null,
+        status: "attempted_call",
+        title: "Call back customer after attempted call",
+        notes: "Auto-created after attempted call. Contact the customer within two working hours.",
+      });
+      if (followUp) {
+        publishVoiceLiveEvent({
+          type: "follow_up",
+          reason: "voice_attempted_call_follow_up_auto_created",
+          callId: input.id,
+          userId: followUp.assignedToId,
+        });
+        if (followUp.assignedToId) {
+          await evaluateVoiceAgentCompliance(followUp.assignedToId);
+        }
+      }
+    }
+
     return;
   }
 
@@ -2208,6 +2288,9 @@ export async function syncVoiceCallAutomation(input: {
           callId: input.id,
           userId: followUp.assignedToId,
         });
+        if (followUp.assignedToId) {
+          await evaluateVoiceAgentCompliance(followUp.assignedToId);
+        }
       }
     }
 

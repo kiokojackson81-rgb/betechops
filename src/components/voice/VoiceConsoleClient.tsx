@@ -2126,6 +2126,16 @@ export default function VoiceConsoleClient({
   const viewerCompliance = (data.agents as any[]).find(
     (agent) => agent.id === data.viewer.targetUserId,
   )?.compliance;
+  const viewerPendingFollowUps = (data.followUps || []).filter((task: any) =>
+    !["resolved", "closed"].includes(String(task.status || "").toLowerCase()),
+  );
+  const viewerNextCallbackDeadline = viewerPendingFollowUps
+    .map((task: any) => (task.dueAt ? new Date(task.dueAt) : null))
+    .filter((value): value is Date => Boolean(value && !Number.isNaN(value.getTime())))
+    .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
+  const viewerCallbackTimeLeft = viewerNextCallbackDeadline
+    ? Math.max(0, Math.ceil((viewerNextCallbackDeadline.getTime() - Date.now()) / 1000))
+    : null;
 
   return (
     <div className="relative z-0 w-full overflow-x-hidden bg-slate-950 text-slate-100">
@@ -2137,7 +2147,11 @@ export default function VoiceConsoleClient({
         ) : null}
         {viewerCompliance?.inboundRestricted ? (
           <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-            New inbound calls are temporarily paused because callback work is overdue. Complete or update your callback tasks to restore routing; you can still call customers back.
+            New inbound calls are temporarily paused because {viewerCompliance.overdueCallbackCount || 0} follow-up{Number(viewerCompliance.overdueCallbackCount || 0) === 1 ? " is" : "s are"} overdue. Resolve every overdue callback to restore routing automatically; you can still call customers back.
+          </div>
+        ) : viewerCompliance?.status === "WARNING" && viewerPendingFollowUps.length ? (
+          <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            You have {viewerPendingFollowUps.length} pending customer follow-up{viewerPendingFollowUps.length === 1 ? "" : "s"}.{viewerNextCallbackDeadline ? ` Complete the next one within ${formatRelative(viewerCallbackTimeLeft)} (by ${formatDateTime(viewerNextCallbackDeadline)}); once it is overdue, new inbound calls will route to the fallback until overdue work is resolved.` : " Complete them before they become overdue to keep inbound routing active."}
           </div>
         ) : viewerCompliance?.qualityReviewRequired ? (
           <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
