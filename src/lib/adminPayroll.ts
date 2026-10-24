@@ -37,7 +37,55 @@ type AttendantRecord = {
 type PayrollBuildOptions = {
   cache: Map<string, Promise<PayrollRow>>;
   carryDepth: number;
+  mayHaveHistoricalNegativeBalance: Promise<boolean>;
 };
+
+const PAYROLL_CARRY_LOOKBACK_PERIODS = 24;
+
+async function mayHaveHistoricalNegativeBalance(
+  attendantId: string,
+  period: TradingPeriod,
+) {
+  let earliestPeriod = period;
+  for (let index = 0; index < PAYROLL_CARRY_LOOKBACK_PERIODS; index += 1) {
+    earliestPeriod = getPreviousTradingPeriod(earliestPeriod);
+  }
+
+  // Earnings are never negative in the payroll calculation. A historical net
+  // balance can therefore only be negative where there was a deduction,
+  // penalty, or recurring deduction. Avoid re-calculating 24 prior periods
+  // for staff who cannot have an amount to carry forward.
+  const [deduction, penalty, recurringDeduction] = await Promise.all([
+    prisma.attendantPayrollAdjustment.findFirst({
+      where: {
+        attendantId,
+        adjustmentKind: "DEDUCTION",
+        amount: { gt: 0 },
+        periodKey: { gte: earliestPeriod.key, lt: period.key },
+      },
+      select: { id: true },
+    }),
+    prisma.commissionLedger.findFirst({
+      where: {
+        userId: attendantId,
+        periodStart: { gte: earliestPeriod.start, lt: period.start },
+        penalties: { gt: 0 },
+      },
+      select: { id: true },
+    }),
+    prisma.attendantRecurringPayrollItem.findFirst({
+      where: {
+        attendantId,
+        isActive: true,
+        adjustmentKind: "DEDUCTION",
+        amount: { gt: 0 },
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  return Boolean(deduction || penalty || recurringDeduction);
+}
 
 function toDateOnly(value: Date) {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
@@ -150,12 +198,14 @@ async function applyPreviousNegativeBalanceCarry(
   row: PayrollRow,
   options: PayrollBuildOptions,
 ) {
-  if (options.carryDepth >= 24) return row;
+  if (options.carryDepth >= PAYROLL_CARRY_LOOKBACK_PERIODS) return row;
+  if (!(await options.mayHaveHistoricalNegativeBalance)) return row;
 
   const previousPeriod = getPreviousTradingPeriod(period);
   const previousRow = await buildPayrollRowInternal(attendant, previousPeriod, {
     cache: options.cache,
     carryDepth: options.carryDepth + 1,
+    mayHaveHistoricalNegativeBalance: options.mayHaveHistoricalNegativeBalance,
   });
   const carriedNegativeBalance = Math.max(0, -Number(previousRow.netPay ?? 0));
   return withNegativeBalanceCarry(row, carriedNegativeBalance, previousPeriod);
@@ -672,6 +722,7 @@ export async function calculatePayrollForAttendant(attendant: AttendantRecord, p
   const row = await buildPayrollRowInternal(attendant, period, {
     cache: new Map<string, Promise<PayrollRow>>(),
     carryDepth: 0,
+    mayHaveHistoricalNegativeBalance: mayHaveHistoricalNegativeBalance(attendant.id, period),
   });
   const { applyCanonicalPayrollOverrides } = await import("@/lib/payrollCanonical");
   const overridden = await applyCanonicalPayrollOverrides(row, period);
