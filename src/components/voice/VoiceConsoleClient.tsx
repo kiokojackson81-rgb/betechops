@@ -2151,7 +2151,7 @@ export default function VoiceConsoleClient({
           </div>
         ) : viewerCompliance?.status === "WARNING" && viewerPendingFollowUps.length ? (
           <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            You have {viewerPendingFollowUps.length} pending customer follow-up{viewerPendingFollowUps.length === 1 ? "" : "s"}.{viewerNextCallbackDeadline ? ` Complete the next one within ${formatRelative(viewerCallbackTimeLeft)} (by ${formatDateTime(viewerNextCallbackDeadline)}); once it is overdue, new inbound calls will route to the fallback until overdue work is resolved.` : " Complete them before they become overdue to keep inbound routing active."}
+            You have {viewerPendingFollowUps.length} pending customer follow-up{viewerPendingFollowUps.length === 1 ? "" : "s"}.{viewerNextCallbackDeadline ? ` Complete the next one within ${formatRelative(viewerCallbackTimeLeft)} (by ${formatDateTime(viewerNextCallbackDeadline.toISOString())}); once it is overdue, new inbound calls will route to the fallback until overdue work is resolved.` : " Complete them before they become overdue to keep inbound routing active."}
           </div>
         ) : viewerCompliance?.qualityReviewRequired ? (
           <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
