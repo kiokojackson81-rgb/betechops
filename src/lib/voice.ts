@@ -1579,17 +1579,30 @@ export function inferVoiceCompletionStatus(
         payload.talkDurationInSeconds ||
         payload.conversationDurationInSeconds,
     ) ?? 0;
+  const bridgeStatus = safeString(
+    payload.dialCallStatus ||
+      payload.lastBridgeDialStatus ||
+      payload.bridgeStatus ||
+      payload.lastBridgeStatus ||
+      payload.bridgeCallStatus,
+  ).toLowerCase();
   const dialDuration =
     parseInteger(
       payload.dialDurationInSeconds ||
         payload.dialDuration ||
         payload.dialCallDurationInSeconds,
     ) ?? 0;
-  // A provider status, recording, or forwarding state only proves that the
-  // provider handled a leg of the call.  It does not prove that a person
-  // answered it.  For inbound calls, only positive duration on the bridged
-  // agent leg is sufficient evidence of an answer.
-  const hasBridgeEvidence = bridgeDuration > 0;
+  // Africa's Talking documents `Bridged` as the point at which the dialled
+  // person answered. Some completed Dial callbacks omit that intermediate
+  // state, but retain the successful dial destination, dial duration and
+  // recording. Treat that complete set as an answered bridge as well.
+  const hasBridgeEvidence =
+    bridgeDuration > 0 ||
+    bridgeStatus === "bridged" ||
+    (isProviderTerminalSuccess &&
+      dialDuration > 0 &&
+      Boolean(safeString(payload.dialDestinationNumber)) &&
+      Boolean(safeString(payload.recordingUrl)));
   // A destination number and ringing duration prove only that an agent was
   // attempted. They do not prove that an agent actually joined the call.
   const unansweredAttemptDuration = dialDuration || duration;
@@ -1655,9 +1668,30 @@ export function hasAnsweredVoiceBridge(
         payload.talkDurationInSeconds ||
         payload.conversationDurationInSeconds,
     ) ?? 0;
-  // Do not use provider status/recording as proof: either can be produced by
-  // the forwarding leg before an agent has picked up.
-  return bridgeDuration > 0;
+  const bridgeStatus = safeString(
+    payload.dialCallStatus ||
+      payload.lastBridgeDialStatus ||
+      payload.bridgeStatus ||
+      payload.lastBridgeStatus ||
+      payload.bridgeCallStatus,
+  ).toLowerCase();
+  const dialDuration =
+    parseInteger(
+      payload.dialDurationInSeconds ||
+        payload.dialDuration ||
+        payload.dialCallDurationInSeconds,
+    ) ?? 0;
+  const terminalSuccess = ["success", "successful", "completed", "complete"].includes(
+    safeString(payload.status || payload.callSessionState).toLowerCase(),
+  );
+  return (
+    bridgeDuration > 0 ||
+    bridgeStatus === "bridged" ||
+    (terminalSuccess &&
+      dialDuration > 0 &&
+      Boolean(safeString(payload.dialDestinationNumber)) &&
+      Boolean(safeString(payload.recordingUrl)))
+  );
 }
 
 function getInternalRoutingPhoneSet() {

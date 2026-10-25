@@ -591,6 +591,16 @@ function inferVoiceProviderOutcomeFromPayload(
         payload.conversationDurationInSeconds ||
         0,
     ) || 0;
+  const bridgeStatus = String(
+    payload.dialCallStatus ||
+      payload.lastBridgeDialStatus ||
+      payload.bridgeStatus ||
+      payload.lastBridgeStatus ||
+      payload.bridgeCallStatus ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
   const dialDuration =
     Number(
       payload.dialDurationInSeconds ||
@@ -598,9 +608,16 @@ function inferVoiceProviderOutcomeFromPayload(
         payload.dialCallDurationInSeconds ||
         0,
     ) || 0;
-  // Routing success and recordings belong to a provider leg and are not
-  // reliable proof that the receiving agent actually answered.
-  const hasBridgeEvidence = bridgeDuration > 0;
+  // AT emits `Bridged` after the dialled person answers. Its final Dial
+  // callback may instead provide the equivalent successful destination,
+  // dial duration and recording evidence.
+  const hasBridgeEvidence =
+    bridgeDuration > 0 ||
+    bridgeStatus === "bridged" ||
+    (isProviderTerminalSuccess &&
+      dialDuration > 0 &&
+      Boolean(String(payload.dialDestinationNumber || "").trim()) &&
+      Boolean(String(payload.recordingUrl || "").trim()));
   // A dial destination/ring duration records an attempt, not an agent answer.
   const unansweredAttemptDuration = dialDuration || duration;
 
