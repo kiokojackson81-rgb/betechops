@@ -107,12 +107,21 @@ function datesBetween(start: Date, end: Date): Date[] {
  * rows: doing so made a GET perform deletes/upserts and caused the employee,
  * admin and PDF paths to observe different data at different times.
  */
-async function getRecurringAdjustmentsForPeriod(attendantId: string, period: TradingPeriod) {
-  const recurringItems = await prisma.attendantRecurringPayrollItem.findMany({
-    where: { attendantId, isActive: true },
-  });
-  if (!recurringItems.length) return [];
-
+function expandRecurringAdjustmentsForPeriod(
+  recurringItems: Array<{
+    id: string;
+    label: string;
+    amount: number;
+    adjustmentType: string;
+    adjustmentKind: string;
+    cadence: string;
+    dayOfWeek: number | null;
+    dayOfMonth: number | null;
+    startDate: Date | null;
+    endDate: Date | null;
+  }>,
+  period: TradingPeriod,
+) {
   const periodDates = datesBetween(period.start, period.end);
   const entries: Array<{ id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }> = [];
   for (const item of recurringItems) {
@@ -148,6 +157,13 @@ async function getRecurringAdjustmentsForPeriod(attendantId: string, period: Tra
     }
   }
   return entries;
+}
+
+async function getRecurringAdjustmentsForPeriod(attendantId: string, period: TradingPeriod) {
+  const recurringItems = await prisma.attendantRecurringPayrollItem.findMany({
+    where: { attendantId, isActive: true },
+  });
+  return expandRecurringAdjustmentsForPeriod(recurringItems, period);
 }
 
 
@@ -715,6 +731,140 @@ export async function buildPayrollRow(attendant: AttendantRecord, period: Tradin
 /** Build several periods with one request-local cache (used by earnings history). */
 export async function buildPayrollRows(attendant: AttendantRecord, periods: TradingPeriod[]): Promise<PayrollRow[]> {
   return Promise.all(periods.map((period) => calculatePayrollForAttendant(attendant, period)));
+}
+
+/**
+ * Fast, ledger-backed payroll list for the admin overview. It evaluates the
+ * same pay-plan, adjustment and carry-forward rules in memory after four
+ * batched reads, instead of issuing a live sales reconciliation for every
+ * employee and every historical period during page navigation.
+ */
+export async function buildPayrollOverviewRows(
+  attendants: AttendantRecord[],
+  period: TradingPeriod,
+): Promise<PayrollRow[]> {
+  if (!attendants.length) return [];
+
+  const periodsNewestFirst: TradingPeriod[] = [period];
+  for (let index = 0; index < PAYROLL_CARRY_LOOKBACK_PERIODS; index += 1) {
+    periodsNewestFirst.push(getPreviousTradingPeriod(periodsNewestFirst[periodsNewestFirst.length - 1]));
+  }
+  const periods = [...periodsNewestFirst].reverse();
+  const userIds = attendants.map((attendant) => attendant.id);
+  const periodKeys = periods.map((entry) => entry.key);
+
+  const [plans, ledgers, adjustments, recurringItems] = await Promise.all([
+    prisma.attendantCompPlan.findMany({ where: { attendantId: { in: userIds } } }),
+    prisma.commissionLedger.findMany({
+      where: {
+        userId: { in: userIds },
+        periodStart: { in: periods.map((entry) => entry.start) },
+        periodEnd: { in: periods.map((entry) => entry.end) },
+      },
+    }),
+    prisma.attendantPayrollAdjustment.findMany({
+      where: {
+        attendantId: { in: userIds },
+        periodKey: { in: periodKeys },
+        recurringItemId: null,
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        attendantId: true,
+        periodKey: true,
+        label: true,
+        amount: true,
+        adjustmentType: true,
+        adjustmentKind: true,
+      },
+    }),
+    prisma.attendantRecurringPayrollItem.findMany({
+      where: { attendantId: { in: userIds }, isActive: true },
+    }),
+  ]);
+
+  const planByUser = new Map(plans.map((entry) => [entry.attendantId, entry]));
+  const ledgerByUserAndPeriod = new Map(
+    ledgers.map((entry) => [
+      `${entry.userId}:${periods.find((candidate) => candidate.start.getTime() === entry.periodStart.getTime() && candidate.end.getTime() === entry.periodEnd.getTime())?.key ?? ""}`,
+      entry,
+    ]),
+  );
+  const adjustmentsByUserAndPeriod = new Map<string, typeof adjustments>();
+  for (const adjustment of adjustments) {
+    const key = `${adjustment.attendantId}:${adjustment.periodKey}`;
+    adjustmentsByUserAndPeriod.set(key, [...(adjustmentsByUserAndPeriod.get(key) ?? []), adjustment]);
+  }
+  const recurringByUser = new Map<string, typeof recurringItems>();
+  for (const item of recurringItems) {
+    recurringByUser.set(item.attendantId, [...(recurringByUser.get(item.attendantId) ?? []), item]);
+  }
+
+  return attendants.map((attendant) => {
+    const plan = planByUser.get(attendant.id);
+    let carriedNegativeBalance = 0;
+    let currentRow: PayrollRow | null = null;
+
+    for (const candidatePeriod of periods) {
+      const ledger = ledgerByUserAndPeriod.get(`${attendant.id}:${candidatePeriod.key}`);
+      const adjustmentSummary = summarizeAdjustments([
+        ...(adjustmentsByUserAndPeriod.get(`${attendant.id}:${candidatePeriod.key}`) ?? []),
+        ...expandRecurringAdjustmentsForPeriod(recurringByUser.get(attendant.id) ?? [], candidatePeriod),
+      ]);
+      const penalties = Number(ledger?.penalties ?? 0);
+      adjustmentSummary.breakdown.penalties = penalties;
+      const commissionTotal = Number(ledger?.commissionTotal ?? ledger?.netCommission ?? ledger?.grossCommission ?? 0);
+      const totalEarnings =
+        Number(plan?.baseSalary ?? 0) +
+        Number(plan?.defaultTransportAllowance ?? 0) +
+        commissionTotal +
+        adjustmentSummary.totalBonus;
+      const totalDeductions = adjustmentSummary.totalDeduction + penalties + carriedNegativeBalance;
+      const detail = (ledger?.detail ?? {}) as Record<string, unknown>;
+      const valueFromDetail = (key: string) => Number(detail[key] ?? 0);
+
+      const row: PayrollRow = {
+        attendantId: attendant.id,
+        name: attendant.name,
+        email: attendant.email,
+        attendantCategory: attendant.attendantCategory,
+        isActive: attendant.isActive,
+        baseSalary: Number(plan?.baseSalary ?? 0),
+        transportAllowance: Number(plan?.defaultTransportAllowance ?? 0),
+        commission: commissionTotal,
+        commissionGross: commissionTotal,
+        commissionDirect: Number(ledger?.commissionDirect ?? commissionTotal),
+        commissionMarketplaceJumia: Number(ledger?.commissionMarketplaceJumia ?? 0),
+        commissionMarketplaceKilimall: Number(ledger?.commissionMarketplaceKilimall ?? 0),
+        commissionTotal,
+        commissionBreakdown: ledger?.commissionBreakdown ?? null,
+        totalAdditions: adjustmentSummary.totalBonus,
+        bonusTotal: adjustmentSummary.totalBonus,
+        deductionTotal: totalDeductions,
+        totalEarnings,
+        totalDeductions,
+        netPay: totalEarnings - totalDeductions,
+        totalSales: valueFromDetail("totalSales"),
+        totalProfit: valueFromDetail("totalProfit"),
+        totalReceipts: valueFromDetail("totalReceipts"),
+        totalItems: valueFromDetail("totalItems"),
+        newProducts: valueFromDetail("newProducts"),
+        editedProducts: valueFromDetail("editedProducts"),
+        copiedProducts: valueFromDetail("copiedProducts"),
+        adjustmentBreakdown: {
+          ...adjustmentSummary.breakdown,
+          other: adjustmentSummary.breakdown.other + carriedNegativeBalance,
+        },
+        adjustmentEntries: adjustmentSummary.entries,
+      };
+
+      carriedNegativeBalance = Math.max(0, -row.netPay);
+      if (candidatePeriod.key === period.key) currentRow = row;
+    }
+
+    return currentRow!;
+  });
 }
 
 /** The single canonical payroll calculation used by employee, admin and PDF reads. */

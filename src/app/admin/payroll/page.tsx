@@ -10,7 +10,7 @@ import {
 import { requireRole } from "@/lib/api";
 import PayrollTableClient from "./PayrollTableClient";
 import type { PayrollRow } from "./types";
-import { buildPayrollRow } from "@/lib/adminPayroll";
+import { buildPayrollOverviewRows } from "@/lib/adminPayroll";
 import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 
 export const dynamic = "force-dynamic";
@@ -50,12 +50,9 @@ export default async function AdminPayrollPage({
     },
   });
 
-  // Build each row once. Canonical reconciliation is intentionally deferred to
-  // targeted refresh/API actions so the admin table does not run a second full
-  // receipt scan for every attendant during the initial page load.
-  const rows: PayrollRow[] = await Promise.all(
-    attendants.map((attendant) => buildPayrollRow(attendant, period)),
-  );
+  // The overview is ledger-backed and uses batched reads, keeping page
+  // navigation fast even when there are many historical payroll periods.
+  const rows: PayrollRow[] = await buildPayrollOverviewRows(attendants, period);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -64,7 +61,7 @@ export default async function AdminPayrollPage({
           <div>
             <h1 className="text-2xl font-semibold">Admin payroll</h1>
             <p className="text-sm text-slate-400">
-              Snapshot for {period.label}. Data comes from commission-ledger, comp plans and adjustments.
+              Fast snapshot for {period.label}. Data comes from commission-ledger, comp plans and adjustments.
             </p>
             {!isCurrentPeriod && (
               <p className="text-xs text-slate-500">
