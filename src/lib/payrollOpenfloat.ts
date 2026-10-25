@@ -121,7 +121,7 @@ function replaceZipEntry(cfb: any, entryPath: string, content: Buffer) {
 }
 
 export async function buildOpenfloatReviewRows(period: TradingPeriod) {
-  const [{ prisma }, { calculatePayrollForAttendant }, { payrollEligibleUserWhere }] =
+  const [{ prisma }, { buildPayrollOverviewRows }, { payrollEligibleUserWhere }] =
     await Promise.all([
       import("@/lib/prisma"),
       import("@/lib/adminPayroll"),
@@ -149,14 +149,20 @@ export async function buildOpenfloatReviewRows(period: TradingPeriod) {
     },
   });
 
-  const rows = await Promise.all(
-    attendants.map(async (attendant) => {
-      // calculatePayrollForAttendant is already canonical. Applying the
-      // override again doubled the expensive receipt/commission reconciliation
-      // for every Openfloat employee.
-      const payrollRow = await calculatePayrollForAttendant(attendant, period);
-      return buildOpenfloatReviewRow(attendant, payrollRow.netPay, period);
-    }),
+  // Openfloat is an operational payout review. Reuse the batched, ledger-backed
+  // payroll overview rather than performing a full live-sales reconciliation
+  // for every employee while the admin is simply opening the review page.
+  const payrollRows = await buildPayrollOverviewRows(attendants, period);
+  const payrollByAttendant = new Map(
+    payrollRows.map((row) => [row.attendantId, row]),
+  );
+
+  const rows = attendants.map((attendant) =>
+    buildOpenfloatReviewRow(
+      attendant,
+      payrollByAttendant.get(attendant.id)?.netPay ?? 0,
+      period,
+    ),
   );
 
   return rows;
