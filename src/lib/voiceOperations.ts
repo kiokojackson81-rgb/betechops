@@ -583,16 +583,6 @@ function inferVoiceProviderOutcomeFromPayload(
     ["success", "successful", "completed", "complete"].includes(
       normalizedStatus,
     ) || ["completed", "complete"].includes(normalizedSessionState);
-  const bridgeStatus = String(
-    payload.dialCallStatus ||
-      payload.lastBridgeDialStatus ||
-      payload.bridgeStatus ||
-      payload.lastBridgeStatus ||
-      payload.bridgeCallStatus ||
-      "",
-  )
-    .trim()
-    .toLowerCase();
   const bridgeDuration =
     Number(
       payload.bridgeDurationInSeconds ||
@@ -608,23 +598,22 @@ function inferVoiceProviderOutcomeFromPayload(
         payload.dialCallDurationInSeconds ||
         0,
     ) || 0;
-  const hasBridgeEvidence =
-    bridgeDuration > 0 ||
-    Boolean(String(payload.recordingUrl || "").trim()) ||
-    [
-      "answered",
-      "connected",
-      "completed",
-      "complete",
-      "success",
-      "successful",
-      "transferred",
-      "bridged",
-    ].includes(bridgeStatus);
+  // Routing success and recordings belong to a provider leg and are not
+  // reliable proof that the receiving agent actually answered.
+  const hasBridgeEvidence = bridgeDuration > 0;
   // A dial destination/ring duration records an attempt, not an agent answer.
   const unansweredAttemptDuration = dialDuration || duration;
 
   if (["connected", "in_progress", "transferred"].includes(normalizedStatus)) {
+    if (
+      direction === "INBOUND" &&
+      treatInboundSuccessWithoutBridgeAsNoAnswer &&
+      !hasBridgeEvidence
+    ) {
+      return unansweredAttemptDuration < ATTEMPTED_CALL_THRESHOLD_SECONDS
+        ? "attempted_call"
+        : "no_answer";
+    }
     return normalizedStatus;
   }
   if (normalizedStatus === "answered") {
@@ -668,6 +657,7 @@ function inferVoiceProviderOutcomeFromPayload(
 
 export function resolveVoiceProviderOutcome(call: {
   status: string | null | undefined;
+  direction?: string | null;
   durationInSeconds?: number | null;
   isActive?: boolean | null;
   routeType?: string | null;
@@ -682,13 +672,13 @@ export function resolveVoiceProviderOutcome(call: {
           ),
         )
       : null;
-  const isRoutedInboundCall = Boolean(
-    String(call.routeType || "").trim() || String(call.routedTo || "").trim(),
-  );
+  const isInboundCall = String(payload?.direction || call.direction || "INBOUND")
+    .trim()
+    .toUpperCase() === "INBOUND";
   const providerStatus = payload
     ? inferVoiceProviderOutcomeFromPayload(payload, {
-        treatZeroDurationSuccessAsNoAnswer: isRoutedInboundCall,
-        treatInboundSuccessWithoutBridgeAsNoAnswer: isRoutedInboundCall,
+        treatZeroDurationSuccessAsNoAnswer: isInboundCall,
+        treatInboundSuccessWithoutBridgeAsNoAnswer: isInboundCall,
       })
     : String(call.status || "");
   const displayStatus = normalizeCallDisplayStatus({

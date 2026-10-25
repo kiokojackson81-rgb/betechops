@@ -42,7 +42,16 @@ export async function POST(request: Request) {
         }
       : payload;
 
-    const resolvedStatus = inferVoiceCompletionStatus(normalizedPayload);
+    const isInboundCall = String(normalizedPayload.direction || "INBOUND")
+      .trim()
+      .toUpperCase() === "INBOUND";
+    // Provider completion only establishes that routing finished.  Inbound
+    // calls need a verified bridged talk duration before they can be stored as
+    // answered; otherwise the callback workflow must own the missed call.
+    const resolvedStatus = inferVoiceCompletionStatus(normalizedPayload, {
+      treatZeroDurationSuccessAsNoAnswer: isInboundCall,
+      treatInboundSuccessWithoutBridgeAsNoAnswer: isInboundCall,
+    });
     const resolvedPayload =
       resolvedStatus === normalizeVoiceStatus(normalizedPayload)
         ? normalizedPayload

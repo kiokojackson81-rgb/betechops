@@ -1572,13 +1572,6 @@ export function inferVoiceCompletionStatus(
     ["success", "successful", "completed", "complete"].includes(
       normalizedStatus,
     ) || ["completed", "complete"].includes(normalizedSessionState);
-  const bridgeStatus = safeString(
-    payload.dialCallStatus ||
-      payload.lastBridgeDialStatus ||
-      payload.bridgeStatus ||
-      payload.lastBridgeStatus ||
-      payload.bridgeCallStatus,
-  ).toLowerCase();
   const bridgeDuration =
     parseInteger(
       payload.bridgeDurationInSeconds ||
@@ -1592,26 +1585,25 @@ export function inferVoiceCompletionStatus(
         payload.dialDuration ||
         payload.dialCallDurationInSeconds,
     ) ?? 0;
-  const hasBridgeEvidence =
-    bridgeDuration > 0 ||
-    // Africa's Talking stores recordings for completed bridged conversations,
-    // even when it omits a separate bridge-duration field.
-    Boolean(safeString(payload.recordingUrl)) ||
-    [
-      "answered",
-      "connected",
-      "completed",
-      "complete",
-      "success",
-      "successful",
-      "transferred",
-      "bridged",
-    ].includes(bridgeStatus);
+  // A provider status, recording, or forwarding state only proves that the
+  // provider handled a leg of the call.  It does not prove that a person
+  // answered it.  For inbound calls, only positive duration on the bridged
+  // agent leg is sufficient evidence of an answer.
+  const hasBridgeEvidence = bridgeDuration > 0;
   // A destination number and ringing duration prove only that an agent was
   // attempted. They do not prove that an agent actually joined the call.
   const unansweredAttemptDuration = dialDuration || duration;
 
   if (["connected", "in_progress", "transferred"].includes(normalizedStatus)) {
+    if (
+      direction === "INBOUND" &&
+      treatInboundSuccessWithoutBridgeAsNoAnswer &&
+      !hasBridgeEvidence
+    ) {
+      return unansweredAttemptDuration < ATTEMPTED_CALL_THRESHOLD_SECONDS
+        ? "attempted_call"
+        : "no_answer";
+    }
     return normalizedStatus;
   }
   if (normalizedStatus === "answered") {
@@ -1656,13 +1648,6 @@ export function hasAnsweredVoiceBridge(
 ) {
   if (!isAnsweredBusinessStatus(inferredStatus)) return false;
 
-  const bridgeStatus = safeString(
-    payload.dialCallStatus ||
-      payload.lastBridgeDialStatus ||
-      payload.bridgeStatus ||
-      payload.lastBridgeStatus ||
-      payload.bridgeCallStatus,
-  ).toLowerCase();
   const bridgeDuration =
     parseInteger(
       payload.bridgeDurationInSeconds ||
@@ -1670,20 +1655,9 @@ export function hasAnsweredVoiceBridge(
         payload.talkDurationInSeconds ||
         payload.conversationDurationInSeconds,
     ) ?? 0;
-  return (
-    bridgeDuration > 0 ||
-    Boolean(safeString(payload.recordingUrl)) ||
-    [
-      "answered",
-      "connected",
-      "completed",
-      "complete",
-      "success",
-      "successful",
-      "transferred",
-      "bridged",
-    ].includes(bridgeStatus)
-  );
+  // Do not use provider status/recording as proof: either can be produced by
+  // the forwarding leg before an agent has picked up.
+  return bridgeDuration > 0;
 }
 
 function getInternalRoutingPhoneSet() {
@@ -2444,13 +2418,11 @@ export async function upsertVoiceCallFromPayload(
   const destinationNumber = normalizeVoiceNumber(
     payload.destinationNumber || payload.to || payload.calledNumber,
   );
-  const isRoutedInboundCall = Boolean(
-    safeString(input?.routeType ?? existingCall?.routeType) ||
-    safeString(input?.routedTo ?? existingCall?.routedTo),
-  );
+  const isInboundCall =
+    safeString(payload.direction || "INBOUND").toUpperCase() === "INBOUND";
   const inferredStatus = inferVoiceCompletionStatus(payload, {
-    treatZeroDurationSuccessAsNoAnswer: isRoutedInboundCall,
-    treatInboundSuccessWithoutBridgeAsNoAnswer: isRoutedInboundCall,
+    treatZeroDurationSuccessAsNoAnswer: isInboundCall,
+    treatInboundSuccessWithoutBridgeAsNoAnswer: isInboundCall,
   });
   const status = inferredStatus || normalizeVoiceStatus(payload);
   const isActive = isVoiceCallActive(payload);
