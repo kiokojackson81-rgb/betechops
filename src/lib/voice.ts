@@ -1257,19 +1257,18 @@ export async function getVoiceRouteTargets(
   }
 
   if (!isWithinVoiceWorkingHours(date)) {
+    // Outside office hours the escalation is intentionally narrow: Admin is
+    // tried first (when Receive calls is enabled), then the dedicated
+    // overflow/fallback line. Sales agents are not included merely because
+    // they opted into after-hours availability.
     const afterHoursTargets = [
       adminTarget,
-      targets.BRENDAH,
-      targets.JENNIFER,
-      targets.STEPHEN,
       overflowTarget,
     ].filter(
       (target) =>
         target.phoneNumber &&
         target.routingEnabled &&
-        (target.label === "ADMIN" ||
-          target.label === "OVERFLOW" ||
-          target.allowAfterHoursCalls),
+        (target.label === "ADMIN" || target.label === "OVERFLOW"),
     );
     const orderedTargets = afterHoursTargets;
     return {
