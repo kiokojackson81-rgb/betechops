@@ -1270,9 +1270,12 @@ async function listVoiceCallbackAssignmentCandidates() {
   });
 }
 
-/** Move legacy callback work away from the admin fallback, balancing it by
- * each agent's current open workload.  It is idempotent and runs before the
- * console snapshot is built, so a refresh repairs older records as well. */
+/**
+ * Move legacy and unowned callback work into the operational team, balancing
+ * it by each agent's current open workload. It is idempotent and runs before
+ * a console snapshot is built, so an agent never loses work that Admin can
+ * still see simply because an older record has no owner.
+ */
 async function redistributeAdminCallbackWork() {
   const [admins, candidates] = await Promise.all([
     prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } }),
@@ -1280,12 +1283,20 @@ async function redistributeAdminCallbackWork() {
   ]);
   const adminIds = admins.map((user) => user.id);
   const candidateIds = candidates.map((user) => user.id);
-  if (!adminIds.length || !candidateIds.length) return;
+  if (!candidateIds.length) return false;
+  const unownedOrAdminWhere = adminIds.length
+    ? {
+        OR: [
+          { assignedToId: { in: adminIds } },
+          { assignedToId: null },
+        ],
+      }
+    : { assignedToId: null };
 
   const [openTasks, openLeads, workload] = await Promise.all([
     prisma.voiceFollowUp.findMany({
       where: {
-        assignedToId: { in: adminIds },
+        ...unownedOrAdminWhere,
         status: { notIn: ["resolved", "closed"] },
       },
       select: { id: true, phone: true },
@@ -1293,7 +1304,7 @@ async function redistributeAdminCallbackWork() {
     }),
     prisma.voiceLead.findMany({
       where: {
-        assignedToId: { in: adminIds },
+        ...unownedOrAdminWhere,
         status: { in: ["open", "pending_follow_up"] },
       },
       select: { id: true, phone: true },
@@ -1308,7 +1319,7 @@ async function redistributeAdminCallbackWork() {
       _count: { _all: true },
     }),
   ]);
-  if (!openTasks.length && !openLeads.length) return;
+  if (!openTasks.length && !openLeads.length) return false;
 
   const loadByUserId = new Map(candidateIds.map((id) => [id, 0]));
   for (const row of workload) {
@@ -1338,6 +1349,7 @@ async function redistributeAdminCallbackWork() {
     if (!owner) continue;
     await prisma.voiceFollowUp.update({ where: { id: item.id }, data: { assignedToId: owner } });
   }
+  return true;
 }
 
 async function getVoiceRoutingConfig() {
@@ -1567,7 +1579,13 @@ function serializePresenceRow(
 
 export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   const { viewer } = input;
-  await redistributeAdminCallbackWork();
+  const redistributedCallbackWork = await redistributeAdminCallbackWork();
+  if (redistributedCallbackWork) {
+    publishVoiceLiveEvent({
+      type: "queue",
+      reason: "voice_queue_ownership_reconciled",
+    });
+  }
   await evaluateAllVoiceCompliance();
   const todayWindow = getVoiceHistoryDateRange("today");
   const historyWindow = getVoiceHistoryDateRange(

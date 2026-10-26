@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DialPad from "@/components/voice/DialPad";
 import VoiceFeedbackPanel from "@/components/voice/VoiceFeedbackPanel";
 import CallCentreHealthPanel from "@/components/voice/CallCentreHealthPanel";
@@ -826,7 +826,7 @@ export default function VoiceConsoleClient({
     window.location.assign(nextHref);
   };
 
-  const refreshSnapshot = async (
+  const refreshSnapshot = useCallback(async (
     nextCallId?: string | null,
     nextPhone?: string | null,
   ) => {
@@ -852,7 +852,21 @@ export default function VoiceConsoleClient({
     setSelectedPhone(nextData.selectedPhone);
     setLastRefreshAt(nextData.generatedAt);
     return nextData;
-  };
+  }, [dateFilter, pollBaseHref]);
+
+  // Server-sent events are immediate when the browser and a voice mutation
+  // share a runtime. A small no-store refresh closes that gap when serverless
+  // requests land on different instances, keeping agent and admin queues in
+  // sync without requiring a manual browser refresh.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refreshSnapshot(selectedCallId, selectedPhone).catch((error) => {
+        console.warn("[voice.console.queue_sync_failed]", error);
+      });
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [refreshSnapshot, selectedCallId, selectedPhone]);
 
   const handleVoiceSearch = async (rawQuery?: string | null) => {
     const query = String(rawQuery ?? queueSearch ?? "").trim();
