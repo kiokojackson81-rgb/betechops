@@ -1135,6 +1135,7 @@ function buildWorkingHoursSelection(input: {
   preferredTarget: VoiceRouteTarget | null;
   agentTargets: VoiceRouteTarget[];
   adminTarget: VoiceRouteTarget;
+  fallbackTarget?: VoiceRouteTarget | null;
   routeReason: VoiceRouteSelection["routeReason"];
   preferAdminFirst?: boolean;
 }): VoiceRouteSelection {
@@ -1152,6 +1153,9 @@ function buildWorkingHoursSelection(input: {
             ? [input.preferredTarget]
             : []),
           ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
+          ...(input.fallbackTarget?.phoneNumber && input.fallbackTarget.routingEnabled
+            ? [input.fallbackTarget]
+            : []),
         ]
       : [
           ...(input.preferredTarget?.phoneNumber
@@ -1161,11 +1165,17 @@ function buildWorkingHoursSelection(input: {
           ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled
             ? [input.adminTarget]
             : []),
+          ...(input.fallbackTarget?.phoneNumber && input.fallbackTarget.routingEnabled
+            ? [input.fallbackTarget]
+            : []),
         ]
   ).filter(
     (target, index, array) =>
-      array.findIndex((candidate) => candidate.label === target.label) ===
-      index,
+      array.findIndex(
+        (candidate) =>
+          normalizeVoiceNumber(candidate.phoneNumber) ===
+          normalizeVoiceNumber(target.phoneNumber),
+      ) === index,
   );
 
   return {
@@ -1374,6 +1384,7 @@ export async function getVoiceRouteTargets(
         preferredTarget: roundRobinTarget,
         agentTargets,
         adminTarget,
+    fallbackTarget: overflowTarget,
         routeReason: "round_robin",
         preferAdminFirst: false,
       });
