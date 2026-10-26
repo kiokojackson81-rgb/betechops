@@ -122,7 +122,6 @@ export async function claimQuickCallRecovery(input: {
   const matchingTargets = [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, targets.ADMIN]
     .filter((target) =>
       target.userId &&
-      target.routingEnabled &&
       normalizeVoiceNumber(target.phoneNumber) === agentPhone,
     );
   let agentId: string | null = matchingTargets[0]?.userId ?? null;
@@ -245,7 +244,6 @@ export async function isQuickCallRecoveryStaffCaller(agentPhone: string) {
     .some(
       (target) =>
         Boolean(target.userId) &&
-        target.routingEnabled &&
         normalizeVoiceNumber(target.phoneNumber) === normalizedPhone,
     );
   if (isConfiguredTarget) return true;
@@ -1146,14 +1144,14 @@ function buildWorkingHoursSelection(input: {
   const orderedTargets = (
     input.preferAdminFirst
       ? [
-          ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled
+          ...(input.adminTarget.phoneNumber
             ? [input.adminTarget]
             : []),
           ...(input.preferredTarget?.phoneNumber
             ? [input.preferredTarget]
             : []),
           ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
-          ...(input.fallbackTarget?.phoneNumber && input.fallbackTarget.routingEnabled
+          ...(input.fallbackTarget?.phoneNumber
             ? [input.fallbackTarget]
             : []),
         ]
@@ -1162,10 +1160,10 @@ function buildWorkingHoursSelection(input: {
             ? [input.preferredTarget]
             : []),
           ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
-          ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled
+          ...(input.adminTarget.phoneNumber
             ? [input.adminTarget]
             : []),
-          ...(input.fallbackTarget?.phoneNumber && input.fallbackTarget.routingEnabled
+          ...(input.fallbackTarget?.phoneNumber
             ? [input.fallbackTarget]
             : []),
         ]
@@ -1195,8 +1193,9 @@ export function buildStickyVoiceTargetOrder(input: {
   const seenNumbers = new Set<string>();
 
   // Ownership decides who rings first; it must never turn one unanswered
-  // agent into a dead end. Continue through the enabled team, then Admin and
-  // finally any configured overflow line.
+  // agent into a dead end. This is the provider's emergency sequential Dial
+  // chain, so normal Receive calls/compliance flags do not remove a configured
+  // phone number. Continue through the full team, then Admin and overflow.
   return [
     input.stickyTarget,
     input.roundRobinTarget ?? null,
@@ -1207,7 +1206,7 @@ export function buildStickyVoiceTargetOrder(input: {
     (target): target is VoiceRouteTarget => {
       if (!target) return false;
       const normalizedNumber = normalizeVoiceNumber(target.phoneNumber);
-      if (!normalizedNumber || !target.routingEnabled) return false;
+      if (!normalizedNumber) return false;
       if (seenNumbers.has(normalizedNumber)) return false;
       seenNumbers.add(normalizedNumber);
       return true;
@@ -1230,12 +1229,13 @@ export async function getVoiceRouteTargets(
     targets.ADMIN,
     targets.OVERFLOW,
   ].filter((target) => target.phoneNumber);
+  // Retain every configured sales destination in the emergency route plan.
+  // `routingEnabled` still drives normal availability displays, but it must
+  // not remove a number from the sequential escalation that prevents a caller
+  // from being marked missed before the rest of the team is tried.
   const agentTargets = [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN].filter(
-    (target) => target.phoneNumber && target.routingEnabled,
+    (target) => target.phoneNumber,
   );
-  // An administrator's Receive calls switch is authoritative. In particular,
-  // it must not be turned back on by an emergency-routing shortcut; the
-  // separately configured overflow line is the no-missed-call destination.
   const adminTarget = targets.ADMIN;
   const overflowTarget = targets.OVERFLOW;
   const quotationOwnerTargets = [
@@ -1243,11 +1243,11 @@ export async function getVoiceRouteTargets(
     targets.JENNIFER,
     targets.STEPHEN,
     targets.ADMIN,
-  ].filter((target) => target.phoneNumber && target.routingEnabled);
-  // Keep the designated overflow number first. Admin is only a final option
-  // when that admin has explicitly left Receive calls enabled.
-  const directFallbackTargets = [overflowTarget, adminTarget].filter(
-    (target) => target.phoneNumber && target.routingEnabled,
+  ].filter((target) => target.phoneNumber);
+  // Emergency and after-hours escalation deliberately overrides ordinary
+  // Receive calls/compliance flags: Admin is tried before the overflow line.
+  const directFallbackTargets = [adminTarget, overflowTarget].filter(
+    (target) => target.phoneNumber,
   );
 
   if (isVoiceAdminTestPhone(callerNumber) && directFallbackTargets.length) {
@@ -1267,17 +1267,15 @@ export async function getVoiceRouteTargets(
   }
 
   if (!isWithinVoiceWorkingHours(date)) {
-    // Outside office hours the escalation is intentionally narrow: Admin is
-    // tried first (when Receive calls is enabled), then the dedicated
-    // overflow/fallback line. Sales agents are not included merely because
-    // they opted into after-hours availability.
+    // Outside office hours escalation is intentionally narrow: Admin first,
+    // then the dedicated overflow line. These are the final emergency routes
+    // even if normal Receive calls/compliance flags currently show unavailable.
     const afterHoursTargets = [
       adminTarget,
       overflowTarget,
     ].filter(
       (target) =>
         target.phoneNumber &&
-        target.routingEnabled &&
         (target.label === "ADMIN" || target.label === "OVERFLOW"),
     );
     const orderedTargets = afterHoursTargets;
@@ -1314,7 +1312,7 @@ export async function getVoiceRouteTargets(
     findLastAnsweredTarget(
       callerNumber,
       [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, adminTarget, targets.OVERFLOW].filter(
-        (target) => target.phoneNumber && target.routingEnabled,
+        (target) => target.phoneNumber,
       ),
       date,
     ),
@@ -1384,7 +1382,7 @@ export async function getVoiceRouteTargets(
         preferredTarget: roundRobinTarget,
         agentTargets,
         adminTarget,
-    fallbackTarget: overflowTarget,
+        fallbackTarget: overflowTarget,
         routeReason: "round_robin",
         preferAdminFirst: false,
       });
@@ -1394,6 +1392,7 @@ export async function getVoiceRouteTargets(
     targets.JENNIFER,
     targets.STEPHEN,
     adminTarget,
+    overflowTarget,
     ...(quotationOwnerTarget &&
     ![targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, adminTarget].some(
       (target) => target.userId === quotationOwnerTarget.userId,
