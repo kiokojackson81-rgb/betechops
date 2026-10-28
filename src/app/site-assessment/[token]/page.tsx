@@ -13,7 +13,7 @@ export default async function PublicSiteAssessmentPage({
   const { token } = await params;
   const payload = verifySiteAssessmentToken(token);
   const visit = payload ? await getSiteVisitById(payload.visitId) : null;
-  if (!payload || !visit || visit.assignedTechnicianId !== payload.technicianId)
+  if (!payload || payload.audience === "CUSTOMER" || !visit || visit.assignedTechnicianId !== payload.technicianId)
     notFound();
   return <SiteAssessmentPublicClient key={visit.id} visit={visit} assessmentToken={token} />;
 }

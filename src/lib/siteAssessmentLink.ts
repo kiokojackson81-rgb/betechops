@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-type AssessmentLinkPayload = { visitId: string; technicianId: string; expiresAt: number };
+export type AssessmentLinkAudience = "TECHNICIAN" | "CUSTOMER";
+type AssessmentLinkPayload = { visitId: string; technicianId?: string; expiresAt: number; audience?: AssessmentLinkAudience };
 
 function secret() {
   const value = process.env.SITE_ASSESSMENT_LINK_SECRET || process.env.NEXTAUTH_SECRET;
@@ -25,6 +26,10 @@ export function verifySiteAssessmentToken(token: string): AssessmentLinkPayload 
   if (receivedSignature.length !== expectedSignature.length || !timingSafeEqual(Buffer.from(receivedSignature), Buffer.from(expectedSignature))) return null;
   try {
     const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as AssessmentLinkPayload;
-    return payload.visitId && payload.technicianId && payload.expiresAt > Date.now() ? payload : null;
+    const validAudience = !payload.audience || payload.audience === "TECHNICIAN" || payload.audience === "CUSTOMER";
+    const validTechnicianLink = payload.audience !== "CUSTOMER" ? Boolean(payload.technicianId) : true;
+    return payload.visitId && payload.expiresAt > Date.now() && validAudience && validTechnicianLink
+      ? payload
+      : null;
   } catch { return null; }
 }
