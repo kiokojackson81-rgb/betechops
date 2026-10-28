@@ -1065,15 +1065,7 @@ export default function SiteAssessmentPublicClient({
     }
   };
   const publishReport = async () => {
-    if (isPublishing || !loads.length) return;
-    if (recommendationType === "CATALOG_PRODUCT" && !selectedProduct) {
-      setPublishError("Search and select a Betech catalog product, or choose Custom quotation.");
-      return;
-    }
-    if (recommendationType === "CATALOG_PRODUCT" && analysis.productMatch.status !== "PASS") {
-      setPublishError("This catalog product cannot yet be validated against the recorded inverter, battery and PV requirements. Choose Custom quotation or select a fully suitable system.");
-      return;
-    }
+    if (isPublishing) return;
     if (!signaturesComplete) {
       setPublishError(
         "The customer and technician must both complete the final electronic sign-off before the report can be shared.",
@@ -1084,6 +1076,13 @@ export default function SiteAssessmentPublicClient({
     setPublishError("");
     setPublishMessage("");
     try {
+      // Missing nameplates, photos or sizing details must be recorded as data
+      // gaps for follow-up, not prevent a technician from submitting the
+      // field report. An unmatched or unselected catalogue system therefore
+      // becomes a controlled custom quotation instead.
+      const effectiveRecommendationType = recommendationType === "CATALOG_PRODUCT" && selectedProduct
+        ? "CATALOG_PRODUCT"
+        : "CUSTOM_QUOTATION";
       const form = new FormData();
       form.set("token", assessmentToken);
       form.set("revision", String(isRevisingReport));
@@ -1091,8 +1090,8 @@ export default function SiteAssessmentPublicClient({
         assessment: assessmentPayload(),
         aiReview,
         recommendation: {
-          type: recommendationType,
-          ...(selectedProduct && recommendationType === "CATALOG_PRODUCT"
+          type: effectiveRecommendationType,
+          ...(selectedProduct && effectiveRecommendationType === "CATALOG_PRODUCT"
             ? {
                 productName: selectedProduct.productName,
                 productUrl: selectedProduct.productUrl,
