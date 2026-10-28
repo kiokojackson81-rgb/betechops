@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   if (!customerLink && action !== "save") {
     return NextResponse.json({ ok: false, error: "Assessment draft details are invalid." }, { status: 400 });
   }
-  if (customerLink && action !== "save-customer") {
+  if (customerLink && action !== "save" && action !== "save-customer") {
     return NextResponse.json({ ok: false, error: "Customer assessment details are invalid." }, { status: 400 });
   }
   if (!body.draft || typeof body.draft !== "object" || Array.isArray(body.draft)) {
@@ -59,11 +59,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Assessment draft is too large to save." }, { status: 413 });
   }
   const customerDraft = body.draft as { projectDetails?: unknown; home?: unknown; electrical?: unknown; notes?: unknown };
-  const existing = customerLink ? await getSiteAssessmentDraft(visit.id) : null;
+  const existing = customerLink && action === "save-customer" ? await getSiteAssessmentDraft(visit.id) : null;
   const existingDraft = existing?.draft && typeof existing.draft === "object" && !Array.isArray(existing.draft)
     ? existing.draft as Prisma.JsonObject
     : {};
-  const mergedDraft = customerLink ? {
+  const mergedDraft = customerLink && action === "save-customer" ? {
     ...existingDraft,
     customerIntake: customerDraft,
     projectDetails: { ...(existingDraft.projectDetails as Prisma.JsonObject || {}), ...(customerDraft.projectDetails as Prisma.JsonObject || {}) },

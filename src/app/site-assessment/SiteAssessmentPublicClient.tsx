@@ -482,9 +482,11 @@ function Field({
 export default function SiteAssessmentPublicClient({
   visit,
   assessmentToken,
+  customerMode = false,
 }: {
   visit: SerializedSiteVisit;
   assessmentToken: string;
+  customerMode?: boolean;
 }) {
   const assessmentRootRef = useRef<HTMLElement | null>(null);
   const clearingDraftRef = useRef(false);
@@ -1198,6 +1200,7 @@ export default function SiteAssessmentPublicClient({
       ref={assessmentRootRef}
       className="min-h-screen min-w-0 bg-slate-950 p-3 text-slate-100 sm:p-5"
     >
+      {customerMode ? <div className="mx-auto mb-4 max-w-6xl rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 text-sm leading-6 text-cyan-50"><b>Customer pre-visit assessment:</b> Fill in everything you know. Your answers save automatically and are shared with the assigned technician, who will complete measurements, safety checks, photos and the final assessment on site.</div> : null}
       <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
         <header className="rounded-2xl bg-cyan-400 p-5 text-slate-950 sm:rounded-3xl sm:p-6">
           <b className="text-xs uppercase tracking-widest">
@@ -2105,11 +2108,13 @@ export default function SiteAssessmentPublicClient({
           ) : null}
           <button
             type="button"
-            onClick={() => void publishReport()}
-            disabled={isPublishing || Boolean(publishMessage) || !signaturesComplete}
+            onClick={() => { if (!customerMode) void publishReport(); }}
+            disabled={customerMode || isPublishing || Boolean(publishMessage) || !signaturesComplete}
             className="mt-5 w-full rounded-xl bg-emerald-400 py-4 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {isPublishing
+            {customerMode
+              ? "Saved for your technician to complete on site"
+              : isPublishing
               ? isRevisingReport ? "Regenerating report..." : "Generating report..."
               : publishMessage
                 ? "Report shared"
