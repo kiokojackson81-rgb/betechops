@@ -422,7 +422,7 @@ export default function CustomerSiteVisitsClient({
                       ))}
                     </select>
                   </Field>
-                  <Field label="What should our technician assess?">
+                  <Field label="What should our technician assess? (optional)">
                     <textarea
                       rows={5}
                       value={form.customerRequirements}
@@ -644,7 +644,6 @@ export default function CustomerSiteVisitsClient({
                 {step < 4 ? (
                   <button
                     disabled={
-                      (step === 1 && !form.customerRequirements.trim()) ||
                       (step === 2 && (!serviceZone || !form.location.trim())) ||
                       (step === 3 && !form.preferredDate)
                     }

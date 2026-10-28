@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     // Every staff booking uses the same queue and customer confirmation flow.
     // Payment confirmation triggers its own follow-up in the M-Pesa callback.
-    void dispatchSiteVisitCreated(
+    const notification = await dispatchSiteVisitCreated(
       visit,
       visit.assignedStaffName ||
         requestedOwner?.name ||
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
         "Admin",
     );
 
-    return NextResponse.json({ ok: true, visit }, { status: 201 });
+    return NextResponse.json({ ok: true, visit, notification }, { status: 201 });
   } catch (error) {
     console.error("[receipts.site-visits] POST failed", error);
     return NextResponse.json(

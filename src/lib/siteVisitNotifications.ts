@@ -16,9 +16,9 @@ import {
 } from "@/lib/siteAssessmentReport";
 import { createSiteAssessmentToken } from "@/lib/siteAssessmentLink";
 
-type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; projectType?: QuoteProjectType | null; visitReason?: SiteVisitReason | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; estimatedDurationMinutes?: number | null; cancellationReason?: string | null; paymentStatus: string; paymentMethod?: string | null; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
+type Visit = { id: string; visitRef: string; customerName: string; customerPhone: string; customerEmail?: string | null; county?: string | null; town?: string | null; location?: string | null; landmark?: string | null; projectType?: QuoteProjectType | null; visitReason?: SiteVisitReason | null; preferredDate?: string | null; preferredTimeLabel?: string | null; assignedTechnicianId?: string | null; assignedTechnicianName?: string | null; scheduledAt?: string | null; estimatedDurationMinutes?: number | null; cancellationReason?: string | null; paymentStatus: string; paymentMethod?: string | null; visitFee: number; dataLoggerRequested: boolean; dataLoggerDays: number; dataLoggerFee: number };
 type RecipientType = "CUSTOMER" | "TECHNICIAN";
-type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_VISIT_SCHEDULED_CUSTOMER_SMS" | "SITE_VISIT_SCHEDULED_TECHNICIAN_SMS" | "SITE_VISIT_CANCELLED_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS";
+type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "SITE_VISIT_CREATED_CUSTOMER_SMS_RESENT" | "TECHNICIAN_ASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_ASSIGNED_SMS" | "TECHNICIAN_REASSIGNED_CUSTOMER_SMS" | "TECHNICIAN_REASSIGNED_SMS" | "SITE_VISIT_SCHEDULED_CUSTOMER_SMS" | "SITE_VISIT_SCHEDULED_TECHNICIAN_SMS" | "SITE_VISIT_CANCELLED_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS" | "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS";
 
 // The apex domain is the registered customer site. The www alias has not
 // consistently served customer-account routes, so SMS links must use this URL.
@@ -72,10 +72,17 @@ async function technicianPhone(visit: Visit) {
   return user?.whatsappNumber || user?.phone || null;
 }
 
-export async function dispatchSiteVisitCreated(visit: Visit, requestedBy?: string | null) {
-  await notifyAdminCriticalSms({ eventType: "SITE_VISIT_REQUESTED", entityId: visit.id, title: `New Site Visit Booking ${visit.visitRef}`, details: [`Customer: ${visit.customerName}`, `Phone: ${visit.customerPhone}`, `Location: ${location(visit)}`, `Requested by: ${requestedBy || "Customer"}`, "Technician: Pending Assignment", `Site Visit Fee: KSh ${visit.visitFee.toLocaleString("en-KE")}`, `Payment: ${paymentLabel(visit)}`, visit.dataLoggerRequested ? `Data Logger: ${visit.dataLoggerDays} day(s)` : "Data Logger: None"], actionPath: `/admin/quotation-center/site-visits/${visit.id}`, payload: { visitRef: visit.visitRef, notificationType: "SITE_VISIT_CREATED_ADMIN_SMS" } });
-  const message = `Your site visit ${visit.visitRef} is booked and pending technician assignment. ${customerPaymentNote(visit)} View the visit scope: ${customerBriefingUrl(visit)}`;
-  return sendOnce({ visitId: visit.id, type: "SITE_VISIT_CREATED_CUSTOMER_SMS", recipient: visit.customerPhone, recipientType: "CUSTOMER", message, version: "created" });
+export async function dispatchSiteVisitCreated(visit: Visit, requestedBy?: string | null, options: { resend?: boolean } = {}) {
+  if (!options.resend) {
+    await notifyAdminCriticalSms({ eventType: "SITE_VISIT_REQUESTED", entityId: visit.id, title: `New Site Visit Booking ${visit.visitRef}`, details: [`Customer: ${visit.customerName}`, `Phone: ${visit.customerPhone}`, `Location: ${location(visit)}`, `Requested by: ${requestedBy || "Customer"}`, "Technician: Pending Assignment", `Site Visit Fee: KSh ${visit.visitFee.toLocaleString("en-KE")}`, `Payment: ${paymentLabel(visit)}`, visit.dataLoggerRequested ? `Data Logger: ${visit.dataLoggerDays} day(s)` : "Data Logger: None"], actionPath: `/admin/quotation-center/site-visits/${visit.id}`, payload: { visitRef: visit.visitRef, notificationType: "SITE_VISIT_CREATED_ADMIN_SMS" } });
+  }
+  const bookingTime = visit.scheduledAt
+    ? `Scheduled: ${scheduleLabel(visit.scheduledAt)}.`
+    : visit.preferredDate
+      ? `Preferred visit: ${visit.preferredDate}${visit.preferredTimeLabel ? ` (${visit.preferredTimeLabel.toLowerCase()})` : ""}.`
+      : "Our team will confirm your visit time.";
+  const message = `BETECH: Your site visit ${visit.visitRef} is booked. ${bookingTime} Purpose: ${visit.visitReason?.replace(/_/g, " ").toLowerCase() || "site assessment"}. Location: ${location(visit)}. ${customerPaymentNote(visit)} View details: ${customerBriefingUrl(visit)}`;
+  return sendOnce({ visitId: visit.id, type: options.resend ? "SITE_VISIT_CREATED_CUSTOMER_SMS_RESENT" : "SITE_VISIT_CREATED_CUSTOMER_SMS", recipient: visit.customerPhone, recipientType: "CUSTOMER", message, version: options.resend ? `manual:${Date.now()}` : "created" });
 }
 
 export async function dispatchSiteVisitTechnicianAssignment(visit: Visit, previousTechnicianId?: string | null) {

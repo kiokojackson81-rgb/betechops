@@ -610,7 +610,7 @@ export const customerSiteVisitCreateSchema = z.object({
   paymentPreference: z.enum(["MPESA_NOW", "PAY_ON_SITE"]).optional(),
   projectType: z.enum(QUOTE_PROJECT_TYPES),
   visitReason: z.enum(SITE_VISIT_REASONS),
-  customerRequirements: z.string().trim().min(10).max(4000),
+  customerRequirements: z.string().trim().max(4000).optional(),
   county: z.string().trim().min(2).max(120),
   town: z.string().trim().min(2).max(120),
   location: z.string().trim().min(2).max(300),

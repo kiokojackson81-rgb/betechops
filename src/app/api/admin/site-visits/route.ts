@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSiteVisitAccessActor } from "@/lib/siteVisitAccess";
-import { dispatchSiteVisitTechnicianAssignment } from "@/lib/siteVisitNotifications";
+import { dispatchSiteVisitCreated, dispatchSiteVisitTechnicianAssignment } from "@/lib/siteVisitNotifications";
 import {
   createSiteVisit,
   listAdminSiteVisits,
@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Unable to create site visit." }, { status: 500 });
   }
 
+  const notification = await dispatchSiteVisitCreated(visit, actor.name || actor.email || "Admin");
   if (visit.assignedTechnicianId) void dispatchSiteVisitTechnicianAssignment(visit);
 
-  return NextResponse.json({ ok: true, visit });
+  return NextResponse.json({ ok: true, visit, notification });
 }

@@ -16,6 +16,7 @@ import {
   MapPin,
   Phone,
   Save,
+  Send,
 } from "lucide-react";
 import type {
   SerializedSiteVisit,
@@ -154,6 +155,7 @@ function SiteVisitWorkflowActions({
   onCreateQuotation,
   onApplyCredit,
   onAssignTechnician,
+  onSendCustomerSms,
 }: {
   visit: SerializedSiteVisit;
   attachmentsCount: number;
@@ -167,6 +169,7 @@ function SiteVisitWorkflowActions({
   onCreateQuotation: () => void;
   onApplyCredit: () => void;
   onAssignTechnician: () => void;
+  onSendCustomerSms: () => void;
 }) {
   const stages = ["PENDING", "TECHNICIAN_ASSIGNED", "ASSESSED", "QUOTED"] as const;
   const stageIndex = visit.status === "SCHEDULED"
@@ -231,6 +234,11 @@ function SiteVisitWorkflowActions({
           <span className="mt-3 block font-bold text-white">View attachments</span>
           <span className="mt-1 block text-xs leading-5 text-slate-400">{attachmentsCount} attachment{attachmentsCount === 1 ? "" : "s"} saved to this visit.</span>
         </button>
+        {canManageCommercials ? <button type="button" disabled={saving || visit.status === "CANCELLED"} onClick={onSendCustomerSms} className="min-h-28 rounded-2xl border border-sky-400/30 bg-sky-400/[.08] p-4 text-left transition hover:bg-sky-400/[.14] disabled:cursor-not-allowed disabled:opacity-50">
+          <Send className="h-5 w-5 text-sky-200" />
+          <span className="mt-3 block font-bold text-sky-50">Send booking SMS to customer</span>
+          <span className="mt-1 block text-xs leading-5 text-sky-100/75">Resend the booking details and secure visit link to {visit.customerPhone}.</span>
+        </button> : null}
         {canManageCommercials && visit.quoteRequestId && visit.quotationCreditStatus === "AVAILABLE" ? (
           <button disabled={saving} onClick={onApplyCredit} className="min-h-28 rounded-2xl border border-amber-300/35 bg-amber-300/[.08] p-4 text-left transition hover:bg-amber-300/[.14] disabled:opacity-50">
             <CreditCard className="h-5 w-5 text-amber-200" />
@@ -489,6 +497,22 @@ export default function SiteVisitDetailClient({
       if (!response.ok) throw new Error(data.error || "Unable to create assessment link.");
       window.open(data.url, "_blank", "noopener,noreferrer");
     } catch (linkError) { setError(linkError instanceof Error ? linkError.message : "Unable to create assessment link."); }
+  }
+  async function sendCustomerSms() {
+    if (!window.confirm(`Send the booking details by SMS to ${visit.customerName} at ${visit.customerPhone}?`)) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/site-visits/${visit.id}/customer-sms`, { method: "POST" });
+      const data = await responseData(response);
+      if (!response.ok) throw new Error(data.error || "Unable to send the customer SMS.");
+      setMessage("Booking details SMS sent to the customer.");
+    } catch (smsError) {
+      setError(smsError instanceof Error ? smsError.message : "Unable to send the customer SMS.");
+    } finally {
+      setSaving(false);
+    }
   }
   async function applyCredit() {
     if (
@@ -985,6 +1009,7 @@ export default function SiteVisitDetailClient({
               onCreateQuotation={() => void createQuotation()}
               onApplyCredit={() => void applyCredit()}
               onAssignTechnician={() => void save({ assignedTechnicianId: draft.assignedTechnicianId, outcome: null })}
+              onSendCustomerSms={() => void sendCustomerSms()}
             />
             {canManageCommercials && visit.status !== "CLOSED" && visit.status !== "CANCELLED" ? (
               <section className="mt-6 rounded-2xl border border-rose-400/25 bg-rose-400/[.05] p-5">

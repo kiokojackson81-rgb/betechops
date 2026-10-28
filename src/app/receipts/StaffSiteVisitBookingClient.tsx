@@ -87,7 +87,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
   const preferredDateRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ visitRef: string; customerName: string; totalPayable: number; assignedStaffName: string | null; paymentPrompted?: boolean; paymentPromptError?: string } | null>(null);
+  const [success, setSuccess] = useState<{ visitRef: string; customerName: string; totalPayable: number; assignedStaffName: string | null; smsStatus?: string; paymentPrompted?: boolean; paymentPromptError?: string } | null>(null);
 
   const towns = getTownsForCounty(form.county);
   const zone = getServiceZone(form.county, form.town);
@@ -138,7 +138,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
         if (paymentResponse.ok) paymentPrompted = true;
         else paymentPromptError = paymentPayload?.error || "The booking was created, but the M-Pesa prompt could not be sent.";
       }
-      setSuccess({ ...payload.visit, paymentPrompted, paymentPromptError });
+      setSuccess({ ...payload.visit, smsStatus: payload?.notification?.status, paymentPrompted, paymentPromptError });
       setForm(emptyForm());
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to book the site visit.");
@@ -161,7 +161,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
       {success ? (
         <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-50">
           <div className="flex items-center gap-2 font-semibold"><CheckCircle2 className="h-5 w-5" /> {success.visitRef} booked successfully</div>
-          <p className="mt-1">{success.customerName} · {money(success.totalPayable)} · owner {success.assignedStaffName || "selected staff"}. The customer and the shared admin queue have been notified.</p>
+          <p className="mt-1">{success.customerName} · {money(success.totalPayable)} · owner {success.assignedStaffName || "selected staff"}. {success.smsStatus === "SENT" ? "The customer booking SMS and shared admin notification were sent." : "The shared admin queue was notified. Customer SMS delivery needs attention."}</p>
           {success.paymentPrompted ? <p className="mt-2 font-medium text-emerald-100">An M-Pesa PayBill prompt has been sent to the customer&apos;s phone.</p> : null}
           {success.paymentPromptError ? <p className="mt-2 text-amber-100">{success.paymentPromptError}</p> : null}
         </div>
@@ -177,7 +177,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
             <Field title={allowUnassigned ? "Sales owner (optional)" : "Staff requesting / customer owner"} wide><select required={!allowUnassigned} disabled={staffLoading} className={inputClass} value={form.assignedStaffId} onChange={(event) => setForm({ ...form, assignedStaffId: event.target.value })}><option value="">{allowUnassigned ? "Unassigned — allocate later" : "Select staff member"}</option>{staffOptions.map((member) => <option key={member.id} value={member.id}>{member.name || member.email || "Staff"}</option>)}</select><span className="mt-1 block text-xs font-normal text-slate-400">{allowUnassigned ? "No sales person is credited until an admin assigns the work." : "This staff member keeps customer and quotation ownership. Only admin assigns the technician."}</span></Field>
             <Field title="Project type"><select className={inputClass} value={form.projectType} onChange={(event) => setForm({ ...form, projectType: event.target.value })}>{SITE_VISIT_PROJECT_OPTIONS.map((project) => <option key={project.value} value={project.value}>{project.label}</option>)}</select></Field>
             <Field title="Visit purpose"><select className={inputClass} value={form.visitReason} onChange={(event) => setForm({ ...form, visitReason: event.target.value })}>{SITE_VISIT_REASON_OPTIONS.map((reason) => <option key={reason.value} value={reason.value}>{reason.label}</option>)}</select></Field>
-            <Field title="What should the team assess?" wide><textarea required minLength={10} rows={3} className={inputClass} placeholder="Customer requirements, system concern or work to assess" value={form.customerRequirements} onChange={(event) => setForm({ ...form, customerRequirements: event.target.value })} /></Field>
+            <Field title="What should the team assess? (optional)" wide><textarea rows={3} className={inputClass} placeholder="Customer requirements, system concern or work to assess" value={form.customerRequirements} onChange={(event) => setForm({ ...form, customerRequirements: event.target.value })} /></Field>
             <Field title="Appliances or equipment to inspect (optional)" wide><textarea rows={2} className={inputClass} value={form.appliancesToInspect} onChange={(event) => setForm({ ...form, appliancesToInspect: event.target.value })} /></Field>
           </div>
         </section>
