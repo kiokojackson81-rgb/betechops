@@ -1714,13 +1714,13 @@ export default function SiteAssessmentPublicClient({
         <section className="rounded-2xl bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-xl font-bold">Site photos & documents</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Take multiple photos quickly. Roof / installation area and equipment / cable route photos are included in the final assessment report.
+            All photos are optional. Take a new photo or upload one from your gallery; you can skip this section and continue at any time.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {evidenceCategories.map((label) => {
               const fileName = evidenceNames[label];
               return (
-                <label
+                <div
                   key={label}
                   className="rounded-xl border border-white/10 p-4 font-bold"
                 >
@@ -1728,24 +1728,12 @@ export default function SiteAssessmentPublicClient({
                   <span className={`mt-2 block text-sm ${fileName ? "text-emerald-300" : "text-amber-200"}`}>
                     {fileName ? `✓ Photo captured — ${fileName}` : "⚠ Not captured"}
                   </span>
-                  <span className="mt-3 inline-block rounded-lg border border-cyan-400/40 px-3 py-2 text-xs text-cyan-100">
-                    {fileName ? "Replace photo" : "Take / upload photo"}
-                  </span>
-                  <input
-                    className="sr-only"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file)
-                        setEvidenceNames((current) => ({
-                          ...current,
-                          [label]: file.name || "Photo captured",
-                        }));
-                    }}
-                  />
-                </label>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <label className="cursor-pointer rounded-lg border border-cyan-400/40 px-3 py-2 text-xs text-cyan-100">Take photo<input className="sr-only" type="file" accept="image/*" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; if (file) setEvidenceNames((current) => ({ ...current, [label]: file.name || "Photo captured" })); }} /></label>
+                    <label className="cursor-pointer rounded-lg border border-white/20 px-3 py-2 text-xs text-slate-200">Upload from gallery<input className="sr-only" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) setEvidenceNames((current) => ({ ...current, [label]: file.name || "Photo uploaded" })); }} /></label>
+                  </div>
+                  <span className="mt-3 block text-xs font-normal text-slate-400">Optional — leave blank if unavailable.</span>
+                </div>
               );
             })}
           </div>
