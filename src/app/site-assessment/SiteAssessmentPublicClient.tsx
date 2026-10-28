@@ -1200,7 +1200,6 @@ export default function SiteAssessmentPublicClient({
       ref={assessmentRootRef}
       className="min-h-screen min-w-0 bg-slate-950 p-3 text-slate-100 sm:p-5"
     >
-      {customerMode ? <div className="mx-auto mb-4 max-w-6xl rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 text-sm leading-6 text-cyan-50"><b>Customer pre-visit assessment:</b> Fill in everything you know. Your answers save automatically and are shared with the assigned technician, who will complete measurements, safety checks, photos and the final assessment on site.</div> : null}
       <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
         <header className="rounded-2xl bg-cyan-400 p-5 text-slate-950 sm:rounded-3xl sm:p-6">
           <b className="text-xs uppercase tracking-widest">
@@ -1211,6 +1210,7 @@ export default function SiteAssessmentPublicClient({
             {visit.visitRef} · {visit.customerName}
           </p>
         </header>
+        {customerMode ? <section className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 text-sm leading-6 text-cyan-50 sm:p-5"><h2 className="text-base font-black text-cyan-100">Your site visit has been booked — {visit.visitRef}</h2><p className="mt-2">We will assign a Betech technician who will contact you to arrange a visit to your premises and complete the site assessment. The information in this form helps our team understand your energy needs and size the correct solar system for you.</p><p className="mt-2">You can fill in any details you know before the visit. Your answers save automatically and will be available to the technician. If you are not sure about a question, simply skip it — our technician will collect the missing information, measurements, photos and safety details during the site visit.</p></section> : null}
         <WizardProgress
           activeStep={activeStep}
           completedSteps={completedSteps}
@@ -1227,13 +1227,13 @@ export default function SiteAssessmentPublicClient({
                   : "Saved on this device. It will sync securely when your connection returns."
               : "Loading saved assessment..."}
           </span>
-          <button
+          {!customerMode ? <button
             type="button"
             onClick={clearDraft}
             className="min-h-11 w-full rounded-lg border border-rose-300/50 px-3 py-2 font-bold text-rose-200 touch-manipulation sm:w-auto"
           >
             Clear saved draft everywhere
-          </button>
+          </button> : null}
         </div>
         <div hidden={activeStep !== 0}>
         <section className="rounded-2xl bg-slate-900 p-4 sm:rounded-3xl sm:p-5">
