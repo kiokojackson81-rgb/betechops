@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSiteVisitById } from "@/lib/siteVisits";
 import { verifySiteAssessmentToken } from "@/lib/siteAssessmentLink";
+import CustomerAssessmentIntake from "@/app/site-visit/CustomerAssessmentIntake";
 import {
   formatSiteVisitProjectType,
   formatSiteVisitReason,
@@ -35,6 +36,7 @@ export default async function CustomerSiteVisitBriefing({ params }: { params: Pr
     <dl className="mt-7 grid gap-4 rounded-2xl bg-slate-50 p-5 text-sm sm:grid-cols-2"><div><dt className="font-semibold text-slate-500">Assessment</dt><dd className="mt-1 font-bold">{formatSiteVisitProjectType(visit.projectType)}</dd></div><div><dt className="font-semibold text-slate-500">Visit reason</dt><dd className="mt-1 font-bold">{formatSiteVisitReason(visit.visitReason)}</dd></div><div><dt className="font-semibold text-slate-500">Technician</dt><dd className="mt-1 font-bold">{visit.assignedTechnicianName || "To be confirmed"}</dd></div><div><dt className="font-semibold text-slate-500">Scheduled time</dt><dd className="mt-1 font-bold">{dateLabel(visit.scheduledAt)}</dd></div><div className="sm:col-span-2"><dt className="font-semibold text-slate-500">Location</dt><dd className="mt-1 font-bold">{location}</dd></div></dl>
     <h2 className="mt-8 text-xl font-black">During the visit, we expect to check</h2><ul className="mt-4 space-y-3 text-slate-700">{checks.map((check) => <li key={check} className="flex gap-3"><span className="font-black text-[#7a0000]">•</span><span>{check}</span></li>)}</ul>
     {visit.customerRequirements || visit.specialInstructions ? <section className="mt-8 rounded-2xl border border-[#7a0000]/15 bg-[#fff8f7] p-5"><h2 className="font-black">Your request</h2><p className="mt-2 whitespace-pre-wrap leading-7 text-slate-700">{visit.customerRequirements || visit.specialInstructions}</p></section> : null}
+    <CustomerAssessmentIntake token={token} customerName={visit.customerName} projectFields={profile.fields} />
     <p className="mt-8 text-sm leading-6 text-slate-500">Please make the relevant equipment and areas accessible. Your technician will contact you if anything else is needed.</p>
   </section></main>;
 }

@@ -26,7 +26,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "This assessment link is invalid or has expired." }, { status: 403 });
   }
   const visit = await getSiteVisitById(tokenPayload.visitId);
-  if (!visit || visit.assignedTechnicianId !== tokenPayload.technicianId) {
+  const customerLink = tokenPayload.audience === "CUSTOMER";
+  if (!visit || (!customerLink && visit.assignedTechnicianId !== tokenPayload.technicianId)) {
     return NextResponse.json({ ok: false, error: "This assessment is no longer assigned to this link." }, { status: 403 });
   }
 
@@ -39,10 +40,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "This assessment can no longer be edited." }, { status: 409 });
   }
   if (action === "clear") {
-    await clearSiteAssessmentDraft(visit.id, tokenPayload.technicianId);
+    if (customerLink) return NextResponse.json({ ok: false, error: "Customer responses cannot clear the assessment draft." }, { status: 403 });
+    await clearSiteAssessmentDraft(visit.id, String(tokenPayload.technicianId));
     return NextResponse.json({ ok: true });
   }
-  if (action !== "save" || !body.draft || typeof body.draft !== "object" || Array.isArray(body.draft)) {
+  if (!customerLink && action !== "save") {
+    return NextResponse.json({ ok: false, error: "Assessment draft details are invalid." }, { status: 400 });
+  }
+  if (customerLink && action !== "save-customer") {
+    return NextResponse.json({ ok: false, error: "Customer assessment details are invalid." }, { status: 400 });
+  }
+  if (!body.draft || typeof body.draft !== "object" || Array.isArray(body.draft)) {
     return NextResponse.json({ ok: false, error: "Assessment draft details are invalid." }, { status: 400 });
   }
 
@@ -50,10 +58,22 @@ export async function POST(request: Request) {
   if (encoded.length > MAX_DRAFT_BYTES) {
     return NextResponse.json({ ok: false, error: "Assessment draft is too large to save." }, { status: 413 });
   }
+  const customerDraft = body.draft as { projectDetails?: unknown; home?: unknown; electrical?: unknown; notes?: unknown };
+  const existing = customerLink ? await getSiteAssessmentDraft(visit.id) : null;
+  const existingDraft = existing?.draft && typeof existing.draft === "object" && !Array.isArray(existing.draft)
+    ? existing.draft as Prisma.JsonObject
+    : {};
+  const mergedDraft = customerLink ? {
+    ...existingDraft,
+    customerIntake: customerDraft,
+    projectDetails: { ...(existingDraft.projectDetails as Prisma.JsonObject || {}), ...(customerDraft.projectDetails as Prisma.JsonObject || {}) },
+    home: { ...(existingDraft.home as Prisma.JsonObject || {}), ...(customerDraft.home as Prisma.JsonObject || {}) },
+    electrical: { ...(existingDraft.electrical as Prisma.JsonObject || {}), ...(customerDraft.electrical as Prisma.JsonObject || {}) },
+  } : body.draft as Prisma.JsonObject;
   const savedAt = await saveSiteAssessmentDraft(
     visit.id,
-    body.draft as Prisma.JsonObject,
-    tokenPayload.technicianId,
+    mergedDraft as Prisma.JsonObject,
+    customerLink ? `customer:${visit.id}` : String(tokenPayload.technicianId),
   );
   if (!savedAt) {
     return NextResponse.json({ ok: false, error: "This assessment can no longer be edited." }, { status: 409 });
