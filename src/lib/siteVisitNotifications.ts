@@ -23,6 +23,7 @@ type NotificationType = "SITE_VISIT_CREATED_CUSTOMER_SMS" | "SITE_VISIT_CREATED_
 // The apex domain is the registered customer site. The www alias has not
 // consistently served customer-account routes, so SMS links must use this URL.
 const customerReportUrl = (id: string) => `https://betech.co.ke/account/site-visits/${id}/report`;
+const secureCustomerReportUrl = (visit: Visit) => `https://betech.co.ke/site-report/${createSiteAssessmentToken({ visitId: visit.id, audience: "CUSTOMER" }, 24 * 30)}`;
 const assessmentUrl = (visit: Visit) => `https://ops.betech.co.ke/site-assessment/${createSiteAssessmentToken({ visitId: visit.id, technicianId: String(visit.assignedTechnicianId), audience: "TECHNICIAN" })}`;
 const customerBriefingUrl = (visit: Visit) => `https://betech.co.ke/site-visit/${createSiteAssessmentToken({ visitId: visit.id, audience: "CUSTOMER" }, 24 * 30)}`;
 const siteVisitRequestUrl = "https://www.betech.co.ke/site-visit";
@@ -143,13 +144,14 @@ export async function dispatchSiteAssessmentReportPublished(
   options: { resend?: boolean; deliveryVersion?: string } = {},
 ) {
   const reportUrl = customerReportUrl(visit.id);
+  const smsReportUrl = secureCustomerReportUrl(visit);
   const recommendation = reportRecommendationLabel(report);
   const sms = sendOnce({
     visitId: visit.id,
     type: options.resend ? "SITE_ASSESSMENT_REPORT_RESENT_CUSTOMER_SMS" : "SITE_ASSESSMENT_REPORT_CUSTOMER_SMS",
     recipient: visit.customerPhone,
     recipientType: "CUSTOMER",
-    message: `Your site assessment report for ${visit.visitRef} is ${options.resend ? "available again" : "ready"}. Recommendation: ${recommendation}. View it securely in your account: ${reportUrl}`,
+    message: `BETECH: Your site assessment report for ${visit.visitRef} is ${options.resend ? "available again" : "ready"}. Recommendation: ${recommendation}. View your report: ${smsReportUrl}`,
     version: options.deliveryVersion || report.submittedAt,
   });
   const email = String(visit.customerEmail || "").trim();

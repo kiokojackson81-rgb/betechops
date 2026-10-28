@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const tokenPayload = verifySiteAssessmentToken(token);
   if (!tokenPayload) return NextResponse.json({ ok: false, error: "This assessment link is invalid or has expired." }, { status: 403 });
   const visit = await getSiteVisitById(tokenPayload.visitId);
-  if (!visit || visit.assignedTechnicianId !== tokenPayload.technicianId || !visit.assessmentReport) {
+  if (!visit || (!tokenPayload.audience && visit.assignedTechnicianId !== tokenPayload.technicianId) || (tokenPayload.audience === "TECHNICIAN" && visit.assignedTechnicianId !== tokenPayload.technicianId) || !visit.assessmentReport) {
     return NextResponse.json({ ok: false, error: "Assessment report not found." }, { status: 404 });
   }
   const pdf = await generateSiteAssessmentReportPdf({
