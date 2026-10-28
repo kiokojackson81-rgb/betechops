@@ -93,9 +93,11 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
   const zone = getServiceZone(form.county, form.town);
   const standardVisitFee = zone?.siteVisitFee || 0;
   const requestedVisitFee = form.feeOverride === "" ? standardVisitFee : Number(form.feeOverride);
-  const feeAdjusted = form.feeOverride !== "" && requestedVisitFee !== standardVisitFee;
+  const feeWaived = form.paymentChoice === "WAIVED";
+  const effectiveVisitFee = feeWaived ? 0 : requestedVisitFee;
+  const feeAdjusted = !feeWaived && form.feeOverride !== "" && requestedVisitFee !== standardVisitFee;
   const loggerFee = form.dataLoggerRequested ? Number(form.dataLoggerDays) * DATA_LOGGER_DAILY_RATE : 0;
-  const totalPayable = requestedVisitFee + loggerFee;
+  const totalPayable = effectiveVisitFee + loggerFee;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -103,7 +105,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
     setError("");
     setSuccess(null);
     try {
-      if (!Number.isFinite(requestedVisitFee) || requestedVisitFee < 0) throw new Error("Enter a valid booking fee.");
+      if (!Number.isFinite(effectiveVisitFee) || effectiveVisitFee < 0) throw new Error("Enter a valid booking fee.");
       if (feeAdjusted && !form.feeOverrideReason.trim()) throw new Error("Give a reason when changing the booking fee.");
       if (form.paymentChoice === "WAIVED" && !form.waiverReason.trim()) throw new Error("Give the reason for waiving the booking fee.");
       if (form.paymentChoice === "WAIVED" && form.dataLoggerRequested) throw new Error("Remove the data logger before waiving the booking fee. Data logger charges must be handled separately.");
@@ -116,7 +118,7 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
           customerEmail: form.customerEmail || undefined,
           landmark: form.landmark || undefined,
           dataLoggerDays: form.dataLoggerRequested ? Number(form.dataLoggerDays) : undefined,
-          visitFee: requestedVisitFee,
+          visitFee: effectiveVisitFee,
           feeOverrideReason: feeAdjusted ? form.feeOverrideReason.trim() : undefined,
           paymentStatus,
           paymentReference: form.paymentChoice === "PAID" ? form.paymentReference : undefined,
@@ -206,13 +208,14 @@ export default function StaffSiteVisitBookingClient({ staffOptions, staffLoading
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
               <label className="text-sm font-medium text-slate-200">Payment arrangement<select className={inputClass} value={form.paymentChoice} onChange={(event) => { const paymentChoice = event.target.value as BookingPaymentChoice; setForm({ ...form, paymentChoice, dataLoggerRequested: paymentChoice === "WAIVED" ? false : form.dataLoggerRequested }); }}><option value="COLLECT_ON_SITE">Collect on site</option><option value="PAY_NOW">Prompt customer to pay now (M-Pesa PayBill)</option><option value="PAID">Payment recorded at desk</option>{canWaive ? <option value="WAIVED">Waive booking fee</option> : null}</select></label>
+              {canWaive ? <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-50"><input type="checkbox" checked={feeWaived} onChange={(event) => setForm({ ...form, paymentChoice: event.target.checked ? "WAIVED" : "COLLECT_ON_SITE", dataLoggerRequested: event.target.checked ? false : form.dataLoggerRequested })} className="mt-0.5 h-4 w-4 accent-amber-400" /><span><b>Waive site visit fee</b><span className="mt-1 block text-xs text-amber-100/80">Sets the visit fee to KES 0. A reason is required for the audit record.</span></span></label> : null}
               {form.paymentChoice === "PAY_NOW" ? <label className="mt-3 block text-sm text-slate-200">M-Pesa prompt phone<input inputMode="tel" placeholder="Customer phone (used if left blank)" className={inputClass} value={form.paymentPhone} onChange={(event) => setForm({ ...form, paymentPhone: event.target.value })} /><span className="mt-1 block text-xs text-slate-400">We will send the existing PayBill/STK payment prompt after this booking is created.</span></label> : null}
               {form.paymentChoice === "PAID" ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm text-slate-200">Method<select className={inputClass} value={form.paymentMethod} onChange={(event) => setForm({ ...form, paymentMethod: event.target.value })}><option>M-PESA</option><option>CASH</option><option>BANK</option><option>CARD</option></select></label><label className="text-sm text-slate-200">Reference<input required className={inputClass} value={form.paymentReference} onChange={(event) => setForm({ ...form, paymentReference: event.target.value })} /></label></div> : null}
               {form.paymentChoice === "WAIVED" ? <label className="mt-3 block text-sm text-slate-200">Waiver reason<textarea required rows={2} className={inputClass} value={form.waiverReason} onChange={(event) => setForm({ ...form, waiverReason: event.target.value })} /></label> : null}
             </div>
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
               <div className="text-xs uppercase tracking-wide text-cyan-200">Booking total</div>
-              <div className="mt-3 space-y-2 text-sm"><div className="flex justify-between gap-3 text-slate-300"><span>Standard visit fee</span><strong className="text-white">{zone ? money(standardVisitFee) : "Select location"}</strong></div>{zone ? <label className="block text-xs text-slate-300">Adjust booking fee (optional)<input inputMode="decimal" min="0" type="number" className={inputClass} placeholder={String(standardVisitFee)} value={form.feeOverride} onChange={(event) => setForm({ ...form, feeOverride: event.target.value })} /></label> : null}{feeAdjusted ? <label className="block text-xs text-slate-300">Fee adjustment reason<textarea required rows={2} className={inputClass} value={form.feeOverrideReason} onChange={(event) => setForm({ ...form, feeOverrideReason: event.target.value })} /></label> : null}<div className="flex justify-between gap-3 text-slate-300"><span>Data logger</span><strong className="text-white">{money(loggerFee)}</strong></div><div className="flex justify-between gap-3 border-t border-white/10 pt-2 text-base"><span className="font-semibold text-white">Total</span><strong className="text-cyan-200">{money(totalPayable)}</strong></div></div>
+              <div className="mt-3 space-y-2 text-sm"><div className="flex justify-between gap-3 text-slate-300"><span>Standard visit fee</span><strong className="text-white">{zone ? money(standardVisitFee) : "Select location"}</strong></div>{feeWaived ? <div className="flex justify-between gap-3 font-bold text-amber-200"><span>Fee waiver</span><strong>−{money(standardVisitFee)}</strong></div> : zone ? <label className="block text-xs text-slate-300">Adjust booking fee (optional)<input inputMode="decimal" min="0" type="number" className={inputClass} placeholder={String(standardVisitFee)} value={form.feeOverride} onChange={(event) => setForm({ ...form, feeOverride: event.target.value })} /></label> : null}{feeAdjusted ? <label className="block text-xs text-slate-300">Fee adjustment reason<textarea required rows={2} className={inputClass} value={form.feeOverrideReason} onChange={(event) => setForm({ ...form, feeOverrideReason: event.target.value })} /></label> : null}<div className="flex justify-between gap-3 text-slate-300"><span>Data logger</span><strong className="text-white">{money(loggerFee)}</strong></div><div className="flex justify-between gap-3 border-t border-white/10 pt-2 text-base"><span className="font-semibold text-white">Total</span><strong className="text-cyan-200">{money(totalPayable)}</strong></div></div>
               {zone ? <p className="mt-3 text-xs text-slate-400">{zone.name}</p> : null}
             </div>
           </div>

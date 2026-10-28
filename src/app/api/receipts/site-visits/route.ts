@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Select a recognized county and town to calculate the visit fee." }, { status: 400 });
   }
   const visitFee = input.visitFee ?? standardVisitFee;
-  const feeAdjusted = visitFee !== standardVisitFee;
+  const feeAdjusted = input.paymentStatus !== "WAIVED" && visitFee !== standardVisitFee;
   if (feeAdjusted && !input.feeOverrideReason?.trim()) {
     return NextResponse.json({ ok: false, error: "Give a reason when changing the booking fee." }, { status: 400 });
   }
