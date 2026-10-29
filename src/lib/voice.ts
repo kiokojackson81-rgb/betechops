@@ -1319,10 +1319,14 @@ export async function getVoiceRouteTargets(
   ]);
   const stickyTarget =
     quotationOwnerTarget ??
-    lastAnsweredTarget ??
-    stickyOwnerTarget ??
     assignedFollowUpTarget ??
     assignedLeadTarget ??
+    // Explicit queue ownership is an operational instruction. It must take
+    // precedence over the person who happened to answer an earlier call;
+    // otherwise an Admin fallback can keep reclaiming calls assigned to an
+    // available attendant such as Jennifer.
+    lastAnsweredTarget ??
+    stickyOwnerTarget ??
     previousAgentTarget;
 
   if (!stickyTarget && !agentTargets.length && directFallbackTargets.length) {
