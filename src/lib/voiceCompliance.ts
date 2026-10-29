@@ -8,6 +8,19 @@ const QUALITY_RESPONSE_MINIMUM = 5;
 const QUALITY_AVERAGE_THRESHOLD = 3;
 const ADMIN_OVERRIDE_GRACE_MS = 24 * 60 * 60 * 1000;
 
+// Callback deadlines are calculated in active Nairobi working hours. The
+// routing consequence must follow the same rule: unresolved work remains
+// visible after hours, but must not block an agent from receiving calls.
+function isWithinNairobiWorkingHours(date: Date) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Nairobi", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(date).map((part) => [part.type, part.value]));
+  const weekday = String(parts.weekday || "");
+  const minutes = Number(parts.hour || 0) * 60 + Number(parts.minute || 0);
+  if (weekday === "Sun") return false;
+  return weekday === "Sat" ? minutes >= 9 * 60 && minutes <= 15 * 60 : minutes >= 9 * 60 && minutes <= 17 * 60 + 30;
+}
+
 export type VoiceComplianceStatus =
   | "NORMAL"
   | "WARNING"
@@ -184,7 +197,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
   // Automatic callback tasks are due after two active working hours. Once a
   // task is overdue, inbound calls go to fallback until that overdue work is
   // resolved. The count remains visible for escalation and audit.
-  const callbackRestrictionRequired = overdueCallbackCount >= 1;
+  const callbackRestrictionRequired = isWithinNairobiWorkingHours(now) && overdueCallbackCount >= 1;
   const overrideGraceEndsAt = existing?.overrideAt
     ? new Date(existing.overrideAt.getTime() + ADMIN_OVERRIDE_GRACE_MS)
     : null;

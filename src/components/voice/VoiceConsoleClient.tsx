@@ -608,6 +608,7 @@ export default function VoiceConsoleClient({
   const [queueView, setQueueView] = useState<VoiceQueueView>(() =>
     normalizeQueueView(searchParams.get("queue")),
   );
+  const [followUpAgentFilter, setFollowUpAgentFilter] = useState("all");
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [dispositionPending, setDispositionPending] = useState(false);
   const [callAssignmentDrafts, setCallAssignmentDrafts] = useState<
@@ -713,15 +714,11 @@ export default function VoiceConsoleClient({
   );
 
   const filteredFollowUps = useMemo(
-    () =>
-      visibleCallQueue.filter((item: any) =>
-        ["pending", "open", "pending_follow_up"].includes(
-          String(item.status || "")
-            .trim()
-            .toLowerCase(),
-        ),
-      ),
-    [visibleCallQueue],
+    () => visibleCallQueue.filter((item: any) =>
+      ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase()) &&
+      (followUpAgentFilter === "all" || item.assignedToId === followUpAgentFilter),
+    ),
+    [visibleCallQueue, followUpAgentFilter],
   );
 
   const missedFollowUpsCount = useMemo(
@@ -2095,6 +2092,26 @@ export default function VoiceConsoleClient({
     } catch (markError) {
       console.error("[voice.console.mark_contacted_failed]", markError);
       setError("Could not mark the customer as contacted.");
+    }
+  };
+
+  const handleResolveFollowUp = async (input: {
+    id?: string | null;
+    voiceLeadId?: string | null;
+    queueType: "task" | "lead";
+  }) => {
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/follow-ups")}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: input.id ?? null, voiceLeadId: input.voiceLeadId ?? null, queueType: input.queueType, status: input.queueType === "lead" ? "closed" : "resolved" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.error || "resolve_follow_up_failed"));
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (resolveError) {
+      console.error("[voice.console.resolve_follow_up_failed]", resolveError);
+      setError("Could not mark the follow-up as resolved.");
     }
   };
 
@@ -4233,6 +4250,7 @@ export default function VoiceConsoleClient({
                           {item.label}
                         </button>
                       ))}
+                      {data.viewer.isAdmin ? <select value={followUpAgentFilter} onChange={(event) => setFollowUpAgentFilter(event.target.value)} className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-[11px] text-slate-100 outline-none"><option value="all">All agents</option>{callbackAssignableEmployees.map((agent: any) => <option key={agent.id} value={agent.id}>{formatVoiceAssignmentCandidate(agent)}</option>)}</select> : null}
                     </div>
                     <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1">
                       {filteredFollowUpsByView.length ? (
@@ -4333,6 +4351,9 @@ export default function VoiceConsoleClient({
                                   className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
                                 >
                                   Mark Contacted
+                                </button>
+                                <button type="button" onClick={() => void handleResolveFollowUp({ id: item.type === "task" ? item.id : null, voiceLeadId: item.type === "lead" ? item.voiceLeadId : null, queueType: item.type })} className="rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-violet-100 transition hover:border-violet-400">
+                                  Resolve
                                 </button>
                                 {data.viewer.isAdmin
                                   ? (() => {
