@@ -7,9 +7,9 @@
 
 ## Purpose
 
-Betech Solar Solutions proposes a referral partnership through which Equity Bank may introduce eligible customers to Betech for solar products, systems and installation services. The programme is designed to create a transparent, auditable and customer-centred route from referral to completed sale.
+Betech Solar Solutions proposes an inclusive referral programme through which Equity Bank employees, WIG participants, students and other eligible individuals may introduce customers to Betech for solar products, systems and installation services. The programme is designed to create a transparent, auditable and customer-centred route from referral to completed sale.
 
-Betech will manage product advice, quotations, site assessment, fulfilment, installation, payment follow-up, customer support and warranty support. Equity Bank will receive commission only for qualifying customers referred through the agreed referral process.
+Betech will manage product advice, quotations, site assessment, fulfilment, installation, payment follow-up, customer support and warranty support. Each eligible individual referrer earns commission only for qualifying customers attributed to them through the agreed referral process.
 
 ## Proposed commission model
 
@@ -20,7 +20,7 @@ Betech will manage product advice, quotations, site assessment, fulfilment, inst
 | Commission basis | The final Betech-approved sale value actually paid by the customer, after approved discounts and excluding cancelled, refunded or reversed items. Delivery, installation and other charges are included only where they form part of the approved sale value. |
 | Referral attribution | A unique Equity Bank referral code, link, lead form or other agreed identifier must be captured before, or at the time, the customer order is submitted. |
 | Commission status | The referral is recorded as **pending** at submission, remains **locked** while fulfilment is in progress, and becomes **earned** only after payment and completion are confirmed. |
-| Payment method | Settlement to an Equity Bank nominated account or another mutually agreed payment channel, supported by a reconciliation statement. |
+| Payment method | Settlement to the eligible referrer's nominated M-Pesa wallet, bank account or another mutually agreed payment channel, supported by a reconciliation statement. |
 
 ### Illustrative examples
 
@@ -34,7 +34,7 @@ The examples are illustrative. The payable amount is calculated from the final q
 
 ## Customer and order journey
 
-1. Equity Bank introduces a customer through the agreed referral channel.
+1. An eligible Equity Bank employee, WIG participant, student or other approved referrer introduces a customer through the agreed referral channel.
 2. Betech records the referral attribution and confirms receipt of the lead or order.
 3. Betech advises the customer, prepares a quotation where needed, and carries out any site assessment required for a system design.
 4. Betech fulfils the order and confirms the customer's payment and successful delivery, collection or installation completion.
@@ -67,7 +67,7 @@ The programme can use tracked links, referral codes or approved lead forms to pr
 
 ## Roles and responsibilities
 
-| Equity Bank | Betech Solar Solutions |
+| Eligible referrers | Betech Solar Solutions |
 | --- | --- |
 | Introduce customers through approved channels. | Provide current product, pricing and programme information. |
 | Use only approved communications and referral identifiers. | Capture and protect referral attribution. |
@@ -82,7 +82,7 @@ Customer personal data will be shared only where necessary for the referral, ord
 
 ## Proposed next steps
 
-1. Confirm whether Equity Bank will operate as a single corporate referrer, through branches, relationship managers, digital channels, or a combination of these.
+1. Confirm the eligible referrer groups, including Equity Bank employees, WIG participants, students and other approved individual referrers.
 2. Agree the referral-attribution method and the treatment of duplicate leads.
 3. Confirm whether the standard 6% model applies to all eligible categories or whether product-specific rates are required.
 4. Agree the settlement frequency, invoicing requirements, tax treatment and bank-account verification process.
