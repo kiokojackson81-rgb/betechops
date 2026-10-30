@@ -27,6 +27,7 @@ import {
 } from "@/lib/voiceIvr";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 import { safelyProcessInboundCallCentreHealth } from "@/lib/voiceCallCentreHealth";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -111,6 +112,26 @@ export async function POST(request: Request) {
           destinationNumber: browserDialedNumber,
         }
       : payload;
+
+    // Africa's Talking returns terminal events to the base callback URL, so
+    // the signed route-plan query is no longer present. Never recalculate a
+    // completed session's route: round-robin state may have changed in the
+    // meantime, which used to make the console show a different route from
+    // the one the provider was actually instructed to dial.
+    const callbackSessionId = safeString(
+      normalizedPayload.sessionId || normalizedPayload.SessionId,
+    );
+    const storedRoute =
+      !routePlanFromQuery && callbackSessionId
+        ? await prisma.voiceCall.findUnique({
+            where: { sessionId: callbackSessionId },
+            select: {
+              routedTo: true,
+              routeType: true,
+              assignedToId: true,
+            },
+          })
+        : null;
 
     const status = inferTerminalStatus(normalizedPayload, routePlanFromQuery);
     const isActive = isVoiceCallActive(normalizedPayload);
@@ -198,6 +219,23 @@ export async function POST(request: Request) {
 
     const effectiveRoutePlan: VoiceRoutePlan =
       routePlanFromQuery ??
+      (storedRoute?.routedTo
+        ? {
+            hops: storedRoute.routedTo
+              .split(",")
+              .map((dialValue, index) => ({
+                label: `STORED_ROUTE_${index + 1}`,
+                dialValue: dialValue.trim(),
+                targetUserId:
+                  index === 0 ? storedRoute.assignedToId ?? null : null,
+              }))
+              .filter((hop) => Boolean(hop.dialValue)),
+            primaryTargetUserId: storedRoute.assignedToId ?? null,
+            routeType: storedRoute.routeType ?? "WORKING_HOURS",
+            routeReason: "stored_route",
+            routedTo: storedRoute.routedTo,
+          }
+        :
       (await (async () => {
         const resolvedRoute = await getVoiceRouteTargets({
           date: new Date(),
@@ -232,7 +270,7 @@ export async function POST(request: Request) {
             .filter(Boolean)
             .join(","),
         } satisfies VoiceRoutePlan;
-      })());
+      })()));
     const currentHop = effectiveRoutePlan.hops[hopIndex] ?? null;
     const hasRoutableTarget = effectiveRoutePlan.hops.length > 0;
     const routeAwareStatus = inferTerminalStatus(
@@ -277,6 +315,28 @@ export async function POST(request: Request) {
       },
       voiceCall.id,
     );
+
+    // Persist the exact provider instruction once. These are intentionally
+    // labelled queued, rather than rang, because Africa's Talking supplies a
+    // single final result for a sequential Dial and not a per-recipient ring
+    // event.
+    if (!storedRoute?.routedTo && isActive && !routePlanFromQuery) {
+      await Promise.all(
+        effectiveRoutePlan.hops.map((hop, index) =>
+          createVoiceEventFromPayload(
+            {
+              ...routeAnnotatedPayload,
+              eventType: "ROUTE_HOP_QUEUED",
+              hopIndex: String(index),
+              hopLabel: hop.label,
+              dialValue: hop.dialValue,
+              routeReason: effectiveRoutePlan.routeReason || "",
+            },
+            voiceCall.id,
+          ),
+        ),
+      );
+    }
 
     await ensureVoiceLeadForCaller({
       callerNumber: voiceCall.callerNumber,

@@ -468,6 +468,7 @@ function buildHopAudit(
   return events
     .filter(
       (event) =>
+        event.eventType === "ROUTE_HOP_QUEUED" ||
         event.eventType === "ROUTE_HOP_STARTED" ||
         event.eventType === "ROUTE_HOP_COMPLETED",
     )
@@ -477,7 +478,9 @@ function buildHopAudit(
           ? (event.payloadJson as Record<string, unknown>)
           : {};
       const status =
-        event.eventType === "ROUTE_HOP_STARTED"
+        event.eventType === "ROUTE_HOP_QUEUED"
+          ? "QUEUED TO PROVIDER"
+          : event.eventType === "ROUTE_HOP_STARTED"
           ? "RANG"
           : formatStatusLabel(
               String(payload.status || payload.callSessionState || "completed"),
