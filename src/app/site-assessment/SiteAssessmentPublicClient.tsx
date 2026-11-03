@@ -1229,7 +1229,7 @@ export default function SiteAssessmentPublicClient({
                   { label: "View our TikTok", href: "https://www.tiktok.com/@betechsolarsolutionske", icon: Music2, classes: "border-rose-300/40 bg-rose-500/15 text-rose-50 hover:bg-rose-500/25" },
                   { label: "Warranty support", href: "https://www.betech.co.ke/warranty-support", icon: ShieldCheck, classes: "border-emerald-300/40 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/25" },
                   { label: "Solar installation terms", href: "https://www.betech.co.ke/p/terms", icon: FileText, classes: "border-amber-300/40 bg-amber-500/15 text-amber-50 hover:bg-amber-500/25" },
-                  { label: "Explore solar packages", href: "https://www.betech.co.ke/category/solar-full-kits", icon: PackageOpen, classes: "border-cyan-200/50 bg-cyan-400/20 text-cyan-50 hover:bg-cyan-400/30" },
+                  { label: "View and compare some of our solar packages", href: "https://www.betech.co.ke/category/solar-full-kits", icon: PackageOpen, classes: "border-cyan-200/50 bg-cyan-400/20 text-cyan-50 hover:bg-cyan-400/30" },
                 ].map(({ label, href, icon: Icon, classes }) => (
                   <a key={href} href={href} target="_blank" rel="noreferrer" className={`group flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2.5 font-bold leading-5 transition ${classes}`}>
                     <Icon className="h-6 w-6 shrink-0" aria-hidden="true" />
