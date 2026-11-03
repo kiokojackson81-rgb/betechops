@@ -496,7 +496,7 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
     user = await createPhoneOtpUser(normalizedPhone);
   } else {
     if (!user.isActive) {
-      throw new Error("This account is inactive. Please contact Betech support.");
+      throw new Error("This account has been deactivated. Please contact Betech support.");
     }
 
     await mergeDuplicateUsersByPhone(user.id, normalizedPhone);
@@ -536,7 +536,7 @@ async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedire
     user = await createEmailOtpUser(normalizedEmail);
   } else {
     if (!user.isActive) {
-      throw new Error("This account is inactive. Please contact Betech support.");
+      throw new Error("This account has been deactivated. Please contact Betech support.");
     }
 
     await mergeDuplicateUsersByEmail(user.id, normalizedEmail);

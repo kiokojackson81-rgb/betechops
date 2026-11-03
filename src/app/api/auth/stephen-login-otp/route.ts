@@ -43,7 +43,10 @@ export async function POST(request: NextRequest) {
     where: { email },
     select: { id: true, email: true, password: true, isActive: true },
   });
-  if (!user || !user.isActive || !user.password || !isStephenOtpProtectedUser(user) || !(await bcrypt.compare(password, user.password))) {
+  if (user && !user.isActive) {
+    return NextResponse.json({ ok: false, error: "This account has been deactivated. Please contact Betech support." }, { status: 403 });
+  }
+  if (!user || !user.password || !isStephenOtpProtectedUser(user) || !(await bcrypt.compare(password, user.password))) {
     return NextResponse.json({ ok: false, error: "Invalid email or password." }, { status: 401 });
   }
 

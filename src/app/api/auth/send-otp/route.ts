@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendOtpSms } from "@/lib/africasTalking";
 import { sendOtpVerificationEmail } from "@/lib/email";
-import { createOtpCodeForChannel } from "@/lib/phoneOtpAuth";
+import { createOtpCodeForChannel, findPhoneAuthUserByEmail, findPhoneAuthUserByPhone } from "@/lib/phoneOtpAuth";
 import { normalizeKenyanPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +58,19 @@ export async function POST(req: NextRequest) {
   } else if (!phone) {
     console.warn("[send-otp] rejected invalid phone");
     return NextResponse.json({ ok: false, error: "Phone number is required." }, { status: 400 });
+  }
+
+  // Do this before creating an OTP or calling either delivery provider.  The
+  // endpoint is public, so it must enforce the offboarding rule itself rather
+  // than relying on the identify screen having been used first.
+  const existingAccount = identifierType === "email"
+    ? await findPhoneAuthUserByEmail(normalizedEmail)
+    : await findPhoneAuthUserByPhone(phone!);
+  if (existingAccount?.user && !existingAccount.user.isActive) {
+    return NextResponse.json(
+      { ok: false, error: "This account has been deactivated. Please contact Betech support." },
+      { status: 403 },
+    );
   }
 
   const rateLimitIdentifier = identifierType === "email" ? normalizedEmail : phone;

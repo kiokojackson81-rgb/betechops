@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     if (looksLikeEmail(identifier)) {
       const result = await findPhoneAuthUserByEmail(identifier);
       if (result?.user && !result.user.isActive) {
-        return NextResponse.json({ ok: false, error: "This account is inactive. Please contact Betech support." }, { status: 403 });
+        return NextResponse.json({ ok: false, error: "This account has been deactivated. Please contact Betech support." }, { status: 403 });
       }
 
       return NextResponse.json({
@@ -51,6 +51,9 @@ export async function POST(request: Request) {
     }
 
     const result = await findPhoneAuthUserByPhone(normalizedPhone);
+    if (result?.user && !result.user.isActive) {
+      return NextResponse.json({ ok: false, error: "This account has been deactivated. Please contact Betech support." }, { status: 403 });
+    }
 
     return NextResponse.json({
       ok: true,
