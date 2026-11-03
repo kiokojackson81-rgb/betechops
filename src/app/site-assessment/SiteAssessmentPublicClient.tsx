@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Camera, ExternalLink, FileText, Music2, PackageOpen, ShieldCheck, ThumbsUp } from "lucide-react";
 import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
 import { analyseSiteAssessment } from "@/lib/siteAssessmentAnalysis";
 import {
@@ -1209,7 +1210,37 @@ export default function SiteAssessmentPublicClient({
             {visit.visitRef} · {visit.customerName}
           </p>
         </header>
-        {customerMode ? <section className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 text-sm leading-6 text-cyan-50 sm:p-5"><h2 className="text-base font-black text-cyan-100">Your site visit has been booked — {visit.visitRef}</h2><p className="mt-2">{visit.assignedTechnicianName ? <>Your assigned Betech technician is <b>{visit.assignedTechnicianName}</b>{visit.scheduledAt ? <>. Your visit is confirmed for <b>{new Date(visit.scheduledAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Nairobi" })}</b></> : ". They will contact you to confirm the visit time."}</> : "We are assigning a Betech technician, who will contact you to arrange a visit to your premises."} The technician will complete the site assessment.</p><p className="mt-2">The information in this form helps our team understand your energy needs and size the correct solar system for you. You can fill in any details you know before the visit. Your answers save automatically and will be available to the technician. If you are not sure about a question, simply skip it — our technician will collect the missing information, measurements, photos and safety details during the site visit.</p></section> : null}
+        {customerMode ? (
+          <section className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 text-sm leading-6 text-cyan-50 sm:p-5">
+            <h2 className="text-base font-black text-cyan-100">Your site visit has been booked — {visit.visitRef}</h2>
+            <p className="mt-2">{visit.assignedTechnicianName ? <>Your assigned Betech technician is <b>{visit.assignedTechnicianName}</b>{visit.scheduledAt ? <>. Your visit is confirmed for <b>{new Date(visit.scheduledAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Nairobi" })}</b></> : ". They will contact you to confirm the visit time."}</> : "We are assigning a Betech technician, who will contact you to arrange a visit to your premises."} The technician will complete the site assessment.</p>
+            <p className="mt-2">The information in this form helps our team understand your energy needs and size the correct solar system for you. You can fill in any details you know before the visit. Your answers save automatically and will be available to the technician. If you are not sure about a question, simply skip it — our technician will collect the missing information, measurements, photos and safety details during the site visit.</p>
+
+            <div className="mt-5 border-t border-cyan-200/20 pt-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-300" aria-hidden="true" />
+                <h3 className="font-black text-cyan-50">Explore Betech Solar with confidence</h3>
+              </div>
+              <p className="mt-1 text-xs text-cyan-100/80">See real work, explore solar options, and get support whenever you need it.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {[
+                  { label: "Recent solar projects", href: "https://www.tiktok.com/@betechsolarprojects", icon: Camera, classes: "border-fuchsia-300/40 bg-fuchsia-500/15 text-fuchsia-50 hover:bg-fuchsia-500/25" },
+                  { label: "View us on Facebook", href: "https://web.facebook.com/profile.php?id=61567374346730", icon: ThumbsUp, classes: "border-blue-300/40 bg-blue-500/20 text-blue-50 hover:bg-blue-500/30" },
+                  { label: "View our TikTok", href: "https://www.tiktok.com/@betechsolarsolutionske", icon: Music2, classes: "border-rose-300/40 bg-rose-500/15 text-rose-50 hover:bg-rose-500/25" },
+                  { label: "Warranty support", href: "https://www.betech.co.ke/warranty-support", icon: ShieldCheck, classes: "border-emerald-300/40 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/25" },
+                  { label: "Solar installation terms", href: "https://www.betech.co.ke/p/terms", icon: FileText, classes: "border-amber-300/40 bg-amber-500/15 text-amber-50 hover:bg-amber-500/25" },
+                  { label: "Explore solar packages", href: "https://www.betech.co.ke/category/solar-full-kits", icon: PackageOpen, classes: "border-cyan-200/50 bg-cyan-400/20 text-cyan-50 hover:bg-cyan-400/30" },
+                ].map(({ label, href, icon: Icon, classes }) => (
+                  <a key={href} href={href} target="_blank" rel="noreferrer" className={`group flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2.5 font-bold leading-5 transition ${classes}`}>
+                    <Icon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">{label}</span>
+                    <ExternalLink className="h-4 w-4 shrink-0 opacity-75 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
         <WizardProgress
           activeStep={activeStep}
           completedSteps={completedSteps}
