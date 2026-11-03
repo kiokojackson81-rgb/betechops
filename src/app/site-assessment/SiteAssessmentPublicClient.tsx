@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, ExternalLink, FileText, Music2, PackageOpen, ShieldCheck, ThumbsUp } from "lucide-react";
+import { ArrowUpRight, BadgeCheck, FileCheck2, ShieldCheck } from "lucide-react";
 import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
 import { analyseSiteAssessment } from "@/lib/siteAssessmentAnalysis";
 import {
@@ -478,6 +478,47 @@ function Field({
       {children}
     </label>
   );
+}
+
+function SolarInstallationIcon({ className }: { className?: string }) {
+  return <svg viewBox="0 0 64 64" fill="none" className={className} aria-hidden="true"><circle cx="49" cy="15" r="7" stroke="currentColor" strokeWidth="3" /><path d="M49 3v3m0 18v3m12-12h-3M40 15h-3M57.5 6.5l-2 2m-13 13-2 2m17 0-2-2m-13-13-2-2M8 35l24-15 24 15" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /><path d="M14 36h36v17H14zM20 36v17m12-17v17m12-17v17M14 42h36M14 48h36" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" /><path d="M10 53h44" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>;
+}
+
+function SolarPackagesIcon({ className }: { className?: string }) {
+  return <svg viewBox="0 0 64 64" fill="none" className={className} aria-hidden="true"><circle cx="48" cy="14" r="7" stroke="currentColor" strokeWidth="3" /><path d="M48 2v3m0 18v3m12-12h-3M39 14h-3M56.5 5.5l-2 2m-13 13-2 2m17 0-2-2m-13-13-2-2M8 33h38l5 21H13L8 33Z" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" /><path d="m12 40 35 0M18 33l-1 21m11-21v21m12-21 4 21M27 40l-1 14m12-14 2 14" stroke="currentColor" strokeWidth="2.5" /><path d="M15 57h39" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>;
+}
+
+function FacebookBrandIcon({ className }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.7 4.54-4.7 1.32 0 2.7.24 2.7.24v2.97h-1.52c-1.5 0-1.97.94-1.97 1.9v2.27h3.35l-.54 3.49h-2.81V24C19.61 23.1 24 18.1 24 12.07Z" /></svg>;
+}
+
+function TikTokBrandIcon({ className }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" className={className} aria-hidden="true"><path fill="#25F4EE" d="M14.5 2h3.2c.3 1.8 1.4 3.2 3.3 3.7v3.2c-1.2 0-2.3-.3-3.3-.9v6.3a6.3 6.3 0 1 1-5.4-6.2v3.3a3.1 3.1 0 1 0 2.2 3V2Z" /><path fill="#FE2C55" d="M13.1 3.1v12.3a3.1 3.1 0 0 1-4.4 2.8 3.1 3.1 0 0 0 5.8-1.6V4.2c1 1.2 2.4 1.9 4 2V5.7c-2.9-.8-4.4-2.6-5.4-2.6Z" /><path fill="white" d="M14.5 2v12.3a3.1 3.1 0 1 1-3.1-3.1c.3 0 .6 0 .9.1V8.1a6.3 6.3 0 1 0 5.4 6.2V8c1 .6 2.1.9 3.3.9V5.7C18.7 5.1 15.8 3.7 14.5 2Z" /></svg>;
+}
+
+function DiscoveryCard({
+  href,
+  title,
+  description,
+  icon,
+  watermark,
+  accent,
+}: {
+  href: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  watermark: React.ReactNode;
+  accent: string;
+}) {
+  return <a href={href} target="_blank" rel="noreferrer" className={`group relative isolate min-h-40 overflow-hidden rounded-[22px] border p-4 transition duration-300 motion-reduce:transition-none sm:p-5 ${accent} hover:-translate-y-1 hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:hover:translate-y-0`}>
+    <div className="absolute right-3 top-3 z-10 rounded-full bg-slate-950/15 p-1.5 text-white/80 transition duration-300 group-hover:bg-slate-950/30 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0 motion-reduce:group-hover:translate-y-0"><ArrowUpRight className="h-4 w-4" aria-hidden="true" /></div>
+    <div className="pointer-events-none absolute -bottom-5 -right-4 opacity-[0.14] transition duration-300 group-hover:scale-110 group-hover:opacity-[0.23] motion-reduce:transition-none motion-reduce:group-hover:scale-100">{watermark}</div>
+    <div className="relative z-10 flex h-full max-w-[82%] flex-col justify-between gap-3">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/10 shadow-inner shadow-white/10 transition duration-300 group-hover:scale-105 group-hover:bg-white/[0.18] group-hover:shadow-lg motion-reduce:transition-none motion-reduce:group-hover:scale-100">{icon}</div>
+      <div><h4 className="text-lg font-black leading-tight text-white">{title}</h4><p className="mt-1 text-sm leading-5 text-white/75">{description}</p></div>
+    </div>
+  </a>;
 }
 
 export default function SiteAssessmentPublicClient({
@@ -1218,25 +1259,16 @@ export default function SiteAssessmentPublicClient({
 
             <div className="mt-5 border-t border-cyan-200/20 pt-4">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-emerald-300" aria-hidden="true" />
-                <h3 className="font-black text-cyan-50">Explore Betech Solar with confidence</h3>
+                <BadgeCheck className="h-6 w-6 text-emerald-300 drop-shadow-[0_0_8px_rgba(110,231,183,0.45)]" aria-hidden="true" />
+                <div><h3 className="font-black text-cyan-50">Discover Betech Solar</h3><p className="text-xs text-cyan-100/80">Real installations. Quality products. Reliable support.</p></div>
               </div>
-              <p className="mt-1 text-xs text-cyan-100/80">See real work, explore solar options, and get support whenever you need it.</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {[
-                  { label: "Recent solar projects", href: "https://www.tiktok.com/@betechsolarprojects", icon: Camera, classes: "border-fuchsia-300/40 bg-fuchsia-500/15 text-fuchsia-50 hover:bg-fuchsia-500/25" },
-                  { label: "View us on Facebook", href: "https://web.facebook.com/profile.php?id=61567374346730", icon: ThumbsUp, classes: "border-blue-300/40 bg-blue-500/20 text-blue-50 hover:bg-blue-500/30" },
-                  { label: "View our TikTok", href: "https://www.tiktok.com/@betechsolarsolutionske", icon: Music2, classes: "border-rose-300/40 bg-rose-500/15 text-rose-50 hover:bg-rose-500/25" },
-                  { label: "Warranty support", href: "https://www.betech.co.ke/warranty-support", icon: ShieldCheck, classes: "border-emerald-300/40 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/25" },
-                  { label: "Solar installation terms", href: "https://www.betech.co.ke/p/terms", icon: FileText, classes: "border-amber-300/40 bg-amber-500/15 text-amber-50 hover:bg-amber-500/25" },
-                  { label: "View and compare some of our solar packages", href: "https://www.betech.co.ke/category/solar-full-kits", icon: PackageOpen, classes: "border-cyan-200/50 bg-cyan-400/20 text-cyan-50 hover:bg-cyan-400/30" },
-                ].map(({ label, href, icon: Icon, classes }) => (
-                  <a key={href} href={href} target="_blank" rel="noreferrer" className={`group flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2.5 font-bold leading-5 transition ${classes}`}>
-                    <Icon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                    <span className="min-w-0 flex-1">{label}</span>
-                    <ExternalLink className="h-4 w-4 shrink-0 opacity-75 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
-                  </a>
-                ))}
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <DiscoveryCard href="https://www.tiktok.com/@betechsolarprojects" title="Our Solar Installations" description="Explore real projects we&apos;ve completed across Kenya." accent="border-violet-300/50 bg-gradient-to-br from-violet-500/30 via-violet-500/20 to-slate-950/30 hover:border-violet-200/80 hover:shadow-violet-950/60" icon={<SolarInstallationIcon className="h-9 w-9 text-violet-200" />} watermark={<SolarInstallationIcon className="h-32 w-32 text-violet-100" />} />
+                <DiscoveryCard href="https://web.facebook.com/profile.php?id=61567374346730" title="Follow Us on Facebook" description="See project updates, customer stories, and solar offers." accent="border-blue-300/50 bg-gradient-to-br from-blue-500/30 via-blue-500/20 to-slate-950/30 hover:border-blue-200/80 hover:shadow-blue-950/60" icon={<FacebookBrandIcon className="h-8 w-8 text-[#72adff]" />} watermark={<FacebookBrandIcon className="h-28 w-28 text-blue-100" />} />
+                <DiscoveryCard href="https://www.tiktok.com/@betechsolarsolutionske" title="Watch Our Solar Videos" description="Watch real installations and solar systems in action." accent="border-pink-300/50 bg-gradient-to-br from-fuchsia-500/25 via-rose-500/20 to-slate-950/30 hover:border-pink-200/80 hover:shadow-fuchsia-950/60" icon={<TikTokBrandIcon className="h-9 w-9" />} watermark={<TikTokBrandIcon className="h-28 w-28" />} />
+                <DiscoveryCard href="https://www.betech.co.ke/warranty-support" title="Warranty & Support" description="Access product warranty information and after-sales assistance." accent="border-emerald-300/50 bg-gradient-to-br from-emerald-500/25 via-emerald-500/15 to-slate-950/30 hover:border-emerald-200/80 hover:shadow-emerald-950/60" icon={<ShieldCheck className="h-8 w-8 text-emerald-200" aria-hidden="true" />} watermark={<ShieldCheck className="h-28 w-28 text-emerald-100" aria-hidden="true" />} />
+                <DiscoveryCard href="https://www.betech.co.ke/p/terms" title="Installation Terms" description="Understand our installation process and service terms." accent="border-amber-300/50 bg-gradient-to-br from-amber-500/25 via-yellow-500/15 to-slate-950/30 hover:border-amber-200/80 hover:shadow-amber-950/60" icon={<FileCheck2 className="h-8 w-8 text-amber-200" aria-hidden="true" />} watermark={<FileCheck2 className="h-28 w-28 text-amber-100" aria-hidden="true" />} />
+                <DiscoveryCard href="https://www.betech.co.ke/category/solar-full-kits" title="View and compare some of our solar packages" description="Discover complete solar solutions for your home or business." accent="border-cyan-200/60 bg-gradient-to-br from-cyan-500/30 via-teal-500/20 to-slate-950/30 hover:border-cyan-100 hover:shadow-cyan-950/60" icon={<SolarPackagesIcon className="h-9 w-9 text-cyan-100" />} watermark={<SolarPackagesIcon className="h-32 w-32 text-cyan-50" />} />
               </div>
             </div>
           </section>
