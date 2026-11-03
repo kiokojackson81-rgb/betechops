@@ -734,12 +734,11 @@ export async function buildPayrollRows(attendant: AttendantRecord, periods: Trad
 }
 
 /**
- * Fast, ledger-backed payroll list for the admin overview. It evaluates the
- * same pay-plan, adjustment and carry-forward rules in memory after four
- * batched reads, instead of issuing a live sales reconciliation for every
- * employee and every historical period during page navigation.
+ * Legacy ledger-only overview kept for diagnostics. It cannot be used for
+ * payroll because old ledger rows may omit sales detail or contain a stale
+ * commission value.
  */
-export async function buildPayrollOverviewRows(
+export async function buildPayrollOverviewRowsFromLedger(
   attendants: AttendantRecord[],
   period: TradingPeriod,
 ): Promise<PayrollRow[]> {
@@ -865,6 +864,20 @@ export async function buildPayrollOverviewRows(
 
     return currentRow!;
   });
+}
+
+/**
+ * Payroll must agree everywhere a member of staff sees it. Use the canonical
+ * calculation for the admin overview too, rather than trusting a partial
+ * CommissionLedger snapshot.
+ */
+export async function buildPayrollOverviewRows(
+  attendants: AttendantRecord[],
+  period: TradingPeriod,
+): Promise<PayrollRow[]> {
+  return Promise.all(
+    attendants.map((attendant) => calculatePayrollForAttendant(attendant, period)),
+  );
 }
 
 /** The single canonical payroll calculation used by employee, admin and PDF reads. */

@@ -51,6 +51,7 @@ type ReceiptRow = {
   source?: "pos" | "marketing" | "support";
   detailUrl?: string | null;
   isPodDelivery?: boolean;
+  podDirectDelivery?: boolean;
   podDeliveryStatus?: string | null;
   podDeliveryNote?: string | null;
   podPickupStation?: string | null;
@@ -167,6 +168,7 @@ type PodOutcomeDraft = {
   reason: string;
   evidenceFile: File | null;
   returnTrackingNumber: string;
+  directDelivery: boolean;
 };
 
 type PodDispatchDraft = {
@@ -1219,7 +1221,7 @@ export default function ReceiptsAdminClient({
         if (!outcome.evidenceFile) {
           throw new Error("Attach evidence before recording a POD outcome.");
         }
-        if (outcome.status === "delivery_failed" && !outcome.returnTrackingNumber.trim()) {
+        if (outcome.status === "delivery_failed" && !outcome.directDelivery && !outcome.returnTrackingNumber.trim()) {
           throw new Error("Enter the return tracking or ticket number before marking delivery failed.");
         }
         if (outcome.evidenceFile) {
@@ -1293,13 +1295,14 @@ export default function ReceiptsAdminClient({
     },
     [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
   );
-  const openPodOutcome = (receiptId: string) =>
+  const openPodOutcome = (receiptId: string, directDelivery = false) =>
     setPodOutcome({
       receiptId,
       status: "delivered",
       reason: "",
       evidenceFile: null,
       returnTrackingNumber: "",
+      directDelivery,
     });
 
   const addPodDeliveryFeeAndDispatch = (receiptId: string, currentFee?: unknown) => {
@@ -2383,7 +2386,7 @@ export default function ReceiptsAdminClient({
   const derivedSummary = useMemo(() => {
     const filtered = rows.filter(
       (row) =>
-        (row.podDeliveryStatus ?? "").toLowerCase() !== "pending" &&
+        !["pending", "ready_for_outcome"].includes((row.podDeliveryStatus ?? "").toLowerCase()) &&
         !isCancelledReceiptRow(row),
     );
     const paymentTotals = filtered.reduce(
@@ -2531,10 +2534,10 @@ export default function ReceiptsAdminClient({
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">
-                  POD receipts only
+                  Delivery outcome queue
                 </p>
                 <p className="text-sm text-slate-300">
-                  All POD delivery work, including pending and failed deliveries.
+                  All delivery pay-on-delivery and POD work, including pending and failed deliveries.
                 </p>
               </div>
               <span className="text-xs text-emerald-300">
@@ -2880,7 +2883,7 @@ export default function ReceiptsAdminClient({
                   row.isPodDelivery &&
                   String(row.podDeliveryStatus ?? "").toLowerCase() ===
                     "pending";
-                const isPodDispatched = row.isPodDelivery && String(row.podDeliveryStatus ?? "").toLowerCase() === "dispatched";
+                const isPodDispatched = row.isPodDelivery && ["dispatched", "ready_for_outcome"].includes(String(row.podDeliveryStatus ?? "").toLowerCase());
                 const hasPendingPayment = ["PENDING", "UNPAID", "PARTIAL"].includes(String(row.paymentStatus ?? "").toUpperCase());
                 const isSelected = row.id === selected?.id && drawerOpen;
                 const customerProfileHref = buildAdminCustomerProfileHref({
@@ -3038,7 +3041,7 @@ export default function ReceiptsAdminClient({
                             isPodPending
                               ? () => void addPodDeliveryFeeAndDispatch(row.id)
                               : isPodDispatched
-                                ? () => openPodOutcome(row.id)
+                                ? () => openPodOutcome(row.id, Boolean(row.podDirectDelivery))
                               : undefined
                           }
                           onMarkPaid={
@@ -4021,10 +4024,10 @@ export default function ReceiptsAdminClient({
                         {podActionId === detail.receipt.id ? "Saving..." : detail.receipt.data.podDelivery.deliveryFee == null ? "Add delivery fee & dispatch" : "Edit delivery fee"}
                       </button>
                     )}
-                    {String(detail.receipt.data?.podDelivery?.status ?? "").toLowerCase() === "dispatched" && (
+                    {["dispatched", "ready_for_outcome"].includes(String(detail.receipt.data?.podDelivery?.status ?? "").toLowerCase()) && (
                       <button
                         type="button"
-                        onClick={() => openPodOutcome(detail.receipt.id)}
+                        onClick={() => openPodOutcome(detail.receipt.id, Boolean(detail.receipt.data?.podDelivery?.directDelivery))}
                         disabled={podActionId === detail.receipt.id}
                         className="rounded-xl border border-yellow-500/70 bg-yellow-500/20 px-4 py-2 text-sm font-semibold text-yellow-100 hover:bg-yellow-500/40 disabled:opacity-50"
                       >
@@ -4273,7 +4276,7 @@ function PodOutcomeModal({
 }) {
   if (!draft) return null;
   const needsEvidence = !draft.evidenceFile;
-  const needsReturnTracking = draft.status === "delivery_failed" && !draft.returnTrackingNumber.trim();
+  const needsReturnTracking = draft.status === "delivery_failed" && !draft.directDelivery && !draft.returnTrackingNumber.trim();
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
       <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b1424] p-6 shadow-2xl">
@@ -4319,7 +4322,7 @@ function PodOutcomeModal({
             }
           />
         </label>
-        {draft.status === "delivery_failed" ? (
+        {draft.status === "delivery_failed" && !draft.directDelivery ? (
           <label className="mt-4 block text-sm text-slate-200">
             Return tracking / ticket number <span className="text-rose-300">(required)</span>
             <input

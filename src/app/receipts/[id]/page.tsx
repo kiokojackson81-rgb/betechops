@@ -118,6 +118,12 @@ export default async function Page({
     canView: canViewReceipt,
     readOnly,
   });
+  const deliveryMetadata = receipt.data && typeof receipt.data === "object" ? receipt.data as Record<string, any> : {};
+  const canRecordDeliveryOutcome =
+    canViewReceipt && !readOnly &&
+    String(deliveryMetadata.customerType ?? "").toLowerCase() === "delivery" &&
+    String(deliveryMetadata.deliveryPaymentTerm ?? "").toUpperCase() === "PAY_ON_DELIVERY" &&
+    ["ready_for_outcome", "dispatched"].includes(String(deliveryMetadata.podDelivery?.status ?? "").toLowerCase());
   const supportCostMap = new Map<string, number>();
   const normalizedReceiptNumber = canonicalReceiptNumber(receipt.order?.orderNumber ?? "");
   if (normalizedReceiptNumber) {
@@ -195,6 +201,7 @@ export default async function Page({
       receiptId={id}
       html={html}
       canEdit={canEditPaymentMethod}
+      canRecordDeliveryOutcome={canRecordDeliveryOutcome}
       initialPaymentMethod={initialPaymentMethod}
       initialDraft={initialDraft}
     />

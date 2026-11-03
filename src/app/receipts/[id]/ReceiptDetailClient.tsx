@@ -36,6 +36,7 @@ type Props = {
   receiptId: string;
   html: string;
   canEdit: boolean;
+  canRecordDeliveryOutcome: boolean;
   initialPaymentMethod: "MPESA" | "CASH";
   initialDraft: EditDraft;
 };
@@ -54,12 +55,17 @@ export default function ReceiptDetailClient({
   receiptId,
   html,
   canEdit,
+  canRecordDeliveryOutcome,
   initialPaymentMethod,
   initialDraft,
 }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [deliveryOutcomeOpen, setDeliveryOutcomeOpen] = useState(false);
+  const [deliveryOutcome, setDeliveryOutcome] = useState<"delivered" | "delivery_failed">("delivered");
+  const [deliveryEvidence, setDeliveryEvidence] = useState<File | null>(null);
+  const [deliveryReason, setDeliveryReason] = useState("");
+  const [savingDeliveryOutcome, setSavingDeliveryOutcome] = useState(false);
   const [draft, setDraft] = useState<EditDraft>(() => cloneDraft(initialDraft));
 
   const totals = useMemo(() => {
@@ -155,21 +161,36 @@ export default function ReceiptDetailClient({
     }
   };
 
-  const confirmDeliveryPayment = async () => {
-    const method = window.prompt("Payment method: CASH, EQUITY_PAYBILL, DTB_PAYBILL or ABSA_PAYBILL", "CASH")?.trim().toUpperCase();
-    if (!method) return;
-    const reference = window.prompt("Payment reference (optional)", "") ?? "";
-    setConfirmingPayment(true);
+  const recordDeliveryOutcome = async () => {
+    if (!deliveryEvidence) {
+      showToast(deliveryOutcome === "delivered" ? "Attach the M-Pesa message before marking this delivery complete" : "Attach a photo of the returned item", "warn");
+      return;
+    }
+    setSavingDeliveryOutcome(true);
     try {
-      const res = await fetch(`/api/receipts/${receiptId}/external-payment`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paymentCollectionMethod: method, paymentReference: reference }) });
+      const form = new FormData();
+      form.set("file", deliveryEvidence);
+      const upload = await fetch("/api/receipts/pod-evidence-upload", { method: "POST", body: form });
+      const uploaded = await upload.json().catch(() => ({}));
+      if (!upload.ok || !uploaded.url) throw new Error(uploaded?.error || "Unable to upload delivery proof");
+      const res = await fetch(`/api/receipts/${receiptId}/pod-delivered`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: deliveryOutcome,
+          reason: deliveryReason.trim() || undefined,
+          evidenceUrl: uploaded.url,
+          evidenceFileName: uploaded.fileName || deliveryEvidence.name,
+        }),
+      });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Unable to confirm payment");
-      showToast("Delivery payment confirmed", "success");
+      if (!res.ok) throw new Error(data?.error || "Unable to record delivery outcome");
+      showToast(deliveryOutcome === "delivered" ? "Delivery recorded. The sale is now paid and complete." : "Delivery failure recorded", "success");
       window.location.reload();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Unable to confirm payment", "error");
+      showToast(error instanceof Error ? error.message : "Unable to record delivery outcome", "error");
     } finally {
-      setConfirmingPayment(false);
+      setSavingDeliveryOutcome(false);
     }
   };
 
@@ -205,9 +226,9 @@ export default function ReceiptDetailClient({
             Edit receipt
           </button>
         ) : null}
-        {canEdit && draft.customerType === "delivery" && draft.deliveryPaymentTerm === "PAY_ON_DELIVERY" ? (
-          <button type="button" onClick={confirmDeliveryPayment} disabled={confirmingPayment} className="shrink-0 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
-            {confirmingPayment ? "Confirming…" : "Confirm delivery payment"}
+        {canRecordDeliveryOutcome ? (
+          <button type="button" onClick={() => setDeliveryOutcomeOpen(true)} className="shrink-0 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white">
+            Record delivery outcome
           </button>
         ) : null}
         {canEdit ? (
@@ -220,6 +241,22 @@ export default function ReceiptDetailClient({
       </div>
 
       <div dangerouslySetInnerHTML={{ __html: html }} />
+
+      {deliveryOutcomeOpen ? (
+        <div className="no-print fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="delivery-outcome-title">
+          <section className="w-full max-w-lg rounded-2xl bg-white p-5 text-slate-900 shadow-2xl">
+            <h2 id="delivery-outcome-title" className="text-lg font-semibold">Record delivery outcome</h2>
+            <p className="mt-1 text-sm text-slate-600">A delivered order is automatically marked paid, completed, and included in sales and commission calculations.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setDeliveryOutcome("delivered")} className={`rounded-lg px-3 py-2 text-sm font-semibold ${deliveryOutcome === "delivered" ? "bg-emerald-600 text-white" : "border border-slate-300"}`}>Delivered</button>
+              <button type="button" onClick={() => setDeliveryOutcome("delivery_failed")} className={`rounded-lg px-3 py-2 text-sm font-semibold ${deliveryOutcome === "delivery_failed" ? "bg-rose-600 text-white" : "border border-slate-300"}`}>Delivery failed</button>
+            </div>
+            <label className="mt-4 block text-sm font-medium">{deliveryOutcome === "delivered" ? "M-Pesa message / payment proof" : "Returned-item photo"}<input type="file" accept="image/*,.pdf,.txt" onChange={(event) => setDeliveryEvidence(event.target.files?.[0] || null)} className="mt-1 block w-full text-sm" /></label>
+            <label className="mt-4 block text-sm font-medium">Note (optional)<textarea value={deliveryReason} onChange={(event) => setDeliveryReason(event.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+            <div className="mt-5 flex justify-end gap-3"><button type="button" onClick={() => setDeliveryOutcomeOpen(false)} disabled={savingDeliveryOutcome} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button><button type="button" onClick={() => void recordDeliveryOutcome()} disabled={savingDeliveryOutcome || !deliveryEvidence} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{savingDeliveryOutcome ? "Saving…" : deliveryOutcome === "delivered" ? "Mark delivered" : "Mark failed"}</button></div>
+          </section>
+        </div>
+      ) : null}
 
       {editOpen ? (
         <div className="no-print fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">

@@ -1676,7 +1676,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs text-slate-300">Pay-on-delivery receipts stay payment pending until an authorised staff member confirms the payment.</p>
+            <p className="mt-2 text-xs text-slate-300">Pay-on-delivery receipts stay payment pending. The receipt owner or an administrator records the delivery outcome with proof; a delivered outcome automatically posts the paid sale and commission.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
             <span>Delivery status</span>

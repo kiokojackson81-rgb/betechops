@@ -106,7 +106,10 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const lockTtlMs = Number(
     process.env.POD_FINALIZE_LOCK_TTL_MS || 5 * 60 * 1000,
   );
-  if (String(podDelivery.status).toLowerCase() !== "dispatched") {
+  const deliveryState = String(podDelivery.status).toLowerCase();
+  const canRecordDirectDeliveryOutcome =
+    Boolean(podDelivery.directDelivery) && deliveryState === "ready_for_outcome";
+  if (deliveryState !== "dispatched" && !canRecordDirectDeliveryOutcome) {
     return NextResponse.json(
       { error: "Dispatch the POD by recording the Speedaf fee and tracking details before recording its outcome." },
       { status: 409 },
@@ -182,7 +185,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       { status: 400 },
     );
   }
-  if (desiredStatus === "delivery_failed" && !returnTrackingNumber) {
+  if (desiredStatus === "delivery_failed" && !returnTrackingNumber && !Boolean(podDelivery.directDelivery)) {
     return NextResponse.json(
       { error: "A return tracking or ticket number is required when delivery fails." },
       { status: 400 },

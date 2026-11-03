@@ -362,7 +362,19 @@ export async function GET(req: NextRequest) {
   // Optional filter: customerType=pod/project to isolate those flows, customerType=normal to exclude special flows.
   if (customerType === 'pod') {
     if (podStatus) {
-      and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
+      // Direct delivery + pay-on-delivery is ready for staff confirmation as
+      // soon as the receipt is saved. Treat it as pending work in the shared
+      // admin delivery filter, alongside Speedaf PODs that are still pending.
+      if (podStatus === "pending") {
+        and.push({
+          OR: [
+            { data: { path: ['podDelivery', 'status'], equals: "pending" } },
+            { data: { path: ['podDelivery', 'status'], equals: "ready_for_outcome" } },
+          ],
+        });
+      } else {
+        and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
+      }
     } else {
       // any receipt that has podDelivery metadata
       and.push({ data: { path: ['podDelivery'], not: Prisma.JsonNull } });
@@ -773,6 +785,7 @@ export async function GET(req: NextRequest) {
           ? rawData.publicReceiptToken.trim() || null
           : null,
       isPodDelivery: Boolean(podDeliveryData?.status),
+      podDirectDelivery: Boolean(podDeliveryData?.directDelivery),
       podDeliveryStatus: podDeliveryFailed ? "delivery_failed" : podDeliveryData?.status ?? null,
       podSpeedafSettlementStatus: (podDeliveryData?.speedafSettlement as Record<string, unknown> | undefined)?.status ?? null,
       podSpeedafSettledAt: (podDeliveryData?.speedafSettlement as Record<string, unknown> | undefined)?.settledAt ?? null,
@@ -1219,6 +1232,10 @@ export async function POST(req: NextRequest) {
     ? "PAY_ON_DELIVERY"
     : "PAY_BEFORE_DELIVERY";
   const isPayOnDelivery = isStandardDelivery && deliveryPaymentTerm === "PAY_ON_DELIVERY";
+  // A normal delivery that is paid at the door follows the same financial
+  // lifecycle as a POD order, but does not require a Speedaf collection point
+  // or dispatch-fee step.
+  const isDirectPayOnDelivery = isPayOnDelivery && !isPodDelivery;
   const isCompletedStandardDelivery = !isStandardDelivery || String(payload?.deliveryStatus || "pending").trim().toLowerCase() === "delivered";
   const isDeliveryRecognizedOnCreation = !isPodDelivery && !isPayOnDelivery && isCompletedStandardDelivery;
   const isMpesaExpress = String(payload?.paymentMethod || "").trim().toUpperCase() === "MPESA_EXPRESS";
@@ -1374,14 +1391,15 @@ export async function POST(req: NextRequest) {
             ...(expressCashAmount > 0 ? { cashRecordedAt: entryDateIso } : {}),
           }
         : receiptMetadata;
-      const podMetadata = isPodDelivery
+      const podMetadata = isPodDelivery || isDirectPayOnDelivery
         ? {
             ...(paymentCollectionMetadata ?? {}),
             podDelivery: {
-              status: 'pending',
+              status: isDirectPayOnDelivery ? 'ready_for_outcome' : 'pending',
               type: 'pay_on_delivery',
-              note: payload?.podDelivery?.note ?? null,
-              provider: 'Speedaf',
+              directDelivery: isDirectPayOnDelivery,
+              note: isDirectPayOnDelivery ? (payload?.notes ?? null) : (payload?.podDelivery?.note ?? null),
+              provider: isDirectPayOnDelivery ? 'Direct delivery' : 'Speedaf',
               pickupStationId: podPickupStation?.id ?? null,
               pickup: podPickupStation ? { stationId: podPickupStation.id, county: podPickupStation.county, area: podPickupStation.area, stationName: podPickupStation.name, address: podPickupStation.address, phone: podPickupStation.phone } : null,
               createdAt: entryDateIso,
@@ -1712,13 +1730,14 @@ export async function POST(req: NextRequest) {
           items,
           buyingTotal: computedBuyingTotal,
           profit: computedProfit,
-          ...(isPodDelivery
+          ...(isPodDelivery || isDirectPayOnDelivery
             ? {
                 podDelivery: {
-                  status: 'pending',
+                  status: isDirectPayOnDelivery ? 'ready_for_outcome' : 'pending',
                   type: 'pay_on_delivery',
-                  note: payload?.podDelivery?.note ?? null,
-                  provider: 'Speedaf',
+                  directDelivery: isDirectPayOnDelivery,
+                  note: isDirectPayOnDelivery ? (payload?.notes ?? null) : (payload?.podDelivery?.note ?? null),
+                  provider: isDirectPayOnDelivery ? 'Direct delivery' : 'Speedaf',
                   pickupStationId: podPickupStation?.id ?? null,
                   pickup: podPickupStation ? { stationId: podPickupStation.id, county: podPickupStation.county, area: podPickupStation.area, stationName: podPickupStation.name, address: podPickupStation.address, phone: podPickupStation.phone } : null,
                   createdAt: entryDateIso,

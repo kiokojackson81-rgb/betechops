@@ -50,8 +50,8 @@ export default async function AdminPayrollPage({
     },
   });
 
-  // The overview is ledger-backed and uses batched reads, keeping page
-  // navigation fast even when there are many historical payroll periods.
+  // Use the same canonical calculation as staff earnings and payslips so the
+  // sales, commission, deductions, and net pay always agree.
   const rows: PayrollRow[] = await buildPayrollOverviewRows(attendants, period);
 
   return (
@@ -61,7 +61,7 @@ export default async function AdminPayrollPage({
           <div>
             <h1 className="text-2xl font-semibold">Admin payroll</h1>
             <p className="text-sm text-slate-400">
-              Fast snapshot for {period.label}. Data comes from commission-ledger, comp plans and adjustments.
+              Canonical payroll for {period.label}. Sales, commission, plans and adjustments are reconciled together.
             </p>
             {!isCurrentPeriod && (
               <p className="text-xs text-slate-500">

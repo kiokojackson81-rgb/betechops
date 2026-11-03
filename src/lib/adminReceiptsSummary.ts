@@ -337,7 +337,7 @@ export async function computeAdminReceiptSummary({
     const value = podStatus ? podStatus.toLowerCase().trim() : undefined;
     if (!value) return undefined;
     if (value === "failed") return "delivery_failed";
-    if (value === "delivery_failed" || value === "pending" || value === "delivered") return value;
+    if (value === "delivery_failed" || value === "pending" || value === "ready_for_outcome" || value === "delivered") return value;
     return undefined;
   })();
 
@@ -530,7 +530,11 @@ export async function computeAdminReceiptSummary({
   const posReceiptsFinal = (() => {
     if (normalizedCustomerType === "pod") {
       const onlyPods = (posReceipts as any[]).filter(isPodReceipt);
-      const byStatus = normalizedPodStatus ? onlyPods.filter((r) => podStatusOf(r) === normalizedPodStatus) : onlyPods;
+      const byStatus = normalizedPodStatus
+        ? onlyPods.filter((r) => normalizedPodStatus === "pending"
+          ? ["pending", "ready_for_outcome"].includes(podStatusOf(r))
+          : podStatusOf(r) === normalizedPodStatus)
+        : onlyPods;
       return applySalesOnly(byStatus);
     }
 
