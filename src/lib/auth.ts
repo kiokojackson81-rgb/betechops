@@ -60,7 +60,21 @@ export async function auth(): Promise<Session | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = (await getServerSession(authOptions as any)) as Session | null;
-    if (session) return session;
+    if (session) {
+      // JWTs can outlive a staff member's employment. Re-check the account on
+      // every server-side session read so setting User.isActive=false revokes
+      // an existing session as well as blocking future sign-ins.
+      const user = session.user as { id?: string | null; email?: string | null } | undefined;
+      const id = String(user?.id ?? "").trim();
+      const email = String(user?.email ?? "").trim().toLowerCase();
+      if (!id && !email) return null;
+      const existing = await prisma.user.findFirst({
+        where: id ? { id } : { email },
+        select: { isActive: true },
+      });
+      if (!existing?.isActive) return null;
+      return session;
+    }
   } catch (err) {
     console.error("[auth] getServerSession failed", err);
   }
