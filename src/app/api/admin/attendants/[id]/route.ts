@@ -24,10 +24,35 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     // Use Prisma's checked update rather than a raw update that can silently
     // affect zero rows. This makes the status returned to the browser the
     // exact status persisted for the selected attendant.
-    const attendant = await prisma.user.update({
-      where: { id },
-      data: { isActive },
-      select: { id: true, isActive: true },
+    const attendant = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: { isActive },
+        select: { id: true, isActive: true },
+      });
+
+      if (!isActive) {
+        // Inactive staff must be impossible to select as a live voice target.
+        // Route construction also checks User.isActive, while these updates
+        // immediately remove any saved voice-desk routing state.
+        await Promise.all([
+          tx.voiceAgentRoutingPreference.upsert({
+            where: { userId: id },
+            create: { userId: id, routingEnabled: false, allowAfterHoursCalls: false },
+            update: { routingEnabled: false, allowAfterHoursCalls: false },
+          }),
+          tx.voiceAgentPresence.updateMany({
+            where: { userId: id },
+            data: { status: "OFFLINE", currentCallId: null },
+          }),
+          tx.voiceRoutingConfig.updateMany({
+            where: { overflowUserId: id },
+            data: { overflowUserId: null, overflowPhone: null },
+          }),
+        ]);
+      }
+
+      return updated;
     });
     return NextResponse.json(attendant);
   } catch (err: any) {

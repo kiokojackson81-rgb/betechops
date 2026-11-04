@@ -19,7 +19,12 @@ export async function GET() {
   }> = [];
   try {
     staff = await prisma.user.findMany({
-      where: buildStaffAttendantWhere(),
+      // Receipt ownership can only be assigned to an active staff account.
+      // Keep former staff out of every new receipt flow while preserving their
+      // historical ownership on receipts that already exist.
+      where: {
+        AND: [buildStaffAttendantWhere(), { isActive: true }],
+      },
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: {
         id: true,
