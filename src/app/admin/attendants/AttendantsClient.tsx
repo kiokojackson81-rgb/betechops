@@ -448,8 +448,9 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                               headers: { "content-type": "application/json" },
                               body: JSON.stringify({ action: "deactivate" }),
                             });
-                            if (!res.ok) throw new Error("Request failed");
-                            setRows((prev) => prev.map((r) => (r.id === a.id ? { ...r, isActive: false } : r)));
+                            const result = await res.json().catch(() => null);
+                            if (!res.ok || result?.id !== a.id || result?.isActive !== false) throw new Error("Request failed");
+                            setRows((prev) => prev.map((r) => (r.id === a.id ? { ...r, isActive: result.isActive } : r)));
                           } catch (err) {
                             alert("Failed to disable attendant");
                           } finally {
@@ -472,8 +473,9 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                               headers: { "content-type": "application/json" },
                               body: JSON.stringify({ action: "activate" }),
                             });
-                            if (!res.ok) throw new Error("Request failed");
-                            setRows((prev) => prev.map((r) => (r.id === a.id ? { ...r, isActive: true } : r)));
+                            const result = await res.json().catch(() => null);
+                            if (!res.ok || result?.id !== a.id || result?.isActive !== true) throw new Error("Request failed");
+                            setRows((prev) => prev.map((r) => (r.id === a.id ? { ...r, isActive: result.isActive } : r)));
                           } catch (err) {
                             alert("Failed to activate attendant");
                           } finally {

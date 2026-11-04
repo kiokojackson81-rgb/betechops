@@ -2,16 +2,18 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextAuth";
-import { updateSafeUserById } from "@/lib/customerProfile";
 
-export async function PATCH(request: any, { params }: any) {
+type RouteContext = { params: Promise<{ id: string }> };
+
+export async function PATCH(request: Request, { params }: RouteContext) {
   try {
     const session: any = await getServerSession(authOptions as any);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if ((session.user?.role ?? "") !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const id = params.id;
+    const { id } = await params;
+    if (!id) return NextResponse.json({ error: "Missing attendant ID" }, { status: 400 });
     const body = await request.json();
     const action = body?.action;
     if (!action || !["activate", "deactivate"].includes(action)) {
@@ -19,14 +21,21 @@ export async function PATCH(request: any, { params }: any) {
     }
 
     const isActive = action === "activate";
-    await updateSafeUserById(id, { isActive });
-    return NextResponse.json({ id, isActive });
+    // Use Prisma's checked update rather than a raw update that can silently
+    // affect zero rows. This makes the status returned to the browser the
+    // exact status persisted for the selected attendant.
+    const attendant = await prisma.user.update({
+      where: { id },
+      data: { isActive },
+      select: { id: true, isActive: true },
+    });
+    return NextResponse.json(attendant);
   } catch (err: any) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
-export async function DELETE(_request: any, { params }: any) {
+export async function DELETE(_request: Request, { params }: RouteContext) {
   try {
     const session: any = await getServerSession(authOptions as any);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,7 +43,8 @@ export async function DELETE(_request: any, { params }: any) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const id = params.id;
+    const { id } = await params;
+    if (!id) return NextResponse.json({ error: "Missing attendant ID" }, { status: 400 });
     await prisma.user.delete({ where: { id } });
     return NextResponse.json({ deleted: true });
   } catch (err: any) {
