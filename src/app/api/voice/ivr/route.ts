@@ -4,10 +4,9 @@ import {
   buildVoiceRoutePlanFromPhoneNumbers,
   buildDialAttemptXml,
   decodeRoutePlan,
-  getAdminPhoneNumbers,
   getIvrDigits,
 } from "@/lib/voiceIvr";
-import { buildVoiceMessageXmlResponse, parseVoicePayloadFromRequest } from "@/lib/voice";
+import { buildVoiceMessageXmlResponse, getEngineeringVoiceRouteTargets, parseVoicePayloadFromRequest } from "@/lib/voice";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -32,18 +31,16 @@ export async function POST(request: Request) {
   let selectedRoutePlan: VoiceRoutePlan | null = customerServiceRoutePlan;
 
   if (digits === "1") {
-    const fallbackAgentHop = customerServiceRoutePlan?.hops?.[0] ?? null;
-    const adminFirstRoutePlan = buildVoiceRoutePlanFromPhoneNumbers({
-      labels: ["ADMIN", fallbackAgentHop?.label || "AGENT_FALLBACK"],
-      phoneNumbers: [
-        ...getAdminPhoneNumbers(),
-        ...(fallbackAgentHop?.dialValue ? [fallbackAgentHop.dialValue] : []),
-      ],
+    const engineeringTargets = await getEngineeringVoiceRouteTargets();
+    const engineeringRoutePlan = buildVoiceRoutePlanFromPhoneNumbers({
+      labels: engineeringTargets.map((target) => target.label),
+      phoneNumbers: engineeringTargets.map((target) => target.phoneNumber),
+      targetUserIds: engineeringTargets.map((target) => target.userId),
       routeType: "TECHNICAL_TEAM",
     });
     selectedRoutePlan = {
-      ...adminFirstRoutePlan,
-      primaryTargetUserId: customerServiceRoutePlan?.primaryTargetUserId ?? null,
+      ...engineeringRoutePlan,
+      primaryTargetUserId: engineeringTargets[0]?.userId ?? null,
     };
 
     const sessionId = payload.sessionId || payload.SessionId || "";

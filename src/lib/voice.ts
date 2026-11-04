@@ -523,6 +523,7 @@ async function buildVoiceTargets(): Promise<
         select: {
           id: true,
           phone: true,
+          isActive: true,
           role: true,
           attendantCategory: true,
           agentProfile: { select: { id: true } },
@@ -531,7 +532,7 @@ async function buildVoiceTargets(): Promise<
     },
   });
   const overflowUser = voiceRoutingConfig?.overflowUser;
-  const overflowUserId = overflowUser && isVoiceOverflowStaff({
+  const overflowUserId = overflowUser?.isActive && isVoiceOverflowStaff({
     ...overflowUser,
     hasAgentProfile: Boolean(overflowUser.agentProfile),
   })
@@ -753,6 +754,51 @@ async function buildVoiceTargets(): Promise<
       defaultAllowAfterHoursCalls: true,
     }),
   };
+}
+
+/**
+ * The IVR's engineer option is intentionally separate from the ordinary
+ * customer-service queue. It reaches active technical staff first, then the
+ * same active Admin and overflow safeguards used by every other call.
+ */
+export async function getEngineeringVoiceRouteTargets() {
+  const [technicalUsers, defaultTargets] = await Promise.all([
+    prisma.user.findMany({
+      where: { isActive: true, attendantCategory: "TECHNICAL_TEAM" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        technicalProfile: { select: { phoneNumber: true, activeAccount: true } },
+      },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+    }),
+    buildVoiceTargets(),
+  ]);
+
+  const seenNumbers = new Set<string>();
+  const include = (target: { label: string; phoneNumber: string; userId: string | null }) => {
+    const normalized = normalizeVoiceNumber(target.phoneNumber);
+    if (!normalized || seenNumbers.has(normalized)) return null;
+    seenNumbers.add(normalized);
+    return { ...target, phoneNumber: normalized };
+  };
+
+  const engineers = technicalUsers
+    .filter((user) => user.technicalProfile?.activeAccount !== false)
+    .map((user) => include({
+      label: user.name || user.email || "TECHNICAL_TEAM",
+      phoneNumber: user.technicalProfile?.phoneNumber || user.phone || "",
+      userId: user.id,
+    }))
+    .filter((target): target is { label: string; phoneNumber: string; userId: string } => Boolean(target));
+
+  const safeguards = [defaultTargets.ADMIN, defaultTargets.OVERFLOW]
+    .map((target) => include(target))
+    .filter((target): target is { label: string; phoneNumber: string; userId: string | null } => Boolean(target));
+
+  return [...engineers, ...safeguards];
 }
 
 type VoiceRouteSelection = {
