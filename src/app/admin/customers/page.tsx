@@ -22,6 +22,26 @@ export default async function AdminCustomersPage({
   const page = Math.max(1, Number(params.page || "1"));
 
   const customers = await getAdminCustomersData(q, sort);
+  const summary = customers.reduce(
+    (totals, customer) => {
+      totals.totalOrders += customer.totalOrders;
+      totals.totalReceipts += customer.totalReceipts;
+      totals.totalSpend += customer.totalSpend;
+      if (customer.phones.length > 0) totals.customersWithPhone += 1;
+      if (customer.emails.length > 0) totals.customersWithEmail += 1;
+      if (customer.phones.length > 0 || customer.emails.length > 0) totals.knownContacts += 1;
+      return totals;
+    },
+    {
+      customerCount: customers.length,
+      totalOrders: 0,
+      totalReceipts: 0,
+      totalSpend: 0,
+      customersWithPhone: 0,
+      customersWithEmail: 0,
+      knownContacts: 0,
+    },
+  );
   const prepared = customers.map((customer) => ({
     ...customer,
     firstPurchaseAt: customer.firstPurchaseAt ? customer.firstPurchaseAt.toISOString() : null,
@@ -106,7 +126,7 @@ export default async function AdminCustomersPage({
         </form>
       </section>
 
-      <CustomersAdminClient customers={pagedCustomers} />
+      <CustomersAdminClient customers={pagedCustomers} summary={summary} />
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.9),rgba(2,6,23,.95))] px-5 py-4 text-sm text-slate-300">
         <div>

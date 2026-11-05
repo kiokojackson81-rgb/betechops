@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
@@ -124,11 +124,12 @@ const formatStatus = (value?: string | null) =>
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
       <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
       <div className="mt-2 text-lg font-semibold text-white">{value}</div>
+      {detail ? <div className="mt-1 text-xs text-slate-400">{detail}</div> : null}
     </div>
   );
 }
@@ -201,27 +202,27 @@ function statusTone(value: string | null | undefined) {
   return "slate" as const;
 }
 
-export default function CustomersAdminClient({ customers }: { customers: CustomerRow[] }) {
+type CustomerSummary = {
+  customerCount: number;
+  totalOrders: number;
+  totalReceipts: number;
+  totalSpend: number;
+  customersWithPhone: number;
+  customersWithEmail: number;
+  knownContacts: number;
+};
+
+export default function CustomersAdminClient({
+  customers,
+  summary,
+}: {
+  customers: CustomerRow[];
+  summary: CustomerSummary;
+}) {
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [detailsById, setDetailsById] = useState<Record<string, CustomerContext | null>>({});
   const [loadingIds, setLoadingIds] = useState<string[]>([]);
   const [detailErrors, setDetailErrors] = useState<Record<string, string | null>>({});
-
-  const totals = useMemo(
-    () =>
-      customers.reduce(
-        (acc, customer) => {
-          acc.totalOrders += customer.totalOrders;
-          acc.totalReceipts += customer.totalReceipts;
-          acc.totalSpend += customer.totalSpend;
-          acc.knownPhones += customer.primaryPhone ? 1 : 0;
-          acc.knownEmails += customer.primaryEmail ? 1 : 0;
-          return acc;
-        },
-        { totalOrders: 0, totalReceipts: 0, totalSpend: 0, knownPhones: 0, knownEmails: 0 },
-      ),
-    [customers],
-  );
 
   async function loadCustomerDetail(customer: CustomerRow) {
     if (detailsById[customer.id] || loadingIds.includes(customer.id)) return;
@@ -271,11 +272,15 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
   return (
     <div className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Customers" value={String(customers.length)} />
-        <MetricCard label="Orders" value={String(totals.totalOrders)} />
-        <MetricCard label="Receipts" value={String(totals.totalReceipts)} />
-        <MetricCard label="Total purchase" value={money(totals.totalSpend)} />
-        <MetricCard label="Known contacts" value={`${totals.knownPhones} phones · ${totals.knownEmails} emails`} />
+        <MetricCard label="Customers" value={String(summary.customerCount)} detail="All matching customer records" />
+        <MetricCard label="Orders" value={String(summary.totalOrders)} />
+        <MetricCard label="Receipts" value={String(summary.totalReceipts)} />
+        <MetricCard label="Total purchase" value={money(summary.totalSpend)} />
+        <MetricCard
+          label="Known contacts"
+          value={`${summary.knownContacts} customers`}
+          detail={`${summary.customersWithPhone} with phone · ${summary.customersWithEmail} with email`}
+        />
       </div>
 
       <div className="hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] lg:block">

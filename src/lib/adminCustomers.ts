@@ -322,6 +322,48 @@ function pushOrderIntoGroup(group: CustomerGroup, orderDetail: CustomerOrderDeta
 
 export async function getAdminCustomersData(q = "", sort = "recent"): Promise<AdminCustomerRow[]> {
   const query = q.trim();
+  // The customer desk must not be limited to people who already have an order.
+  // Customer accounts created through the shop/portal are included as well, while
+  // internal staff and sales agents remain out of the customer directory.
+  const customerAccounts = await prisma.user.findMany({
+    where: {
+      AND: [
+        {
+          OR: [
+            { name: { not: null } },
+            { email: { not: null } },
+            { phone: { not: null } },
+          ],
+        },
+        {
+          NOT: {
+            OR: [
+              { role: { in: ["ADMIN", "SUPERVISOR"] } },
+              { attendantCategory: { not: null } },
+              { categoryAssignments: { some: {} } },
+              { agentProfile: { isNot: null } },
+            ],
+          },
+        },
+        query
+          ? {
+              OR: [
+                { name: { contains: query, mode: "insensitive" } },
+                { email: { contains: query, mode: "insensitive" } },
+                { phone: { contains: query, mode: "insensitive" } },
+              ],
+            }
+          : {},
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+    },
+  });
+
   const legacyOrders = await prisma.order.findMany({
     where: {
       AND: [
@@ -687,6 +729,44 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
     };
 
     pushOrderIntoGroup(group, orderDetail);
+  }
+
+  for (const customer of customerAccounts) {
+    const identity = buildGroupId({
+      userId: customer.id,
+      phone: customer.phone,
+      email: customer.email,
+      name: customer.name,
+      fallbackPrefix: "customer-account",
+      fallbackId: customer.id,
+      userIdToGroup,
+      phoneToGroup,
+      emailToGroup,
+      nameToGroup,
+    });
+
+    let group = groups.get(identity.groupId);
+    if (!group) {
+      group = makeGroup(
+        identity.groupId,
+        customer.name?.trim() || customer.email?.trim() || formatPhoneForDisplay(customer.phone || undefined) || "Unnamed customer",
+      );
+      groups.set(identity.groupId, group);
+    }
+
+    applyGroupIdentity(group, {
+      ...identity,
+      userIdToGroup,
+      phoneToGroup,
+      emailToGroup,
+      nameToGroup,
+    });
+    setGroupCustomerUserId(group, customer.id);
+
+    if (!group.displayName || group.displayName === "Unnamed customer") {
+      group.displayName =
+        customer.name?.trim() || customer.email?.trim() || formatPhoneForDisplay(customer.phone || undefined) || group.displayName;
+    }
   }
 
   const rows: AdminCustomerRow[] = Array.from(groups.values()).map((group) => {
