@@ -538,8 +538,10 @@ async function buildVoiceTargets(): Promise<
   })
     ? overflowUser.id
     : null;
+  // Persisted fallback contact can be an approved alternate staff number when
+  // the primary account phone is blank.
   const overflowPhone = overflowUserId
-    ? normalizeVoiceNumber(overflowUser?.phone || "")
+    ? normalizeVoiceNumber(voiceRoutingConfig?.overflowPhone || overflowUser?.phone || "")
     : null;
 
   const userIds = [
@@ -794,7 +796,10 @@ export async function getEngineeringVoiceRouteTargets() {
     }))
     .filter((target): target is { label: string; phoneNumber: string; userId: string } => Boolean(target));
 
-  const safeguards = [defaultTargets.ADMIN, defaultTargets.OVERFLOW]
+  const safeguards = [
+    ...(defaultTargets.ADMIN.isAvailable ? [defaultTargets.ADMIN] : []),
+    defaultTargets.OVERFLOW,
+  ]
     .map((target) => include(target))
     .filter((target): target is { label: string; phoneNumber: string; userId: string | null } => Boolean(target));
 
@@ -825,7 +830,7 @@ async function buildQuotationOwnerVoiceTarget(
   const [user, presence, routingPreference, compliance, activeCall] = await Promise.all([
     prisma.user.findFirst({
       where: { id: ownerId, isActive: true },
-      select: { phone: true },
+      select: { phone: true, role: true },
     }),
     prisma.voiceAgentPresence.findUnique({ where: { userId: ownerId } }),
     prisma.voiceAgentRoutingPreference.findUnique({ where: { userId: ownerId } }),
@@ -887,6 +892,9 @@ async function buildQuotationOwnerVoiceTarget(
     if (!hasRecentPresence) skipReasons.push("stale_or_missing_presence");
     if (hasBusyCall) skipReasons.push("active_call_in_progress");
   }
+  // A quotation owned by Admin must not bypass the same offline protection
+  // applied to the normal escalation path.
+  if (user?.role === "ADMIN" && !isAvailable) return null;
 
   return {
     label: "QUOTATION_OWNER",
@@ -1178,7 +1186,7 @@ async function findRoundRobinTarget(agentTargets: VoiceRouteTarget[]) {
 function buildWorkingHoursSelection(input: {
   preferredTarget: VoiceRouteTarget | null;
   agentTargets: VoiceRouteTarget[];
-  adminTarget: VoiceRouteTarget;
+  adminTarget?: VoiceRouteTarget | null;
   fallbackTarget?: VoiceRouteTarget | null;
   routeReason: VoiceRouteSelection["routeReason"];
   preferAdminFirst?: boolean;
@@ -1190,7 +1198,7 @@ function buildWorkingHoursSelection(input: {
   const orderedTargets = (
     input.preferAdminFirst
       ? [
-          ...(input.adminTarget.phoneNumber
+          ...(input.adminTarget?.phoneNumber
             ? [input.adminTarget]
             : []),
           ...(input.preferredTarget?.phoneNumber
@@ -1206,7 +1214,7 @@ function buildWorkingHoursSelection(input: {
             ? [input.preferredTarget]
             : []),
           ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
-          ...(input.adminTarget.phoneNumber
+          ...(input.adminTarget?.phoneNumber
             ? [input.adminTarget]
             : []),
           ...(input.fallbackTarget?.phoneNumber
@@ -1283,17 +1291,18 @@ export async function getVoiceRouteTargets(
     (target) => target.phoneNumber,
   );
   const adminTarget = targets.ADMIN;
+  // Do not dial an Admin who has gone offline. The fallback line is next.
+  const availableAdminTarget = adminTarget.isAvailable ? adminTarget : null;
   const overflowTarget = targets.OVERFLOW;
   const quotationOwnerTargets = [
     targets.BRENDAH,
     targets.JENNIFER,
     targets.STEPHEN,
-    targets.ADMIN,
-  ].filter((target) => target.phoneNumber);
-  // Emergency and after-hours escalation deliberately overrides ordinary
-  // Receive calls/compliance flags: Admin is tried before the overflow line.
-  const directFallbackTargets = [adminTarget, overflowTarget].filter(
-    (target) => target.phoneNumber,
+    availableAdminTarget,
+  ].filter((target): target is VoiceRouteTarget => Boolean(target?.phoneNumber));
+  // Admin is included only while available; overflow remains the final route.
+  const directFallbackTargets = [availableAdminTarget, overflowTarget].filter(
+    (target): target is VoiceRouteTarget => Boolean(target?.phoneNumber),
   );
 
   if (isVoiceAdminTestPhone(callerNumber) && directFallbackTargets.length) {
@@ -1313,17 +1322,15 @@ export async function getVoiceRouteTargets(
   }
 
   if (!isWithinVoiceWorkingHours(date)) {
-    // Outside office hours escalation is intentionally narrow: Admin first,
-    // then the dedicated overflow line. These are the final emergency routes
-    // even if normal Receive calls/compliance flags currently show unavailable.
+    // Outside office hours escalation is intentionally narrow: an available
+    // Admin first, then the dedicated overflow line.
     const afterHoursTargets = [
-      adminTarget,
+      availableAdminTarget,
       overflowTarget,
-    ].filter(
-      (target) =>
-        target.phoneNumber &&
-        (target.label === "ADMIN" || target.label === "OVERFLOW"),
-    );
+    ].filter((target): target is VoiceRouteTarget => {
+      if (!target?.phoneNumber) return false;
+      return target.label === "ADMIN" || target.label === "OVERFLOW";
+    });
     const orderedTargets = afterHoursTargets;
     return {
       routeType: "AFTER_HOURS",
@@ -1357,8 +1364,8 @@ export async function getVoiceRouteTargets(
     findStickyOwnerTarget(callerNumber, agentTargets),
     findLastAnsweredTarget(
       callerNumber,
-      [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, adminTarget, targets.OVERFLOW].filter(
-        (target) => target.phoneNumber,
+      [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, availableAdminTarget, targets.OVERFLOW].filter(
+        (target): target is VoiceRouteTarget => Boolean(target?.phoneNumber),
       ),
       date,
     ),
@@ -1417,7 +1424,7 @@ export async function getVoiceRouteTargets(
           stickyTarget,
           roundRobinTarget,
           agentTargets,
-          adminTarget,
+          adminTarget: availableAdminTarget,
           fallbackTarget: overflowTarget,
         }),
         routeReason: quotationOwnerTarget
@@ -1431,7 +1438,7 @@ export async function getVoiceRouteTargets(
     : buildWorkingHoursSelection({
         preferredTarget: roundRobinTarget,
         agentTargets,
-        adminTarget,
+        adminTarget: availableAdminTarget,
         fallbackTarget: overflowTarget,
         routeReason: "round_robin",
         preferAdminFirst: false,

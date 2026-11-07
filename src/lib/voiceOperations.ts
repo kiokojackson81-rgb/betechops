@@ -1215,10 +1215,18 @@ async function listVoiceRoutingCandidates() {
   return prisma.user.findMany({
     where: {
       isActive: true,
-      phone: { not: null },
       OR: [
-        { role: { in: ["ADMIN", "SUPERVISOR"] } },
-        buildStaffAttendantWhere(),
+        { phone: { not: null } },
+        { notificationPhoneNumber: { not: null } },
+        { mobileMoneyPhoneNumber: { not: null } },
+      ],
+      AND: [
+        {
+          OR: [
+            { role: { in: ["ADMIN", "SUPERVISOR"] } },
+            buildStaffAttendantWhere(),
+          ],
+        },
       ],
     },
     select: {
@@ -1226,6 +1234,8 @@ async function listVoiceRoutingCandidates() {
       name: true,
       email: true,
       phone: true,
+      notificationPhoneNumber: true,
+      mobileMoneyPhoneNumber: true,
       role: true,
       attendantCategory: true,
     },
@@ -1365,6 +1375,8 @@ async function getVoiceRoutingConfig() {
           name: true,
           email: true,
           phone: true,
+          notificationPhoneNumber: true,
+          mobileMoneyPhoneNumber: true,
           role: true,
           attendantCategory: true,
           agentProfile: { select: { id: true } },
@@ -2421,7 +2433,11 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     id: candidate.id,
     name: candidate.name,
     email: candidate.email,
-    phone: candidate.phone,
+    phone:
+      candidate.phone ||
+      candidate.notificationPhoneNumber ||
+      candidate.mobileMoneyPhoneNumber ||
+      null,
     role: candidate.role,
     attendantCategory: candidate.attendantCategory,
     label:
@@ -2545,7 +2561,12 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     },
     routingConfig: {
       overflowUserId: validOverflowUser?.id ?? null,
-      overflowPhone: validOverflowUser?.phone ?? null,
+      overflowPhone:
+        voiceRoutingConfigRaw?.overflowPhone ||
+        validOverflowUser?.phone ||
+        validOverflowUser?.notificationPhoneNumber ||
+        validOverflowUser?.mobileMoneyPhoneNumber ||
+        null,
       overflowUserLabel:
         validOverflowUser?.name ||
         validOverflowUser?.email ||
@@ -2846,6 +2867,7 @@ export async function updateVoiceRoutingConfig(input: {
   overflowUserId?: string | null;
 }) {
   const overflowUserId = String(input.overflowUserId || "").trim() || null;
+  let overflowPhone: string | null = null;
 
   if (overflowUserId) {
     const overflowUser = await prisma.user.findUnique({
@@ -2853,6 +2875,9 @@ export async function updateVoiceRoutingConfig(input: {
       select: {
         id: true,
         isActive: true,
+        phone: true,
+        notificationPhoneNumber: true,
+        mobileMoneyPhoneNumber: true,
         role: true,
         attendantCategory: true,
         agentProfile: { select: { id: true } },
@@ -2864,6 +2889,12 @@ export async function updateVoiceRoutingConfig(input: {
     })) {
       throw new Error("voice_overflow_user_not_found");
     }
+    overflowPhone =
+      overflowUser.phone ||
+      overflowUser.notificationPhoneNumber ||
+      overflowUser.mobileMoneyPhoneNumber ||
+      null;
+    if (!overflowPhone) throw new Error("voice_overflow_phone_missing");
   }
 
   const config = await prisma.voiceRoutingConfig.upsert({
@@ -2871,11 +2902,11 @@ export async function updateVoiceRoutingConfig(input: {
     create: {
       key: "default",
       overflowUserId,
-      overflowPhone: null,
+      overflowPhone,
     },
     update: {
       overflowUserId,
-      overflowPhone: null,
+      overflowPhone,
     },
     include: {
       overflowUser: {
@@ -2884,6 +2915,8 @@ export async function updateVoiceRoutingConfig(input: {
           name: true,
           email: true,
           phone: true,
+          notificationPhoneNumber: true,
+          mobileMoneyPhoneNumber: true,
         },
       },
     },
