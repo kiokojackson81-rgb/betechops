@@ -1232,7 +1232,10 @@ export default function VoiceConsoleClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             status,
-            currentCallId: selectedCall?.id ?? null,
+            // The selected call may be an old history row. Only the softphone
+            // owns real active-call state, so never turn a viewed call into a
+            // busy presence record when changing availability.
+            currentCallId: null,
           }),
         },
       );
