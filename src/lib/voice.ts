@@ -647,7 +647,13 @@ async function buildVoiceTargets(): Promise<
     label: VoiceRouteTarget["label"],
     phoneNumber: string,
     userId: string | null,
-    options?: { alwaysDial?: boolean; defaultAllowAfterHoursCalls?: boolean },
+    options?: {
+      alwaysDial?: boolean;
+      // Mobile destinations do not require a browser/WebRTC heartbeat. Their
+      // explicit "Receive calls" routing switch is the source of truth.
+      ignorePresence?: boolean;
+      defaultAllowAfterHoursCalls?: boolean;
+    },
   ): VoiceRouteTarget => {
     const presence = userId ? presenceByUserId.get(userId) : null;
     const routingPreference = userId
@@ -676,7 +682,7 @@ async function buildVoiceTargets(): Promise<
       skipReasons.push(inboundRestricted ? "compliance_restricted" : "routing_disabled");
     if (!userId && label !== "OVERFLOW")
       skipReasons.push("missing_routing_user");
-    if (!options?.alwaysDial) {
+    if (!options?.alwaysDial && !options?.ignorePresence) {
       if (!presence) {
         skipReasons.push("missing_presence");
       } else {
@@ -702,6 +708,8 @@ async function buildVoiceTargets(): Promise<
       Boolean(phoneNumber) &&
       (options?.alwaysDial
         ? true
+        : options?.ignorePresence
+          ? !hasBusyCall
         : presenceStatus === "AVAILABLE" &&
           Boolean(lastSeenAt) &&
           now - (lastSeenAt?.getTime() ?? 0) <=
@@ -711,7 +719,7 @@ async function buildVoiceTargets(): Promise<
       webRtcRegistration?.identity ??
       buildVoiceWebrtcIdentity(getDefaultWebrtcClientName(label)) ??
       null;
-    if (isVoiceWebrtcEnabled() && !options?.alwaysDial) {
+    if (isVoiceWebrtcEnabled() && !options?.alwaysDial && !options?.ignorePresence) {
       if (!webRtcRegistration?.identity)
         skipReasons.push("missing_browser_identity");
       if (!webRtcRegistration) skipReasons.push("browser_not_registered");
@@ -758,7 +766,13 @@ async function buildVoiceTargets(): Promise<
     BRENDAH: toTarget("BRENDAH", brendahPhone, brendahUserId),
     JENNIFER: toTarget("JENNIFER", jenniferPhone, jenniferUserId),
     STEPHEN: toTarget("STEPHEN", stephenPhone, stephenUserId),
-    ADMIN: toTarget("ADMIN", adminPhone, adminUserId),
+    // Admin's configured mobile is deliberately independent of the browser
+    // console. If Receive calls is on, it is the first after-hours target even
+    // when the dashboard tab is closed or its heartbeat is stale.
+    ADMIN: toTarget("ADMIN", adminPhone, adminUserId, {
+      ignorePresence: true,
+      defaultAllowAfterHoursCalls: true,
+    }),
     OVERFLOW: toTarget("OVERFLOW", overflowPhone || "", overflowUserId, {
       alwaysDial: true,
       defaultAllowAfterHoursCalls: true,
