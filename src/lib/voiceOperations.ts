@@ -2733,6 +2733,10 @@ export type VoiceCallsSnapshot = Awaited<
   ReturnType<typeof listVoiceCallsSnapshot>
 >;
 
+// A provider may omit the terminal callback for an abandoned attempt. Do not
+// allow such an old record to be written back into an agent's busy presence.
+const VOICE_ACTIVE_CALL_STALE_MS = 15 * 60 * 1000;
+
 export async function updateVoicePresence(input: {
   userId: string;
   status?: string | null;
@@ -2766,6 +2770,7 @@ export async function updateVoicePresence(input: {
           id: requestedCurrentCallId,
           assignedToId: input.userId,
           isActive: true,
+          updatedAt: { gte: new Date(now.getTime() - VOICE_ACTIVE_CALL_STALE_MS) },
         },
         select: { id: true },
       })

@@ -57,6 +57,11 @@ export type VoiceRouteTarget = {
 };
 
 const VOICE_PRESENCE_ROUTING_WINDOW_MS = 90 * 1000;
+// Provider callbacks occasionally never deliver their terminal event. Those
+// orphaned rows must not keep an available operator permanently "busy".
+// Fifteen minutes is longer than a normal unanswered/connection attempt while
+// still protecting an operator during a genuine active call.
+const VOICE_ACTIVE_CALL_STALE_MS = 15 * 60 * 1000;
 const DEFAULT_VOICE_STICKY_OWNER_DAYS = 60;
 
 function isRoutingBlockingVoiceStatus(status: string | null | undefined) {
@@ -595,10 +600,12 @@ async function buildVoiceTargets(): Promise<
   for (const compliance of complianceRows) {
     complianceByUserId.set(compliance.userId, compliance);
   }
+  const activeCallCutoff = new Date(Date.now() - VOICE_ACTIVE_CALL_STALE_MS);
   const activeCalls = userIds.length
     ? await prisma.voiceCall.findMany({
         where: {
           assignedToId: { in: userIds },
+          updatedAt: { gte: activeCallCutoff },
           OR: [
             { isActive: true },
             {
@@ -842,6 +849,7 @@ async function buildQuotationOwnerVoiceTarget(
     prisma.voiceCall.findFirst({
       where: {
         assignedToId: ownerId,
+        updatedAt: { gte: new Date(Date.now() - VOICE_ACTIVE_CALL_STALE_MS) },
         OR: [
           { isActive: true },
           {
