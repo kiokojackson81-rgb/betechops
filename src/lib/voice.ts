@@ -651,11 +651,12 @@ async function buildVoiceTargets(): Promise<
     const presenceStatus =
       safeString(presence?.status).toUpperCase() || "OFFLINE";
     const lastSeenAt = presence?.lastSeenAt ?? null;
-    const currentCallId = safeString(presence?.currentCallId);
     const assignedActiveCallId = userId
       ? (activeCallByUserId.get(userId) ?? null)
       : null;
-    const hasBusyCall = Boolean(currentCallId || assignedActiveCallId);
+    // Presence is browser-reported and can retain an old selected history row.
+    // Only a verified active call assigned to this user may make them busy.
+    const hasBusyCall = Boolean(assignedActiveCallId);
     const inboundRestricted = isVoiceComplianceRestricted(compliance);
     const routingEnabled =
       (routingPreference?.routingEnabled ?? true) && !inboundRestricted;
@@ -732,7 +733,7 @@ async function buildVoiceTargets(): Promise<
       userId,
       presenceStatus,
       lastSeenAt: lastSeenAt?.toISOString() ?? null,
-      currentCallId: currentCallId || assignedActiveCallId,
+      currentCallId: assignedActiveCallId,
       isAvailable,
       routingEnabled,
       allowAfterHoursCalls,
@@ -872,9 +873,8 @@ async function buildQuotationOwnerVoiceTarget(
   const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
   const lastSeenAt = presence?.lastSeenAt ?? null;
   const hasBusyCall = Boolean(
-    presence?.currentCallId ||
-      (activeCall &&
-        (activeCall.isActive || isRoutingBlockingVoiceStatus(activeCall.status))),
+    activeCall &&
+      (activeCall.isActive || isRoutingBlockingVoiceStatus(activeCall.status)),
   );
   const hasRecentPresence = Boolean(
     lastSeenAt &&

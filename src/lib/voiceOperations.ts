@@ -2755,7 +2755,22 @@ export async function updateVoicePresence(input: {
     where: { userId: input.userId },
   });
   const now = new Date();
-  const normalizedCurrentCallId = input.currentCallId ?? null;
+  const requestedCurrentCallId = String(input.currentCallId || "").trim() || null;
+  // Do not trust a browser-selected row as an active call. Older open tabs can
+  // submit a historical call ID and permanently make an available agent look
+  // busy. A current-call marker is retained only for an actual active call
+  // assigned to the same user.
+  const activeCurrentCall = requestedCurrentCallId
+    ? await prisma.voiceCall.findFirst({
+        where: {
+          id: requestedCurrentCallId,
+          assignedToId: input.userId,
+          isActive: true,
+        },
+        select: { id: true },
+      })
+    : null;
+  const normalizedCurrentCallId = activeCurrentCall?.id ?? null;
 
   if (existingPresence) {
     const statusMatches =
