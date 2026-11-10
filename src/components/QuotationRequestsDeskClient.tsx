@@ -2173,7 +2173,31 @@ export default function QuotationRequestsDeskClient({
     if (typeof input.assigneeId === "string") setBulkAssigneeId(input.assigneeId);
   }
 
-  async function handleCreateQuotation() {
+  async function downloadQuotationPdf(request: Pick<SerializedQuoteRequest, "id" | "quoteRef">) {
+    const pdfApiBasePath =
+      apiBasePath === "/api/public/quotation-center"
+        ? createApiPath.startsWith("/api/admin/")
+          ? "/api/admin/quotation-center"
+          : "/api/attendant/quote-requests"
+        : apiBasePath;
+    const response = await fetch(
+      buildApiUrl(pdfApiBasePath, apiQueryParams, `${request.id}/pdf`),
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || "Failed to download quotation PDF.");
+    }
+    const blob = await response.blob();
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `${request.quoteRef}.pdf`;
+    link.click();
+    URL.revokeObjectURL(href);
+  }
+
+  async function handleCreateQuotation(downloadAfterSave = false) {
     setCreateSaving(true);
     setMessage(null);
     try {
@@ -2289,7 +2313,17 @@ export default function QuotationRequestsDeskClient({
       if (!createOnlyMode && data.request?.id) {
         setExpandedId(null);
       }
-      setMessage(createSuccessMessage);
+      if (downloadAfterSave) {
+        if (!data.request?.id || !data.request?.quoteRef) {
+          throw new Error("Quotation was saved, but its PDF is not ready to download.");
+        }
+        await downloadQuotationPdf(data.request);
+      }
+      setMessage(
+        downloadAfterSave
+          ? "Quotation saved and PDF download started."
+          : createSuccessMessage,
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save quotation.");
     } finally {
@@ -3101,21 +3135,7 @@ export default function QuotationRequestsDeskClient({
     setDownloadingId(request.id);
     setMessage(null);
     try {
-      const response = await fetch(
-        buildApiUrl(apiBasePath, apiQueryParams, `${request.id}/pdf`),
-        { cache: "no-store" },
-      );
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error || "Failed to download quotation PDF.");
-      }
-      const blob = await response.blob();
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = href;
-      link.download = `${request.quoteRef}.pdf`;
-      link.click();
-      URL.revokeObjectURL(href);
+      await downloadQuotationPdf(request);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to download quotation PDF.");
     } finally {
@@ -4438,6 +4458,7 @@ export default function QuotationRequestsDeskClient({
                 </>
               ) : null}
               {!templateBuilderMode ? (
+                <>
                 <button
                   type="button"
                   disabled={
@@ -4452,6 +4473,22 @@ export default function QuotationRequestsDeskClient({
                 >
                   {createSaving ? "Saving..." : createActionLabel}
                 </button>
+                <button
+                  type="button"
+                  disabled={
+                    createSaving ||
+                    !createDraft.customerName.trim() ||
+                    !createDraft.customerPhone.trim() ||
+                    (requireAssigneeSelection && !createDraft.assignedAttendantId.trim()) ||
+                    (createMode === "template" && !createDraft.templateId)
+                  }
+                  onClick={() => void handleCreateQuotation(true)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-2"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {createSaving ? "Saving..." : "Save & Download PDF"}
+                </button>
+                </>
               ) : null}
               <button
                 type="button"
@@ -4488,6 +4525,7 @@ export default function QuotationRequestsDeskClient({
                   </button>
                 ) : null}
                 {!templateBuilderMode ? (
+                  <>
                   <button
                     type="button"
                     disabled={
@@ -4502,6 +4540,22 @@ export default function QuotationRequestsDeskClient({
                   >
                     {createSaving ? "Saving..." : createActionLabel}
                   </button>
+                  <button
+                    type="button"
+                    disabled={
+                      createSaving ||
+                      !createDraft.customerName.trim() ||
+                      !createDraft.customerPhone.trim() ||
+                      (requireAssigneeSelection && !createDraft.assignedAttendantId.trim()) ||
+                      (createMode === "template" && !createDraft.templateId)
+                    }
+                    onClick={() => void handleCreateQuotation(true)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {createSaving ? "Saving..." : "Save & Download PDF"}
+                  </button>
+                  </>
                 ) : null}
                 <button
                   type="button"
