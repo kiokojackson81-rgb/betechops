@@ -40,6 +40,7 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers, 
             <div className="sm:border-l sm:border-emerald-200 sm:pl-5"><dt className="text-sm text-slate-600">Outstanding balance</dt><dd className="mt-1 break-words text-2xl font-bold text-emerald-900">{receiptMoney(receipt.balance)}</dd></div>
           </dl>
         </section>
+        <PurchaseSummary receipt={receipt} pdf={pdf} />
         {receipt.delivery ? <section aria-label="Delivery status" className={`mt-4 rounded-xl border p-4 text-sm ${deliveryFailed || deliveryCancelled ? "border-rose-200 bg-rose-50 text-rose-900" : "border-sky-200 bg-sky-50 text-sky-950"}`}>
           <p className="font-bold">Delivery: {receipt.delivery.status === "delivered" ? "Delivered" : receipt.delivery.status === "dispatched" ? "Dispatched" : deliveryCancelled ? "Cancelled" : deliveryFailed ? "Delivery failed" : "Pending"}</p>
           {deliveryCancelled ? <p className="mt-1">This order has been cancelled. It will not be dispatched. Please place a new order if you would still like the item.</p> : deliveryFailed ? <div className="mt-1 space-y-2"><p>We could not complete this delivery.</p><p>Please <Link className="font-semibold underline" href="/shop">place a new order</Link> or contact Betech Customer Care for assistance.</p></div> : receipt.delivery.status === "delivered" ? <p className="mt-1">Your order has been delivered. Thank you for choosing Betech Solar Solutions.</p> : receipt.delivery.paymentLabel === "Pay on delivery" ? <div className="mt-1 space-y-2">{receipt.delivery.status === "dispatched" ? <p>Your order has been dispatched. Expect it within <strong>1–3 days</strong>.</p> : null}<p>You will pay <strong>{receiptMoney(receipt.balance)}</strong> when you collect your order.</p>{receipt.delivery.pickup ? <div className="rounded-lg border border-sky-200 bg-white/70 p-3"><p className="font-semibold">Collection point: {receipt.delivery.pickup.stationName} Speedaf Station</p><p className="mt-1">{receipt.delivery.pickup.address}</p><p className="mt-1">{receipt.delivery.pickup.area}{receipt.delivery.pickup.county ? `, ${receipt.delivery.pickup.county}` : ""}</p>{receipt.delivery.pickup.phone ? <p className="mt-1">Station contact: <a className="font-semibold underline" href={`tel:${receipt.delivery.pickup.phone}`}>{receipt.delivery.pickup.phone}</a></p> : null}</div> : <p>Speedaf will confirm the collection point with you.</p>}{receipt.delivery.speedafReceipts.length ? <SpeedafReceipts documents={receipt.delivery.speedafReceipts} /> : null}<p>You will receive an SMS or call from Speedaf or the Betech team once your parcel is ready for collection.</p>{receipt.delivery.servingAgentPhone ? <p>For help, call or WhatsApp <strong>{receipt.delivery.servingAgentName}</strong> on <a className="font-semibold underline" href={`tel:${receipt.delivery.servingAgentPhone}`}>{receipt.delivery.servingAgentPhone}</a>.</p> : <p>For help, call or WhatsApp Betech Customer Care on <a className="font-semibold underline" href="https://wa.me/254722151083">0722151083</a>.</p>}</div> : <p className="mt-1">{receipt.delivery.paymentLabel}. We will contact you with delivery arrangements once your order is ready.</p>}
@@ -48,18 +49,6 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers, 
         {receipt.project && receipt.project.stage !== "CANCELLED" && receipt.balance > 0 ? (
           <ProjectPaymentOptions token={token} balance={receipt.balance} initialPhone={receipt.customerPhone} customerName={receipt.customerName} />
         ) : null}
-        <section aria-labelledby="purchase-heading" className="mt-6">
-          <h2 id="purchase-heading" className="text-xl font-bold">Purchase summary</h2>
-          <ul className="mt-3 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-slate-50">
-            {receipt.items.map(item => <li key={item.id} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 p-4"><div className="min-w-0 flex-1 basis-40"><p className="break-words font-medium">{item.name}</p><p className="mt-1 text-sm text-slate-600">Qty {item.quantity} × {receiptMoney(item.unitPrice)}</p></div><p className="font-semibold">{receiptMoney(item.lineTotal)}</p></li>)}
-          </ul>
-          <dl className="mt-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:ml-auto sm:max-w-md">
-            <div className="flex items-center justify-between gap-4"><dt className="text-slate-600">Item subtotal</dt><dd className="font-medium">{receiptMoney(receipt.subtotal)}</dd></div>
-            {receipt.showDiscount ? <div className="mt-2 flex items-center justify-between gap-4 text-emerald-700"><dt>Discount</dt><dd className="font-medium">−{receiptMoney(receipt.discount)}</dd></div> : null}
-            <div className="mt-3 flex items-center justify-between gap-4 border-t border-slate-200 pt-3 text-base font-bold text-slate-950"><dt>Final amount payable</dt><dd>{receiptMoney(receipt.total)}</dd></div>
-          </dl>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2"><a href={pdf} target="_blank" rel="noreferrer" className="receipt-primary"><FileText size={21} aria-hidden="true" />View Receipt</a><a href={`${pdf}?download=1`} className="receipt-secondary"><Download size={21} aria-hidden="true" />Download PDF</a></div>
-        </section>
         {receipt.project ? <ProjectDocumentsCard project={receipt.project} token={token} documentsReady={projectDocumentsReady} /> : null}
         <section aria-labelledby="help-heading" className="mt-6 border-t border-slate-200 pt-5">
           <h2 id="help-heading" className="text-xl font-bold">Need help with your purchase?</h2>
@@ -80,11 +69,26 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers, 
   </div>;
 }
 
+function PurchaseSummary({ receipt, pdf }: { receipt: CustomerReceiptPresentation; pdf: string }) {
+  return <section aria-labelledby="purchase-heading" className="mt-6">
+    <h2 id="purchase-heading" className="text-xl font-bold">Purchase summary</h2>
+    <ul className="mt-3 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-slate-50">
+      {receipt.items.map(item => <li key={item.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-x-4"><div className="min-w-0"><p className="break-words font-medium">{item.name}</p><p className="mt-1 text-sm text-slate-600">Qty {item.quantity} × {receiptMoney(item.unitPrice)}</p></div><p className="font-semibold sm:shrink-0">{receiptMoney(item.lineTotal)}</p></li>)}
+    </ul>
+    <dl className="mt-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:ml-auto sm:max-w-md">
+      <div className="flex items-center justify-between gap-4"><dt className="text-slate-600">Item subtotal</dt><dd className="font-medium">{receiptMoney(receipt.subtotal)}</dd></div>
+      {receipt.showDiscount ? <div className="mt-2 flex items-center justify-between gap-4 text-emerald-700"><dt>Discount</dt><dd className="font-medium">−{receiptMoney(receipt.discount)}</dd></div> : null}
+      <div className="mt-3 flex items-center justify-between gap-4 border-t border-slate-200 pt-3 text-base font-bold text-slate-950"><dt>Final amount payable</dt><dd>{receiptMoney(receipt.total)}</dd></div>
+    </dl>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2"><a href={pdf} target="_blank" rel="noreferrer" className="receipt-primary"><FileText size={21} aria-hidden="true" />View Receipt</a><a href={`${pdf}?download=1`} className="receipt-secondary"><Download size={21} aria-hidden="true" />Download PDF</a></div>
+  </section>;
+}
+
 function ProjectDocumentsCard({ project, token, documentsReady }: { project: NonNullable<CustomerReceiptPresentation["project"]>; token: string; documentsReady: boolean }) {
   const completed = project.stage === "COMPLETED_POSTED";
   const documentBase = `/api/public/receipts/${encodeURIComponent(token)}/project-documents`;
   return <section aria-labelledby="project-documents-heading" className={`mt-6 rounded-xl border p-5 ${completed ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-    <div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white ${completed ? "bg-emerald-600" : "bg-amber-500"}`}>{completed ? <Award aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}</span><div><p className={`text-xs font-bold uppercase tracking-[0.16em] ${completed ? "text-emerald-800" : "text-amber-800"}`}>Project documents</p><h2 id="project-documents-heading" className="mt-1 text-xl font-bold text-slate-900">{completed ? "Your completion and warranty documents" : "Completion certificate and warranty"}</h2>{completed ? <p className="mt-1 text-sm leading-6 text-slate-700">Your certificate of completion and warranty are ready to view or download.</p> : <p className="mt-1 text-sm leading-6 text-slate-700">Your certificate of completion will be available here after the project is completed. Your warranty will be available here to view or download once the project is marked completed.</p>}</div></div>
+    <div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white ${completed ? "bg-emerald-600" : "bg-amber-500"}`}>{completed ? <Award aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}</span><div><p className={`text-xs font-bold uppercase tracking-[0.16em] ${completed ? "text-emerald-800" : "text-amber-800"}`}>Project documents</p><h2 id="project-documents-heading" className="mt-1 text-xl font-bold text-slate-900">{completed ? "Your completion and warranty documents" : "Completion certificate and warranty"}</h2>{completed ? <p className="mt-1 text-sm leading-6 text-slate-700">Your certificate of completion and warranty are ready to view or download.</p> : <p className="mt-1 text-sm leading-6 text-slate-700">Your certificate of completion and warranty will be ready for download here once this project is paid and marked completed by our technicians.</p>}</div></div>
     {completed && documentsReady ? <div className="mt-4 grid gap-3 sm:grid-cols-2"><ProjectDocumentActions label="Certificate of completion" url={`${documentBase}/completion`} /><ProjectDocumentActions label="Warranty certificate" url={`${documentBase}/warranty`} /></div> : completed ? <p className="mt-4 rounded-lg bg-white/80 p-3 text-sm text-slate-700">Your documents are being prepared. Please check again shortly.</p> : null}
   </section>;
 }
