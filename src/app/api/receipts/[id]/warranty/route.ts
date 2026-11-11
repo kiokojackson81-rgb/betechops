@@ -1,5 +1,5 @@
 import { prepareProjectDocuments } from "@/lib/projectDocuments";
-import { ensureCustomerCertificateToken, sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
+import { sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
 import { activeLicensedProfessional } from "@/lib/professionalCommissioning";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -60,8 +60,7 @@ export async function POST(request: NextRequest, context: ParamsContext) {
       const certificate = await getWarrantyCertificate(id);
       if (!certificate) return NextResponse.json({ error: "Generate the warranty certificate before sending it." }, { status: 409 });
       await prepareProjectDocuments({ sessionId: certificate.commissioningSessionId, origin: new URL(request.url).origin, actorId: actor.issuedById });
-      const token = await ensureCustomerCertificateToken(certificate.commissioningSessionId);
-      const delivery = await sendCustomerCertificateDelivery({ sessionId: certificate.commissioningSessionId, certificateUrl: `${new URL(request.url).origin}/certificate/${token}`, actorId: actor.issuedById, manual: true });
+      const delivery = await sendCustomerCertificateDelivery({ sessionId: certificate.commissioningSessionId, actorId: actor.issuedById, manual: true });
       return NextResponse.json({ ok: delivery.status === "SENT", certificate, delivery, error: delivery.error }, { status: delivery.status === "FAILED" ? 502 : 200 });
     }
     if (parsed.data.action === "reissue" && !parsed.data.reason) return NextResponse.json({ error: "Enter the reason for reissuing the warranty certificate." }, { status: 400 });

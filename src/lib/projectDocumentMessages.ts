@@ -5,7 +5,7 @@ export function technicianCommissioningSms(input: { name: string; reference: str
 }
 
 export function customerProjectDocumentsSms(input: { name: string; reference: string; link: string }) {
-  return `Hi ${clean(input.name)}, your solar installation for project ${clean(input.reference)} is completed and certified. Your Receipt, Completion Certificate and Warranty Certificate are ready. View or download your documents here: ${input.link}`;
+  return `Hi ${clean(input.name)}, your solar installation for project ${clean(input.reference)} is completed and certified. Track your completed project, payment record, Receipt, Completion Certificate, Warranty Certificate and available rewards here: ${input.link}`;
 }
 
 export const PROJECT_DOCUMENT_ORDER = ["receipt", "completion", "warranty"] as const;

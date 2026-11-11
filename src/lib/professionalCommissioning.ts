@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getBranding } from "@/lib/branding";
 import { appendCommissioningAudit, certificateNumber, projectSummary } from "@/lib/commissioning";
-import { ensureCustomerCertificateToken, sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
+import { sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
 import { TERMS_URL } from "@/lib/publicLinks";
 import { prepareProjectDocuments } from "@/lib/projectDocuments";
 import { completeCertifiedProject } from "@/lib/projectCompletion";
@@ -167,8 +167,7 @@ export async function issueProfessionallyApprovedCertificate(input: {
   let warranty: unknown = null;
   try {
     warranty = await prepareProjectDocuments({ sessionId: updated.id, origin: input.origin, actorId: input.approvedById });
-    const customerToken = await ensureCustomerCertificateToken(updated.id);
-    delivery = await sendCustomerCertificateDelivery({ sessionId: updated.id, certificateUrl: `${input.origin.replace(/\/$/, "")}/certificate/${customerToken}`, actorId: input.approvedById });
+    delivery = await sendCustomerCertificateDelivery({ sessionId: updated.id, actorId: input.approvedById });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Document preparation failed.";
     warranty = { error: detail };

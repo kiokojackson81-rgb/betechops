@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { getPublicReceiptDocumentsUrl } from "@/lib/publicReceiptLinks";
 import {
   appendCommissioningAudit,
   commissioningExpiry,
@@ -15,7 +16,7 @@ import {
   hashCommissioningToken,
   projectSummary,
 } from "@/lib/commissioning";
-import { ensureCustomerCertificateToken, sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
+import { sendCustomerCertificateDelivery } from "@/lib/commissioningDelivery";
 
 export const dynamic = "force-dynamic";
 
@@ -91,11 +92,9 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       return NextResponse.json({ error: "Issue the commissioning certificate before sending it to the customer." }, { status: 409 });
     }
     await prepareProjectDocuments({ sessionId: existing.id, origin: new URL(req.url).origin, actorId });
-    const createdToken = await ensureCustomerCertificateToken(existing.id);
-    const customerToken = createdToken || decryptCommissioningToken(existing.customerTokenCiphertext || "");
-    const link = `${new URL(req.url).origin}/certificate/${customerToken}`;
-    const delivery = await sendCustomerCertificateDelivery({ sessionId: existing.id, certificateUrl: link, actorId, manual: true });
-    return NextResponse.json({ ok: delivery.status === "SENT", link, delivery, error: delivery.error, message: "Customer document SMS submitted." }, { status: delivery.status === "FAILED" ? 502 : 200 });
+    const delivery = await sendCustomerCertificateDelivery({ sessionId: existing.id, actorId, manual: true });
+    const link = await getPublicReceiptDocumentsUrl(id);
+    return NextResponse.json({ ok: delivery.status === "SENT", link, delivery, error: delivery.error, message: "Customer project SMS submitted." }, { status: delivery.status === "FAILED" ? 502 : 200 });
   }
 
   if (action === "revoke") {

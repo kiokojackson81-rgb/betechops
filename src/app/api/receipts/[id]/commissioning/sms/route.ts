@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getBranding } from "@/lib/branding";
-import { decryptCommissioningToken, ensureCustomerCertificateToken } from "@/lib/commissioning";
+import { getPublicReceiptDocumentsUrl } from "@/lib/publicReceiptLinks";
 import { technicianMessagePreview, sendTechnicianCommissioningLink } from "@/lib/commissioningAssignments";
 import { customerProjectDocumentsSms } from "@/lib/projectDocumentMessages";
 import { prepareProjectDocuments } from "@/lib/projectDocuments";
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest, { params }: Context) {
   let recipients: Array<{ id: string; name: string; phone: string; message: string }> = [];
   let technician: { name: string; phone: string; message: string } | null = null;
   try { const preview = await technicianMessagePreview(id, origin); recipients = preview.recipients; technician = { name: preview.name, phone: preview.phone, message: preview.message }; } catch { /* No technician SMS after issuance or revocation. */ }
-  const customerLink = session.customerTokenCiphertext ? `${origin}/certificate/${decryptCommissioningToken(session.customerTokenCiphertext)}` : null;
+  const customerLink = session.status === "ISSUED" ? await getPublicReceiptDocumentsUrl(id) : null;
   const customer = session.status === "ISSUED" ? {
     name: session.receipt.order?.customerName || "Customer", phone: session.receipt.order?.customerPhone || "",
     message: customerLink ? customerProjectDocumentsSms({ name: session.receipt.order?.customerName || "Customer", reference: session.receipt.receiptNumber || session.receipt.order?.orderNumber || "Project", link: customerLink }) : null,
@@ -61,8 +61,7 @@ export async function POST(request: NextRequest, { params }: Context) {
       await prepareProjectDocuments({ sessionId: session.id, origin: request.nextUrl.origin, actorId });
       return NextResponse.json({ ok: true, message: "Documents are ready. Preview and send the customer SMS." });
     }
-    const token = await ensureCustomerCertificateToken(session.id);
-    const delivery = await sendCustomerCertificateDelivery({ sessionId: session.id, certificateUrl: `${request.nextUrl.origin}/certificate/${token}`, actorId, manual: true });
+    const delivery = await sendCustomerCertificateDelivery({ sessionId: session.id, actorId, manual: true });
     return NextResponse.json({ ok: delivery.status === "SENT", delivery, error: delivery.error }, { status: delivery.status === "FAILED" ? 502 : 200 });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to send SMS." }, { status: 409 }); }
 }
