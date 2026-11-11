@@ -66,6 +66,8 @@ export default function renderReceiptTemplate(
   const paymentMethod = snapshot.paymentMethod || order?.paymentMethod || '';
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
   const customerEmail = snapshot.customerEmail || order?.customerEmail || '';
+  const customerName = snapshot.customerName || order?.customerName || '';
+  const projectPaybillAccountName = String(customerName).trim().split(/\s+/)[0] || 'Customer';
   const projectFlow =
     snapshot.projectFlow && typeof snapshot.projectFlow === 'object' ? snapshot.projectFlow : null;
   const formatWarrantyValue = (value: any) => {
@@ -193,8 +195,9 @@ export default function renderReceiptTemplate(
       <div class="project-payment-method-list">
         <div class="project-payment-method-option">
           <div class="project-payment-method-title">M-Pesa Paybill</div>
-          <div class="project-payment-method-line"><span>Paybill Number:</span> <strong>516600</strong></div>
-          <div class="project-payment-method-line"><span>Account Number:</span> <strong>0710098001</strong></div>
+          <div class="project-payment-method-line"><span>Paybill Number:</span> <strong>1231008</strong></div>
+          <div class="project-payment-method-line"><span>Account Name:</span> <strong>${escapeHtml(projectPaybillAccountName)}</strong></div>
+          <div class="project-payment-method-line"><span>Display Name:</span> Betech Solar Limited</div>
         </div>
         <div class="project-payment-method-option">
           <div class="project-payment-method-title">ABSA Bank</div>
@@ -205,9 +208,9 @@ export default function renderReceiptTemplate(
         <div class="project-payment-method-option">
           <div class="project-payment-method-title">Equity Bank</div>
           <div class="project-payment-method-line"><span>Bank:</span> Equity Bank</div>
-          <div class="project-payment-method-line"><span>Account Name:</span> Betech Technologies Limited</div>
-          <div class="project-payment-method-line"><span>Branch:</span> Moi Avenue</div>
-          <div class="project-payment-method-line"><span>Account Number:</span> <strong>0470265072030</strong></div>
+          <div class="project-payment-method-line"><span>Account Name:</span> Betech Solar Solution Limited</div>
+          <div class="project-payment-method-line"><span>Branch:</span> Tea Room</div>
+          <div class="project-payment-method-line"><span>Account Number:</span> <strong>0940287664685</strong></div>
         </div>
       </div>
     </div>
@@ -334,8 +337,9 @@ export default function renderReceiptTemplate(
           <div class="project-payment-bank-card">
             <div class="project-payment-bank-card__brand">${paymentIconBadge("M-PESA", "mpesa")}</div>
             <div class="project-payment-bank-card__name">Paybill</div>
-            <div class="project-payment-bank-card__line"><span>Paybill Number:</span> 516600</div>
-            <div class="project-payment-bank-card__line"><span>Account Number:</span> 0710098001</div>
+            <div class="project-payment-bank-card__line"><span>Paybill Number:</span> 1231008</div>
+            <div class="project-payment-bank-card__line"><span>Account Name:</span> ${escapeHtml(projectPaybillAccountName)}</div>
+            <div class="project-payment-bank-card__line"><span>Display Name:</span> Betech Solar Limited</div>
           </div>
           <div class="project-payment-bank-card">
             <div class="project-payment-bank-card__brand">${paymentIconBadge("ABSA", "absa")}</div>
@@ -348,9 +352,9 @@ export default function renderReceiptTemplate(
             <div class="project-payment-bank-card__brand">${paymentIconBadge("EQUITY", "equity")}</div>
             <div class="project-payment-bank-card__name">Equity Bank</div>
             <div class="project-payment-bank-card__line"><span>Bank:</span> Equity Bank</div>
-            <div class="project-payment-bank-card__line"><span>Account Name:</span> Betech Technologies Limited</div>
-            <div class="project-payment-bank-card__line"><span>Branch:</span> Moi Avenue</div>
-            <div class="project-payment-bank-card__line"><span>Account Number:</span> 0470265072030</div>
+            <div class="project-payment-bank-card__line"><span>Account Name:</span> Betech Solar Solution Limited</div>
+            <div class="project-payment-bank-card__line"><span>Branch:</span> Tea Room</div>
+            <div class="project-payment-bank-card__line"><span>Account Number:</span> 0940287664685</div>
           </div>
         </div>
       </section>
