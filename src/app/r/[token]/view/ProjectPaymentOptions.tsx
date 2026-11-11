@@ -30,8 +30,11 @@ function maskedPhone(phone: string) {
   return compact.length >= 7 ? `${compact.slice(0, 4)}•••${compact.slice(-3)}` : compact;
 }
 
-export default function ProjectPaymentOptions({ token, balance, initialPhone }: { token: string; balance: number; initialPhone: string | null }) {
+export default function ProjectPaymentOptions({ token, balance, initialPhone, customerName }: { token: string; balance: number; initialPhone: string | null; customerName: string }) {
   const maximum = Math.min(Math.max(0, Math.round(balance)), MPESA_EXPRESS_LIMIT);
+  const paybillAmount = balance > MPESA_EXPRESS_LIMIT ? MPESA_EXPRESS_LIMIT : balance;
+  const paybillRemainder = Math.max(0, balance - paybillAmount);
+  const paybillAccountName = customerName.trim().split(/\s+/)[0] || "Customer";
   const [phone, setPhone] = useState(initialPhone || "");
   const [editingPhone, setEditingPhone] = useState(!initialPhone);
   const [amount, setAmount] = useState(String(maximum));
@@ -68,6 +71,24 @@ export default function ProjectPaymentOptions({ token, balance, initialPhone }: 
     return () => { active = false; window.clearInterval(interval); };
   }, [checkoutRequestId, state]);
 
+  // A direct PayBill callback can arrive while the customer is still on this
+  // page. Refresh as soon as the authoritative order balance changes, which
+  // also presents the next KSh 250,000 instruction when a balance remains.
+  useEffect(() => {
+    let active = true;
+    const checkPaybill = async () => {
+      try {
+        const response = await fetch(`/api/public/receipts/${encodeURIComponent(token)}/project/payment-status`, { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (active && response.ok && Number(data.balance) < balance) window.location.reload();
+      } catch {
+        // The normal receipt page remains usable if a background check fails.
+      }
+    };
+    const interval = window.setInterval(() => void checkPaybill(), 10_000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [balance, token]);
+
   async function requestMpesaExpress() {
     setState("sending");
     setMessage("");
@@ -102,7 +123,7 @@ export default function ProjectPaymentOptions({ token, balance, initialPhone }: 
         <p className="mt-3 text-xs leading-5 text-slate-600">Never enter your M-Pesa PIN on this page. Enter it only on Safaricom’s prompt on your phone.</p>
       </section>
 
-      <section className="rounded-xl border border-sky-200 bg-sky-50/70 p-4"><div className="flex items-start gap-3"><Clipboard className="mt-0.5 text-sky-700" aria-hidden="true" /><div><h3 className="font-bold text-sky-950">M-Pesa PayBill</h3><p className="mt-1 text-sm leading-5 text-slate-700">In M-Pesa, choose <strong>Lipa na M-Pesa → PayBill</strong>, then use the details below. {balance <= MPESA_EXPRESS_LIMIT ? <>Enter exactly <strong>{receiptMoney(balance)}</strong> as the amount.</> : <>Start with <strong>KSh 250,000.00</strong>, then pay the remaining <strong>{receiptMoney(balance - MPESA_EXPRESS_LIMIT)}</strong>. This keeps each payment within the KSh 250,000 limit.</>}</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><CopyValue label="Business number" value="247247" /><CopyValue label="Account number" value="722151" /></div></section>
+      <section className="rounded-xl border border-sky-200 bg-sky-50/70 p-4"><div className="flex items-start gap-3"><Clipboard className="mt-0.5 text-sky-700" aria-hidden="true" /><div><h3 className="font-bold text-sky-950">M-Pesa PayBill</h3><p className="mt-1 text-sm leading-5 text-slate-700">In M-Pesa, choose <strong>Lipa na M-Pesa → PayBill</strong>, then use the details below. {paybillRemainder ? <>Start with <strong>{receiptMoney(paybillAmount)}</strong>, then pay the remaining <strong>{receiptMoney(paybillRemainder)}</strong> after it is received.</> : <>Enter exactly <strong>{receiptMoney(paybillAmount)}</strong> as the amount.</>}</p><p className="mt-2 text-xs leading-5 text-slate-600">Use the prefilled account name exactly so we can match the payment to this project automatically.</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><CopyValue label="PayBill number" value="1231008" /><CopyValue label="Account name" value={paybillAccountName} /><CopyValue label="Display name" value="Betech Solar Limited" /><CopyValue label="Amount to pay" value={String(paybillAmount)} /></div></section>
 
       <section className="rounded-xl border border-violet-200 bg-violet-50/70 p-4"><div className="flex items-start gap-3"><Landmark className="mt-0.5 text-violet-700" aria-hidden="true" /><div><h3 className="font-bold text-violet-950">Bank transfer / PesaLink</h3><p className="mt-1 text-sm leading-5 text-slate-700">Transfer from any bank to Equity Bank using a bank transfer or PesaLink. Please use your receipt number as the payment reference.</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><CopyValue label="Account name" value="Betech Solar Solution Limited" /><CopyValue label="Account number" value="0940287664685" /><CopyValue label="Bank" value="Equity Bank Kenya" /><CopyValue label="Branch" value="Tea Room" /></div></section>
     </div>

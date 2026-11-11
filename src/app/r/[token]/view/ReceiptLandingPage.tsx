@@ -46,7 +46,7 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers, 
         </section> : null}
         {receipt.project ? <ProjectStatusCard project={receipt.project} /> : null}
         {receipt.project && receipt.project.stage !== "CANCELLED" && receipt.balance > 0 ? (
-          <ProjectPaymentOptions token={token} balance={receipt.balance} initialPhone={receipt.customerPhone} />
+          <ProjectPaymentOptions token={token} balance={receipt.balance} initialPhone={receipt.customerPhone} customerName={receipt.customerName} />
         ) : null}
         <section aria-labelledby="purchase-heading" className="mt-6">
           <h2 id="purchase-heading" className="text-xl font-bold">Purchase summary</h2>

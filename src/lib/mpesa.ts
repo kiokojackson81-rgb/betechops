@@ -261,6 +261,41 @@ async function findInstallationProjectPaymentTarget(reference: string): Promise<
   return { kind: "INSTALLATION_PROJECT", id: order.id, reference: order.orderNumber, total: Math.max(0, toNumber(order.paidAmount)) + due, paid: Math.max(0, toNumber(order.paidAmount)), customerPhone: order.customerPhone, purpose: "ORDER_DEPOSIT" };
 }
 
+/**
+ * Direct PayBill payments do not create an STK reservation. Project customers
+ * are therefore shown their first name as the PayBill account name. Match it
+ * only when it identifies one and exactly one unpaid installation project; a
+ * collision is deliberately left unmatched for operations to reconcile.
+ */
+async function findInstallationProjectC2bTarget(reference: string): Promise<PaymentTarget | null> {
+  const accountName = reference.trim().toLocaleLowerCase("en-KE");
+  if (!accountName) return null;
+  const orders = await prisma.order.findMany({
+    where: {
+      status: { not: "CANCELED" },
+      customerName: { startsWith: reference.trim(), mode: "insensitive" },
+    },
+    select: {
+      id: true, orderNumber: true, customerName: true, customerPhone: true,
+      totalAmount: true, paidAmount: true,
+      receipt: { select: { data: true } },
+    },
+    take: 25,
+  });
+  const matches = orders.filter((order) => {
+    const firstName = String(order.customerName || "").trim().split(/\s+/)[0]?.toLocaleLowerCase("en-KE");
+    const project = readReceiptProjectFlow(paymentMetadata(order.receipt?.data).projectFlow);
+    return firstName === accountName && Boolean(project) && toNumber(order.totalAmount) > toNumber(order.paidAmount);
+  });
+  if (matches.length !== 1) return null;
+  const order = matches[0];
+  return {
+    kind: "INSTALLATION_PROJECT", id: order.id, reference: order.orderNumber,
+    total: toNumber(order.totalAmount), paid: Math.max(0, toNumber(order.paidAmount)),
+    customerPhone: order.customerPhone, purpose: "ORDER_DEPOSIT",
+  };
+}
+
 async function findStkTarget(resourceType: MpesaStkResourceType, reference: string) {
   if (resourceType === "ORDER") return findPaymentTarget(reference);
   if (resourceType === "SITE_VISIT") return findSiteVisitPaymentTarget(reference);
@@ -1036,7 +1071,7 @@ async function applyConfirmedPaymentInTransaction(
     total = projectValue;
     const existingFlow = readReceiptProjectFlow(receiptData.projectFlow ?? metadata.projectFlow);
     const paymentTerm = String(existingFlow?.paymentTerm || metadata.installationPaymentTerm || receiptData.installationPaymentTerm || "FULL_BEFORE_INSTALLATION");
-    const isBalancePrompt = String(metadata.installationPaymentKind || "").toUpperCase() === "BALANCE";
+    const isBalancePrompt = String(metadata.installationPaymentKind || "").toUpperCase() === "BALANCE" || payment.channel === "C2B";
     const existingDepositPaid = Math.max(0, Number(existingFlow?.depositPaidAmount ?? 0));
     const existingBalancePaid = Math.max(0, Number(existingFlow?.balancePaidAmount ?? 0));
     const flow = buildReceiptProjectFlow({
@@ -1328,7 +1363,7 @@ export async function handleC2bConfirmation(payload: unknown) {
   // Manual PayBill payments normally target orders/invoices. LPP accounts are
   // also a valid customer-facing reference and use the same atomic ledger
   // application path as their STK installments.
-  const target = await findPaymentTarget(reference) ?? await findLppPaymentTarget(reference);
+  const target = await findPaymentTarget(reference) ?? await findLppPaymentTarget(reference) ?? await findInstallationProjectC2bTarget(reference);
   const amount = toNumber(body.TransAmount);
   const transactionAt = parseDarajaTransactionDate(String(body.TransTime || ""));
   const phoneNumber = normalizeDarajaPhone(String(body.MSISDN || "")) || null;
@@ -1373,6 +1408,9 @@ export async function handleC2bConfirmation(payload: unknown) {
     });
   }
   if (confirmation?.application.applied && confirmation.payment.orderId) await finalizeConfirmedPosExpressReceipt(confirmation.payment.orderId);
+  if (confirmation?.application.applied && confirmation.payment.resourceType === "INSTALLATION_PROJECT" && confirmation.payment.resourceId) {
+    await notifyConfirmedInstallationProject(confirmation.payment.resourceId, receiptNumber, phoneNumber);
+  }
   // C2B is a real confirmation for PayBill STK too.  A matching pending STK
   // request becomes successful here, but only the C2B row above applies its
   // amount to the order.  Receipt numbers stay unique to the C2B ledger row.
@@ -1402,7 +1440,7 @@ export async function handleC2bConfirmation(payload: unknown) {
 }
 
 export async function canAcceptC2bReference(reference: string) {
-  return Boolean(await findPaymentTarget(reference) ?? await findLppPaymentTarget(reference));
+  return Boolean(await findPaymentTarget(reference) ?? await findLppPaymentTarget(reference) ?? await findInstallationProjectC2bTarget(reference));
 }
 
 export function isExpectedC2bPaybill(payload: unknown) {
