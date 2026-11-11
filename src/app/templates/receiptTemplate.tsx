@@ -330,7 +330,16 @@ export default function renderReceiptTemplate(
 
   const projectPaymentOptionsHtml =
     projectFlow?.isProject
-      ? `
+      ? isProjectFullyPaid
+        ? `
+      <section class="project-payment-complete-panel">
+        <div class="project-payment-complete-panel__badge">PAYMENT CONFIRMED</div>
+        <div class="project-payment-complete-panel__heading">This project receipt is paid in full</div>
+        <p>Your payment has been recorded. Keep this receipt for your installation, completion certificate and warranty records.</p>
+        <div class="project-payment-complete-panel__reference">Receipt reference: <strong>${escapeHtml(receiptNumber)}</strong></div>
+      </section>
+      `
+        : `
       <section class="project-payment-bank-panel">
         <div class="project-payment-bank-panel__title">PAYMENT OPTIONS</div>
         <div class="project-payment-bank-grid">
@@ -657,6 +666,41 @@ export default function renderReceiptTemplate(
         }
         .project-payment-bank-panel {
           margin-top: 8px;
+        }
+        .project-payment-complete-panel {
+          margin-top: 8px;
+          min-height: 120px;
+          box-sizing: border-box;
+          border: 1px solid #86efac;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+          padding: 14px;
+          color: #14532d;
+        }
+        .project-payment-complete-panel__badge {
+          display: inline-block;
+          border-radius: 999px;
+          background: #15803d;
+          color: #ffffff;
+          padding: 3px 8px;
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+        }
+        .project-payment-complete-panel__heading {
+          margin-top: 10px;
+          font-size: 15px;
+          font-weight: 900;
+          color: #14532d;
+        }
+        .project-payment-complete-panel p {
+          margin: 7px 0 0;
+          font-size: 10px;
+          line-height: 1.45;
+        }
+        .project-payment-complete-panel__reference {
+          margin-top: 10px;
+          font-size: 10px;
         }
         .project-payment-bank-panel__title {
           margin-bottom: 6px;
@@ -1015,6 +1059,16 @@ export default function renderReceiptTemplate(
           }
           .project-summary-card__item strong { font-size: 7pt; }
           .project-payment-bank-panel { margin-top: 2mm; }
+          .project-payment-complete-panel {
+            margin-top: 2mm;
+            min-height: 35mm;
+            padding: 3.2mm;
+            border-radius: 7px;
+          }
+          .project-payment-complete-panel__badge { padding: 0.8mm 1.6mm; font-size: 6.5pt; }
+          .project-payment-complete-panel__heading { margin-top: 2.2mm; font-size: 10pt; }
+          .project-payment-complete-panel p { margin-top: 1.6mm; font-size: 7pt; }
+          .project-payment-complete-panel__reference { margin-top: 2.2mm; font-size: 7pt; }
           .project-payment-bank-panel__title {
             margin-bottom: 1.2mm;
             font-size: 7.1pt;
