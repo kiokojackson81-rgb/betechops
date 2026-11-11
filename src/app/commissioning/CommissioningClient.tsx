@@ -1799,11 +1799,40 @@ function TechnicianPaymentDesk({ session, token }: { session: Session; token: st
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null);
+  const [promptState, setPromptState] = useState<"ready" | "pending" | "success" | "failed">("ready");
 
   useEffect(() => {
     setPhoneNumber(session.project.customerPhone || "");
     setAmount(String(Math.round(Math.min(session.payment.balance, 250000))));
   }, [session.payment.balance, session.project.customerPhone]);
+
+  useEffect(() => {
+    if (!checkoutRequestId || promptState !== "pending") return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/payments/mpesa/stk/status?checkoutRequestId=${encodeURIComponent(checkoutRequestId)}`, { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (!active || !response.ok) return;
+        const status = String(data.payment?.status || "PENDING").toUpperCase();
+        if (status === "SUCCESS") {
+          setPromptState("success");
+          setMessage(`Payment received${data.payment?.receiptNumber ? ` — M-Pesa receipt ${data.payment.receiptNumber}` : ""}. The project balance will refresh now.`);
+          window.setTimeout(() => window.location.reload(), 1800);
+        } else if (["FAILED", "CANCELLED"].includes(status)) {
+          setPromptState("failed");
+          const reason = String(data.payment?.resultDescription || "The customer did not complete the M-Pesa request.");
+          setMessage(`${reason} No payment was recorded. Ask the customer to try a lower amount, use another funded number, or use PayBill/bank transfer before sending a new prompt.`);
+        }
+      } catch {
+        // The callback and payment ledger remain authoritative; keep waiting.
+      }
+    };
+    void poll();
+    const interval = window.setInterval(() => void poll(), 2000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [checkoutRequestId, promptState]);
 
   const copy = async (value: string, label: string) => {
     try {
@@ -1816,6 +1845,7 @@ function TechnicianPaymentDesk({ session, token }: { session: Session; token: st
   const prompt = async () => {
     setMessage("");
     setSending(true);
+    setPromptState("ready");
     try {
       const response = await fetch(`/api/commissioning/${encodeURIComponent(token)}/payment-prompt`, {
         method: "POST",
@@ -1824,8 +1854,11 @@ function TechnicianPaymentDesk({ session, token }: { session: Session; token: st
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Unable to send the M-Pesa prompt.");
-      setMessage(`M-Pesa prompt sent to ${phoneNumber}. The customer should enter their PIN on their phone.`);
+      setCheckoutRequestId(body.checkoutRequestId || null);
+      setPromptState("pending");
+      setMessage(`Prompt sent to ${phoneNumber}. The customer must approve it using their M-Pesa PIN. Waiting for Safaricom confirmation…`);
     } catch (error) {
+      setPromptState("failed");
       setMessage(error instanceof Error ? error.message : "Unable to send the M-Pesa prompt.");
     } finally {
       setSending(false);
@@ -1853,14 +1886,16 @@ function TechnicianPaymentDesk({ session, token }: { session: Session; token: st
             <p className="mt-1 text-xs text-slate-200">Send a secure prompt to the customer. They enter their PIN only on Safaricom’s prompt.</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2"><label className="text-xs font-bold text-slate-300">Customer M-Pesa number<input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-base text-white" /></label><label className="text-xs font-bold text-slate-300">Amount for this prompt<input value={amount} onChange={event => setAmount(event.target.value)} type="number" min="1" max={maximum} className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-base text-white" /></label></div>
             <p className="mt-2 text-xs text-slate-300">Maximum per prompt: {money(maximum)}. {session.payment.balance > 250000 ? "Start with KSh 250,000 and send the remaining balance in the next prompt." : "A lower amount can be paid now and the remaining balance will stay on this project."}</p>
-            <button type="button" disabled={sending || !phoneNumber || !Number(amount)} onClick={() => void prompt()} className="mt-3 w-full rounded-xl bg-emerald-400 px-3 py-3 font-black text-slate-950 disabled:opacity-50">{sending ? "SENDING PROMPT…" : `SEND M-PESA PROMPT FOR ${money(Number(amount) || 0)}`}</button>
+            <button type="button" disabled={sending || promptState === "pending" || !phoneNumber || !Number(amount)} onClick={() => void prompt()} className="mt-3 w-full rounded-xl bg-emerald-400 px-3 py-3 font-black text-slate-950 disabled:opacity-50">{sending ? "SENDING PROMPT…" : promptState === "pending" ? "WAITING FOR M-PESA…" : `SEND M-PESA PROMPT FOR ${money(Number(amount) || 0)}`}</button>
+            <p className="mt-2 text-xs text-slate-200">If the customer has insufficient funds, Safaricom reports the failed request here. No money is recorded; reduce the amount, use another funded number, or select PayBill/bank transfer. Do not send another prompt while this one is waiting.</p>
           </div>
           <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 p-3"><p className="font-black text-sky-200">M-Pesa PayBill</p><p className="mt-1 text-xs text-slate-200">Lipa na M-Pesa → PayBill. Use the customer’s first name so the payment can be matched to this project.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{[["PAYBILL NUMBER", "1231008", true], ["ACCOUNT NAME", firstName, true], ["DISPLAY NAME", "Betech Solar Limited", false], ["AMOUNT TO PAY", String(Math.round(maximum)), true]].map(([label, value, copyable]) => <div className="rounded-lg bg-white/95 p-2 text-slate-950" key={label as string}><p className="text-[10px] font-black tracking-wide text-slate-500">{label}</p><div className="flex items-center justify-between gap-2"><b className="break-all">{value}</b>{copyable ? <button type="button" onClick={() => void copy(value as string, label as string)} className="rounded border border-slate-300 px-2 py-1 text-xs">COPY</button> : null}</div></div>)}</div></div>
           <div className="rounded-xl border border-rose-400/30 bg-rose-400/10 p-3"><p className="font-black text-rose-200">Bank transfer — Absa Bank</p><p className="mt-1 text-xs text-slate-200">The customer can transfer from any bank. Use {session.project.reference} as the payment reference.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{[["ACCOUNT NAME", "Betech Solar Solution"], ["ACCOUNT NUMBER", "2047639940"], ["BANK", "Absa Bank Kenya"]].map(([label, value]) => <div className="rounded-lg bg-white/95 p-2 text-slate-950" key={label}><p className="text-[10px] font-black tracking-wide text-slate-500">{label}</p><div className="flex items-center justify-between gap-2"><b className="break-words">{value}</b><button type="button" onClick={() => void copy(value, label)} className="rounded border border-slate-300 px-2 py-1 text-xs">COPY</button></div></div>)}</div></div>
           <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-3"><p className="font-black text-violet-200">Bank transfer / PesaLink — Equity</p><p className="mt-1 text-xs text-slate-200">The customer can transfer from any bank to Equity Bank or PesaLink. Use {session.project.reference} as the payment reference.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{[["ACCOUNT NAME", "Betech Solar Solution Limited"], ["ACCOUNT NUMBER", "0940287664685"], ["BANK", "Equity Bank Kenya"], ["BRANCH", "Tea Room"]].map(([label, value]) => <div className="rounded-lg bg-white/95 p-2 text-slate-950" key={label}><p className="text-[10px] font-black tracking-wide text-slate-500">{label}</p><div className="flex items-center justify-between gap-2"><b className="break-words">{value}</b><button type="button" onClick={() => void copy(value, label)} className="rounded border border-slate-300 px-2 py-1 text-xs">COPY</button></div></div>)}</div></div>
         </>}
         {session.status === "ISSUED" ? <div className="grid gap-2 sm:grid-cols-3">{[["Customer receipt", "receipt"], ["Completion certificate", "completion"], ["Warranty certificate", "warranty"]].map(([label, kind]) => <a key={kind} href={documentHref(kind as "receipt" | "completion" | "warranty")} className="rounded-xl border border-cyan-300 bg-cyan-400/10 px-3 py-3 text-center font-bold text-cyan-100">DOWNLOAD {label.toUpperCase()}</a>)}</div> : <p className="rounded-xl bg-slate-950 p-3 text-xs text-slate-300">Customer receipt, completion certificate and warranty downloads will appear here after commissioning is issued.</p>}
-        {message ? <p role="status" className="rounded-lg bg-slate-950 p-2 text-xs text-cyan-100">{message}</p> : null}
+        <section className="rounded-xl border border-amber-300/30 bg-amber-300/10 p-3 text-xs leading-5 text-slate-100"><p className="font-black uppercase tracking-wide text-amber-200">Technician payment guide</p><ol className="mt-2 list-decimal space-y-1 pl-4"><li>Tell the customer that the SMS link opens their secure project page: it shows their order, recorded payments, outstanding balance and payment choices.</li><li>On that page they can send an M-Pesa Express prompt to their receipt number, choose <b>Use another number</b> to pay from someone else’s phone, or enter a smaller amount for a partial payment.</li><li>Encourage M-Pesa Express first: it is fast, secure and the payment is recorded automatically after Safaricom confirms it. The customer enters their PIN only in Safaricom’s prompt.</li><li>We are discontinuing the DTB PayBill. Use only Betech PayBill <b>1231008</b>, Absa/Equity bank transfer, or M-Pesa Express.</li><li>Always wait for the recorded payment/receipt before confirming payment or completing the installation. After completion, the customer uses the same link to download their receipt, completion certificate and warranty certificate.</li></ol></section>
+        {message ? <p role="status" className={`rounded-lg p-2 text-xs ${promptState === "success" ? "bg-emerald-400/15 text-emerald-100" : promptState === "failed" ? "bg-rose-400/15 text-rose-100" : "bg-slate-950 text-cyan-100"}`}>{message}</p> : null}
       </div> : null}
     </section>
   );
