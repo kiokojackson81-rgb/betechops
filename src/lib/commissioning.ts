@@ -62,7 +62,7 @@ export function commissioningUrl(token: string, origin?: string) {
 export function projectSummary(receipt: {
   receiptNumber: string | null;
   data: unknown;
-  order: { orderNumber: string; customerName: string | null; metadata?: unknown } | null;
+  order: { orderNumber: string; customerName: string | null; customerPhone?: string | null; metadata?: unknown } | null;
 }) {
   const data = receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
     ? (receipt.data as Record<string, unknown>)
@@ -84,6 +84,7 @@ export function projectSummary(receipt: {
   return {
     reference: receipt.receiptNumber || receipt.order?.orderNumber || "Project",
     customerName: receipt.order?.customerName || String(data.customerName || "Customer"),
+    customerPhone: receipt.order?.customerPhone || String(data.customerPhone || ""),
     location: typeof location === "string" ? location : "Location pending",
     system: itemNames.join(" · ") || String(data.itemDescription || data.description || "Solar installation"),
     expectedItems: itemNames,

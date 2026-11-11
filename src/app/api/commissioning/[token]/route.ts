@@ -43,7 +43,11 @@ async function publicSession(session: NonNullable<Awaited<ReturnType<typeof find
     technicianName: String(sessionData.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || "Installer / agent"),
     technicianSignatureUrl: session.technician?.technicalProfile?.signatureUrl || null,
     project: projectSummary(session.receipt),
-    payment: commissioningPaymentState(session.receipt.order),
+    payment: {
+      ...commissioningPaymentState(session.receipt.order),
+      paymentStatus: session.receipt.order?.paymentStatus || "PENDING",
+      paymentMethod: String(asRecord(session.receipt.data).paymentMethod || asRecord(session.receipt.data).paymentType || "Not recorded"),
+    },
     data: {
       ...sessionData,
       installerName: String(sessionData.installerName || session.technician?.name || (asRecord(session.assignment).names as string[] | undefined)?.join(" / ") || ""),

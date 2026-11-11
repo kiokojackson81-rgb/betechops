@@ -32,7 +32,7 @@ type Draft = {
   [key: string]: unknown;
 };
 type Session = {
-  payment: { totalAmount: number; paidAmount: number; balance: number; fullyPaid: boolean };
+  payment: { totalAmount: number; paidAmount: number; balance: number; fullyPaid: boolean; paymentStatus: string; paymentMethod: string };
   isCertifyingProfessional?: boolean;
   professionalReviewComment?: string | null;
   status: "DRAFT" | "TECHNICIAN_COMPLETED" | "AWAITING_PROFESSIONAL_REVIEW" | "RETURNED_FOR_CORRECTION" | "PROFESSIONALLY_APPROVED" | "ISSUED" | "REVOKED";
@@ -46,6 +46,7 @@ type Session = {
   project: {
     reference: string;
     customerName: string;
+    customerPhone: string;
     location: string;
     system: string;
     expectedItems: string[];
@@ -820,7 +821,7 @@ export default function CommissioningClient({ token }: { token: string }) {
         </div>
       )}
       {!resumePrompt && (
-        <div className="fixed inset-x-0 bottom-0 border-t border-slate-700 bg-slate-950/95 p-3 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-0 max-h-[72vh] overflow-y-auto border-t border-slate-700 bg-slate-950/95 p-3 backdrop-blur">
           <div className="mx-auto max-w-xl">
             {returnStep !== null && returnStep > activeStep ? (
               <button
@@ -854,6 +855,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 {canContinue ? "CONTINUE" : "COMPLETE THIS STEP TO CONTINUE"}
               </button>
             )}
+            <TechnicianPaymentDesk session={session} token={token} />
           </div>
         </div>
       )}
@@ -1750,6 +1752,7 @@ function Review({
 }
 function IssuedView({ session, token }: { session: Session; token: string }) {
   const certificateHref = `/api/commissioning/${encodeURIComponent(token)}/certificate`;
+  const documentHref = (kind: "receipt" | "completion" | "warranty") => `/api/commissioning/${encodeURIComponent(token)}/documents/${kind}`;
   return (
     <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900">
       <article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm">
@@ -1772,6 +1775,13 @@ function IssuedView({ session, token }: { session: Session; token: string }) {
         <a href={certificateHref} className="block w-full rounded-xl bg-[#7a0000] px-4 py-3 text-center font-black text-white">
           DOWNLOAD FORMAL CERTIFICATE & EVIDENCE REPORT (PDF)
         </a>
+        <section className="grid gap-2 sm:grid-cols-3">
+          {[["Customer receipt", "receipt"], ["Completion certificate", "completion"], ["Warranty certificate", "warranty"]].map(([label, kind]) => (
+            <a key={kind} href={documentHref(kind as "receipt" | "completion" | "warranty")} className="rounded-xl border border-[#7a0000]/20 bg-[#fff8f8] px-3 py-3 text-center text-sm font-black text-[#7a0000]">
+              DOWNLOAD {label.toUpperCase()}
+            </a>
+          ))}
+        </section>
         <p className="text-xs leading-5 text-slate-500">The issued record is view-only. The downloadable PDF contains the professional certificate and installation evidence report only.</p>
       </article>
     </main>
@@ -1779,6 +1789,81 @@ function IssuedView({ session, token }: { session: Session; token: string }) {
 }
 function ProfessionalReviewPendingView({ session, busy, error, onIssue, paymentDecision, onPaymentDecision }: { session: Session; busy: boolean; error: string; onIssue: () => void; paymentDecision: Draft["paymentDecision"]; onPaymentDecision: (value: "CLEARED" | "OUTSTANDING") => void }) {
   return <main className="min-h-screen bg-[#f5f2ee] p-4 text-slate-900"><article className="mx-auto max-w-xl space-y-5 rounded-3xl border border-[#7a0000]/15 bg-white p-6 shadow-sm"><p className="text-xs font-black tracking-[.2em] text-[#7a0000]">BETECH SOLAR SOLUTIONS</p><h1 className="text-2xl font-black">Installation details submitted</h1><p>Generate your certificates using the configured supervisor signature and company stamp. No separate approval or supervisor sign-off is required.</p><p>Project: {session.project.reference}<br />Customer: {session.project.customerName}</p><PaymentConfirmation payment={session.payment} value={paymentDecision} onChange={onPaymentDecision} />{error ? <p role="alert">{error}</p> : null}<button disabled={busy || (!session.payment.fullyPaid && !paymentDecision)} onClick={onIssue} className="w-full rounded-xl bg-[#7a0000] px-4 py-3 font-bold text-white disabled:opacity-50">{busy ? "Generating certificates..." : "Generate certificates"}</button></article></main>;
+}
+
+function TechnicianPaymentDesk({ session, token }: { session: Session; token: string }) {
+  const money = (amount: number) => `KSh ${amount.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const maximum = Math.min(session.payment.balance, 250000);
+  const [phoneNumber, setPhoneNumber] = useState(session.project.customerPhone || "");
+  const [amount, setAmount] = useState(String(Math.round(maximum)));
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    setPhoneNumber(session.project.customerPhone || "");
+    setAmount(String(Math.round(Math.min(session.payment.balance, 250000))));
+  }, [session.payment.balance, session.project.customerPhone]);
+
+  const copy = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage(`${label} copied.`);
+    } catch {
+      setMessage(`Copy ${label}: ${value}`);
+    }
+  };
+  const prompt = async () => {
+    setMessage("");
+    setSending(true);
+    try {
+      const response = await fetch(`/api/commissioning/${encodeURIComponent(token)}/payment-prompt`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phoneNumber, amount: Number(amount) }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Unable to send the M-Pesa prompt.");
+      setMessage(`M-Pesa prompt sent to ${phoneNumber}. The customer should enter their PIN on their phone.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to send the M-Pesa prompt.");
+    } finally {
+      setSending(false);
+    }
+  };
+  const firstName = session.project.customerName.trim().split(/\s+/)[0] || "Customer";
+  const documentHref = (kind: "receipt" | "completion" | "warranty") => `/api/commissioning/${encodeURIComponent(token)}/documents/${kind}`;
+
+  return (
+    <section className="mt-3 rounded-2xl border border-cyan-400/30 bg-slate-900/95 p-3 text-sm shadow-2xl">
+      <button type="button" onClick={() => setExpanded(value => !value)} className="flex w-full items-center justify-between gap-3 text-left">
+        <span><span className="font-black text-cyan-200">PROJECT PAYMENT DESK</span><span className="mt-1 block text-xs text-slate-300">Paid {money(session.payment.paidAmount)} · Balance {money(session.payment.balance)}</span></span>
+        <span className="rounded-lg border border-cyan-400/40 px-2 py-1 text-xs font-bold text-cyan-200">{expanded ? "HIDE" : "VIEW"}</span>
+      </button>
+      {expanded ? <div className="mt-3 space-y-4 border-t border-slate-700 pt-3">
+        <div className="rounded-xl bg-slate-950 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Customer order</p>
+          <p className="mt-1 font-bold">{session.project.customerName} · {session.project.reference}</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-300">{session.project.expectedItems.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
+          <p className="mt-3 text-slate-300">Order total: <b className="text-white">{money(session.payment.totalAmount)}</b><br />Recorded paid: <b className="text-emerald-300">{money(session.payment.paidAmount)}</b><br />Balance: <b className="text-amber-200">{money(session.payment.balance)}</b><br />Recorded method: <b className="text-white">{session.payment.paymentMethod}</b></p>
+        </div>
+        {session.payment.fullyPaid ? <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3 font-bold text-emerald-100">Payment is fully recorded. Customer payment prompts are no longer needed.</div> : <>
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3">
+            <p className="font-black text-emerald-200">M-Pesa Express</p>
+            <p className="mt-1 text-xs text-slate-200">Send a secure prompt to the customer. They enter their PIN only on Safaricom’s prompt.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2"><label className="text-xs font-bold text-slate-300">Customer M-Pesa number<input value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} inputMode="tel" className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-base text-white" /></label><label className="text-xs font-bold text-slate-300">Amount for this prompt<input value={amount} onChange={event => setAmount(event.target.value)} type="number" min="1" max={maximum} className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-base text-white" /></label></div>
+            <p className="mt-2 text-xs text-slate-300">Maximum per prompt: {money(maximum)}. {session.payment.balance > 250000 ? "Start with KSh 250,000 and send the remaining balance in the next prompt." : "A lower amount can be paid now and the remaining balance will stay on this project."}</p>
+            <button type="button" disabled={sending || !phoneNumber || !Number(amount)} onClick={() => void prompt()} className="mt-3 w-full rounded-xl bg-emerald-400 px-3 py-3 font-black text-slate-950 disabled:opacity-50">{sending ? "SENDING PROMPT…" : `SEND M-PESA PROMPT FOR ${money(Number(amount) || 0)}`}</button>
+          </div>
+          <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 p-3"><p className="font-black text-sky-200">M-Pesa PayBill</p><p className="mt-1 text-xs text-slate-200">Lipa na M-Pesa → PayBill. Use the customer’s first name so the payment can be matched to this project.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{[["PAYBILL NUMBER", "1231008", true], ["ACCOUNT NAME", firstName, true], ["DISPLAY NAME", "Betech Solar Limited", false], ["AMOUNT TO PAY", String(Math.round(maximum)), true]].map(([label, value, copyable]) => <div className="rounded-lg bg-white/95 p-2 text-slate-950" key={label as string}><p className="text-[10px] font-black tracking-wide text-slate-500">{label}</p><div className="flex items-center justify-between gap-2"><b className="break-all">{value}</b>{copyable ? <button type="button" onClick={() => void copy(value as string, label as string)} className="rounded border border-slate-300 px-2 py-1 text-xs">COPY</button> : null}</div></div>)}</div></div>
+          <div className="rounded-xl border border-rose-400/30 bg-rose-400/10 p-3"><p className="font-black text-rose-200">Bank transfer — Absa Bank</p><p className="mt-1 text-xs text-slate-200">The customer can transfer from any bank. Use {session.project.reference} as the payment reference.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{[["ACCOUNT NAME", "Betech Solar Solution"], ["ACCOUNT NUMBER", "2047639940"], ["BANK", "Absa Bank Kenya"]].map(([label, value]) => <div className="rounded-lg bg-white/95 p-2 text-slate-950" key={label}><p className="text-[10px] font-black tracking-wide text-slate-500">{label}</p><div className="flex items-center justify-between gap-2"><b className="break-words">{value}</b><button type="button" onClick={() => void copy(value, label)} className="rounded border border-slate-300 px-2 py-1 text-xs">COPY</button></div></div>)}</div></div>
+          <div className="rounded-xl border border-violet-400/30 bg-violet-400/10 p-3"><p className="font-black text-violet-200">Bank transfer / PesaLink — Equity</p><p className="mt-1 text-xs text-slate-200">The customer can transfer from any bank to Equity Bank or PesaLink. Use {session.project.reference} as the payment reference.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{[["ACCOUNT NAME", "Betech Solar Solution Limited"], ["ACCOUNT NUMBER", "0940287664685"], ["BANK", "Equity Bank Kenya"], ["BRANCH", "Tea Room"]].map(([label, value]) => <div className="rounded-lg bg-white/95 p-2 text-slate-950" key={label}><p className="text-[10px] font-black tracking-wide text-slate-500">{label}</p><div className="flex items-center justify-between gap-2"><b className="break-words">{value}</b><button type="button" onClick={() => void copy(value, label)} className="rounded border border-slate-300 px-2 py-1 text-xs">COPY</button></div></div>)}</div></div>
+        </>}
+        {session.status === "ISSUED" ? <div className="grid gap-2 sm:grid-cols-3">{[["Customer receipt", "receipt"], ["Completion certificate", "completion"], ["Warranty certificate", "warranty"]].map(([label, kind]) => <a key={kind} href={documentHref(kind as "receipt" | "completion" | "warranty")} className="rounded-xl border border-cyan-300 bg-cyan-400/10 px-3 py-3 text-center font-bold text-cyan-100">DOWNLOAD {label.toUpperCase()}</a>)}</div> : <p className="rounded-xl bg-slate-950 p-3 text-xs text-slate-300">Customer receipt, completion certificate and warranty downloads will appear here after commissioning is issued.</p>}
+        {message ? <p role="status" className="rounded-lg bg-slate-950 p-2 text-xs text-cyan-100">{message}</p> : null}
+      </div> : null}
+    </section>
+  );
 }
 
 function PaymentConfirmation({ payment, value, onChange }: { payment: Session["payment"]; value: Draft["paymentDecision"]; onChange: (value: "CLEARED" | "OUTSTANDING") => void }) {
