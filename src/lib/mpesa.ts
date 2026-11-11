@@ -30,6 +30,7 @@ type PaymentTarget =
   | { kind: "INSTALLATION_PROJECT"; id: string; reference: string; total: number; paid: number; customerPhone: string | null; purpose: "ORDER_DEPOSIT" };
 
 export const MPESA_STK_RESOURCE_TYPES = ["ORDER", "SITE_VISIT", "LPP", "INSTALLATION_PROJECT"] as const;
+export const MPESA_EXPRESS_MAX_AMOUNT = 250_000;
 export type MpesaStkResourceType = (typeof MPESA_STK_RESOURCE_TYPES)[number];
 
 export type MpesaReconciliationTarget = {
@@ -268,11 +269,19 @@ async function findStkTarget(resourceType: MpesaStkResourceType, reference: stri
 }
 
 function permittedStkAmountForTarget(target: PaymentTarget, chosenAmount?: number | null) {
-  if (target.kind !== "LPP") return permittedStkAmount(target);
+  if (target.kind !== "LPP" && target.kind !== "INSTALLATION_PROJECT") return permittedStkAmount(target);
   const balance = Math.max(0, target.total - target.paid);
-  const amount = Number(chosenAmount);
-  if (!Number.isInteger(amount) || amount < 1 || amount > balance) {
-    throw new Error("Enter a whole-KES installment amount that does not exceed the outstanding balance");
+  const amount = target.kind === "INSTALLATION_PROJECT" && chosenAmount == null
+    ? Math.min(balance, MPESA_EXPRESS_MAX_AMOUNT)
+    : Number(chosenAmount);
+  const maximum = target.kind === "INSTALLATION_PROJECT"
+    ? Math.min(balance, MPESA_EXPRESS_MAX_AMOUNT)
+    : balance;
+  if (!Number.isInteger(amount) || amount < 1 || amount > maximum) {
+    const limitMessage = target.kind === "INSTALLATION_PROJECT"
+      ? `Enter a whole-KES amount up to KSh ${MPESA_EXPRESS_MAX_AMOUNT.toLocaleString("en-KE")} and no more than the outstanding balance`
+      : "Enter a whole-KES installment amount that does not exceed the outstanding balance";
+    throw new Error(limitMessage);
   }
   return amount;
 }

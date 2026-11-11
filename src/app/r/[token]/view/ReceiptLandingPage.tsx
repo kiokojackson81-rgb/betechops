@@ -4,6 +4,7 @@ import { footerGroups } from "@/app/shop/shopData";
 import { receiptMoney, type CustomerReceiptPresentation } from "@/lib/customerReceiptPresentation";
 import type { ReceiptReferralOffer } from "@/lib/reviewsReferrals";
 import ReceiptReferralCard from "./ReceiptReferralCard";
+import ProjectPaymentOptions from "./ProjectPaymentOptions";
 import styles from "./receipt.module.css";
 
 const contacts = footerGroups.flatMap(group => group.links);
@@ -44,6 +45,9 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
           {deliveryCancelled ? <p className="mt-1">This order has been cancelled. It will not be dispatched. Please place a new order if you would still like the item.</p> : deliveryFailed ? <div className="mt-1 space-y-2"><p>We could not complete this delivery.</p><p>Please <Link className="font-semibold underline" href="/shop">place a new order</Link> or contact Betech Customer Care for assistance.</p></div> : receipt.delivery.status === "delivered" ? <p className="mt-1">Your order has been delivered. Thank you for choosing Betech Solar Solutions.</p> : receipt.delivery.paymentLabel === "Pay on delivery" ? <div className="mt-1 space-y-2">{receipt.delivery.status === "dispatched" ? <p>Your order has been dispatched. Expect it within <strong>1–3 days</strong>.</p> : null}<p>You will pay <strong>{receiptMoney(receipt.balance)}</strong> when you collect your order.</p>{receipt.delivery.pickup ? <div className="rounded-lg border border-sky-200 bg-white/70 p-3"><p className="font-semibold">Collection point: {receipt.delivery.pickup.stationName} Speedaf Station</p><p className="mt-1">{receipt.delivery.pickup.address}</p><p className="mt-1">{receipt.delivery.pickup.area}{receipt.delivery.pickup.county ? `, ${receipt.delivery.pickup.county}` : ""}</p>{receipt.delivery.pickup.phone ? <p className="mt-1">Station contact: <a className="font-semibold underline" href={`tel:${receipt.delivery.pickup.phone}`}>{receipt.delivery.pickup.phone}</a></p> : null}</div> : <p>Speedaf will confirm the collection point with you.</p>}{receipt.delivery.speedafReceipts.length ? <SpeedafReceipts documents={receipt.delivery.speedafReceipts} /> : null}<p>You will receive an SMS or call from Speedaf or the Betech team once your parcel is ready for collection.</p>{receipt.delivery.servingAgentPhone ? <p>For help, call or WhatsApp <strong>{receipt.delivery.servingAgentName}</strong> on <a className="font-semibold underline" href={`tel:${receipt.delivery.servingAgentPhone}`}>{receipt.delivery.servingAgentPhone}</a>.</p> : <p>For help, call or WhatsApp Betech Customer Care on <a className="font-semibold underline" href="https://wa.me/254722151083">0722151083</a>.</p>}</div> : <p className="mt-1">{receipt.delivery.paymentLabel}. We will contact you with delivery arrangements once your order is ready.</p>}
         </section> : null}
         {receipt.project ? <ProjectStatusCard project={receipt.project} /> : null}
+        {receipt.project && receipt.project.stage !== "CANCELLED" && receipt.balance > 0 ? (
+          <ProjectPaymentOptions token={token} balance={receipt.balance} />
+        ) : null}
         <section aria-labelledby="purchase-heading" className="mt-6">
           <h2 id="purchase-heading" className="text-xl font-bold">Purchase summary</h2>
           <ul className="mt-3 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-slate-50">
