@@ -30,7 +30,7 @@ function formatProjectDate(value: string | null | undefined) {
 /** The live order ledger is authoritative, including for commissioned projects. */
 export function customerReceiptPresentation(receipt: {
   receiptNumber?: string | null; data?: unknown; discount?: unknown; showDiscount?: boolean | null;
-  order: { customerName: string; orderNumber: string; totalAmount: number; paidAmount: number; attendant?: { name?: string | null; oneVoiceCustomerNumber?: string | null } | null; items?: unknown[]; mpesaPayments?: Array<{ transactionAt: Date | null }>; layawayPlan?: { payments: Array<{ paidAt: Date }> } | null };
+  order: { customerName: string; customerPhone?: string | null; orderNumber: string; totalAmount: number; paidAmount: number; attendant?: { name?: string | null; oneVoiceCustomerNumber?: string | null } | null; items?: unknown[]; mpesaPayments?: Array<{ transactionAt: Date | null }>; layawayPlan?: { payments: Array<{ paidAt: Date }> } | null };
 }) {
   const { order } = receipt;
   const data = record(receipt.data);
@@ -111,6 +111,7 @@ export function customerReceiptPresentation(receipt: {
   const paymentPendingOnDelivery = isDelivery && !deliveredPod && deliveryPaymentLabel(receipt) === "Pay on delivery" && paid <= 0;
   return {
     customerName: order.customerName,
+    customerPhone: order.customerPhone || null,
     receiptNumber: receipt.receiptNumber || order.orderNumber,
     paid, balance, total, subtotal, discount, showDiscount,
     status: paymentPendingOnDelivery ? "Payment pending" : balance === 0 ? "Paid in full" : paid > 0 ? "Partially paid" : "Awaiting payment",

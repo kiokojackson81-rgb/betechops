@@ -1,4 +1,4 @@
-import { CalendarDays, Check, CircleDot, Clock, Download, FileText, LogIn, MessageCircle, PackageSearch, Phone, Star } from "lucide-react";
+import { Award, CalendarDays, Check, CircleDot, Clock, Download, FileText, LogIn, MessageCircle, PackageSearch, Phone, ShieldCheck, Star } from "lucide-react";
 import Link from "next/link";
 import { footerGroups } from "@/app/shop/shopData";
 import { receiptMoney, type CustomerReceiptPresentation } from "@/lib/customerReceiptPresentation";
@@ -11,7 +11,7 @@ const contacts = footerGroups.flatMap(group => group.links);
 const whatsapp = contacts.find(link => link.href.startsWith("https://wa.me/"))!.href;
 const phone = contacts.find(link => link.href.startsWith("tel:"))!.href;
 
-export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }: { receipt: CustomerReceiptPresentation; token: string; reviewUrl: string | null; offers: ReceiptReferralOffer[] }) {
+export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers, projectDocumentsReady }: { receipt: CustomerReceiptPresentation; token: string; reviewUrl: string | null; offers: ReceiptReferralOffer[]; projectDocumentsReady: boolean }) {
   const pdf = `/r/${encodeURIComponent(token)}`;
   const paid = receipt.status === "Paid in full";
   const deliveryFailed = receipt.delivery?.status === "failed" || receipt.delivery?.status === "delivery_failed";
@@ -46,7 +46,7 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
         </section> : null}
         {receipt.project ? <ProjectStatusCard project={receipt.project} /> : null}
         {receipt.project && receipt.project.stage !== "CANCELLED" && receipt.balance > 0 ? (
-          <ProjectPaymentOptions token={token} balance={receipt.balance} />
+          <ProjectPaymentOptions token={token} balance={receipt.balance} initialPhone={receipt.customerPhone} />
         ) : null}
         <section aria-labelledby="purchase-heading" className="mt-6">
           <h2 id="purchase-heading" className="text-xl font-bold">Purchase summary</h2>
@@ -60,6 +60,7 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
           </dl>
           <div className="mt-4 grid gap-3 sm:grid-cols-2"><a href={pdf} target="_blank" rel="noreferrer" className="receipt-primary"><FileText size={21} aria-hidden="true" />View Receipt</a><a href={`${pdf}?download=1`} className="receipt-secondary"><Download size={21} aria-hidden="true" />Download PDF</a></div>
         </section>
+        {receipt.project ? <ProjectDocumentsCard project={receipt.project} token={token} documentsReady={projectDocumentsReady} /> : null}
         <section aria-labelledby="help-heading" className="mt-6 border-t border-slate-200 pt-5">
           <h2 id="help-heading" className="text-xl font-bold">Need help with your purchase?</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2"><a href={whatsapp} target="_blank" rel="noreferrer" className="receipt-secondary"><MessageCircle size={22} aria-hidden="true" />WhatsApp Support</a><a href={phone} className="receipt-secondary"><Phone size={21} aria-hidden="true" />Call Us</a></div>
@@ -77,6 +78,19 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers }
       </div>
     </article>
   </div>;
+}
+
+function ProjectDocumentsCard({ project, token, documentsReady }: { project: NonNullable<CustomerReceiptPresentation["project"]>; token: string; documentsReady: boolean }) {
+  const completed = project.stage === "COMPLETED_POSTED";
+  const documentBase = `/api/public/receipts/${encodeURIComponent(token)}/project-documents`;
+  return <section aria-labelledby="project-documents-heading" className={`mt-6 rounded-xl border p-5 ${completed ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+    <div className="flex items-start gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white ${completed ? "bg-emerald-600" : "bg-amber-500"}`}>{completed ? <Award aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}</span><div><p className={`text-xs font-bold uppercase tracking-[0.16em] ${completed ? "text-emerald-800" : "text-amber-800"}`}>Project documents</p><h2 id="project-documents-heading" className="mt-1 text-xl font-bold text-slate-900">{completed ? "Your completion and warranty documents" : "Completion certificate and warranty"}</h2>{completed ? <p className="mt-1 text-sm leading-6 text-slate-700">Your certificate of completion and warranty are ready to view or download.</p> : <p className="mt-1 text-sm leading-6 text-slate-700">Your certificate of completion will be available here after the project is completed. Your warranty will be available here to view or download once the project is marked completed.</p>}</div></div>
+    {completed && documentsReady ? <div className="mt-4 grid gap-3 sm:grid-cols-2"><ProjectDocumentActions label="Certificate of completion" url={`${documentBase}/completion`} /><ProjectDocumentActions label="Warranty certificate" url={`${documentBase}/warranty`} /></div> : completed ? <p className="mt-4 rounded-lg bg-white/80 p-3 text-sm text-slate-700">Your documents are being prepared. Please check again shortly.</p> : null}
+  </section>;
+}
+
+function ProjectDocumentActions({ label, url }: { label: string; url: string }) {
+  return <div className="rounded-lg border border-emerald-200 bg-white/80 p-3"><p className="font-semibold text-slate-900">{label}</p><div className="mt-3 flex flex-wrap gap-2"><a href={url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-emerald-700 px-3 text-sm font-bold text-emerald-800"><FileText size={16} aria-hidden="true" />View</a><a href={`${url}?download=1`} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 text-sm font-bold text-white"><Download size={16} aria-hidden="true" />Download</a></div></div>;
 }
 
 function SpeedafReceipts({ documents }: { documents: NonNullable<CustomerReceiptPresentation["delivery"]>["speedafReceipts"] }) {

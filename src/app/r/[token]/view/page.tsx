@@ -13,8 +13,8 @@ export default async function CustomerReceiptPage({ params }: { params: Promise<
   if (!/^rcpt_[A-Za-z0-9_-]{16}$/.test(token)) notFound();
   const receipt = await prisma.receipt.findFirst({
     where: { data: { path: ["publicReceiptToken"], equals: token } },
-    select: { id: true, receiptNumber: true, data: true, discount: true, showDiscount: true, order: { select: {
-      orderNumber: true, customerName: true, totalAmount: true, paidAmount: true,
+    select: { id: true, receiptNumber: true, data: true, discount: true, showDiscount: true, commissioningSession: { select: { status: true, completionPdfUrl: true } }, warrantyCertificates: { where: { status: "ISSUED" }, select: { id: true }, take: 1 }, order: { select: {
+      orderNumber: true, customerName: true, customerPhone: true, totalAmount: true, paidAmount: true,
       attendant: { select: { name: true, oneVoiceCustomerNumber: true } },
       items: { select: { id: true, quantity: true, sellingPrice: true, product: { select: { name: true } } } },
       mpesaPayments: { where: { status: "SUCCESS", purpose: "ORDER_PAYMENT" }, select: { transactionAt: true } },
@@ -27,5 +27,7 @@ export default async function CustomerReceiptPage({ params }: { params: Promise<
     ensureReviewInvitationForReceipt(receipt.id).catch(() => null),
     getReceiptReferralOffers(receipt.id).catch(() => []),
   ]);
-  return <ReceiptLandingPage receipt={customerReceiptPresentation(receipt)} token={token} reviewUrl={review?.reviewUrl || null} offers={offers} />;
+  const presentation = customerReceiptPresentation(receipt);
+  const projectDocumentsReady = presentation.project?.stage === "COMPLETED_POSTED" && receipt.commissioningSession?.status === "ISSUED" && Boolean(receipt.commissioningSession.completionPdfUrl && receipt.warrantyCertificates.length);
+  return <ReceiptLandingPage receipt={presentation} token={token} reviewUrl={review?.reviewUrl || null} offers={offers} projectDocumentsReady={projectDocumentsReady} />;
 }
