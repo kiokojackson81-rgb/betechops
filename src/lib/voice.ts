@@ -671,8 +671,15 @@ async function buildVoiceTargets(): Promise<
     // Only a verified active call assigned to this user may make them busy.
     const hasBusyCall = Boolean(assignedActiveCallId);
     const inboundRestricted = isVoiceComplianceRestricted(compliance);
+    // A configured phone number is not permission to call it. A disabled or
+    // deactivated staff account is intentionally absent from
+    // resolveRoutingUsers(), so it has no userId here and must never become a
+    // provider Dial target. This also protects former staff whose legacy
+    // number remains in an environment variable.
     const routingEnabled =
-      (routingPreference?.routingEnabled ?? true) && !inboundRestricted;
+      (label === "OVERFLOW" || Boolean(userId)) &&
+      (routingPreference?.routingEnabled ?? true) &&
+      !inboundRestricted;
     const allowAfterHoursCalls =
       routingPreference?.allowAfterHoursCalls ??
       Boolean(options?.defaultAllowAfterHoursCalls);
@@ -1305,12 +1312,12 @@ export async function getVoiceRouteTargets(
     targets.ADMIN,
     targets.OVERFLOW,
   ].filter((target) => target.phoneNumber);
-  // Retain every configured sales destination in the emergency route plan.
-  // `routingEnabled` still drives normal availability displays, but it must
-  // not remove a number from the sequential escalation that prevents a caller
-  // from being marked missed before the rest of the team is tried.
+  // Sequential escalation must never override an account's Receive calls
+  // switch or account deactivation. Only enabled, active sales agents may be
+  // offered to the provider; the next eligible agent, Admin and overflow can
+  // still be tried before a call is missed.
   const agentTargets = [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN].filter(
-    (target) => target.phoneNumber,
+    (target) => target.phoneNumber && target.routingEnabled,
   );
   const adminTarget = targets.ADMIN;
   // Do not dial an Admin who has gone offline. The fallback line is next.
@@ -1321,7 +1328,7 @@ export async function getVoiceRouteTargets(
     targets.JENNIFER,
     targets.STEPHEN,
     availableAdminTarget,
-  ].filter((target): target is VoiceRouteTarget => Boolean(target?.phoneNumber));
+  ].filter((target): target is VoiceRouteTarget => Boolean(target?.phoneNumber && target.routingEnabled));
   // Admin is included only while available; overflow remains the final route.
   const directFallbackTargets = [availableAdminTarget, overflowTarget].filter(
     (target): target is VoiceRouteTarget => Boolean(target?.phoneNumber),
@@ -1387,7 +1394,7 @@ export async function getVoiceRouteTargets(
     findLastAnsweredTarget(
       callerNumber,
       [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, availableAdminTarget, targets.OVERFLOW].filter(
-        (target): target is VoiceRouteTarget => Boolean(target?.phoneNumber),
+        (target): target is VoiceRouteTarget => Boolean(target?.phoneNumber && target.routingEnabled),
       ),
       date,
     ),
