@@ -465,20 +465,45 @@ function buildHopAudit(
     payloadJson: unknown;
   }>,
 ) {
+  const formatSkipReason = (reason: string) => {
+    const labels: Record<string, string> = {
+      missing_mobile_fallback: "No phone number configured",
+      routing_disabled: "Receive calls is off",
+      compliance_restricted: "Inbound compliance is restricted",
+      missing_routing_user: "Staff account is inactive or unavailable",
+      missing_presence: "No current availability signal",
+      stale_presence: "Availability signal is stale",
+      missing_last_seen: "No recent activity signal",
+      active_call_in_progress: "Busy on another call",
+      missing_browser_identity: "Browser calling identity is unavailable",
+      browser_not_registered: "Browser phone is not registered",
+      status_offline: "Marked offline",
+      status_busy: "Marked busy",
+      status_away: "Marked away",
+    };
+    return labels[reason] || reason.replace(/^status_/, "Marked ").replace(/_/g, " ");
+  };
   return events
     .filter(
       (event) =>
         event.eventType === "ROUTE_HOP_QUEUED" ||
         event.eventType === "ROUTE_HOP_STARTED" ||
-        event.eventType === "ROUTE_HOP_COMPLETED",
+        event.eventType === "ROUTE_HOP_COMPLETED" ||
+        event.eventType === "ROUTE_TARGET_SKIPPED",
     )
     .map((event) => {
       const payload =
         event.payloadJson && typeof event.payloadJson === "object"
           ? (event.payloadJson as Record<string, unknown>)
           : {};
+      const skipReasons = String(payload.skipReasons || "")
+        .split(",")
+        .map((reason) => reason.trim())
+        .filter(Boolean);
       const status =
-        event.eventType === "ROUTE_HOP_QUEUED"
+        event.eventType === "ROUTE_TARGET_SKIPPED"
+          ? "SKIPPED"
+          : event.eventType === "ROUTE_HOP_QUEUED"
           ? "QUEUED TO PROVIDER"
           : event.eventType === "ROUTE_HOP_STARTED"
           ? "RANG"
@@ -489,7 +514,10 @@ function buildHopAudit(
         id: event.id,
         title: String(payload.hopLabel || payload.dialValue || "Route hop"),
         status,
-        detail: String(payload.dialValue || ""),
+        detail:
+          event.eventType === "ROUTE_TARGET_SKIPPED"
+            ? skipReasons.map(formatSkipReason).join(" · ")
+            : String(payload.dialValue || ""),
         at: event.createdAt.toISOString(),
       };
     });

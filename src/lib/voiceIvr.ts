@@ -9,6 +9,10 @@ export type VoiceRouteHop = {
 
 export type VoiceRoutePlan = {
   hops: VoiceRouteHop[];
+  skippedTargets?: Array<{
+    label: string;
+    skipReasons: string[];
+  }>;
   primaryTargetUserId: string | null;
   routeType: string | null;
   routeReason?: string | null;
@@ -58,6 +62,20 @@ export function decodeRoutePlan(serialized: string | null) {
           targetUserId: safeString(hop?.targetUserId || "") || null,
         }))
         .filter((hop) => hop.label && hop.dialValue),
+      ...(Array.isArray(parsed.skippedTargets) && parsed.skippedTargets.length
+        ? {
+            skippedTargets: parsed.skippedTargets
+              .map((target) => ({
+                label: safeString(target?.label),
+                skipReasons: Array.isArray(target?.skipReasons)
+                  ? target.skipReasons
+                      .map((reason) => safeString(reason))
+                      .filter(Boolean)
+                  : [],
+              }))
+              .filter((target) => target.label),
+          }
+        : {}),
       primaryTargetUserId: safeString(parsed.primaryTargetUserId || "") || null,
       routeType: safeString(parsed.routeType || "") || null,
       routeReason: safeString(parsed.routeReason || "") || null,

@@ -258,6 +258,10 @@ export async function POST(request: Request) {
                 targetUserId: target.userId,
               })),
           ),
+          skippedTargets: resolvedRoute.unavailableTargets.map((target) => ({
+            label: target.label,
+            skipReasons: target.skipReasons,
+          })),
           primaryTargetUserId: resolvedRoute.primaryTarget?.userId ?? null,
           routeType: resolvedRoute.routeType,
           routeReason: resolvedRoute.routeReason,
@@ -322,7 +326,8 @@ export async function POST(request: Request) {
     // event.
     if (!storedRoute?.routedTo && isActive && !routePlanFromQuery) {
       await Promise.all(
-        effectiveRoutePlan.hops.map((hop, index) =>
+        [
+          ...effectiveRoutePlan.hops.map((hop, index) =>
           createVoiceEventFromPayload(
             {
               ...routeAnnotatedPayload,
@@ -334,7 +339,20 @@ export async function POST(request: Request) {
             },
             voiceCall.id,
           ),
-        ),
+          ),
+          ...(effectiveRoutePlan.skippedTargets || []).map((target) =>
+            createVoiceEventFromPayload(
+              {
+                ...routeAnnotatedPayload,
+                eventType: "ROUTE_TARGET_SKIPPED",
+                hopLabel: target.label,
+                skipReasons: target.skipReasons.join(","),
+                routeReason: effectiveRoutePlan.routeReason || "",
+              },
+              voiceCall.id,
+            ),
+          ),
+        ],
       );
     }
 
