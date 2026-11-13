@@ -852,96 +852,6 @@ type QuotationOwnerRow = {
   quoteRef: string;
 };
 
-async function buildQuotationOwnerVoiceTarget(
-  ownerId: string,
-  options?: { alwaysDialMobile?: boolean },
-): Promise<VoiceRouteTarget | null> {
-  const [user, presence, routingPreference, compliance, activeCall] = await Promise.all([
-    prisma.user.findFirst({
-      where: { id: ownerId, isActive: true },
-      select: { phone: true, role: true },
-    }),
-    prisma.voiceAgentPresence.findUnique({ where: { userId: ownerId } }),
-    prisma.voiceAgentRoutingPreference.findUnique({ where: { userId: ownerId } }),
-    prisma.voiceAgentCompliance.findUnique({
-      where: { userId: ownerId },
-      select: { status: true, overrideActive: true },
-    }),
-    prisma.voiceCall.findFirst({
-      where: {
-        assignedToId: ownerId,
-        updatedAt: { gte: new Date(Date.now() - VOICE_ACTIVE_CALL_STALE_MS) },
-        OR: [
-          { isActive: true },
-          {
-            status: {
-              in: [
-                "queued",
-                "ringing",
-                "initiated",
-                "dialing",
-                "in_progress",
-                "answered",
-                "connected",
-                "processing",
-                "transferred",
-              ],
-            },
-          },
-        ],
-      },
-      select: { id: true, isActive: true, status: true },
-    }),
-  ]);
-  const phoneNumber = normalizeVoiceNumber(user?.phone || "");
-  const routingEnabled =
-    (routingPreference?.routingEnabled ?? true) &&
-    !isVoiceComplianceRestricted(compliance);
-  if (!phoneNumber || !routingEnabled) return null;
-
-  const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
-  const lastSeenAt = presence?.lastSeenAt ?? null;
-  const hasBusyCall = Boolean(
-    activeCall &&
-      (activeCall.isActive || isRoutingBlockingVoiceStatus(activeCall.status)),
-  );
-  const hasRecentPresence = Boolean(
-    lastSeenAt &&
-      Date.now() - lastSeenAt.getTime() <= VOICE_PRESENCE_ROUTING_WINDOW_MS,
-  );
-  const isAvailable =
-    Boolean(options?.alwaysDialMobile) ||
-    (presenceStatus === "AVAILABLE" && hasRecentPresence && !hasBusyCall);
-  const skipReasons: string[] = [];
-  if (!options?.alwaysDialMobile) {
-    if (!presence) skipReasons.push("missing_presence");
-    if (presenceStatus !== "AVAILABLE") {
-      skipReasons.push(`status_${presenceStatus.toLowerCase()}`);
-    }
-    if (!hasRecentPresence) skipReasons.push("stale_or_missing_presence");
-    if (hasBusyCall) skipReasons.push("active_call_in_progress");
-  }
-  // A quotation owned by Admin must not bypass the same offline protection
-  // applied to the normal escalation path.
-  if (user?.role === "ADMIN" && !isAvailable) return null;
-
-  return {
-    label: "QUOTATION_OWNER",
-    phoneNumber,
-    userId: ownerId,
-    presenceStatus,
-    isAvailable,
-    routingEnabled,
-    allowAfterHoursCalls: routingPreference?.allowAfterHoursCalls ?? false,
-    lastSeenAt,
-    webRtcIdentity: null,
-    isWebrtcRegistered: false,
-    dialValue: phoneNumber,
-    dialValues: [phoneNumber],
-    skipReasons,
-  };
-}
-
 async function findQuotationOwnerTarget(
   callerNumber: string | null,
   targets: VoiceRouteTarget[],
@@ -978,9 +888,11 @@ async function findQuotationOwnerTarget(
     const owner = rows[0];
     if (!owner?.ownerId) return null;
 
-    const target =
-      targets.find((candidate) => candidate.userId === owner.ownerId) ??
-      (await buildQuotationOwnerVoiceTarget(owner.ownerId));
+    // An existing quotation only gets inbound priority when its owner is in
+    // the current active sales routing pool. Never manufacture a target here:
+    // that could reintroduce an Admin or inactive former staff member ahead
+    // of the live queue.
+    const target = targets.find((candidate) => candidate.userId === owner.ownerId) ?? null;
     if (target) {
       console.info("[voice.routing.quotation_owner]", {
         callerNumber,
@@ -1020,8 +932,7 @@ async function findAssignedLeadTarget(
   });
 
   if (!assignedLead?.assignedToId) return null;
-  return agentTargets.find((target) => target.userId === assignedLead.assignedToId) ??
-    buildQuotationOwnerVoiceTarget(assignedLead.assignedToId, { alwaysDialMobile: true });
+  return agentTargets.find((target) => target.userId === assignedLead.assignedToId) ?? null;
 }
 
 async function findAssignedFollowUpTarget(
@@ -1045,8 +956,7 @@ async function findAssignedFollowUpTarget(
   });
 
   if (!followUp?.assignedToId) return null;
-  return agentTargets.find((target) => target.userId === followUp.assignedToId) ??
-    buildQuotationOwnerVoiceTarget(followUp.assignedToId, { alwaysDialMobile: true });
+  return agentTargets.find((target) => target.userId === followUp.assignedToId) ?? null;
 }
 
 async function findStickyOwnerTarget(
@@ -1104,8 +1014,7 @@ async function findStickyOwnerTarget(
     })[0];
 
   if (!freshest?.assignedToId) return null;
-  return agentTargets.find((target) => target.userId === freshest.assignedToId) ??
-    buildQuotationOwnerVoiceTarget(freshest.assignedToId, { alwaysDialMobile: true });
+  return agentTargets.find((target) => target.userId === freshest.assignedToId) ?? null;
 }
 
 async function findPreviousAgentTarget(
@@ -1323,12 +1232,9 @@ export async function getVoiceRouteTargets(
   // Do not dial an Admin who has gone offline. The fallback line is next.
   const availableAdminTarget = adminTarget.isAvailable ? adminTarget : null;
   const overflowTarget = targets.OVERFLOW;
-  const quotationOwnerTargets = [
-    targets.BRENDAH,
-    targets.JENNIFER,
-    targets.STEPHEN,
-    availableAdminTarget,
-  ].filter((target): target is VoiceRouteTarget => Boolean(target?.phoneNumber && target.routingEnabled));
+  // Only a currently enabled sales/marketing agent may claim first priority
+  // for a customer they previously served. Admin is escalation only.
+  const quotationOwnerTargets = agentTargets;
   // Admin is included only while available; overflow remains the final route.
   const directFallbackTargets = [availableAdminTarget, overflowTarget].filter(
     (target): target is VoiceRouteTarget => Boolean(target?.phoneNumber),
@@ -1393,9 +1299,7 @@ export async function getVoiceRouteTargets(
     findStickyOwnerTarget(callerNumber, agentTargets),
     findLastAnsweredTarget(
       callerNumber,
-      [targets.BRENDAH, targets.JENNIFER, targets.STEPHEN, availableAdminTarget, targets.OVERFLOW].filter(
-        (target): target is VoiceRouteTarget => Boolean(target?.phoneNumber && target.routingEnabled),
-      ),
+      agentTargets,
       date,
     ),
   ]);
@@ -1446,20 +1350,34 @@ export async function getVoiceRouteTargets(
   }
 
   const roundRobinTarget = await findRoundRobinTarget(agentTargets);
-  // Customer ownership is retained for follow-up work, but it must not
-  // override the live inbound queue. Every ordinary working-hours call starts
-  // with the rotating sales/marketing queue, then continues through the other
-  // enabled sales agent, Admin and finally the configured overflow line.
-  // This keeps provider Dial instructions predictable even for returning
-  // callers and prevents a stale owner record from jumping straight to Admin.
-  const selection = buildWorkingHoursSelection({
-    preferredTarget: roundRobinTarget,
-    agentTargets,
-    adminTarget: availableAdminTarget,
-    fallbackTarget: overflowTarget,
-    routeReason: "round_robin",
-    preferAdminFirst: false,
-  });
+  // A live, enabled sales owner receives the first ring. If that person does
+  // not answer, the same provider Dial instruction continues through the
+  // round-robin sales queue, then Admin, then fallback. Without a valid sales
+  // owner, the round-robin agent is first as normal.
+  const selection = stickyTarget
+    ? {
+        preferredTarget: stickyTarget,
+        orderedTargets: buildStickyVoiceTargetOrder({
+          stickyTarget,
+          roundRobinTarget,
+          agentTargets,
+          adminTarget: availableAdminTarget,
+          fallbackTarget: overflowTarget,
+        }),
+        routeReason: quotationOwnerTarget
+          ? ("quotation_owner" as const)
+          : lastAnsweredTarget || stickyOwnerTarget
+            ? ("assigned_owner" as const)
+            : ("returning_customer" as const),
+      }
+    : buildWorkingHoursSelection({
+        preferredTarget: roundRobinTarget,
+        agentTargets,
+        adminTarget: availableAdminTarget,
+        fallbackTarget: overflowTarget,
+        routeReason: "round_robin",
+        preferAdminFirst: false,
+      });
 
   const workingTargets = [
     targets.BRENDAH,
