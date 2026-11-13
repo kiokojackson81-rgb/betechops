@@ -2509,6 +2509,26 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         await getContextForPhone(selectedPhone, true),
       )
     : null;
+  // A customer search must not be limited to the currently selected history
+  // range. Supervisors use this timeline to see the relationship owner and
+  // every person who actually spoke to the customer across earlier calls.
+  const customerCallHistory = selectedPhoneVariants.length
+    ? await prisma.voiceCall.findMany({
+        where: {
+          ...callWhere,
+          OR: [
+            { callerNumber: { in: selectedPhoneVariants } },
+            { destinationNumber: { in: selectedPhoneVariants } },
+          ],
+        },
+        include: {
+          assignedTo: { select: { id: true, name: true, email: true } },
+          answeredBy: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
+        take: 50,
+      })
+    : [];
   const selectedCallDetail = effectiveSelectedCall
     ? await prisma.voiceCall.findUnique({
         where: { id: effectiveSelectedCall.id },
@@ -2627,6 +2647,27 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     selectedCallId: effectiveSelectedCall?.id ?? null,
     selectedPhone,
     selectedContext,
+    customerCallHistory: customerCallHistory.map((call) => {
+      const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
+      return {
+        id: call.id,
+        direction: call.direction,
+        callerNumber: call.callerNumber,
+        destinationNumber: call.destinationNumber,
+        status: displayStatus,
+        statusLabel: formatStatusLabel(displayStatus),
+        providerStatusLabel: formatStatusLabel(providerStatus),
+        startedAt: toIso(call.startedAt),
+        createdAt: call.createdAt.toISOString(),
+        durationInSeconds: call.durationInSeconds ?? 0,
+        recordingUrl: call.recordingUrl,
+        routedToDisplay: getVoiceRoutingLabel(call.routedTo),
+        assignedToName: call.assignedTo?.name ?? null,
+        assignedToEmail: call.assignedTo?.email ?? null,
+        answeredByName: call.answeredBy?.name ?? null,
+        answeredByEmail: call.answeredBy?.email ?? null,
+      };
+    }),
     selectedCallDetail: selectedCallDetail
       ? {
           ...(function () {

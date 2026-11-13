@@ -705,6 +705,27 @@ export default function VoiceConsoleClient({
     });
   }, [dateFilter, recentFilter, recentSearch, visibleRecentCalls]);
 
+  const customerCallHistory = useMemo(
+    () =>
+      ((data.customerCallHistory || []) as Array<{
+        id: string;
+        direction: string;
+        callerNumber: string;
+        status: string;
+        statusLabel: string;
+        startedAt?: string | null;
+        createdAt: string;
+        durationInSeconds: number;
+        recordingUrl?: string | null;
+        routedToDisplay?: string | null;
+        assignedToName?: string | null;
+        assignedToEmail?: string | null;
+        answeredByName?: string | null;
+        answeredByEmail?: string | null;
+      }>).filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
+    [data.customerCallHistory],
+  );
+
   const filteredRecordings = useMemo(
     () =>
       data.recentRecordings.filter((call) =>
@@ -1174,6 +1195,13 @@ export default function VoiceConsoleClient({
     setExpandedRecentCallId(nextExpanded);
     if (!nextExpanded) return;
     if (selectedCallId === callId && selectedPhone === phone) return;
+    handleSelectCall(callId, phone);
+  };
+
+  const handleSelectCustomerHistoryCall = (callId: string) => {
+    const phone = selectedPhone || data.selectedPhone;
+    if (!phone) return;
+    setExpandedRecentCallId(null);
     handleSelectCall(callId, phone);
   };
 
@@ -2305,17 +2333,24 @@ export default function VoiceConsoleClient({
                               : setQueueSearch(event.target.value)
                           }
                           onKeyDown={(event) => {
-                            if (event.key !== "Enter" || activeTab === "recent")
-                              return;
-                            void handleVoiceSearch(queueSearch);
+                            if (event.key !== "Enter") return;
+                            void handleVoiceSearch(
+                              activeTab === "recent"
+                                ? recentSearch
+                                : queueSearch,
+                            );
                           }}
                           placeholder="Search customer or number..."
                           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
                         />
                         {activeTab === "recent" ? (
-                          <span className="hidden rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-400 sm:inline-flex">
-                            Ctrl K
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleVoiceSearch(recentSearch)}
+                            className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-100 transition hover:border-cyan-400"
+                          >
+                            History
+                          </button>
                         ) : (
                           <button
                             type="button"
@@ -3166,6 +3201,10 @@ export default function VoiceConsoleClient({
                           onChange={(event) =>
                             setRecentSearch(event.target.value)
                           }
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            void handleVoiceSearch(recentSearch);
+                          }}
                           placeholder="Search caller, route, or status"
                           className="w-full rounded-2xl border border-slate-800 bg-slate-900/75 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
                         />
@@ -3204,6 +3243,92 @@ export default function VoiceConsoleClient({
                         </button>
                       </div>
                       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pr-1">
+                        {selectedPhone && customerCallHistory.length ? (
+                          <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.05] p-4 sm:p-5">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/80">
+                                  Customer call timeline
+                                </div>
+                                <h3 className="mt-1 text-lg font-semibold text-white">
+                                  Previous conversations with {selectedPhone}
+                                </h3>
+                                <p className="mt-1 text-sm text-slate-400">
+                                  {customerCallHistory.length} most recent call{customerCallHistory.length === 1 ? "" : "s"}. “Spoke with” is the staff member who answered, not merely the callback owner.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void copyCustomerPhone(selectedPhone)}
+                                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-slate-950/50 px-3 text-xs font-semibold text-slate-100 transition hover:border-cyan-400/50"
+                              >
+                                {copiedPhone === selectedPhone ? "Phone copied" : "Copy number"}
+                              </button>
+                            </div>
+                            <div className="mt-4 space-y-2">
+                              {customerCallHistory.map((call) => {
+                                const spokeWith =
+                                  call.answeredByName || call.answeredByEmail;
+                                const wasAnswered = Boolean(spokeWith);
+                                return (
+                                  <div
+                                    key={call.id}
+                                    className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:grid-cols-[minmax(150px,0.8fr)_minmax(180px,1.2fr)_auto] sm:items-center"
+                                  >
+                                    <div>
+                                      <div className="text-sm font-semibold text-white">
+                                        {formatDateTime(call.startedAt || call.createdAt)}
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-400">
+                                        <span>{call.direction}</span>
+                                        <span>·</span>
+                                        <span>{formatDuration(call.durationInSeconds)}</span>
+                                        <span>·</span>
+                                        <span>{call.statusLabel}</span>
+                                      </div>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                        {wasAnswered ? "Spoke with" : "Call outcome"}
+                                      </div>
+                                      <div className={`mt-1 truncate text-sm font-semibold ${wasAnswered ? "text-emerald-200" : "text-amber-200"}`}>
+                                        {spokeWith || "No staff member answered"}
+                                      </div>
+                                      <div className="mt-1 truncate text-xs text-slate-500">
+                                        {wasAnswered
+                                          ? call.routedToDisplay || "Voice call"
+                                          : `Callback owner: ${call.assignedToName || call.assignedToEmail || "Unassigned"}`}
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSelectCustomerHistoryCall(call.id)}
+                                        className="min-h-10 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-100 transition hover:border-cyan-400"
+                                      >
+                                        View call
+                                      </button>
+                                      {call.recordingUrl ? (
+                                        <a
+                                          href={call.recordingUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex min-h-10 items-center rounded-xl border border-white/10 bg-white/[0.03] px-3 text-xs font-semibold text-slate-100 transition hover:border-white/25"
+                                        >
+                                          Recording
+                                        </a>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        ) : selectedPhone ? (
+                          <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-5 text-sm text-slate-400">
+                            No previous calls were found for {selectedPhone}.
+                          </div>
+                        ) : null}
                         {groupedRecentCalls.length ? (
                           groupedRecentCalls.map(([bucket, calls]) => (
                             <div key={bucket} className="space-y-3">
