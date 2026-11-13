@@ -1446,32 +1446,20 @@ export async function getVoiceRouteTargets(
   }
 
   const roundRobinTarget = await findRoundRobinTarget(agentTargets);
-  const selection = stickyTarget
-    ? {
-        preferredTarget: stickyTarget,
-        orderedTargets: buildStickyVoiceTargetOrder({
-          stickyTarget,
-          roundRobinTarget,
-          agentTargets,
-          adminTarget: availableAdminTarget,
-          fallbackTarget: overflowTarget,
-        }),
-        routeReason: quotationOwnerTarget
-          ? ("quotation_owner" as const)
-          : lastAnsweredTarget
-            ? ("assigned_owner" as const)
-            : stickyOwnerTarget
-              ? ("assigned_owner" as const)
-              : ("returning_customer" as const),
-      }
-    : buildWorkingHoursSelection({
-        preferredTarget: roundRobinTarget,
-        agentTargets,
-        adminTarget: availableAdminTarget,
-        fallbackTarget: overflowTarget,
-        routeReason: "round_robin",
-        preferAdminFirst: false,
-      });
+  // Customer ownership is retained for follow-up work, but it must not
+  // override the live inbound queue. Every ordinary working-hours call starts
+  // with the rotating sales/marketing queue, then continues through the other
+  // enabled sales agent, Admin and finally the configured overflow line.
+  // This keeps provider Dial instructions predictable even for returning
+  // callers and prevents a stale owner record from jumping straight to Admin.
+  const selection = buildWorkingHoursSelection({
+    preferredTarget: roundRobinTarget,
+    agentTargets,
+    adminTarget: availableAdminTarget,
+    fallbackTarget: overflowTarget,
+    routeReason: "round_robin",
+    preferAdminFirst: false,
+  });
 
   const workingTargets = [
     targets.BRENDAH,
