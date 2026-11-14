@@ -825,6 +825,13 @@ function buildCreateDraftFromExistingQuotation(request: SerializedQuoteRequest):
 
   return {
     ...defaults,
+    customerName: request.customerName || request.manualCustomerName || "",
+    customerPhone: request.customerPhone || request.manualCustomerPhone || "",
+    customerEmail: request.customerEmail || request.manualCustomerEmail || "",
+    customerLocation: request.customerLocation || "",
+    county: request.county || "",
+    town: request.town || "",
+    specificLocation: request.specificLocation || "",
     projectType,
     preferredContactMethod: request.preferredContactMethod || defaults.preferredContactMethod,
     bestTimeToContact: request.bestTimeToContact || defaults.bestTimeToContact,
@@ -1581,6 +1588,7 @@ export default function QuotationRequestsDeskClient({
   const [showResponseMoreOptions, setShowResponseMoreOptions] = useState(false);
   const [createMode, setCreateMode] = useState<CreateQuotationMode>("manual");
   const [createDraft, setCreateDraft] = useState<CreateQuotationDraft>(createDefaultQuotationDraft());
+  const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [createItemAccordion, setCreateItemAccordion] = useState<boolean[]>([true]);
   const [templates, setTemplates] = useState<SerializedQuotationTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -2280,11 +2288,28 @@ export default function QuotationRequestsDeskClient({
         followUpNotes: createDraft.followUpNotes.trim() || undefined,
       };
 
-      const response = await fetch(buildApiUrl(createApiPath, apiQueryParams), {
-        method: "POST",
+      const isEditing = Boolean(editingQuotationId);
+      const response = await fetch(
+        isEditing
+          ? buildApiUrl(apiBasePath, apiQueryParams, `${editingQuotationId}/respond`)
+          : buildApiUrl(createApiPath, apiQueryParams),
+        {
+        method: isEditing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+        body: JSON.stringify(
+          isEditing
+            ? {
+                ...payload,
+                status: "QUOTED",
+                issueQuotation: true,
+                sendEmail: Boolean(createDraft.customerEmail.trim()),
+                sendSms: true,
+                resendWhatsapp: true,
+              }
+            : payload,
+        ),
+      },
+      );
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok) {
         throw new Error(data?.error || "Failed to save quotation.");
@@ -2307,6 +2332,7 @@ export default function QuotationRequestsDeskClient({
       setCreateItemAccordion([true]);
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
+      setEditingQuotationId(null);
       if (!createOnlyMode) {
         await refreshRequests("ALL", "");
       }
@@ -2321,8 +2347,12 @@ export default function QuotationRequestsDeskClient({
       }
       setMessage(
         downloadAfterSave
-          ? "Quotation saved and PDF download started."
-          : createSuccessMessage,
+          ? isEditing
+            ? "Quotation updated, resent to the customer, and PDF download started."
+            : "Quotation saved and PDF download started."
+          : isEditing
+            ? "Quotation updated and resent by SMS, email, and WhatsApp where contact details are available."
+            : createSuccessMessage,
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save quotation.");
@@ -2550,6 +2580,7 @@ export default function QuotationRequestsDeskClient({
     setTemplateBuilderMode(false);
     setTemplatePasteText("");
     setCreateMode("manual");
+    setEditingQuotationId(null);
     setCreateDraft(nextDraft);
     setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
     setCreateCatalogQuery("");
@@ -2560,6 +2591,26 @@ export default function QuotationRequestsDeskClient({
     setMessage(
       `Copied quotation ${request.quoteRef}. Update customer details, quantities, pricing, then save the new quotation.`,
     );
+  }
+
+  function handleEditQuotation(request: SerializedQuoteRequest) {
+    const nextDraft = buildCreateDraftFromExistingQuotation(request);
+    setShowCreatePanel(true);
+    setShowTemplatesPanel(false);
+    setShowCreateMoreOptions(false);
+    setEditingTemplateId(null);
+    setTemplateBuilderMode(false);
+    setTemplatePasteText("");
+    setCreateMode("manual");
+    setEditingQuotationId(request.id);
+    setCreateDraft(nextDraft);
+    setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
+    setCreateCatalogQuery("");
+    setCreateCatalogResults([]);
+    requestAnimationFrame(() => {
+      createPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    setMessage(`Editing ${request.quoteRef}. Saving will update this quotation and resend it to the customer.`);
   }
 
   async function handleSaveRequestAsTemplate(request: SerializedQuoteRequest) {
@@ -3762,13 +3813,17 @@ export default function QuotationRequestsDeskClient({
                       : "Add template"
                     : editingTemplateId
                       ? "Edit template"
-                      : "Create quotation"}
+                      : editingQuotationId
+                        ? "Edit quotation"
+                        : "Create quotation"}
                 </div>
                 <div className="mt-1 text-sm text-slate-300">
                   {templateBuilderMode
                     ? "Paste a full BOQ or itemized quotation text, let the system break it into clean line items, then save it as a reusable template."
                     : editingTemplateId
                     ? "Update the saved template using only the fields staff actually maintain in day-to-day quotation work."
+                    : editingQuotationId
+                      ? "Review the prefilled quotation, make the changes, then save to resend the revised quotation by SMS, email, and WhatsApp."
                     : "Start a quotation for walk-in, WhatsApp, phone, or template-based customers without waiting for the website form."}
                 </div>
               </div>
@@ -4471,7 +4526,7 @@ export default function QuotationRequestsDeskClient({
                   onClick={() => void handleCreateQuotation()}
                   className="w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-2"
                 >
-                  {createSaving ? "Saving..." : createActionLabel}
+                  {createSaving ? "Saving..." : editingQuotationId ? "Update & resend quotation" : createActionLabel}
                 </button>
                 <button
                   type="button"
@@ -4498,6 +4553,7 @@ export default function QuotationRequestsDeskClient({
                   setEditingTemplateId(null);
                   setTemplateBuilderMode(false);
                   setTemplatePasteText("");
+                  setEditingQuotationId(null);
                   setCreateDraft(createDefaultQuotationDraft());
                   setCreateItemAccordion([true]);
                 }}
@@ -4538,7 +4594,7 @@ export default function QuotationRequestsDeskClient({
                     onClick={() => void handleCreateQuotation()}
                     className="w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {createSaving ? "Saving..." : createActionLabel}
+                    {createSaving ? "Saving..." : editingQuotationId ? "Update & resend quotation" : createActionLabel}
                   </button>
                   <button
                     type="button"
@@ -4565,6 +4621,7 @@ export default function QuotationRequestsDeskClient({
                     setEditingTemplateId(null);
                     setTemplateBuilderMode(false);
                     setTemplatePasteText("");
+                  setEditingQuotationId(null);
                     setCreateDraft(createDefaultQuotationDraft());
                     setCreateItemAccordion([true]);
                   }}
@@ -4674,6 +4731,14 @@ export default function QuotationRequestsDeskClient({
                           >
                             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             {expanded ? "Close" : "View quotation"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditQuotation(request)}
+                            className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-400/15"
+                          >
+                            <FilePenLine className="h-4 w-4" />
+                            Edit quotation
                           </button>
                           <button
                             type="button"
@@ -4834,6 +4899,14 @@ export default function QuotationRequestsDeskClient({
                             >
                               {draftOpening === `${request.id}:project` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                               Convert to project workflow
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditQuotation(request)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
+                            >
+                              <FilePenLine className="h-4 w-4" />
+                              Edit quotation
                             </button>
                             <button
                               type="button"

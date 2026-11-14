@@ -449,6 +449,16 @@ export type QuoteRequestCreateInput = z.infer<
 export const quoteRequestResponseSchema = z.object({
   status: z.enum(QUOTE_REQUEST_STATUSES),
   issueQuotation: z.boolean().optional(),
+  name: z.string().trim().min(2).optional(),
+  phone: z.string().trim().min(7).optional(),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  location: z.string().trim().optional(),
+  county: z.string().trim().optional(),
+  town: z.string().trim().optional(),
+  specificLocation: z.string().trim().optional(),
+  projectType: z.enum(QUOTE_PROJECT_TYPES).optional(),
+  preferredProducts: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
   quoteTitle: z.string().trim().max(200).optional(),
   quoteMessage: z.string().trim().max(12000).optional(),
   quoteItems: z.array(quoteLineItemSchema).default([]),
@@ -499,6 +509,7 @@ export const quoteRequestResponseSchema = z.object({
   followUpNotes: z.string().trim().max(4000).optional(),
   sendEmail: z.boolean().optional(),
   sendSms: z.boolean().optional(),
+  resendWhatsapp: z.boolean().optional(),
 });
 
 export type QuoteRequestResponseInput = z.infer<
@@ -1930,6 +1941,16 @@ export async function updateQuoteRequestResponse(
     UPDATE "QuoteRequest"
     SET
       "status" = ${nextStatus},
+      "customerName" = COALESCE(${input.name?.trim() || null}, "customerName"),
+      "customerPhone" = COALESCE(${input.phone?.trim() || null}, "customerPhone"),
+      "customerEmail" = COALESCE(${input.email?.trim() || null}, "customerEmail"),
+      "customerLocation" = COALESCE(${input.location?.trim() || null}, "customerLocation"),
+      "county" = COALESCE(${input.county?.trim() || null}, "county"),
+      "town" = COALESCE(${input.town?.trim() || null}, "town"),
+      "specificLocation" = COALESCE(${input.specificLocation?.trim() || null}, "specificLocation"),
+      "projectType" = COALESCE(${input.projectType || null}, "projectType"),
+      "preferredProducts" = COALESCE(${input.preferredProducts?.trim() || null}, "preferredProducts"),
+      "notes" = COALESCE(${input.notes?.trim() || null}, "notes"),
       "quoteTitle" = ${input.quoteTitle?.trim() || null},
       "quoteMessage" = ${input.quoteMessage?.trim() || null},
       "quotationData" = ${quotationData as Prisma.JsonObject},
