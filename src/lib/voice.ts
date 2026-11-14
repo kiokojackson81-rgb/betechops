@@ -840,12 +840,37 @@ type VoiceRouteSelection = {
   orderedTargets: VoiceRouteTarget[];
   routeReason:
     | "after_hours"
+    | "manual_contact_owner"
     | "quotation_owner"
     | "returning_customer"
     | "round_robin"
     | "admin_only"
     | "assigned_owner";
 };
+
+async function findManualContactOwnerTarget(
+  callerNumber: string | null,
+  agentTargets: VoiceRouteTarget[],
+): Promise<VoiceRouteTarget | null> {
+  if (!callerNumber) return null;
+  const phoneVariants = getKenyanPhoneVariants(callerNumber);
+  if (!phoneVariants.length) return null;
+
+  // A manual claim is a deliberate relationship assignment, distinct from an
+  // automatically-created missed-call lead. It wins over historical routing.
+  const contact = await prisma.voiceLead.findFirst({
+    where: {
+      phone: { in: phoneVariants },
+      source: "MANUAL_CONTACT_CLAIM",
+      status: "claimed",
+      assignedToId: { not: null },
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: { assignedToId: true },
+  });
+  if (!contact?.assignedToId) return null;
+  return agentTargets.find((target) => target.userId === contact.assignedToId) ?? null;
+}
 
 type QuotationOwnerRow = {
   ownerId: string | null;
@@ -1285,6 +1310,7 @@ export async function getVoiceRouteTargets(
   }
 
   const [
+    manualContactOwnerTarget,
     quotationOwnerTarget,
     assignedFollowUpTarget,
     assignedLeadTarget,
@@ -1292,6 +1318,7 @@ export async function getVoiceRouteTargets(
     stickyOwnerTarget,
     lastAnsweredTarget,
   ] = await Promise.all([
+    findManualContactOwnerTarget(callerNumber, agentTargets),
     findQuotationOwnerTarget(callerNumber, quotationOwnerTargets),
     findAssignedFollowUpTarget(callerNumber, agentTargets),
     findAssignedLeadTarget(callerNumber, agentTargets),
@@ -1304,6 +1331,7 @@ export async function getVoiceRouteTargets(
     ),
   ]);
   const stickyTarget =
+    manualContactOwnerTarget ??
     quotationOwnerTarget ??
     assignedFollowUpTarget ??
     assignedLeadTarget ??
@@ -1364,9 +1392,11 @@ export async function getVoiceRouteTargets(
           adminTarget: availableAdminTarget,
           fallbackTarget: overflowTarget,
         }),
-        routeReason: quotationOwnerTarget
-          ? ("quotation_owner" as const)
-          : lastAnsweredTarget || stickyOwnerTarget
+        routeReason: manualContactOwnerTarget
+          ? ("manual_contact_owner" as const)
+          : quotationOwnerTarget
+            ? ("quotation_owner" as const)
+            : lastAnsweredTarget || stickyOwnerTarget
             ? ("assigned_owner" as const)
             : ("returning_customer" as const),
       }
@@ -1409,6 +1439,7 @@ export async function getVoiceRouteTargets(
       reason: selection.routeReason,
       callerNumber,
       quotationOwnerTarget: quotationOwnerTarget?.label ?? null,
+      manualContactOwnerTarget: manualContactOwnerTarget?.label ?? null,
       assignedFollowUpTarget: assignedFollowUpTarget?.label ?? null,
       assignedLeadTarget: assignedLeadTarget?.label ?? null,
       stickyOwnerTarget: stickyOwnerTarget?.label ?? null,

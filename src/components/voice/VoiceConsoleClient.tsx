@@ -637,6 +637,7 @@ export default function VoiceConsoleClient({
   const [routingConfigPending, setRoutingConfigPending] = useState(false);
   const [compliancePendingKey, setCompliancePendingKey] = useState<string | null>(null);
   const [bulkResolvePending, setBulkResolvePending] = useState(false);
+  const [contactClaimPending, setContactClaimPending] = useState(false);
   const [overflowUserIdDraft, setOverflowUserIdDraft] = useState(
     initialData.routingConfig?.overflowUserId ?? "",
   );
@@ -2041,6 +2042,38 @@ export default function VoiceConsoleClient({
     softphone.startOutgoingCall(normalizedPhone);
   };
 
+  const handleClaimContact = async (rawPhone?: string | null) => {
+    const phone = normalizeKenyanPhone(String(rawPhone || "").trim());
+    if (!phone) {
+      setError("Enter a valid customer phone number before claiming the contact.");
+      return;
+    }
+    if (!window.confirm(`Make ${phone} your contact? It cannot be claimed if it already belongs to another agent.`)) return;
+    setContactClaimPending(true);
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/contact-owner")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.error || "contact_claim_failed"));
+      const result = payload.result as { status?: string; ownerName?: string | null } | undefined;
+      if (result?.status === "owned_by_another") {
+        setError(`This contact is already assigned to ${result.ownerName || "another agent"}.`);
+        return;
+      }
+      setQueueSearch(phone);
+      setError(result?.status === "already_claimed" ? "This customer is already your contact." : "Contact assigned to you. Their next inbound call will ring you first.");
+      await refreshSnapshot(selectedCallId, phone).catch(() => undefined);
+    } catch (claimError) {
+      setError(claimError instanceof Error ? claimError.message : "Could not claim this contact.");
+    } finally {
+      setContactClaimPending(false);
+    }
+  };
+
   const applyContactedUpdateLocally = (input: {
     id?: string | null;
     voiceLeadId?: string | null;
@@ -2372,6 +2405,24 @@ export default function VoiceConsoleClient({
                       >
                         <Plus className="h-4.5 w-4.5" />
                         Outbound Call
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          contactClaimPending ||
+                          !normalizeKenyanPhone(
+                            activeTab === "recent" ? recentSearch : queueSearch,
+                          )
+                        }
+                        onClick={() =>
+                          void handleClaimContact(
+                            activeTab === "recent" ? recentSearch : queueSearch,
+                          )
+                        }
+                        title="Assign an unowned customer contact to yourself for first-priority inbound routing"
+                        className="inline-flex items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {contactClaimPending ? "Assigning..." : "Claim Contact"}
                       </button>
                     </div>
 
@@ -5062,6 +5113,23 @@ export default function VoiceConsoleClient({
                                 className="min-h-12 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
                               >
                                 Open Follow-ups
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  contactClaimPending ||
+                                  !normalizeKenyanPhone(
+                                    selectedCall?.callerNumber || selectedPhone || "",
+                                  )
+                                }
+                                onClick={() =>
+                                  void handleClaimContact(
+                                    selectedCall?.callerNumber || selectedPhone,
+                                  )
+                                }
+                                className="min-h-12 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {contactClaimPending ? "Assigning..." : "Claim Contact"}
                               </button>
                             </div>
                           </div>

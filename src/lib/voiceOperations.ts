@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { buildStaffAttendantWhere, isStaffAttendantLike } from "@/lib/staffUsers";
@@ -53,6 +54,82 @@ export type VoiceViewer = {
   isAdmin: boolean;
   impersonateId: string | null;
 };
+
+export type VoiceContactClaimResult =
+  | { status: "claimed" | "already_claimed"; phone: string; ownerName: string | null }
+  | { status: "owned_by_another"; phone: string; ownerName: string | null };
+
+type QuoteContactOwnerRow = { ownerId: string | null };
+
+/** Claim an unowned customer for first-priority inbound routing. */
+export async function claimVoiceCustomerContact(input: {
+  viewer: VoiceViewer;
+  phone: string;
+}): Promise<VoiceContactClaimResult> {
+  const phone = normalizeKenyanPhone(input.phone);
+  if (!phone) throw new Error("Enter a valid Kenyan customer phone number.");
+
+  const claimant = await prisma.user.findUnique({
+    where: { id: input.viewer.targetUserId },
+    select: { id: true, name: true, email: true, isActive: true, oneVoiceCustomerNumber: true },
+  });
+  if (!claimant?.isActive || !claimant.oneVoiceCustomerNumber) {
+    throw new Error("Only an active voice agent can claim a customer contact.");
+  }
+
+  const variants = getKenyanPhoneVariants(phone);
+  const ownerSelect = { select: { assignedToId: true, assignedTo: { select: { name: true, email: true } } } } as const;
+  const [manualClaim, leadOwner, followUpOwner, quoteOwnerRows] = await Promise.all([
+    prisma.voiceLead.findFirst({
+      where: { phone: { in: variants }, source: "MANUAL_CONTACT_CLAIM", status: "claimed", assignedToId: { not: null } },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      ...ownerSelect,
+    }),
+    prisma.voiceLead.findFirst({
+      where: { phone: { in: variants }, source: { not: "MANUAL_CONTACT_CLAIM" }, assignedToId: { not: null } },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      ...ownerSelect,
+    }),
+    prisma.voiceFollowUp.findFirst({
+      where: { phone: { in: variants }, assignedToId: { not: null }, status: { notIn: ["resolved", "closed"] } },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      ...ownerSelect,
+    }),
+    prisma.$queryRaw<QuoteContactOwnerRow[]>(Prisma.sql`
+      SELECT COALESCE("respondedById", NULLIF("responseMetadata"->>'createdById', ''), "assignedAttendantId") AS "ownerId"
+      FROM "QuoteRequest"
+      WHERE ("customerPhone" IN (${Prisma.join(variants)}) OR "manualCustomerPhone" IN (${Prisma.join(variants)}))
+        AND UPPER(COALESCE("status", '')) NOT IN ('CLOSED', 'REJECTED', 'EXPIRED')
+      ORDER BY COALESCE("respondedAt", "updatedAt", "createdAt") DESC
+      LIMIT 1
+    `),
+  ]);
+
+  const quoteOwnerId = quoteOwnerRows[0]?.ownerId ?? null;
+  const quoteOwnerPerson = quoteOwnerId
+    ? await prisma.user.findUnique({ where: { id: quoteOwnerId }, select: { name: true, email: true } })
+    : null;
+  const existing = manualClaim || leadOwner || followUpOwner;
+  const ownerId = existing?.assignedToId || quoteOwnerId;
+  const ownerPerson = existing?.assignedTo || quoteOwnerPerson;
+  const ownerName = ownerPerson?.name || ownerPerson?.email || null;
+  if (ownerId && ownerId !== claimant.id) return { status: "owned_by_another", phone, ownerName };
+  if (manualClaim?.assignedToId === claimant.id || ownerId === claimant.id) {
+    return { status: "already_claimed", phone, ownerName: claimant.name || claimant.email || null };
+  }
+
+  await prisma.voiceLead.create({
+    data: {
+      phone,
+      source: "MANUAL_CONTACT_CLAIM",
+      status: "claimed",
+      assignedToId: claimant.id,
+      lastCallAt: new Date(),
+    },
+  });
+  publishVoiceLiveEvent({ type: "queue", reason: "voice_contact_claimed" });
+  return { status: "claimed", phone, ownerName: claimant.name || claimant.email || null };
+}
 
 export function isVoiceOperationsSchemaMissingError(error: unknown) {
   if (!error || typeof error !== "object") return false;
@@ -322,6 +399,9 @@ function getCallQueueReasonLabel(call: {
   }
   if (routeReason === "returning_customer") {
     return "Returning customer";
+  }
+  if (routeReason === "manual_contact_owner") {
+    return "Manual contact owner";
   }
   if (routeReason === "assigned_owner") {
     return "Assigned owner";
