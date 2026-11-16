@@ -25,7 +25,7 @@ export async function completeCertifiedProject(tx: Prisma.TransactionClient, rec
   const totals = receipt.totals && typeof receipt.totals === "object" && !Array.isArray(receipt.totals) ? receipt.totals as Record<string, unknown> : {};
   const updated = await tx.receipt.update({ where: { id: receiptId }, data: {
     totals: { ...totals, balance: 0 } as Prisma.InputJsonValue,
-    data: { ...data, customerType: "project", projectFlow: flow, ...(decision === "CLEARED" ? { commissioningPaymentConfirmation: { sessionId: confirmation!.sessionId, actorId: confirmation?.actorId || null, confirmedAt: completedAt.toISOString(), previousPaidAmount: payment.paidAmount, amountReceived: payment.balance } } : {}) } as Prisma.InputJsonValue,
+    data: { ...data, customerType: "project", projectFlow: flow, ...(decision === "CLEARED" ? { paymentDate: completedAt.toISOString(), commissioningPaymentConfirmation: { sessionId: confirmation!.sessionId, actorId: confirmation?.actorId || null, confirmedAt: completedAt.toISOString(), previousPaidAmount: payment.paidAmount, amountReceived: payment.balance } } : {}) } as Prisma.InputJsonValue,
     order: { update: { status: "COMPLETED", paidAmount: decision === "CLEARED" ? payment.totalAmount : payment.paidAmount, paymentStatus: "PAID" } },
   }, include: { order: true } });
   const normalized = readReceiptProjectFlow(flow);
