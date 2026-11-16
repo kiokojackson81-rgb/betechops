@@ -47,7 +47,18 @@ export function customerReceiptPresentation(receipt: {
     ...(order.mpesaPayments || []).map(p => p.transactionAt), ...(order.layawayPlan?.payments || []).map(p => p.paidAt)]
     .filter((value): value is Date | string | number => value instanceof Date || typeof value === "string" || typeof value === "number")
     .map(value => new Date(value)).filter(value => Number.isFinite(value.getTime()));
-  const lastPayment = paid > 0 && dates.length ? new Date(Math.max(...dates.map(date => date.getTime()))) : null;
+  // Older project records did not retain a dedicated payment timestamp. Their
+  // fully-paid project-flow update is the best available final-payment marker;
+  // it is only a fallback, never allowed to override an actual M-Pesa or
+  // explicitly recorded payment time.
+  const legacyProjectFinalPayment = paid > 0 && projectFlow?.paymentStatus === "FULLY_PAID" && projectFlow.updatedAt
+    ? new Date(projectFlow.updatedAt)
+    : null;
+  const lastPayment = paid > 0 && dates.length
+    ? new Date(Math.max(...dates.map(date => date.getTime())))
+    : legacyProjectFinalPayment && Number.isFinite(legacyProjectFinalPayment.getTime())
+      ? legacyProjectFinalPayment
+      : null;
   const rawItems = order.items?.length ? order.items : Array.isArray(data.items) ? data.items : [];
   const items = rawItems.map((rawItem: unknown, index: number) => {
     const item = record(rawItem);
