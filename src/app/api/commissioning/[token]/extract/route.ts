@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       { error: "Invalid label image." },
       { status: 400 },
     );
-  const prompt = `Read this ${parsed.data.kind} equipment label. Return JSON only with keys brand, model, serial, ratedPower, voltage, capacity. Use empty strings for unreadable values. Do not invent readings.`;
+  const prompt = `Read this ${parsed.data.kind} equipment label. Return JSON only with keys brand, model, serial, ratedPower, voltage, capacity. The serial is especially important: look for S/N, SN, Serial No, Serial Number, barcode-adjacent identifiers, or a manufacturer code. Copy it exactly, including hyphens and leading zeroes. Do not use the model number as a serial number. Use empty strings for unreadable values; do not invent readings.`;
   try {
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
@@ -57,14 +57,22 @@ export async function POST(req: NextRequest, context: ParamsContext) {
       ],
     });
     const raw = completion.choices[0]?.message?.content || "{}";
-    const values = JSON.parse(raw) as Record<string, unknown>;
+    // JSON mode should return an object, but accepting a fenced response keeps
+    // an otherwise good label reading from being discarded by formatting.
+    const values = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim()) as Record<string, unknown>;
+    const stringValue = (...keys: string[]) => {
+      const value = keys.map((key) => values[key]).find((item) => typeof item === "string");
+      return typeof value === "string" ? value.trim() : "";
+    };
     const equipment = Object.fromEntries(
-      ["brand", "model", "serial", "ratedPower", "voltage", "capacity"].map(
-        (key) => [
-          key,
-          typeof values[key] === "string" ? values[key].trim() : "",
-        ],
-      ),
+      [
+        ["brand", ["brand", "manufacturer"]],
+        ["model", ["model", "modelNumber", "model_number"]],
+        ["serial", ["serial", "serialNumber", "serial_number", "serialNo", "serial_no", "sn"]],
+        ["ratedPower", ["ratedPower", "rated_power", "power"]],
+        ["voltage", ["voltage"]],
+        ["capacity", ["capacity", "rating"]],
+      ].map(([key, aliases]) => [key, stringValue(...aliases)]),
     );
     const identified = Boolean(
       equipment.brand || equipment.model || equipment.serial,

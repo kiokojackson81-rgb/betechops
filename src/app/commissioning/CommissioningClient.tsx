@@ -198,6 +198,7 @@ export default function CommissioningClient({ token }: { token: string }) {
   const evidence = draft.evidence || {};
   const confirmations = draft.confirmations || {};
   const profile = commissioningProfile(draft.systemProfile);
+  const issuanceReadiness = isReadyToIssue(draft);
   const visibleSteps = useMemo(() => steps.filter((step) => {
     if (step.id === "array") return profile.panels;
     if (step.id === "inverter") return profile.inverter;
@@ -220,7 +221,7 @@ export default function CommissioningClient({ token }: { token: string }) {
           ? !profile.inverter || Boolean(
               evidence.inverterLabel?.length &&
               evidence.inverterInstallation?.length &&
-              confirmations.inverter,
+              confirmations.inverter && draft.equipment?.inverterSerial?.trim(),
             )
           : id === "battery"
             ? !profile.battery || Boolean(
@@ -809,6 +810,7 @@ export default function CommissioningClient({ token }: { token: string }) {
                 completed={completedStages}
                 total={visibleSteps.length - 1}
                 profile={profile}
+                readiness={issuanceReadiness}
               />
               </>
             )}
@@ -839,7 +841,7 @@ export default function CommissioningClient({ token }: { token: string }) {
             {current.id === "review" ? (
               <button
                 type="button"
-                disabled={saveState === "saving" || !isReadyToIssue(draft).ready || (!session.payment.fullyPaid && !draft.paymentDecision)}
+                disabled={saveState === "saving" || !issuanceReadiness.ready || (!session.payment.fullyPaid && !draft.paymentDecision)}
                 onClick={() => void issue()}
                 className="w-full rounded-2xl bg-cyan-400 px-5 py-4 text-base font-black text-slate-950 disabled:opacity-40"
               >
@@ -1208,6 +1210,10 @@ function EquipmentConfirm({
   onEquipment: (values: Record<string, string>) => void;
 }) {
   const identified = equipment.brand || equipment.model || equipment.serial;
+  // A brand/model match alone is not sufficient to issue a warranty. Keep the
+  // serial field open whenever label reading did not find one, rather than
+  // making the installer discover the manual-details toggle.
+  const showManual = manual || !equipment.serial.trim();
   return (
     <section className="mt-4 rounded-3xl border border-cyan-400/20 bg-slate-900 p-5">
       {identified ? (
@@ -1250,12 +1256,17 @@ function EquipmentConfirm({
       ) : (
         <p className="mt-4 font-bold text-emerald-300">✓ Confirmed</p>
       )}
+      {identified && !equipment.serial.trim() ? (
+        <p className="mt-3 rounded-xl border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
+          The label reader found some details but not the serial number. Type the serial below exactly as printed on the label.
+        </p>
+      ) : null}
       <button
         type="button"
         onClick={onManual}
         className="mt-3 text-sm font-bold text-cyan-200"
       >
-        {manual ? "HIDE MANUAL DETAILS" : "ENTER BRAND / MODEL DETAILS MANUALLY"}
+        {!equipment.serial.trim() ? "SERIAL NUMBER REQUIRED" : manual ? "HIDE MANUAL DETAILS" : "EDIT LABEL DETAILS MANUALLY"}
       </button>
       {(identified || confirmed) && (
         <button
@@ -1266,7 +1277,7 @@ function EquipmentConfirm({
           CLEAR ENTERED DETAILS
         </button>
       )}
-      {manual ? (
+      {showManual ? (
         <div className="mt-3 grid gap-3">
           <label className="text-sm">
             Brand
@@ -1293,7 +1304,7 @@ function EquipmentConfirm({
             />
           </label>
           <label className="text-sm">
-            Serial number
+            Serial number <span className="text-amber-200">(required)</span>
             <input
               className={inputClass}
               value={equipment.serial}
@@ -1708,19 +1719,21 @@ function Review({
   completed,
   total,
   profile,
+  readiness,
 }: {
   session: Session;
   draft: Draft;
   completed: number;
   total: number;
   profile: ReturnType<typeof commissioningProfile>;
+  readiness: ReturnType<typeof isReadyToIssue>;
 }) {
   const e = draft.equipment || {};
   const q = e.panelQuantity || "Project quantity";
   return (
     <section className="rounded-3xl bg-slate-900 p-5">
       <p className="text-xs font-black tracking-[.18em] text-emerald-300">
-        {isReadyToIssue(draft).ready ? "READY FOR SIGN-OFF" : "COMPLETION REQUIRED"}
+        {readiness.ready ? "READY FOR SIGN-OFF" : "COMPLETION REQUIRED"}
       </p>
       <h3 className="mt-2 text-2xl font-black">Final review</h3>
       <div className="mt-5 space-y-3 text-sm">
@@ -1747,6 +1760,19 @@ function Review({
       <p className="mt-5 text-sm text-slate-400">
         {completed}/{total} stages completed. Submitting issues the certificates using the configured supervisor signature and stamp once all required checks are complete.
       </p>
+      {!readiness.ready ? (
+        <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-50">
+          <p className="font-black">Complete these items to enable submission:</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {readiness.missingEquipment.map((item) => <li key={`equipment-${item}`}>{item}</li>)}
+            {readiness.missingEvidence.map((item) => <li key={`evidence-${item}`}>Upload the required {item.replace(/([A-Z])/g, " $1").toLowerCase()} photo.</li>)}
+            {readiness.missingChecklist.map((item) => <li key={`check-${item}`}>Record a PASS or N/A result for {item}.</li>)}
+            {readiness.missingHandover.map((item) => <li key={`handover-${item}`}>Confirm customer handover: {item}.</li>)}
+            {!readiness.termsAccepted ? <li>Accept the customer terms and conditions.</li> : null}
+            {readiness.missingSignatures.map((item) => <li key={`signature-${item}`}>Add the {item} signature.</li>)}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }
