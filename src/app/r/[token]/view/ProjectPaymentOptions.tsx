@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Clipboard, Copy, Landmark, Loader2, ShieldCheck, Smartphone } from "lucide-react";
+import { Check, Clipboard, Copy, CreditCard, Landmark, Loader2, ShieldCheck, Smartphone } from "lucide-react";
 import { receiptMoney } from "@/lib/customerReceiptPresentation";
 
 const MPESA_EXPRESS_LIMIT = 250_000;
@@ -27,6 +27,7 @@ function CopyValue({ label, value, copyable = true }: { label: string; value: st
 
 export default function ProjectPaymentOptions({ token, balance, initialPhone, customerName, paymentMode = "project" }: { token: string; balance: number; initialPhone: string | null; customerName: string; paymentMode?: "project" | "delivery" }) {
   const paymentPath = `/api/public/receipts/${encodeURIComponent(token)}/${paymentMode}`;
+  const pesapalPath = `/api/public/receipts/${encodeURIComponent(token)}/pesapal`;
   const paymentLabel = paymentMode === "delivery" ? "delivery balance" : "project balance";
   const maximum = Math.min(Math.max(0, Math.round(balance)), MPESA_EXPRESS_LIMIT);
   const paybillAmount = balance > MPESA_EXPRESS_LIMIT ? MPESA_EXPRESS_LIMIT : balance;
@@ -38,6 +39,7 @@ export default function ProjectPaymentOptions({ token, balance, initialPhone, cu
   const [state, setState] = useState<"ready" | "sending" | "pending" | "success" | "failed">("ready");
   const [message, setMessage] = useState("");
   const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null);
+  const [pesapalBusy, setPesapalBusy] = useState(false);
 
   const selectedAmount = useMemo(() => Math.max(0, Math.round(Number(amount))), [amount]);
   const balanceAfterThisPrompt = Math.max(0, balance - selectedAmount);
@@ -106,6 +108,20 @@ export default function ProjectPaymentOptions({ token, balance, initialPhone, cu
     }
   }
 
+  async function startPesapal() {
+    setPesapalBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(pesapalPath, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount: selectedAmount || maximum }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok || !data.redirectUrl) throw new Error(data.error || "Pesapal checkout is not available right now.");
+      window.location.assign(data.redirectUrl);
+    } catch (error) {
+      setPesapalBusy(false);
+      setMessage(error instanceof Error ? error.message : "Unable to begin Pesapal checkout.");
+    }
+  }
+
   const busy = state === "sending" || state === "pending";
   return <section aria-labelledby="project-payment-heading" className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-5 sm:p-6">
     <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white"><ShieldCheck aria-hidden="true" /></span><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-800">Secure payment options</p><h2 id="project-payment-heading" className="mt-1 text-xl font-bold text-slate-900">Pay your {paymentLabel}</h2><p className="mt-1 text-sm leading-6 text-slate-700">Outstanding balance: <strong>{receiptMoney(balance)}</strong>. Choose the payment method that works best for you.</p></div></div>
@@ -119,6 +135,8 @@ export default function ProjectPaymentOptions({ token, balance, initialPhone, cu
         <button type="button" disabled={busy || !phone.trim() || selectedAmount < 1 || selectedAmount > maximum} onClick={() => void requestMpesaExpress()} className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-bold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">{state === "sending" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Smartphone size={18} aria-hidden="true" />}{state === "pending" ? "Waiting for M-Pesa…" : state === "sending" ? "Sending prompt…" : `Pay ${receiptMoney(selectedAmount || 0)} with M-Pesa`}</button>
         <p className="mt-3 text-xs leading-5 text-slate-600">Never enter your M-Pesa PIN on this page. Enter it only on Safaricom’s prompt on your phone.</p>
       </section>
+
+      <section className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-4"><div className="flex items-start gap-3"><CreditCard className="mt-0.5 text-indigo-700" aria-hidden="true" /><div><h3 className="font-bold text-indigo-950">Pay online with Pesapal</h3><p className="mt-1 text-sm leading-5 text-slate-700">Pay securely by card, bank, or the payment methods available in Pesapal&apos;s checkout.</p></div></div><button type="button" disabled={pesapalBusy || selectedAmount < 1 || selectedAmount > maximum} onClick={() => void startPesapal()} className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-indigo-700 px-4 text-sm font-bold text-white transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">{pesapalBusy ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <CreditCard size={18} aria-hidden="true" />}{pesapalBusy ? "Opening secure checkout…" : `Pay ${receiptMoney(selectedAmount || maximum)} with Pesapal`}</button><p className="mt-3 text-xs leading-5 text-slate-600">You will be redirected to Pesapal&apos;s secure checkout and returned here after payment.</p></section>
 
       <section className="rounded-xl border border-sky-200 bg-sky-50/70 p-4"><div className="flex items-start gap-3"><Clipboard className="mt-0.5 text-sky-700" aria-hidden="true" /><div><h3 className="font-bold text-sky-950">M-Pesa PayBill</h3><p className="mt-1 text-sm leading-5 text-slate-700">In M-Pesa, choose <strong>Lipa na M-Pesa → PayBill</strong>, then use the details below. {paybillRemainder ? <>Start with <strong>{receiptMoney(paybillAmount)}</strong>, then pay the remaining <strong>{receiptMoney(paybillRemainder)}</strong> after it is received.</> : <>Enter exactly <strong>{receiptMoney(paybillAmount)}</strong> as the amount.</>}</p><p className="mt-2 text-xs leading-5 text-slate-600">Use the prefilled account name exactly so we can match the payment to this project automatically.</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><CopyValue label="PayBill number" value="1231008" /><CopyValue label="Account name" value={paybillAccountName} /><CopyValue label="Display name" value="Betech Solar Limited" copyable={false} /><CopyValue label="Amount to pay" value={String(paybillAmount)} /></div></section>
 
