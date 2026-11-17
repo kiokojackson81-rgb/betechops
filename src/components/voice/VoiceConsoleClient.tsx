@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Grip,
   History,
+  MessageCircle,
   Mic,
   MoreHorizontal,
   Plus,
@@ -108,6 +109,11 @@ function formatDuration(seconds: number | null | undefined) {
   const secs = seconds % 60;
   if (!mins) return `${secs}s`;
   return `${mins}m ${secs}s`;
+}
+
+function whatsappHref(phone: string | null | undefined) {
+  const normalized = normalizeKenyanPhone(String(phone || ""));
+  return normalized ? `https://wa.me/${normalized.slice(1)}` : null;
 }
 
 function formatMoney(value: number | null | undefined, currencyCode = "KES") {
@@ -2866,9 +2872,7 @@ export default function VoiceConsoleClient({
                                         call.callerNumber}
                                     </div>
                                   )}
-                                  <div className="truncate text-xs text-slate-400">
-                                    {call.callerNumber}
-                                  </div>
+                                  {whatsappHref(call.callerNumber) ? <a href={whatsappHref(call.callerNumber)!} target="_blank" rel="noreferrer" className="truncate text-xs text-emerald-300 underline decoration-emerald-400/50 underline-offset-2 hover:text-emerald-100" title="Open WhatsApp chat">{call.callerNumber}</a> : <div className="truncate text-xs text-slate-400">{call.callerNumber}</div>}
                                 </div>
                                 <div className="truncate text-slate-300">
                                   {call.assignedToName ||
@@ -3473,9 +3477,7 @@ export default function VoiceConsoleClient({
                                               </span>
                                             ) : null}
                                           </div>
-                                          <div className="whitespace-nowrap text-sm text-slate-400">
-                                            {call.callerNumber}
-                                          </div>
+                                          {whatsappHref(call.callerNumber) ? <a href={whatsappHref(call.callerNumber)!} target="_blank" rel="noreferrer" className="whitespace-nowrap text-sm text-emerald-300 underline decoration-emerald-400/50 underline-offset-2 hover:text-emerald-100" title="Open WhatsApp chat">{call.callerNumber}</a> : <div className="whitespace-nowrap text-sm text-slate-400">{call.callerNumber}</div>}
                                         </div>
                                         <div>
                                           <span
@@ -3552,7 +3554,7 @@ export default function VoiceConsoleClient({
                                                     </div>
                                                   )}
                                                   <div className="mt-1 text-sm text-slate-400">
-                                                    {call.callerNumber} ·{" "}
+                                                    {whatsappHref(call.callerNumber) ? <a href={whatsappHref(call.callerNumber)!} target="_blank" rel="noreferrer" className="text-emerald-300 underline decoration-emerald-400/50 underline-offset-2 hover:text-emerald-100" title="Open WhatsApp chat">{call.callerNumber}</a> : call.callerNumber} ·{" "}
                                                     {call.direction} ·{" "}
                                                     {call.statusLabel}
                                                   </div>
@@ -3634,6 +3636,7 @@ export default function VoiceConsoleClient({
                                                   >
                                                     Call back
                                                   </a>
+                                                  {whatsappHref(call.callerNumber) ? <a href={whatsappHref(call.callerNumber)!} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center whitespace-nowrap gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400" title={`Message ${call.callerNumber} on WhatsApp`}><MessageCircle size={15} aria-hidden="true" />WhatsApp</a> : null}
                                                   <button
                                                     type="button"
                                                     onClick={() =>
