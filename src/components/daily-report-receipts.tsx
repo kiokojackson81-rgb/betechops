@@ -19,6 +19,7 @@ type DailyReportReceiptRow = {
   status?: string | null;
   paymentStatus?: string | null;
   isPodDelivery?: boolean;
+  podDirectDelivery?: boolean;
   podDeliveryStatus?: string | null;
   podDeliveryNote?: string | null;
   podEvidenceUrl?: string | null;
@@ -697,6 +698,8 @@ export default function DailyReportReceiptsPanel({
             {receipts.map((receipt) => {
               const customerProfileHref = buildCustomerProfileHref(receipt);
               const cancelled = isCancelledReceipt(receipt);
+              const isRiderPod = Boolean(receipt.podDirectDelivery);
+              const deliveryStatus = String(receipt.podDeliveryStatus ?? "").toLowerCase();
               const projectStageLabel = receipt.isProjectReceipt ? formatProjectStageLabel(receipt.projectStage) : null;
               const projectPaymentLabel = receipt.isProjectReceipt
                 ? String(receipt.projectPaymentStatus ?? "").replace(/_/g, " ").trim()
@@ -722,7 +725,7 @@ export default function DailyReportReceiptsPanel({
                           : "border-sky-400/25 bg-sky-400/10 text-sky-100"
                       }`}
                     >
-                      {receipt.isPodDelivery ? "POD" : "POS"}
+                      {receipt.isPodDelivery ? (isRiderPod ? "Rider POD" : "POD") : "POS"}
                     </span>
                   </div>
                   <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
@@ -731,13 +734,13 @@ export default function DailyReportReceiptsPanel({
                       {receipt.customerName ?? "-"}
                     </Link>
                     <div className="mt-1 break-normal text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
-                    {!cancelled && receipt.isPodDelivery && ["pending", "dispatched"].includes(String(receipt.podDeliveryStatus ?? "").toLowerCase()) && receipt.source === "pos" ? (
+                    {!cancelled && receipt.isPodDelivery && ["pending", "dispatched", "ready_for_outcome"].includes(deliveryStatus) && receipt.source === "pos" ? (
                       <button
                         type="button"
-                        onClick={() => String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" ? openFeeAction(receipt) : openPodAction(receipt)}
+                        onClick={() => deliveryStatus === "pending" ? openFeeAction(receipt) : openPodAction(receipt)}
                         className="mt-3 rounded-lg border border-yellow-400/40 bg-yellow-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-yellow-100 hover:bg-yellow-500/20"
                       >
-                        {String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" ? "Add fee & dispatch POD" : "Record delivery outcome"}
+                        {deliveryStatus === "pending" ? (isRiderPod ? "Prepare rider delivery" : "Add fee & dispatch POD") : `Record ${isRiderPod ? "rider " : ""}delivery outcome`}
                       </button>
                     ) : null}
                   </div>
@@ -758,10 +761,10 @@ export default function DailyReportReceiptsPanel({
                     ) : null}
                   </div>
                   <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
-                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">POD waybill</span>
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">{isRiderPod ? "Rider delivery" : "POD waybill"}</span>
                     {receipt.isPodDelivery ? (
                       <div className="mt-1 space-y-2">
-                        <div className="break-all text-sm font-semibold text-slate-100">{waybills.length ? waybills.join(" · ") : "Not entered"}</div>
+                        <div className="break-all text-sm font-semibold text-slate-100">{isRiderPod ? "Betech rider" : waybills.length ? waybills.join(" · ") : "Not entered"}</div>
                         {waybills.length ? (
                           <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
                             <button
@@ -795,7 +798,7 @@ export default function DailyReportReceiptsPanel({
                     )}
                   </div>
                   <div className="min-w-0 xl:border-r xl:border-white/10 xl:pr-4">
-                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">POD status</span>
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 xl:block">{isRiderPod ? "Rider status" : "POD status"}</span>
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
                         cancelled
@@ -808,7 +811,7 @@ export default function DailyReportReceiptsPanel({
                       {cancelled
                         ? "Cancelled"
                         : receipt.isPodDelivery
-                        ? `POD ${String(receipt.podDeliveryStatus ?? "pending").replace(/_/g, " ")}`
+                        ? `${isRiderPod ? "Rider POD" : "POD"} ${String(receipt.podDeliveryStatus ?? "pending").replace(/_/g, " ")}`
                         : projectStageLabel ?? String(receipt.paymentStatus ?? receipt.status ?? "open").replace(/_/g, " ")}
                     </span>
                     {cancelled ? (
