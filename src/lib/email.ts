@@ -657,8 +657,8 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
     ]
       .filter(Boolean)
       .join("\n\n"),
-    ctaLabel: "Login to your account",
-    ctaUrl: accountUrl,
+    ctaLabel: input.receiptLink ? "View order details & receipt" : "Login to your account",
+    ctaUrl: input.receiptLink || accountUrl,
     outro: input.isPodReceipt
       ? "Kind regards,\nBetech Solar Solutions"
       : "You can use the same account to review your saved order history and download future receipts.",

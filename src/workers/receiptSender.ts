@@ -486,6 +486,7 @@ export async function sendReceiptChannels(
   const wantSms = channels.length === 0 || channels.includes('sms');
   const baseDataAny = (typeof receipt.data === 'object' && receipt.data ? (receipt.data as any) : {}) as any;
   const isPodReceipt = Boolean(baseDataAny?.podDelivery) || Boolean(opts?.markPodSent) || isPodDispatchTag(opts?.chatraceTag);
+  const isRiderPayOnDelivery = String(baseDataAny?.customerType || '').toLowerCase() === 'delivery' && String(baseDataAny?.deliveryPaymentTerm || '').toUpperCase() === 'PAY_ON_DELIVERY';
   if (
     !isPodReceipt &&
     !shouldUseGenericReceiptNotifications({
@@ -1222,13 +1223,13 @@ export async function sendReceiptChannels(
         const customerReceiptUrl = secureDocumentsUrl;
         const podSupportName = receipt.order?.attendant?.name || receipt.issuedBy?.name || "Betech support";
         const podSupportNumber = String(receipt.order?.attendant?.oneVoiceCustomerNumber || receipt.issuedBy?.oneVoiceCustomerNumber || "").trim();
-        const smsBody = isPodReceipt
+        const smsBody = isPodReceipt || isRiderPayOnDelivery
           ? [
               `Hello ${customerName}, your Pay on Delivery order has been received and is being dispatched.`,
               `Receipt No: ${receiptNumber}.`,
-              `Amount due on delivery: ${amountText}.`,
-              `View and download your receipt: ${customerReceiptUrl}`,
-              ...(podSupportNumber ? [`For help, call ${podSupportName} on ${podSupportNumber}.`] : []),
+              `Amount due on delivery: ${formatCurrencyKes(Math.max(0, Number(receipt.totalAmount ?? orderAny?.totalAmount ?? 0) - Number(orderAny?.paidAmount || 0)))}.`,
+              `View order details and download your receipt: ${customerReceiptUrl}`,
+              ...(podSupportNumber ? [`For help, call ${podSupportName} on ${podSupportNumber}.`] : ['For help, call Betech Customer Care on 0722151083.']),
             ].join(' ')
           : [
               `Hello ${customerName}, thank you for shopping at BETECH SOLAR SOLUTIONS.`,

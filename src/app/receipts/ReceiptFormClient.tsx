@@ -184,7 +184,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showAddressInput, setShowAddressInput] = useState<boolean>(false);
   const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "pod" | "project" | "">("");
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
-  const [deliveryPaymentTerm, setDeliveryPaymentTerm] = useState<"PAY_BEFORE_DELIVERY" | "PAY_ON_DELIVERY">("PAY_BEFORE_DELIVERY");
+  const [deliveryPaymentTerm, setDeliveryPaymentTerm] = useState<"PAY_BEFORE_DELIVERY" | "PAY_ON_DELIVERY">("PAY_ON_DELIVERY");
   const [podNote, setPodNote] = useState<string>("");
   const [podCounty, setPodCounty] = useState("");
   const [podArea, setPodArea] = useState("");
@@ -1038,6 +1038,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (type === "delivery") {
       // ensure address input is visible for delivery customers
       setShowAddressInput(true);
+      setDeliveryPaymentTerm("PAY_ON_DELIVERY");
     }
     if (type !== "delivery") {
       setDeliveryStatus("pending");

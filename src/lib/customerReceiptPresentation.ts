@@ -136,12 +136,14 @@ export function customerReceiptPresentation(receipt: {
       : null,
     delivery: isDelivery
       ? {
+          isRiderDelivery: String(data.customerType || "").trim().toLowerCase() === "delivery",
           status: currentDeliveryStatus,
           paymentLabel: deliveryPaymentLabel(receipt),
           servingAgentName: String(podDelivery.dispatchedByName || order.attendant?.name || data.attendantName || data.servedByName || data.salespersonName || "our sales team").trim(),
           servingAgentPhone: String(
-            order.attendant?.oneVoiceCustomerNumber ||
-              (podDelivery.dispatchedByPhoneSource === "ONE_VOICE" ? podDelivery.dispatchedByPhone : "")
+              podDelivery.dispatchedByPhoneSource === "ONE_VOICE"
+                ? podDelivery.dispatchedByPhone
+                : order.attendant?.oneVoiceCustomerNumber || "",
           ).trim() || null,
           deliveryFee: amount(podDelivery.deliveryFee),
           speedafReceipts: Array.isArray(podDelivery.speedafReceipts) ? podDelivery.speedafReceipts.map((item) => record(item)).filter((item) => typeof item.url === "string" && item.url).map((item) => ({ url: String(item.url), fileName: String(item.fileName || "Speedaf receipt"), trackingNumbers: Array.isArray(item.trackingNumbers) ? item.trackingNumbers.map(String) : [] })) : [],

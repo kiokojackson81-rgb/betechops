@@ -1228,7 +1228,8 @@ export async function POST(req: NextRequest) {
     normalizeCustomerType(payload?.customerType) === "pod";
   const isProjectReceipt = normalizeCustomerType(payload?.customerType) === "project";
   const isStandardDelivery = normalizeCustomerType(payload?.customerType) === "delivery";
-  const deliveryPaymentTerm = String(payload?.deliveryPaymentTerm || "").trim().toUpperCase() === "PAY_ON_DELIVERY"
+  const suppliedDeliveryPaymentTerm = String(payload?.deliveryPaymentTerm || "").trim().toUpperCase();
+  const deliveryPaymentTerm = suppliedDeliveryPaymentTerm === "PAY_ON_DELIVERY" || (isStandardDelivery && !suppliedDeliveryPaymentTerm)
     ? "PAY_ON_DELIVERY"
     : "PAY_BEFORE_DELIVERY";
   const isPayOnDelivery = isStandardDelivery && deliveryPaymentTerm === "PAY_ON_DELIVERY";
