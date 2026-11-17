@@ -995,6 +995,27 @@ async function applyConfirmedPaymentInTransaction(
           : {}),
       },
     });
+    // Keep the public receipt in step with the immutable M-Pesa ledger. This
+    // is particularly important for Rider Delivery: its delivery remains
+    // pending, but a customer who pays through the prompt must immediately
+    // see the order as paid rather than an old payment-pending snapshot.
+    const receipt = await tx.receipt.findUnique({ where: { orderId: order.id }, select: { id: true, data: true } });
+    if (receipt) {
+      const receiptData = paymentMetadata(receipt.data);
+      const paidAt = input.transactionAt || payment.transactionAt || new Date();
+      await tx.receipt.update({
+        where: { id: receipt.id },
+        data: {
+          data: {
+            ...receiptData,
+            paymentDate: paidAt.toISOString(),
+            lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null,
+            lastMpesaPaymentAt: paidAt.toISOString(),
+            lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null,
+          },
+        },
+      });
+    }
   }
 
   if (payment.websiteOrderId) {
