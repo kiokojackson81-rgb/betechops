@@ -19,7 +19,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
   const outstanding = Math.max(0, Number(receipt.order.totalAmount) - Number(receipt.order.paidAmount));
   if (input.data.amount > outstanding || outstanding < 1) return NextResponse.json({ error: "This delivery has no payable outstanding balance." }, { status: 409 });
   try {
-    const payment = await initiateStkPushForResource({ resourceType: "ORDER", reference: receipt.order.orderNumber, phoneNumber: input.data.phoneNumber, installmentAmount: input.data.amount });
+    const payment = await initiateStkPushForResource({
+      resourceType: "ORDER",
+      orderId: receipt.order.id,
+      reference: receipt.order.orderNumber,
+      phoneNumber: input.data.phoneNumber,
+      installmentAmount: input.data.amount,
+    });
     return NextResponse.json({ ok: true, ...payment, balance: outstanding }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to send the M-Pesa Express prompt." }, { status: 502 });

@@ -303,6 +303,23 @@ async function findStkTarget(resourceType: MpesaStkResourceType, reference: stri
   return findInstallationProjectPaymentTarget(reference);
 }
 
+async function findPosOrderPaymentTarget(orderId: string): Promise<Extract<PaymentTarget, { kind: "ORDER" }> | null> {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, status: { not: "CANCELED" } },
+    select: { id: true, orderNumber: true, totalAmount: true, paidAmount: true, customerPhone: true },
+  });
+  if (!order) return null;
+  return {
+    kind: "ORDER",
+    id: order.id,
+    reference: order.orderNumber,
+    total: toNumber(order.totalAmount),
+    paid: Math.max(0, toNumber(order.paidAmount)),
+    customerPhone: order.customerPhone,
+    purpose: "ORDER_PAYMENT",
+  };
+}
+
 function permittedStkAmountForTarget(target: PaymentTarget, chosenAmount?: number | null) {
   if (target.kind !== "LPP" && target.kind !== "INSTALLATION_PROJECT") return permittedStkAmount(target);
   const balance = Math.max(0, target.total - target.paid);
@@ -324,11 +341,16 @@ function permittedStkAmountForTarget(target: PaymentTarget, chosenAmount?: numbe
 export async function initiateStkPushForResource(input: {
   resourceType: MpesaStkResourceType;
   reference: string;
+  // Public receipt links already know their exact POS order. Supplying it
+  // prevents an identically named website order from receiving the payment.
+  orderId?: string | null;
   phoneNumber?: string | null;
   installmentAmount?: number | null;
   paymentAccessToken?: string | null;
 }) {
-  const target = await findStkTarget(input.resourceType, input.reference);
+  const target = input.resourceType === "ORDER" && input.orderId
+    ? await findPosOrderPaymentTarget(input.orderId)
+    : await findStkTarget(input.resourceType, input.reference);
   if (!target) throw new Error("The payment record was not found or has no outstanding balance");
   if (target.kind === "WEBSITE_ORDER" && target.awaitingPayment && target.paymentAccessToken !== String(input.paymentAccessToken || "")) {
     throw new Error("This checkout payment session has expired. Return to checkout and try again.");
