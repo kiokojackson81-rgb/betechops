@@ -344,6 +344,11 @@ export async function GET(req: NextRequest) {
     and.push({
       OR: [
         { order: { attendantId } },
+        // Older and manually entered POD/Rider POD receipts store their
+        // ownership on the receipt itself. Include that canonical owner so
+        // an attendant's pending-delivery queue never appears empty merely
+        // because Order.attendantId was not populated at creation time.
+        { issuedById: attendantId },
         { data: { path: ["attendantId"], equals: attendantId } },
         { data: { path: ["projectFlow", "handlerStaffId"], equals: attendantId } },
       ],
@@ -353,6 +358,7 @@ export async function GET(req: NextRequest) {
     and.push({
       OR: [
         { order: { attendantId: attendantFilterParam } },
+        { issuedById: attendantFilterParam },
         { data: { path: ["attendantId"], equals: attendantFilterParam } as any },
         { data: { path: ["projectFlow", "handlerStaffId"], equals: attendantFilterParam } as any },
       ],
