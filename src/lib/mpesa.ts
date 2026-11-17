@@ -998,6 +998,19 @@ async function applyConfirmedPaymentInTransaction(
     paidAfter = Math.min(total, paidBefore + amount);
     const orderMetadata = paymentMetadata(order.metadata);
     const isCounterPayment = ["MPESA_EXPRESS", "MPESA_PAYBILL"].includes(String(orderMetadata.paymentCollectionMethod || ""));
+    const receipt = await tx.receipt.findUnique({ where: { orderId: order.id }, select: { id: true, data: true } });
+    const receiptData = receipt ? paymentMetadata(receipt.data) : null;
+    const podDelivery = receiptData ? paymentMetadata(receiptData.podDelivery) : {};
+    // Rider deliveries paid through an authenticated M-Pesa Express callback
+    // are complete at payment. Do not apply this to PayBill/C2B or bank
+    // transfers: those remain in the delivery queue for staff confirmation.
+    const automaticallyDelivered =
+      payment.channel === "STK" &&
+      paidAfter >= total &&
+      String(receiptData?.customerType || "").trim().toLowerCase() === "delivery" &&
+      String(receiptData?.deliveryPaymentTerm || "").trim().toUpperCase() === "PAY_ON_DELIVERY" &&
+      Boolean(podDelivery.directDelivery) &&
+      !["delivered", "delivery_failed", "failed", "cancelled", "canceled"].includes(String(podDelivery.status || "").trim().toLowerCase());
     await tx.order.update({
       where: { id: order.id },
       data: {
@@ -1005,7 +1018,7 @@ async function applyConfirmedPaymentInTransaction(
         paymentStatus: paidAfter >= total ? "PAID" : "PARTIAL",
         // A counter receipt has no fulfilment step after the customer has
         // confirmed payment. Other order types retain their Processing state.
-        status: paidAfter >= total ? (isCounterPayment ? "COMPLETED" : "PROCESSING") : order.status,
+        status: paidAfter >= total ? (automaticallyDelivered || isCounterPayment ? "COMPLETED" : "PROCESSING") : order.status,
         ...(isCounterPayment
           ? {
               metadata: {
@@ -1021,9 +1034,7 @@ async function applyConfirmedPaymentInTransaction(
     // is particularly important for Rider Delivery: its delivery remains
     // pending, but a customer who pays through the prompt must immediately
     // see the order as paid rather than an old payment-pending snapshot.
-    const receipt = await tx.receipt.findUnique({ where: { orderId: order.id }, select: { id: true, data: true } });
-    if (receipt) {
-      const receiptData = paymentMetadata(receipt.data);
+    if (receipt && receiptData) {
       const paidAt = input.transactionAt || payment.transactionAt || new Date();
       await tx.receipt.update({
         where: { id: receipt.id },
@@ -1034,6 +1045,20 @@ async function applyConfirmedPaymentInTransaction(
             lastMpesaReceiptNumber: input.receiptNumber || payment.receiptNumber || null,
             lastMpesaPaymentAt: paidAt.toISOString(),
             lastMpesaPayerPhone: input.phoneNumber || payment.phoneNumber || null,
+            ...(automaticallyDelivered
+              ? {
+                  financialRecognitionAt: paidAt.toISOString(),
+                  podDelivery: {
+                    ...podDelivery,
+                    status: "delivered",
+                    deliveredAt: podDelivery.deliveredAt || paidAt.toISOString(),
+                    paidAt: podDelivery.paidAt || paidAt.toISOString(),
+                    paymentConfirmedByDelivery: true,
+                    autoDeliveredBy: "MPESA_EXPRESS",
+                    autoDeliveredAt: paidAt.toISOString(),
+                  },
+                }
+              : {}),
           },
         },
       });
