@@ -5,6 +5,7 @@ import { receiptMoney, type CustomerReceiptPresentation } from "@/lib/customerRe
 import type { ReceiptReferralOffer } from "@/lib/reviewsReferrals";
 import ReceiptReferralCard from "./ReceiptReferralCard";
 import ProjectPaymentOptions from "./ProjectPaymentOptions";
+import PesapalPaymentButton from "./PesapalPaymentButton";
 import styles from "./receipt.module.css";
 
 const contacts = footerGroups.flatMap(group => group.links);
@@ -51,6 +52,9 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers, 
         ) : null}
         {receipt.delivery?.isRiderDelivery && receipt.delivery.paymentLabel === "Pay on delivery" && receipt.balance > 0 ? (
           <ProjectPaymentOptions token={token} balance={receipt.balance} initialPhone={receipt.customerPhone} customerName={receipt.customerName} paymentMode="delivery" />
+        ) : null}
+        {!receipt.project && !(receipt.delivery?.isRiderDelivery && receipt.delivery.paymentLabel === "Pay on delivery") && receipt.balance > 0 ? (
+          <PesapalPaymentButton token={token} balance={receipt.balance} />
         ) : null}
         {receipt.project ? <ProjectDocumentsCard project={receipt.project} token={token} documentsReady={projectDocumentsReady} /> : null}
         <section aria-labelledby="help-heading" className="mt-6 border-t border-slate-200 pt-5">
