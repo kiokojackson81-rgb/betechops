@@ -25,7 +25,9 @@ function CopyValue({ label, value, copyable = true }: { label: string; value: st
   </div>;
 }
 
-export default function ProjectPaymentOptions({ token, balance, initialPhone, customerName }: { token: string; balance: number; initialPhone: string | null; customerName: string }) {
+export default function ProjectPaymentOptions({ token, balance, initialPhone, customerName, paymentMode = "project" }: { token: string; balance: number; initialPhone: string | null; customerName: string; paymentMode?: "project" | "delivery" }) {
+  const paymentPath = `/api/public/receipts/${encodeURIComponent(token)}/${paymentMode}`;
+  const paymentLabel = paymentMode === "delivery" ? "delivery balance" : "project balance";
   const maximum = Math.min(Math.max(0, Math.round(balance)), MPESA_EXPRESS_LIMIT);
   const paybillAmount = balance > MPESA_EXPRESS_LIMIT ? MPESA_EXPRESS_LIMIT : balance;
   const paybillRemainder = Math.max(0, balance - paybillAmount);
@@ -73,7 +75,7 @@ export default function ProjectPaymentOptions({ token, balance, initialPhone, cu
     let active = true;
     const checkPaybill = async () => {
       try {
-        const response = await fetch(`/api/public/receipts/${encodeURIComponent(token)}/project/payment-status`, { cache: "no-store" });
+        const response = await fetch(`${paymentPath}/payment-status`, { cache: "no-store" });
         const data = await response.json().catch(() => ({}));
         if (active && response.ok && Number(data.balance) < balance) window.location.reload();
       } catch {
@@ -82,13 +84,13 @@ export default function ProjectPaymentOptions({ token, balance, initialPhone, cu
     };
     const interval = window.setInterval(() => void checkPaybill(), 10_000);
     return () => { active = false; window.clearInterval(interval); };
-  }, [balance, token]);
+  }, [balance, paymentPath]);
 
   async function requestMpesaExpress() {
     setState("sending");
     setMessage("");
     try {
-      const response = await fetch(`/api/public/receipts/${encodeURIComponent(token)}/project/mpesa-express`, {
+      const response = await fetch(`${paymentPath}/mpesa-express`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phoneNumber: phone, amount: selectedAmount }),
@@ -106,7 +108,7 @@ export default function ProjectPaymentOptions({ token, balance, initialPhone, cu
 
   const busy = state === "sending" || state === "pending";
   return <section aria-labelledby="project-payment-heading" className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-5 sm:p-6">
-    <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white"><ShieldCheck aria-hidden="true" /></span><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-800">Secure payment options</p><h2 id="project-payment-heading" className="mt-1 text-xl font-bold text-slate-900">Pay your project balance</h2><p className="mt-1 text-sm leading-6 text-slate-700">Outstanding balance: <strong>{receiptMoney(balance)}</strong>. Choose the payment method that works best for you.</p></div></div>
+    <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white"><ShieldCheck aria-hidden="true" /></span><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-800">Secure payment options</p><h2 id="project-payment-heading" className="mt-1 text-xl font-bold text-slate-900">Pay your {paymentLabel}</h2><p className="mt-1 text-sm leading-6 text-slate-700">Outstanding balance: <strong>{receiptMoney(balance)}</strong>. Choose the payment method that works best for you.</p></div></div>
 
     <div className="mt-5 grid gap-4">
       <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">

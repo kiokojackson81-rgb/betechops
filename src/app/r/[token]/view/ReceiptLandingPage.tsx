@@ -49,6 +49,9 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers, 
         {receipt.project && receipt.project.stage !== "CANCELLED" && receipt.balance > 0 ? (
           <ProjectPaymentOptions token={token} balance={receipt.balance} initialPhone={receipt.customerPhone} customerName={receipt.customerName} />
         ) : null}
+        {receipt.delivery?.isRiderDelivery && receipt.delivery.paymentLabel === "Pay on delivery" && receipt.balance > 0 ? (
+          <ProjectPaymentOptions token={token} balance={receipt.balance} initialPhone={receipt.customerPhone} customerName={receipt.customerName} paymentMode="delivery" />
+        ) : null}
         {receipt.project ? <ProjectDocumentsCard project={receipt.project} token={token} documentsReady={projectDocumentsReady} /> : null}
         <section aria-labelledby="help-heading" className="mt-6 border-t border-slate-200 pt-5">
           <h2 id="help-heading" className="text-xl font-bold">Need help with your purchase?</h2>
