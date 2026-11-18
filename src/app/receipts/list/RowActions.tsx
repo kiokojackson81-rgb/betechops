@@ -17,7 +17,6 @@ export default function RowActions({
   onDelete,
   onDownload,
   onSendWhatsapp,
-  smsAction,
   onPrint,
   onPodAction,
   onMarkPaid,
@@ -34,7 +33,6 @@ export default function RowActions({
   onDelete: () => void;
   onDownload: () => void;
   onSendWhatsapp: () => void;
-  smsAction?: React.ReactNode;
   onPrint: () => void;
   onPodAction?: () => void;
   onMarkPaid?: () => void;
@@ -121,8 +119,6 @@ export default function RowActions({
         <Send size={16} />
         <span className="hidden md:inline">WhatsApp</span>
       </button>
-
-      {smsAction}
 
       {onPodAction && (
         <button

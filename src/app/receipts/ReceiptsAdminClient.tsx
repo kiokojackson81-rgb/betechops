@@ -12,7 +12,6 @@ import {
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import ReceiptsSummary from "./list/ReceiptsSummary";
-import RowActions from "./list/RowActions";
 import MarkdownRendererClient, {
   RichFormattingToggle,
 } from "@/components/MarkdownRendererClient";
@@ -622,7 +621,6 @@ export default function ReceiptsAdminClient({
   const [sendingChannel, setSendingChannel] = useState<
     "email" | "whatsapp" | null
   >(null);
-  const [pendingEditId, setPendingEditId] = useState<string | null>(null);
   const [editState, setEditState] = useState<{
     open: boolean;
     draft: EditDraft | null;
@@ -1836,23 +1834,6 @@ export default function ReceiptsAdminClient({
     if (selected) openCancellation(selected);
   };
 
-  const deleteReceiptById = (receiptId: string) => {
-    const row = rows.find((item) => item.id === receiptId);
-    if (!row) {
-      showToast("Receipt not found; refreshing list", "info");
-      void loadRows(page);
-      return;
-    }
-    openCancellation(row);
-  };
-
-  useEffect(() => {
-    if (pendingEditId && detail?.receipt?.id === pendingEditId) {
-      setPendingEditId(null);
-      openEditModal();
-    }
-  }, [pendingEditId, detail?.receipt?.id]);
-
   const openEditModal = () => {
     if (!allowEdit) return;
     if (!detail?.receipt) {
@@ -2858,16 +2839,13 @@ export default function ReceiptsAdminClient({
                 <th className="px-3 py-2 text-left whitespace-nowrap">
                   Created
                 </th>
-                <th className="px-3 py-2 text-right whitespace-nowrap">
-                  Actions
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 whitespace-nowrap">
               {displayRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9}
                     className="px-3 py-6 text-center text-slate-400"
                   >
                     {loading
@@ -2879,12 +2857,6 @@ export default function ReceiptsAdminClient({
                 </tr>
               )}
               {displayRows.map((row) => {
-                const isPodPending =
-                  row.isPodDelivery &&
-                  String(row.podDeliveryStatus ?? "").toLowerCase() ===
-                    "pending";
-                const isPodDispatched = row.isPodDelivery && ["dispatched", "ready_for_outcome"].includes(String(row.podDeliveryStatus ?? "").toLowerCase());
-                const hasPendingPayment = ["PENDING", "UNPAID", "PARTIAL"].includes(String(row.paymentStatus ?? "").toUpperCase());
                 const isSelected = row.id === selected?.id && drawerOpen;
                 const customerProfileHref = buildAdminCustomerProfileHref({
                   phone: row.customerPhone,
@@ -3006,80 +2978,11 @@ export default function ReceiptsAdminClient({
                       <td className="px-3 py-3 text-slate-300">
                         {formatDateTime(row.createdAt)}
                       </td>
-                      <td className="px-3 py-3 text-right">
-                        <RowActions
-                          onEdit={() => {
-                            setPendingEditId(row.id);
-                            handleRowClick(row, true);
-                          }}
-                          onEditItems={() => {
-                            setPendingEditId(row.id);
-                            handleRowClick(row, true);
-                          }}
-                          onDelete={() => void deleteReceiptById(row.id)}
-                          onDownload={() => void downloadReceiptById(row)}
-                          onSendWhatsapp={() =>
-                            void sendReceiptById(row.id, "whatsapp")
-                          }
-                          smsAction={
-                            <CustomerSmsComposer
-                              customerName={row.customerName}
-                              customerPhone={row.customerPhone}
-                              entityType="RECEIPT"
-                              entityId={row.id}
-                              reference={row.orderRef}
-                              className="inline-flex items-center gap-2 rounded bg-cyan-700 px-2 py-1 text-xs font-semibold text-white outline-none hover:bg-cyan-600 focus:ring-2 focus:ring-cyan-400"
-                            />
-                          }
-                          onResendPod={
-                            row.isPodDelivery
-                              ? () => void sendReceiptById(row.id, "whatsapp")
-                              : undefined
-                          }
-                          onPrint={() =>
-                            window.open(`/receipts/${row.id}`, "_blank")
-                          }
-                          onPodAction={
-                            isPodPending
-                              ? () => void addPodDeliveryFeeAndDispatch(row.id)
-                              : isPodDispatched
-                                ? () => openPodOutcome(row.id, Boolean(row.podDirectDelivery))
-                              : undefined
-                          }
-                          onMarkPaid={
-                            !row.isPodDelivery && hasPendingPayment
-                                ? () => void handleAdminMarkPaid(row)
-                                : undefined
-                          }
-                          onProjectAction={
-                            row.isProjectReceipt &&
-                            row.projectStage !== "COMPLETED_POSTED" &&
-                            row.projectStage !== "CANCELLED"
-                              ? () => void advanceProjectStage(row)
-                              : undefined
-                          }
-                          projectActionLabel={
-                            row.projectStage === "RECEIPT_CREATED"
-                              ? "Confirm & schedule"
-                              : row.projectStage === "PROJECT_SCHEDULED"
-                                ? "Start progress"
-                                : row.projectStage === "PROJECT_IN_PROGRESS"
-                                  ? "Mark installed"
-                                  : row.projectStage === "PROJECT_INSTALLED"
-                                    ? "Complete project"
-                                    : "Project saved"
-                          }
-                          projectActionProcessing={projectActionId === row.id}
-                          podActionLabel={isPodPending ? "Add fee & dispatch" : "Record POD outcome"}
-                          podActionProcessing={podActionId === row.id}
-                          disabled={loading}
-                        />
-                      </td>
                     </tr>
                     {isSelected ? (
                       <tr className="bg-slate-950/80">
                         <td
-                          colSpan={10}
+                          colSpan={9}
                           className="border-t border-cyan-400/15 p-0 whitespace-normal"
                         >
                           <div className="sticky left-0 w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] p-3 sm:p-4 lg:static lg:w-auto lg:max-w-none lg:p-5">
@@ -3986,6 +3889,15 @@ export default function ReceiptsAdminClient({
                     >
                       Open printable
                     </Link>
+                    {selected && (
+                      <button
+                        type="button"
+                        onClick={() => void downloadReceiptById(selected)}
+                        className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/10"
+                      >
+                        Download receipt
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleSend("email")}
@@ -4004,6 +3916,34 @@ export default function ReceiptsAdminClient({
                         ? "Sending..."
                         : "Send WhatsApp"}
                     </button>
+                    <CustomerSmsComposer
+                      customerName={selected?.customerName}
+                      customerPhone={selected?.customerPhone}
+                      entityType="RECEIPT"
+                      entityId={detail.receipt.id}
+                      reference={selected?.orderRef}
+                      className="rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-400/20"
+                    />
+                    {selected && !selected.isPodDelivery && ["PENDING", "UNPAID", "PARTIAL"].includes(String(selected.paymentStatus ?? "").toUpperCase()) && (
+                      <button
+                        type="button"
+                        onClick={() => void handleAdminMarkPaid(selected)}
+                        disabled={podActionId === selected.id}
+                        className="rounded-xl border border-emerald-500/70 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-50"
+                      >
+                        {podActionId === selected.id ? "Saving..." : "Mark paid"}
+                      </button>
+                    )}
+                    {selected && selected.isProjectReceipt && !["COMPLETED_POSTED", "CANCELLED"].includes(String(selected.projectStage ?? "")) && (
+                      <button
+                        type="button"
+                        onClick={() => void advanceProjectStage(selected)}
+                        disabled={projectActionId === selected.id}
+                        className="rounded-xl border border-cyan-500/70 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-50"
+                      >
+                        {projectActionId === selected.id ? "Processing..." : selected.projectStage === "RECEIPT_CREATED" ? "Confirm & schedule" : selected.projectStage === "PROJECT_SCHEDULED" ? "Start progress" : selected.projectStage === "PROJECT_IN_PROGRESS" ? "Mark installed" : "Complete project"}
+                      </button>
+                    )}
                     {detail.receipt.data?.podDelivery && (
                       <button
                         type="button"
