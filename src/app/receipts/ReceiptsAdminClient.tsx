@@ -2941,14 +2941,6 @@ export default function ReceiptsAdminClient({
                         >
                           {row.customerName || "Walk-in"}
                         </Link>
-                        <CustomerSmsComposer
-                          customerName={row.customerName}
-                          customerPhone={row.customerPhone}
-                          entityType="RECEIPT"
-                          entityId={row.id}
-                          reference={row.orderRef}
-                          className="mt-2 rounded-md border border-cyan-400/25 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-100 hover:bg-cyan-400/10"
-                        />
                       </td>
                       <td className="px-3 py-3 text-slate-300">
                         {ownerEditReceiptId === row.id ? (
@@ -3028,6 +3020,16 @@ export default function ReceiptsAdminClient({
                           onDownload={() => void downloadReceiptById(row)}
                           onSendWhatsapp={() =>
                             void sendReceiptById(row.id, "whatsapp")
+                          }
+                          smsAction={
+                            <CustomerSmsComposer
+                              customerName={row.customerName}
+                              customerPhone={row.customerPhone}
+                              entityType="RECEIPT"
+                              entityId={row.id}
+                              reference={row.orderRef}
+                              className="inline-flex items-center gap-2 rounded bg-cyan-700 px-2 py-1 text-xs font-semibold text-white outline-none hover:bg-cyan-600 focus:ring-2 focus:ring-cyan-400"
+                            />
                           }
                           onResendPod={
                             row.isPodDelivery
