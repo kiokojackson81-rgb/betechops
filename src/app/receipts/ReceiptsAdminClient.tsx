@@ -2839,13 +2839,16 @@ export default function ReceiptsAdminClient({
                 <th className="px-3 py-2 text-left whitespace-nowrap">
                   Created
                 </th>
+                <th className="px-3 py-2 text-right whitespace-nowrap">
+                  Operations
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 whitespace-nowrap">
               {displayRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-3 py-6 text-center text-slate-400"
                   >
                     {loading
@@ -2857,6 +2860,9 @@ export default function ReceiptsAdminClient({
                 </tr>
               )}
               {displayRows.map((row) => {
+                const isPodPending = row.isPodDelivery && String(row.podDeliveryStatus ?? "").toLowerCase() === "pending";
+                const isPodDispatched = row.isPodDelivery && ["dispatched", "ready_for_outcome"].includes(String(row.podDeliveryStatus ?? "").toLowerCase());
+                const hasPendingPayment = ["PENDING", "UNPAID", "PARTIAL"].includes(String(row.paymentStatus ?? "").toUpperCase());
                 const isSelected = row.id === selected?.id && drawerOpen;
                 const customerProfileHref = buildAdminCustomerProfileHref({
                   phone: row.customerPhone,
@@ -2978,11 +2984,45 @@ export default function ReceiptsAdminClient({
                       <td className="px-3 py-3 text-slate-300">
                         {formatDateTime(row.createdAt)}
                       </td>
+                      <td className="px-3 py-3 text-right">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {isPodPending || isPodDispatched ? (
+                            <button
+                              type="button"
+                              onClick={(event) => { event.stopPropagation(); if (isPodPending) void addPodDeliveryFeeAndDispatch(row.id); else openPodOutcome(row.id, Boolean(row.podDirectDelivery)); }}
+                              disabled={loading || podActionId === row.id}
+                              className="rounded bg-yellow-500/60 px-2 py-1 text-xs font-semibold text-black hover:bg-yellow-500 disabled:opacity-50"
+                            >
+                              {podActionId === row.id ? "Processing..." : isPodPending ? "Add fee & dispatch" : "Record POD outcome"}
+                            </button>
+                          ) : null}
+                          {!row.isPodDelivery && hasPendingPayment ? (
+                            <button
+                              type="button"
+                              onClick={(event) => { event.stopPropagation(); void handleAdminMarkPaid(row); }}
+                              disabled={loading || podActionId === row.id}
+                              className="rounded bg-emerald-600/80 px-2 py-1 text-xs font-semibold text-black hover:bg-emerald-600 disabled:opacity-50"
+                            >
+                              {podActionId === row.id ? "Saving..." : "Mark paid"}
+                            </button>
+                          ) : null}
+                          {row.isProjectReceipt && !["COMPLETED_POSTED", "CANCELLED"].includes(String(row.projectStage ?? "")) ? (
+                            <button
+                              type="button"
+                              onClick={(event) => { event.stopPropagation(); void advanceProjectStage(row); }}
+                              disabled={loading || projectActionId === row.id}
+                              className="rounded bg-cyan-500/70 px-2 py-1 text-xs font-semibold text-black hover:bg-cyan-500 disabled:opacity-50"
+                            >
+                              {projectActionId === row.id ? "Processing..." : row.projectStage === "RECEIPT_CREATED" ? "Confirm & schedule" : row.projectStage === "PROJECT_SCHEDULED" ? "Start progress" : row.projectStage === "PROJECT_IN_PROGRESS" ? "Mark installed" : "Complete project"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                     {isSelected ? (
                       <tr className="bg-slate-950/80">
                         <td
-                          colSpan={9}
+                          colSpan={10}
                           className="border-t border-cyan-400/15 p-0 whitespace-normal"
                         >
                           <div className="sticky left-0 w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] p-3 sm:p-4 lg:static lg:w-auto lg:max-w-none lg:p-5">
@@ -3924,26 +3964,6 @@ export default function ReceiptsAdminClient({
                       reference={selected?.orderRef}
                       className="rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-400/20"
                     />
-                    {selected && !selected.isPodDelivery && ["PENDING", "UNPAID", "PARTIAL"].includes(String(selected.paymentStatus ?? "").toUpperCase()) && (
-                      <button
-                        type="button"
-                        onClick={() => void handleAdminMarkPaid(selected)}
-                        disabled={podActionId === selected.id}
-                        className="rounded-xl border border-emerald-500/70 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-50"
-                      >
-                        {podActionId === selected.id ? "Saving..." : "Mark paid"}
-                      </button>
-                    )}
-                    {selected && selected.isProjectReceipt && !["COMPLETED_POSTED", "CANCELLED"].includes(String(selected.projectStage ?? "")) && (
-                      <button
-                        type="button"
-                        onClick={() => void advanceProjectStage(selected)}
-                        disabled={projectActionId === selected.id}
-                        className="rounded-xl border border-cyan-500/70 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-50"
-                      >
-                        {projectActionId === selected.id ? "Processing..." : selected.projectStage === "RECEIPT_CREATED" ? "Confirm & schedule" : selected.projectStage === "PROJECT_SCHEDULED" ? "Start progress" : selected.projectStage === "PROJECT_IN_PROGRESS" ? "Mark installed" : "Complete project"}
-                      </button>
-                    )}
                     {detail.receipt.data?.podDelivery && (
                       <button
                         type="button"
