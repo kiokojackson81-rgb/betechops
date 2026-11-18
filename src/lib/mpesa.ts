@@ -1308,7 +1308,7 @@ export async function reconcileUnmatchedMpesaPayment(input: {
       phoneNumber: payment.phoneNumber,
       transactionAt: payment.transactionAt,
       resultCode: payment.resultCode,
-      resultDescription: payment.resultDescription,
+      resultDescription: `Manually reconciled by finance operations. ${payment.resultDescription || "Original PayBill payment had no automatic match."}`,
       payload: payment.callbackPayload,
       preserveCallbackPayload: true,
     });

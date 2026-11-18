@@ -20,6 +20,19 @@ function date(value: Date | null) {
   return value ? value.toISOString() : null;
 }
 
+const AUTO_PAYBILL_MATCH = "Auto-matched PayBill payment:";
+const MANUAL_RECONCILIATION = "Manually reconciled by finance operations.";
+
+type MatchStatus = "MATCHED_BY_REFERENCE" | "AUTO_MATCHED" | "MANUALLY_RECONCILED" | "UNMATCHED" | "AWAITING_CONFIRMATION";
+
+function matchStatus(payment: { status: MpesaPaymentStatus; resultDescription: string | null; orderId?: string | null; websiteOrderId?: string | null; resourceId?: string | null }): MatchStatus {
+  if (payment.status === "UNMATCHED") return "UNMATCHED";
+  if (payment.resultDescription?.startsWith(MANUAL_RECONCILIATION)) return "MANUALLY_RECONCILED";
+  if (payment.resultDescription?.startsWith(AUTO_PAYBILL_MATCH)) return "AUTO_MATCHED";
+  if (payment.orderId || payment.websiteOrderId || payment.resourceId) return "MATCHED_BY_REFERENCE";
+  return "AWAITING_CONFIRMATION";
+}
+
 function serialize(payment: {
   id: string;
   channel: MpesaPaymentChannel;
@@ -41,6 +54,8 @@ function serialize(payment: {
   callbackPayload: unknown;
   createdAt: Date;
   updatedAt: Date;
+  orderId?: string | null;
+  websiteOrderId?: string | null;
   order: { id: string; customerName: string; orderNumber: string; totalAmount: number; paidAmount: number; paymentStatus: string; metadata: unknown } | null;
   websiteOrder: { id: string; customerName: string; orderRef: string; total: unknown; metadata: unknown; status: string } | null;
 }) {
@@ -73,6 +88,7 @@ function serialize(payment: {
     createdAt: payment.createdAt.toISOString(),
     updatedAt: payment.updatedAt.toISOString(),
     settlementRole: isSettledMpesaPayment(payment) ? "SETTLEMENT" : payment.status === "SUCCESS" ? "CONFIRMATION_EVENT" : "ATTEMPT",
+    matchStatus: matchStatus(payment),
     order: payment.order ? {
       kind: "ORDER" as const,
       id: payment.order.id,
@@ -113,9 +129,24 @@ export async function GET(request: NextRequest) {
   const phoneNumber = params.get("phoneNumber")?.trim() || "";
   const status = params.get("status") || "ALL";
   const channel = params.get("channel") || "ALL";
+  const match = params.get("match") || "ALL";
   const from = params.get("from")?.trim();
   const to = params.get("to")?.trim();
+  const matchFilters: Prisma.MpesaPaymentWhereInput[] = [];
+  if (match === "UNMATCHED") matchFilters.push({ status: "UNMATCHED" });
+  if (match === "AUTO_MATCHED") matchFilters.push({ resultDescription: { startsWith: AUTO_PAYBILL_MATCH } });
+  if (match === "MANUALLY_RECONCILED") matchFilters.push({ resultDescription: { startsWith: MANUAL_RECONCILIATION } });
+  if (match === "MATCHED_BY_REFERENCE") matchFilters.push(
+    { status: { not: "UNMATCHED" } },
+    { NOT: [{ resultDescription: { startsWith: AUTO_PAYBILL_MATCH } }, { resultDescription: { startsWith: MANUAL_RECONCILIATION } }] },
+    { OR: [{ orderId: { not: null } }, { websiteOrderId: { not: null } }, { resourceId: { not: null } }] },
+  );
+  if (match === "AWAITING_CONFIRMATION") matchFilters.push(
+    { status: { not: "UNMATCHED" } },
+    { orderId: null, websiteOrderId: null, resourceId: null },
+  );
   const where: Prisma.MpesaPaymentWhereInput = {
+    ...(matchFilters.length ? { AND: matchFilters } : {}),
     ...(status !== "ALL" && Object.values(MpesaPaymentStatus).includes(status as MpesaPaymentStatus)
       ? { status: status as MpesaPaymentStatus }
       : {}),

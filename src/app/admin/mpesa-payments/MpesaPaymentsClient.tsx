@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED" | "CANCELLED" | "UNMATCHED";
+type MatchStatus = "MATCHED_BY_REFERENCE" | "AUTO_MATCHED" | "MANUALLY_RECONCILED" | "UNMATCHED" | "AWAITING_CONFIRMATION";
 type Payment = {
   id: string;
   channel: "STK" | "C2B";
@@ -24,6 +25,7 @@ type Payment = {
   transactionAt: string | null;
   createdAt: string;
   settlementRole: "ATTEMPT" | "CONFIRMATION_EVENT" | "SETTLEMENT";
+  matchStatus: MatchStatus;
   order: { kind: "ORDER" | "WEBSITE_ORDER"; id: string; reference: string; total: number; paid: number; paymentStatus: string; paymentCollectionMethod?: string | null } | null;
 };
 type Candidate = { kind: "ORDER" | "WEBSITE_ORDER"; id: string; reference: string; customerName: string; customerPhone: string | null; total: number; paid: number };
@@ -43,10 +45,26 @@ function statusClass(status: PaymentStatus) {
   return "border-rose-400/30 bg-rose-400/10 text-rose-100";
 }
 
+const matchStatusLabel: Record<MatchStatus, string> = {
+  MATCHED_BY_REFERENCE: "Matched by reference / prompt",
+  AUTO_MATCHED: "Auto-matched: name + amount + time",
+  MANUALLY_RECONCILED: "Manually reconciled",
+  UNMATCHED: "Unmatched — needs review",
+  AWAITING_CONFIRMATION: "Awaiting confirmation",
+};
+
+function matchStatusClass(status: MatchStatus) {
+  if (status === "AUTO_MATCHED") return "border-sky-400/30 bg-sky-400/10 text-sky-100";
+  if (status === "MANUALLY_RECONCILED") return "border-violet-400/30 bg-violet-400/10 text-violet-100";
+  if (status === "UNMATCHED") return "border-amber-400/30 bg-amber-400/10 text-amber-100";
+  if (status === "AWAITING_CONFIRMATION") return "border-slate-400/30 bg-slate-400/10 text-slate-200";
+  return "border-emerald-400/30 bg-emerald-400/10 text-emerald-100";
+}
+
 export default function MpesaPaymentsClient() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [filters, setFilters] = useState({ q: "", accountReference: "", phoneNumber: "", status: "ALL", channel: "ALL", from: "", to: "" });
+  const [filters, setFilters] = useState({ q: "", accountReference: "", phoneNumber: "", status: "ALL", match: "ALL", channel: "ALL", from: "", to: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
@@ -150,11 +168,12 @@ export default function MpesaPaymentsClient() {
           <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4"><p className="text-xs uppercase tracking-wide text-slate-400">Ledger records</p><p className="mt-2 text-2xl font-semibold">{loading ? "…" : payments.length}</p><p className="mt-1 text-sm text-slate-400">Up to 250 matching records shown</p></div>
         </section>
 
-        <form onSubmit={(event: FormEvent) => { event.preventDefault(); void loadPayments(); }} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-900/60 p-4 md:grid-cols-4 xl:grid-cols-7">
+        <form onSubmit={(event: FormEvent) => { event.preventDefault(); void loadPayments(); }} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-900/60 p-4 md:grid-cols-4 xl:grid-cols-8">
           <input value={filters.q} onChange={(event) => setFilters({ ...filters, q: event.target.value })} placeholder="Receipt / transaction ID" className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm" />
           <input value={filters.accountReference} onChange={(event) => setFilters({ ...filters, accountReference: event.target.value })} placeholder="Account / BillRef" className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm" />
           <input value={filters.phoneNumber} onChange={(event) => setFilters({ ...filters, phoneNumber: event.target.value })} placeholder="Phone number" className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm" />
           <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })} className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm"><option value="ALL">All statuses</option>{(["PENDING", "SUCCESS", "FAILED", "CANCELLED", "UNMATCHED"] as const).map((status) => <option key={status}>{status}</option>)}</select>
+          <select value={filters.match} onChange={(event) => setFilters({ ...filters, match: event.target.value })} className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm"><option value="ALL">All match statuses</option>{(["MATCHED_BY_REFERENCE", "AUTO_MATCHED", "MANUALLY_RECONCILED", "UNMATCHED", "AWAITING_CONFIRMATION"] as const).map((status) => <option key={status} value={status}>{matchStatusLabel[status]}</option>)}</select>
           <select value={filters.channel} onChange={(event) => setFilters({ ...filters, channel: event.target.value })} className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm"><option value="ALL">All channels</option><option value="C2B">C2B</option><option value="STK">STK</option></select>
           <input type="date" aria-label="From date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm" />
           <div className="flex gap-2"><input type="date" aria-label="To date" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm" /><button className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-bold text-slate-950 hover:bg-emerald-400" type="submit">Search</button></div>
@@ -162,9 +181,9 @@ export default function MpesaPaymentsClient() {
 
         {error ? <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</div> : null}
         <section className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/60">
-          <table className="min-w-[1200px] w-full text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-slate-400"><tr><th className="p-3">Receipt / transaction</th><th className="p-3">M-Pesa date</th><th className="p-3">Attempt / settlement</th><th className="p-3">Payer</th><th className="p-3">Account reference</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3">Purpose / linked record</th><th className="p-3">Result</th><th className="p-3">Action</th></tr></thead>
-            <tbody>{payments.map((payment) => <tr key={payment.id} className="border-b border-white/5 align-top hover:bg-white/[0.025]"><td className="p-3 font-mono text-xs text-slate-200">{payment.receiptNumber || payment.transactionId || "—"}<div className="mt-1 font-sans text-[11px] text-slate-500">Created {formatDate(payment.createdAt)}<br />Checkout: {payment.checkoutRequestId || "—"}</div></td><td className="p-3 whitespace-nowrap">{payment.transactionAt ? formatDate(payment.transactionAt) : <><span className="text-slate-400">Awaiting M-Pesa date</span><div className="mt-1 text-xs text-slate-500">Attempt: {formatDate(payment.createdAt)}</div></>}</td><td className="p-3"><div>{payment.settlementRole === "SETTLEMENT" ? "M-Pesa settlement" : payment.settlementRole === "CONFIRMATION_EVENT" ? "STK confirmation event" : `${payment.channel} attempt`}</div><div className="mt-1 text-xs text-slate-500">{payment.order?.paymentCollectionMethod === "MPESA_EXPRESS" ? "M-Pesa Express" : payment.order?.paymentCollectionMethod === "MPESA_PAYBILL" ? "Paybill fallback" : payment.channel}</div></td><td className="p-3"><div>{payment.payerName || "Name not supplied"}</div>{payment.payerNameSource === "CUSTOMER" ? <div className="mt-1 text-xs text-slate-500">Receipt customer</div> : null}<div className="mt-1 font-mono text-xs text-slate-400">{payment.phoneNumber || "—"}</div></td><td className="p-3">{payment.accountReference || "—"}</td><td className="p-3 whitespace-nowrap font-semibold">{money.format(payment.amount ?? payment.requestedAmount ?? 0)}</td><td className="p-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(payment.status)}`}>{payment.status}</span></td><td className="p-3"><div className="font-medium">{payment.purpose.replace(/_/g, " ")}</div>{payment.order ? <div className="text-xs text-slate-400">{payment.order.kind === "ORDER" ? "POS" : "Website"}: {payment.order.reference}</div> : payment.resourceType ? <div className="text-xs text-slate-400">{payment.resourceType}: {payment.accountReference || payment.resourceId}</div> : "—"}</td><td className="max-w-[220px] p-3 text-xs text-slate-300">{payment.resultDescription || "—"}</td><td className="p-3">{payment.status === "UNMATCHED" && payment.channel === "C2B" ? <button type="button" onClick={() => selectForReconciliation(payment)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1.5 text-xs font-bold text-amber-100 hover:bg-amber-300/20">Reconcile</button> : payment.status === "SUCCESS" ? <Link href={`/admin/mpesa-refunds?paymentId=${encodeURIComponent(payment.id)}`} className="rounded-lg border border-amber-300/40 px-3 py-1.5 text-xs font-bold text-amber-100 hover:bg-amber-300/10">Refund</Link> : "—"}</td></tr>)}{!loading && !payments.length ? <tr><td colSpan={10} className="p-8 text-center text-slate-400">No matching M-Pesa payments.</td></tr> : null}</tbody>
+          <table className="min-w-[1350px] w-full text-left text-sm">
+            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-slate-400"><tr><th className="p-3">Receipt / transaction</th><th className="p-3">M-Pesa date</th><th className="p-3">Attempt / settlement</th><th className="p-3">Payer</th><th className="p-3">Account reference</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3">Match status</th><th className="p-3">Purpose / linked record</th><th className="p-3">Result</th><th className="p-3">Action</th></tr></thead>
+            <tbody>{payments.map((payment) => <tr key={payment.id} className="border-b border-white/5 align-top hover:bg-white/[0.025]"><td className="p-3 font-mono text-xs text-slate-200">{payment.receiptNumber || payment.transactionId || "—"}<div className="mt-1 font-sans text-[11px] text-slate-500">Created {formatDate(payment.createdAt)}<br />Checkout: {payment.checkoutRequestId || "—"}</div></td><td className="p-3 whitespace-nowrap">{payment.transactionAt ? formatDate(payment.transactionAt) : <><span className="text-slate-400">Awaiting M-Pesa date</span><div className="mt-1 text-xs text-slate-500">Attempt: {formatDate(payment.createdAt)}</div></>}</td><td className="p-3"><div>{payment.settlementRole === "SETTLEMENT" ? "M-Pesa settlement" : payment.settlementRole === "CONFIRMATION_EVENT" ? "STK confirmation event" : `${payment.channel} attempt`}</div><div className="mt-1 text-xs text-slate-500">{payment.order?.paymentCollectionMethod === "MPESA_EXPRESS" ? "M-Pesa Express" : payment.order?.paymentCollectionMethod === "MPESA_PAYBILL" ? "Paybill fallback" : payment.channel}</div></td><td className="p-3"><div>{payment.payerName || "Name not supplied"}</div>{payment.payerNameSource === "CUSTOMER" ? <div className="mt-1 text-xs text-slate-500">Receipt customer</div> : null}<div className="mt-1 font-mono text-xs text-slate-400">{payment.phoneNumber || "—"}</div></td><td className="p-3">{payment.accountReference || "—"}</td><td className="p-3 whitespace-nowrap font-semibold">{money.format(payment.amount ?? payment.requestedAmount ?? 0)}</td><td className="p-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(payment.status)}`}>{payment.status}</span></td><td className="p-3"><span className={`inline-block rounded-full border px-2 py-1 text-xs font-semibold ${matchStatusClass(payment.matchStatus)}`}>{matchStatusLabel[payment.matchStatus]}</span></td><td className="p-3"><div className="font-medium">{payment.purpose.replace(/_/g, " ")}</div>{payment.order ? <div className="text-xs text-slate-400">{payment.order.kind === "ORDER" ? "POS" : "Website"}: {payment.order.reference}</div> : payment.resourceType ? <div className="text-xs text-slate-400">{payment.resourceType}: {payment.accountReference || payment.resourceId}</div> : "—"}</td><td className="max-w-[220px] p-3 text-xs text-slate-300">{payment.resultDescription || "—"}</td><td className="p-3">{payment.status === "UNMATCHED" && payment.channel === "C2B" ? <button type="button" onClick={() => selectForReconciliation(payment)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1.5 text-xs font-bold text-amber-100 hover:bg-amber-300/20">Reconcile</button> : payment.status === "SUCCESS" ? <Link href={`/admin/mpesa-refunds?paymentId=${encodeURIComponent(payment.id)}`} className="rounded-lg border border-amber-300/40 px-3 py-1.5 text-xs font-bold text-amber-100 hover:bg-amber-300/10">Refund</Link> : "—"}</td></tr>)}{!loading && !payments.length ? <tr><td colSpan={11} className="p-8 text-center text-slate-400">No matching M-Pesa payments.</td></tr> : null}</tbody>
           </table>
         </section>
 
