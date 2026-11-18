@@ -196,6 +196,37 @@ async function findPaymentTarget(reference: string): Promise<PaymentTarget | nul
   };
 }
 
+function normalizedPersonName(value: string | null | undefined) {
+  return String(value || "").normalize("NFKD").replace(/[^a-zA-Z0-9]/g, "").toLocaleLowerCase("en-KE");
+}
+
+/**
+ * Safe fallback for direct PayBill payments whose account reference was
+ * omitted or mistyped. A different payer phone is explicitly allowed: the
+ * only automatic match is one unique, newly-created receipt with the exact
+ * amount and the same customer/payer name after case and punctuation folding.
+ */
+async function findRecentPaybillReceiptTarget(input: { amount: number; transactionAt: Date | null; payerName: string | null }): Promise<PaymentTarget | null> {
+  const payerName = normalizedPersonName(input.payerName);
+  if (!payerName || input.amount <= 0) return null;
+  const paidAt = input.transactionAt || new Date();
+  const createdAfter = new Date(paidAt.getTime() - 20 * 60 * 1000);
+  const candidates = await prisma.order.findMany({
+    where: {
+      status: { not: "CANCELED" },
+      receipt: { is: { generatedAt: { gte: createdAfter, lte: paidAt } } },
+    },
+    select: { id: true, orderNumber: true, customerName: true, customerPhone: true, totalAmount: true, paidAmount: true },
+  });
+  const matches = candidates.filter((order) => {
+    const outstanding = Math.max(0, toNumber(order.totalAmount) - toNumber(order.paidAmount));
+    return Math.abs(outstanding - input.amount) < 0.001 && normalizedPersonName(order.customerName) === payerName;
+  });
+  if (matches.length !== 1) return null;
+  const order = matches[0];
+  return { kind: "ORDER", id: order.id, reference: order.orderNumber, total: toNumber(order.totalAmount), paid: Math.max(0, toNumber(order.paidAmount)), customerPhone: order.customerPhone, purpose: "ORDER_PAYMENT" };
+}
+
 function permittedStkAmount(target: PaymentTarget) {
   const balance = Math.max(0, target.total - target.paid);
   const amount = target.kind === "WEBSITE_ORDER"
@@ -1432,10 +1463,17 @@ export async function handleC2bConfirmation(payload: unknown) {
   // Manual PayBill payments normally target orders/invoices. LPP accounts are
   // also a valid customer-facing reference and use the same atomic ledger
   // application path as their STK installments.
-  const target = await findPaymentTarget(reference) ?? await findLppPaymentTarget(reference) ?? await findInstallationProjectC2bTarget(reference);
   const amount = toNumber(body.TransAmount);
   const transactionAt = parseDarajaTransactionDate(String(body.TransTime || ""));
   const phoneNumber = normalizeDarajaPhone(String(body.MSISDN || "")) || null;
+  const payerName = payerNameFromMpesaPayload(payload);
+  const referenceTarget = await findPaymentTarget(reference) ?? await findLppPaymentTarget(reference) ?? await findInstallationProjectC2bTarget(reference);
+  const target = referenceTarget ?? await findRecentPaybillReceiptTarget({ amount, transactionAt, payerName });
+  const matchDescription = referenceTarget
+    ? "C2B payment received"
+    : target
+      ? "Auto-matched PayBill payment: exact amount, normalized customer name, and receipt created within 20 minutes."
+      : "Could not match BillRefNumber to a Betech order or invoice";
   const payment = await prisma.mpesaPayment.create({
     data: {
       channel: "C2B",
@@ -1448,7 +1486,7 @@ export async function handleC2bConfirmation(payload: unknown) {
       transactionId,
       transactionAt,
       resultCode: 0,
-      resultDescription: target ? "C2B payment received" : "Could not match BillRefNumber to a Betech order or invoice",
+      resultDescription: matchDescription,
       callbackPayload: jsonValue(payload),
     },
   }).catch(async (error) => {
@@ -1467,7 +1505,7 @@ export async function handleC2bConfirmation(payload: unknown) {
     ).catch((error) => console.error("[mpesa] unmatched Paybill operations SMS failed", error));
     return;
   }
-  const confirmation = await applyConfirmedPayment(payment.id, { amount, receiptNumber, transactionId, phoneNumber, transactionAt, resultCode: 0, resultDescription: "C2B payment received", payload });
+  const confirmation = await applyConfirmedPayment(payment.id, { amount, receiptNumber, transactionId, phoneNumber, transactionAt, resultCode: 0, resultDescription: matchDescription, payload });
   if (confirmation?.application.applied && confirmation.payment.websiteOrderId) {
     await notifyConfirmedWebsiteOrder({
       websiteOrderId: confirmation.payment.websiteOrderId,
