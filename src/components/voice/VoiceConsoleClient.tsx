@@ -641,7 +641,6 @@ export default function VoiceConsoleClient({
   const [routingPreferencePendingKey, setRoutingPreferencePendingKey] =
     useState<string | null>(null);
   const [routingConfigPending, setRoutingConfigPending] = useState(false);
-  const [compliancePendingKey, setCompliancePendingKey] = useState<string | null>(null);
   const [bulkResolvePending, setBulkResolvePending] = useState(false);
   const [contactClaimPending, setContactClaimPending] = useState(false);
   const [overflowUserIdDraft, setOverflowUserIdDraft] = useState(
@@ -1601,26 +1600,6 @@ export default function VoiceConsoleClient({
       setError("Could not save the overflow routing target.");
     } finally {
       setRoutingConfigPending(false);
-    }
-  };
-
-  const handleComplianceDecision = async (userId: string, action: "restore" | "restrict") => {
-    setCompliancePendingKey(userId);
-    setError(null);
-    try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/compliance")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(payload.error || "voice_compliance_failed"));
-      await refreshSnapshot(selectedCallId, selectedPhone);
-    } catch (complianceError) {
-      console.error("[voice.console.compliance_failed]", complianceError);
-      setError("Could not update the inbound-call restriction.");
-    } finally {
-      setCompliancePendingKey(null);
     }
   };
 
@@ -4707,7 +4686,6 @@ export default function VoiceConsoleClient({
                           const row = agent as any;
                           const routingPending =
                             routingPreferencePendingKey === row.id;
-                          const compliancePending = compliancePendingKey === row.id;
                           return (
                             <div
                               key={row.id}
@@ -4807,20 +4785,6 @@ export default function VoiceConsoleClient({
                                 </div>
                               </div>
                               <div className="mt-4 space-y-3 border-t border-slate-800 pt-4">
-                                {row.role !== "ADMIN" ? <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <div className="text-sm font-semibold text-white">Inbound compliance</div>
-                                    <div className="text-xs text-slate-500">Restricted staff can still complete callbacks.</div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    disabled={compliancePending}
-                                    onClick={() => void handleComplianceDecision(row.id, row.compliance?.inboundRestricted ? "restore" : "restrict")}
-                                    className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide ${row.compliance?.inboundRestricted ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100" : "border-rose-500/30 bg-rose-500/10 text-rose-100"}`}
-                                  >
-                                    {compliancePending ? "Saving..." : row.compliance?.inboundRestricted ? "Restore" : "Restrict"}
-                                  </button>
-                                </div> : null}
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
                                     <div className="text-sm font-semibold text-white">

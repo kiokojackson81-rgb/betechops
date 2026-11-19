@@ -8,19 +8,6 @@ const QUALITY_RESPONSE_MINIMUM = 5;
 const QUALITY_AVERAGE_THRESHOLD = 3;
 const ADMIN_OVERRIDE_GRACE_MS = 24 * 60 * 60 * 1000;
 
-// Callback deadlines are calculated in active Nairobi working hours. The
-// routing consequence must follow the same rule: unresolved work remains
-// visible after hours, but must not block an agent from receiving calls.
-function isWithinNairobiWorkingHours(date: Date) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Africa/Nairobi", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-  }).formatToParts(date).map((part) => [part.type, part.value]));
-  const weekday = String(parts.weekday || "");
-  const minutes = Number(parts.hour || 0) * 60 + Number(parts.minute || 0);
-  if (weekday === "Sun") return false;
-  return weekday === "Sat" ? minutes >= 9 * 60 && minutes <= 15 * 60 : minutes >= 9 * 60 && minutes <= 17 * 60 + 30;
-}
-
 export type VoiceComplianceStatus =
   | "NORMAL"
   | "WARNING"
@@ -194,35 +181,18 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
     (feedbackResponseCount30d >= QUALITY_RESPONSE_MINIMUM &&
       averageRating30d > 0 &&
       averageRating30d < QUALITY_AVERAGE_THRESHOLD);
-  // Automatic callback tasks are due after two active working hours. Once a
-  // task is overdue, inbound calls go to fallback until that overdue work is
-  // resolved. The count remains visible for escalation and audit.
-  const callbackRestrictionRequired = isWithinNairobiWorkingHours(now) && overdueCallbackCount >= 1;
-  const overrideGraceEndsAt = existing?.overrideAt
-    ? new Date(existing.overrideAt.getTime() + ADMIN_OVERRIDE_GRACE_MS)
-    : null;
-  const overrideActive = Boolean(
-    existing?.overrideActive &&
-      overrideGraceEndsAt &&
-      now.getTime() < overrideGraceEndsAt.getTime(),
-  );
-  const manualRestriction = Boolean(existing?.manualRestriction);
-
-  const status: VoiceComplianceStatus = manualRestriction ||
-    (callbackRestrictionRequired && !overrideActive)
-    ? "RESTRICTED"
-    : overrideActive
-      ? "ADMIN_OVERRIDE"
-      : pendingCallbackCount > 0
-        ? "WARNING"
-        : qualityReviewRequired
-          ? "QUALITY_REVIEW"
-          : "NORMAL";
-  const restrictionReason = manualRestriction
-    ? existing?.manualRestrictionReason || "Restricted by an administrator."
-    : callbackRestrictionRequired
-      ? `${overdueCallbackCount} overdue customer callback task${overdueCallbackCount === 1 ? "" : "s"}.`
-      : null;
+  // Callback and quality signals remain visible for managers, but never turn
+  // off inbound routing automatically. Routing is controlled solely by the
+  // explicit "Receive calls" switch; after-hours routing remains governed by
+  // its separate after-hours setting.
+  const overrideActive = false;
+  const manualRestriction = false;
+  const status: VoiceComplianceStatus = pendingCallbackCount > 0
+    ? "WARNING"
+    : qualityReviewRequired
+      ? "QUALITY_REVIEW"
+      : "NORMAL";
+  const restrictionReason = null;
   const changed =
     !existing ||
     existing.status !== status ||
@@ -245,13 +215,13 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
       restrictionReason,
       restrictedAt: status === "RESTRICTED" ? now : null,
       overrideActive,
-      overrideReason: existing?.overrideReason ?? null,
-      overrideById: existing?.overrideById ?? null,
-      overrideAt: existing?.overrideAt ?? null,
-      overrideBaselineAt: existing?.overrideBaselineAt ?? null,
+      overrideReason: null,
+      overrideById: null,
+      overrideAt: null,
+      overrideBaselineAt: null,
       manualRestriction,
-      manualRestrictionReason: existing?.manualRestrictionReason ?? null,
-      manualRestrictedAt: existing?.manualRestrictedAt ?? null,
+      manualRestrictionReason: null,
+      manualRestrictedAt: null,
     },
     update: {
       status,
@@ -358,77 +328,12 @@ export async function setVoiceComplianceAdminDecision(input: {
   action: "restore" | "restrict";
   reason?: string | null;
 }) {
-  const target = await prisma.user.findUnique({ where: { id: input.userId }, select: { role: true } });
-  if (target?.role === "ADMIN") throw new Error("ADMIN_VOICE_COMPLIANCE_EXEMPT");
-  const now = new Date();
-  const overrideGraceEndsAt = new Date(now.getTime() + ADMIN_OVERRIDE_GRACE_MS);
-  const reason = String(input.reason || "").trim() || null;
-  const current = await evaluateVoiceAgentCompliance(input.userId, now);
-  const compliance = await prisma.voiceAgentCompliance.update({
-    where: { id: current.id },
-    data:
-      input.action === "restore"
-        ? {
-            status: "ADMIN_OVERRIDE",
-            overrideActive: true,
-            overrideReason: reason,
-            overrideById: input.adminId,
-            overrideAt: now,
-            overrideBaselineAt: now,
-            manualRestriction: false,
-            manualRestrictionReason: null,
-            manualRestrictedAt: null,
-            restrictionReason: null,
-            restrictedAt: null,
-          }
-        : {
-            status: "RESTRICTED",
-            manualRestriction: true,
-            manualRestrictionReason: reason || "Restricted by an administrator.",
-            manualRestrictedAt: now,
-            overrideActive: false,
-            restrictionReason: reason || "Restricted by an administrator.",
-            restrictedAt: now,
-          },
-  });
-  const complianceEvent = await prisma.voiceComplianceEvent.create({
-    data: {
-      complianceId: compliance.id,
-      type: input.action === "restore" ? "ADMIN_ROUTING_RESTORED" : "ADMIN_RESTRICTION_APPLIED",
-      reason,
-      payload: eventPayload({
-        adminId: input.adminId,
-        action: input.action,
-        overrideGraceEndsAt:
-          input.action === "restore" ? overrideGraceEndsAt.toISOString() : null,
-      }),
-    },
-  });
-  publishVoiceLiveEvent({ type: "presence", reason: "voice_compliance_admin_decision", userId: input.userId });
-  if (input.action === "restrict") {
-    try {
-      await notifyComplianceRestriction({
-        eventId: complianceEvent.id,
-        userId: input.userId,
-        reason: compliance.restrictionReason,
-        overdueCallbackCount: compliance.overdueCallbackCount,
-      });
-    } catch (error) {
-      console.error("[voice.compliance.notification_failed]", error);
-    }
-  } else {
-    try {
-      await notifyOverrideGrace({ userId: input.userId, deadline: overrideGraceEndsAt });
-    } catch (error) {
-      console.error("[voice.compliance.override_notification_failed]", error);
-    }
-  }
-  return compliance;
+  void input;
+  throw new Error("INBOUND_COMPLIANCE_RESTRICTIONS_DISABLED");
 }
 
-export function isVoiceComplianceRestricted(compliance: {
-  status?: string | null;
-  overrideActive?: boolean | null;
-} | null | undefined) {
-  return compliance?.status === "RESTRICTED" && !compliance.overrideActive;
+export function isVoiceComplianceRestricted() {
+  // Compliance is informational only. Inbound routing is controlled through
+  // the explicit routing and after-hours preferences.
+  return false;
 }
