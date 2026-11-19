@@ -1,12 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { notifyAdminCriticalSms } from "@/lib/adminCriticalSms";
 import { sendTransactionalSms } from "@/lib/africasTalking";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 
 const LOW_RATING_LIMIT = 2;
 const QUALITY_RESPONSE_MINIMUM = 5;
 const QUALITY_AVERAGE_THRESHOLD = 3;
-const ADMIN_OVERRIDE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 export type VoiceComplianceStatus =
   | "NORMAL"
@@ -17,43 +15,6 @@ export type VoiceComplianceStatus =
 
 function eventPayload(input: Record<string, unknown>) {
   return input as Record<string, never>;
-}
-
-async function notifyComplianceRestriction(input: {
-  eventId: string;
-  userId: string;
-  reason: string | null;
-  overdueCallbackCount: number;
-}) {
-  const user = await prisma.user.findUnique({
-    where: { id: input.userId },
-    select: { name: true, phone: true },
-  });
-  const agentLabel = user?.name || "The assigned agent";
-  const reason = input.reason || "overdue customer callback work";
-  const actionPath = "/admin/communications/voice?tab=agents";
-
-  await Promise.allSettled([
-    notifyAdminCriticalSms({
-      eventType: "VOICE_COMPLIANCE_RESTRICTED",
-      entityId: input.eventId,
-      title: "Voice routing paused",
-      details: [
-        `Agent: ${agentLabel}`,
-        `Reason: ${reason}`,
-        `Overdue callbacks: ${input.overdueCallbackCount}`,
-        "New inbound calls are being sent to the emergency admin fallback.",
-      ],
-      actionPath,
-      payload: { userId: input.userId, reason, overdueCallbackCount: input.overdueCallbackCount },
-    }),
-    user?.phone
-      ? sendTransactionalSms(
-          user.phone,
-          `[BETECH VOICE] Your inbound-call routing has been paused: ${reason} Complete or update your callback tasks, then contact an admin if you need routing restored.`,
-        )
-      : Promise.resolve(),
-  ]);
 }
 
 function formatCallbackDeadline(value: Date) {
@@ -91,38 +52,7 @@ async function notifyComplianceWarning(input: {
     : "";
   await sendTransactionalSms(
     user.phone,
-    `[BETECH VOICE] You have ${input.pendingCallbackCount} customer follow-up${input.pendingCallbackCount === 1 ? "" : "s"} to complete.${deadline} If a follow-up becomes overdue, new inbound calls will be routed to the fallback until all overdue work is resolved.`,
-  );
-}
-
-function formatOverrideDeadline(value: Date) {
-  return value.toLocaleString("en-KE", {
-    timeZone: "Africa/Nairobi",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-async function notifyOverrideGrace(input: { userId: string; deadline: Date }) {
-  const user = await prisma.user.findUnique({
-    where: { id: input.userId },
-    select: { phone: true },
-  });
-  if (!user?.phone) return;
-  await sendTransactionalSms(
-    user.phone,
-    `[BETECH VOICE] An admin has temporarily restored your inbound-call routing. You have until ${formatOverrideDeadline(input.deadline)} (EAT) to complete or update your overdue callback tasks. If the work remains overdue after this deadline, routing will be restricted again automatically.`,
-  );
-}
-
-async function notifyComplianceRestored(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true } });
-  if (!user?.phone) return;
-  await sendTransactionalSms(
-    user.phone,
-    "[BETECH VOICE] Your overdue call tasks have been cleared. Your inbound-call routing has been restored automatically. Thank you for completing the customer follow-up.",
+    `[BETECH VOICE] You have ${input.pendingCallbackCount} customer follow-up${input.pendingCallbackCount === 1 ? "" : "s"} to complete.${deadline} Your inbound-call routing remains available.`,
   );
 }
 
@@ -213,7 +143,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
       averageRating30d,
       qualityReviewRequired,
       restrictionReason,
-      restrictedAt: status === "RESTRICTED" ? now : null,
+      restrictedAt: null,
       overrideActive,
       overrideReason: null,
       overrideById: null,
@@ -232,10 +162,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
       averageRating30d,
       qualityReviewRequired,
       restrictionReason,
-      restrictedAt:
-        status === "RESTRICTED"
-          ? existing?.restrictedAt ?? now
-          : null,
+      restrictedAt: null,
       overrideActive,
     },
   });
@@ -244,7 +171,7 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
     const complianceEvent = await prisma.voiceComplianceEvent.create({
       data: {
         complianceId: compliance.id,
-        type: status === "RESTRICTED" ? "RESTRICTION_EVALUATED" : "STATUS_EVALUATED",
+        type: "STATUS_EVALUATED",
         reason: restrictionReason,
         payload: eventPayload({
           previousStatus: existing?.status ?? null,
@@ -264,18 +191,6 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
       reason: "voice_compliance_updated",
       userId,
     });
-    if (status === "RESTRICTED" && existing?.status !== "RESTRICTED") {
-      try {
-        await notifyComplianceRestriction({
-          eventId: complianceEvent.id,
-          userId,
-          reason: restrictionReason,
-          overdueCallbackCount,
-        });
-      } catch (error) {
-        console.error("[voice.compliance.notification_failed]", error);
-      }
-    }
     if (
       status === "WARNING" &&
       existing?.status !== "WARNING" &&
@@ -290,17 +205,6 @@ export async function evaluateVoiceAgentCompliance(userId: string, now = new Dat
         });
       } catch (error) {
         console.error("[voice.compliance.warning_notification_failed]", error);
-      }
-    }
-    if (
-      status !== "RESTRICTED" &&
-      existing?.status === "RESTRICTED" &&
-      !manualRestriction
-    ) {
-      try {
-        await notifyComplianceRestored(userId);
-      } catch (error) {
-        console.error("[voice.compliance.restore_notification_failed]", error);
       }
     }
   }

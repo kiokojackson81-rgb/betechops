@@ -670,7 +670,7 @@ async function buildVoiceTargets(): Promise<
     // Presence is browser-reported and can retain an old selected history row.
     // Only a verified active call assigned to this user may make them busy.
     const hasBusyCall = Boolean(assignedActiveCallId);
-    const inboundRestricted = isVoiceComplianceRestricted(compliance);
+    const inboundRestricted = isVoiceComplianceRestricted();
     // A configured phone number is not permission to call it. A disabled or
     // deactivated staff account is intentionally absent from
     // resolveRoutingUsers(), so it has no userId here and must never become a

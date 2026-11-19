@@ -1633,7 +1633,7 @@ function serializePresenceRow(
   const webRtcRegistry = getVoiceWebrtcRegistryEntry(agent.id);
 
   const effectiveStatus = effectivePresenceStatus(agent.voicePresence?.status);
-  const complianceRestricted = isVoiceComplianceRestricted(agent.voiceCompliance);
+  const complianceRestricted = isVoiceComplianceRestricted();
   const routingEnabled =
     (agent.voiceRoutingPreference?.routingEnabled ?? true) &&
     !complianceRestricted;
