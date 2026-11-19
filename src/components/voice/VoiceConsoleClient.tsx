@@ -717,6 +717,7 @@ export default function VoiceConsoleClient({
         id: string;
         direction: string;
         callerNumber: string;
+        destinationNumber?: string | null;
         status: string;
         statusLabel: string;
         startedAt?: string | null;
