@@ -2420,12 +2420,16 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     ? await prisma.voiceCall.findMany({
         where: {
           ...callWhere,
-          assignedToId: { in: agentIds },
           direction: "INBOUND",
           createdAt: { gte: todayWindow.start, lt: todayWindow.endExclusive },
+          OR: [
+            { assignedToId: { in: agentIds } },
+            { answeredById: { in: agentIds } },
+          ],
         },
         select: {
           assignedToId: true,
+          answeredById: true,
           status: true,
           durationInSeconds: true,
           isActive: true,
@@ -2447,21 +2451,29 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       }
     >
   >((accumulator, call) => {
-    if (!call.assignedToId) return accumulator;
-    const current = accumulator.get(call.assignedToId) ?? {
-      receivedCallsToday: 0,
-      answeredCallsToday: 0,
-      missedCallsToday: 0,
-      attemptedCallsToday: 0,
-    };
-
-    current.receivedCallsToday += 1;
     const effectiveStatus = resolveVoiceProviderOutcome(call).displayStatus;
-    if (isAnsweredStatus(effectiveStatus)) current.answeredCallsToday += 1;
-    if (isMissedStatus(effectiveStatus)) current.missedCallsToday += 1;
-    if (isAttemptedCallStatus(effectiveStatus)) current.attemptedCallsToday += 1;
+    const participatingAgentIds = Array.from(
+      new Set(
+        [call.assignedToId, call.answeredById].filter(
+          (agentId): agentId is string => Boolean(agentId),
+        ),
+      ),
+    );
+    for (const agentId of participatingAgentIds) {
+      const current = accumulator.get(agentId) ?? {
+        receivedCallsToday: 0,
+        answeredCallsToday: 0,
+        missedCallsToday: 0,
+        attemptedCallsToday: 0,
+      };
 
-    accumulator.set(call.assignedToId, current);
+      current.receivedCallsToday += 1;
+      if (isAnsweredStatus(effectiveStatus)) current.answeredCallsToday += 1;
+      if (isMissedStatus(effectiveStatus)) current.missedCallsToday += 1;
+      if (isAttemptedCallStatus(effectiveStatus)) current.attemptedCallsToday += 1;
+
+      accumulator.set(agentId, current);
+    }
     return accumulator;
   }, new Map());
 
