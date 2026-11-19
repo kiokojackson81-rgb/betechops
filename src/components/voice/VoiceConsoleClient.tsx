@@ -728,7 +728,11 @@ export default function VoiceConsoleClient({
         assignedToEmail?: string | null;
         answeredByName?: string | null;
         answeredByEmail?: string | null;
-      }>).filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
+      }>).filter(
+        (call) =>
+          isMeaningfulVoicePhone(call.callerNumber) ||
+          isMeaningfulVoicePhone(call.destinationNumber),
+      ),
     [data.customerCallHistory],
   );
 
@@ -1117,10 +1121,12 @@ export default function VoiceConsoleClient({
   ]);
 
   const selectedContextData = useMemo(() => {
-    if (!selectedCall || !isMeaningfulVoicePhone(selectedCall.callerNumber))
-      return null;
+    const hasSelectedCall = Boolean(
+      selectedCall && isMeaningfulVoicePhone(selectedCall.callerNumber),
+    );
+    if (!hasSelectedCall && !isMeaningfulVoicePhone(selectedPhone)) return null;
     return data.selectedContext;
-  }, [data.selectedContext, selectedCall]);
+  }, [data.selectedContext, selectedCall, selectedPhone]);
 
   const selectedChatraceActivity =
     selectedContextData?.chatrace || selectedCall?.customer?.chatrace || null;
@@ -1879,10 +1885,13 @@ export default function VoiceConsoleClient({
     visibleAgents[0] ||
     null;
 
+  // A phone search is a customer investigation, not just a single call. Show
+  // the merged customer timeline first so every related call, receipt, quote,
+  // order, note and follow-up is immediately visible.
   const timelineItems = (
-    data.selectedCallDetail?.timeline?.length
-      ? data.selectedCallDetail.timeline
-      : selectedContextData?.recentTimeline || []
+    selectedContextData?.recentTimeline?.length
+      ? selectedContextData.recentTimeline
+      : data.selectedCallDetail?.timeline || []
   ) as Array<any>;
 
   const consoleNav = [
@@ -1961,7 +1970,7 @@ export default function VoiceConsoleClient({
   const contextQuickCards = [
     {
       label: "Phone Number",
-      value: selectedCall?.callerNumber || "No active call",
+      value: selectedCall?.callerNumber || selectedPhone || "No active call",
     },
     {
       label: "Location",
@@ -2008,7 +2017,9 @@ export default function VoiceConsoleClient({
         selectedCall.assignedToEmail ||
         "Route pending"
       }`
-    : "Choose a live caller or callback task to begin work.";
+    : selectedPhone
+      ? `Customer search · ${selectedPhone}`
+      : "Choose a live caller or callback task to begin work.";
 
   const statusSelectValue =
     softphone.availability === "AVAILABLE"
