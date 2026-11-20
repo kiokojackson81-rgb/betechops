@@ -1223,7 +1223,16 @@ export async function sendReceiptChannels(
         const customerReceiptUrl = secureDocumentsUrl;
         const podSupportName = receipt.order?.attendant?.name || receipt.issuedBy?.name || "Betech support";
         const podSupportNumber = String(receipt.order?.attendant?.oneVoiceCustomerNumber || receipt.issuedBy?.oneVoiceCustomerNumber || "").trim();
-        const smsBody = isPodReceipt || isRiderPayOnDelivery
+        const paymentCollectionMethod = String(dataAny?.paymentCollectionMethod || "").trim().toUpperCase();
+        const smsBody = paymentCollectionMethod === "PESAPAL"
+          ? [
+              `Hello ${customerName}, your secure Betech payment link is ready.`,
+              `Receipt No: ${receiptNumber}.`,
+              `Amount due: ${amountText}.`,
+              "Use the link to pay securely with Airtel Money, Visa, Mastercard, or another option available in Pesapal.",
+              `Pay securely: ${customerReceiptUrl}`,
+            ].join(" ")
+          : isPodReceipt || isRiderPayOnDelivery
           ? [
               `Hello ${customerName}, your Pay on Delivery order has been received and is being dispatched.`,
               `Receipt No: ${receiptNumber}.`,

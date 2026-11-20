@@ -75,7 +75,7 @@ type ReceiptFormProps = {
   showHero?: boolean;
 };
 
-type PaymentChoice = "MPESA" | "CASH" | "MPESA_EXPRESS";
+type PaymentChoice = "MPESA" | "CASH" | "MPESA_EXPRESS" | "PESAPAL";
 type PaybillCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "DTB_PAYBILL" | "ABSA_PAYBILL";
 type ExpressPayment = {
   receiptId: string;
@@ -167,6 +167,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [showDiscount, setShowDiscount] = useState<boolean>(false);
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
   const [isMpesaExpress, setIsMpesaExpress] = useState(false);
+  const [isPesapal, setIsPesapal] = useState(false);
   const [cashWithMpesaExpress, setCashWithMpesaExpress] = useState(false);
   const [mpesaPayerPhone, setMpesaPayerPhone] = useState("");
   const [editingMpesaPayerPhone, setEditingMpesaPayerPhone] = useState(false);
@@ -174,8 +175,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [externalPaymentReference, setExternalPaymentReference] = useState("");
   const [expressPayment, setExpressPayment] = useState<ExpressPayment | null>(null);
   const completedExpressCheckoutIds = useRef(new Set<string>());
-  const hasPaymentMethodSelection = isMpesaExpress || selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
-  const primaryPaymentMethod: PaymentChoice = isMpesaExpress ? "MPESA_EXPRESS" : selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
+  const hasPaymentMethodSelection = isMpesaExpress || isPesapal || selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
+  const primaryPaymentMethod: PaymentChoice = isMpesaExpress ? "MPESA_EXPRESS" : isPesapal ? "PESAPAL" : selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
   const paymentDetailsShown = true;
   // Paper size is fixed to A5 by default; remove runtime selector
   const [notes, setNotes] = useState<string>("");
@@ -343,14 +344,21 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         const station = getSpeedafPickupStation(String(parsed.podDelivery.pickup.stationId));
         if (station) { setPodCounty(station.county); setPodArea(station.area); setPodStationId(station.id); }
       }
-      if (parsed.paymentMethod === "MPESA_EXPRESS") {
+      if (parsed.paymentMethod === "PESAPAL" || parsed.metadata?.paymentCollectionMethod === "PESAPAL") {
+        setIsMpesaExpress(false);
+        setIsPesapal(true);
+        setSelectedPaymentMethods({ MPESA: false, CASH: false });
+      } else if (parsed.paymentMethod === "MPESA_EXPRESS") {
         setIsMpesaExpress(true);
+        setIsPesapal(false);
         setSelectedPaymentMethods({ MPESA: false, CASH: false });
       } else if (parsed.paymentMethod === "CASH") {
         setIsMpesaExpress(false);
+        setIsPesapal(false);
         setSelectedPaymentMethods({ MPESA: false, CASH: true });
       } else if (parsed.paymentMethod === "MPESA") {
         setIsMpesaExpress(false);
+        setIsPesapal(false);
         setSelectedPaymentMethods({ MPESA: true, CASH: false });
       }
       if (Array.isArray(parsed.items) && parsed.items.length) {
@@ -754,7 +762,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       cash: normalizedPaymentBreakdown.cash,
       mpesa: normalizedPaymentBreakdown.mpesa,
     },
-    paymentMethods: { ...selectedPaymentMethods, CASH: selectedPaymentMethods.CASH || (isMpesaExpress && cashWithMpesaExpress), MPESA_EXPRESS: isMpesaExpress },
+    paymentMethods: { ...selectedPaymentMethods, CASH: selectedPaymentMethods.CASH || (isMpesaExpress && cashWithMpesaExpress), MPESA_EXPRESS: isMpesaExpress, PESAPAL: isPesapal },
   });
 
   const [lastSavedPrintableUrl, setLastSavedPrintableUrl] = useState<string | null>(null);
@@ -949,6 +957,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       return;
     }
     setIsMpesaExpress(false);
+    setIsPesapal(false);
     setCashWithMpesaExpress(false);
     setSelectedPaymentMethods((prev) => {
       const isActive = prev[method];
@@ -1021,9 +1030,23 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const selectMpesaExpress = () => {
     if (expressPayment) return;
     setIsMpesaExpress(true);
+    setIsPesapal(false);
     setCashWithMpesaExpress(false);
     setCashPaid(0);
     setMpesaPaid(total);
+    setMpesaPayerPhone("");
+    setEditingMpesaPayerPhone(false);
+    setExternalPaymentReference("");
+    setSelectedPaymentMethods({ MPESA: false, CASH: false });
+  };
+
+  const selectPesapal = () => {
+    if (expressPayment) return;
+    setIsMpesaExpress(false);
+    setIsPesapal(true);
+    setCashWithMpesaExpress(false);
+    setCashPaid(0);
+    setMpesaPaid(0);
     setMpesaPayerPhone("");
     setEditingMpesaPayerPhone(false);
     setExternalPaymentReference("");
@@ -1128,6 +1151,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setCatalogOpen(false);
     setStaffId(defaultStaffId);
     setIsMpesaExpress(false);
+    setIsPesapal(false);
     setMpesaPayerPhone("");
     setEditingMpesaPayerPhone(false);
     setExternalPaymentReference("");
@@ -1402,7 +1426,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         discount: normalizedDiscount,
         showDiscount: effectiveShowDiscount,
         paymentDetailsShown,
-        paymentMethod: resolvedPaymentMethod,
+        // PESAPAL is stored as a collection channel. The underlying POS
+        // payment enum remains MPESA/CASH for legacy ledgers, while the order
+        // stays unpaid until Pesapal verifies the customer payment.
+        paymentMethod: resolvedPaymentMethod === "PESAPAL" ? "MPESA" : resolvedPaymentMethod,
         customerType,
         deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
         deliveryPaymentTerm: customerType === "delivery" ? deliveryPaymentTerm : undefined,
@@ -1417,7 +1444,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             mpesa: normalizedPaymentBreakdown.mpesa,
           },
           metadata:
-            websiteOrderId || prefillMetadata || resolvedPaymentMethod === "MPESA_EXPRESS"
+            websiteOrderId || prefillMetadata || resolvedPaymentMethod === "MPESA_EXPRESS" || resolvedPaymentMethod === "PESAPAL"
               ? {
                   ...(prefillMetadata ?? {}),
                   ...(resolvedPaymentMethod === "MPESA_EXPRESS"
@@ -1427,6 +1454,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                         mpesaPayerPhone: mpesaPayerPhone.trim() || customerPhone.trim(),
                         cashPortion: normalizedPaymentBreakdown.cash,
                         mpesaExpressBalance: normalizedPaymentBreakdown.mpesa,
+                      }
+                    : {}),
+                  ...(resolvedPaymentMethod === "PESAPAL"
+                    ? {
+                        paymentCollectionMethod: "PESAPAL",
+                        pesapalPaymentLinkSentAt: new Date().toISOString(),
                       }
                     : {}),
                   ...(websiteOrderId
@@ -2138,6 +2171,18 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             >
               M-Pesa Express
             </button>
+            <button
+              type="button"
+              onClick={selectPesapal}
+              className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                isPesapal
+                  ? "bg-indigo-500 text-white"
+                  : "border border-white/10 text-slate-200"
+              }`}
+              aria-pressed={isPesapal}
+            >
+              Pesapal
+            </button>
           </div>
           {isMpesaExpress ? <div className="mt-3 space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3">
             <p className="text-xs leading-5 text-emerald-200">Preview the receipt with the customer, record any cash received, then send an STK prompt for the remaining balance. The receipt completes only after M-Pesa confirms that balance.</p>
@@ -2162,6 +2207,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               </div>
             ) : null}
             <div><label className={labelClass}>Customer M-Pesa number</label>{editingMpesaPayerPhone ? <div className="mt-1 flex flex-wrap gap-2"><input type="tel" inputMode="tel" autoFocus value={mpesaPayerPhone} onChange={(event) => setMpesaPayerPhone(event.target.value)} placeholder="07XX XXX XXX" className={`${fieldClass} mt-0 flex-1`} /><button type="button" onClick={() => { setMpesaPayerPhone(""); setEditingMpesaPayerPhone(false); }} className="rounded-xl border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-100">Use customer number</button></div> : <div className="mt-1 flex flex-wrap items-center gap-3"><strong className="rounded-lg bg-slate-950/70 px-3 py-2 font-mono text-sm text-white">{customerPhone || "Customer phone required"}</strong><button type="button" disabled={!customerPhone.trim()} onClick={() => { setMpesaPayerPhone(customerPhone.trim()); setEditingMpesaPayerPhone(true); }} className="rounded-xl border border-emerald-300/50 px-3 py-2 text-xs font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40">Change phone number</button></div>}<p className="mt-1 text-xs text-slate-300">{customerPhone.trim() ? "The prompt uses this customer number by default. Change it only when another authorised person is paying." : "Enter the customer phone number above before sending an M-Pesa prompt."}</p></div>
+          </div> : null}
+          {isPesapal ? <div className="mt-3 rounded-xl border border-indigo-400/25 bg-indigo-400/5 p-3 text-xs leading-5 text-indigo-100">
+            <p className="font-semibold text-indigo-50">Secure Airtel and card payment link</p>
+            <p className="mt-1">The customer will receive an SMS with their secure receipt link. On that page they can choose Airtel Money, Visa, Mastercard, or any other option enabled in Pesapal. Do not collect card details in Betech.</p>
           </div> : null}
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">

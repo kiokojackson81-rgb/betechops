@@ -447,6 +447,7 @@ const paymentCollectionLabel = (paymentCollectionMethod?: string | null, payment
     case "EQUITY_PAYBILL": return "Equity Paybill";
     case "DTB_PAYBILL": return "DTB Paybill";
     case "ABSA_PAYBILL": return "Absa Paybill";
+    case "PESAPAL": return "Pesapal";
     default: return paymentMethod;
   }
 };
