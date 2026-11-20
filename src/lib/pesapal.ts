@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { sendTransactionalSms } from "@/lib/africasTalking";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -136,6 +137,15 @@ export async function settlePesapalPayment(input: { trackingId: string; merchant
   const pending = record(metadata.pesapal);
   if (pending.merchantReference !== input.merchantReference) throw new Error("Pesapal payment reference does not match this order.");
   if (pending.status === "COMPLETED") {
+    // Older successful callbacks may have completed before the office alert
+    // was added. Deliver it on a later IPN/callback without charging or
+    // settling the order again.
+    await sendPesapalOfficeConfirmation({
+      order,
+      pending,
+      trackingId: input.trackingId,
+      merchantReference: input.merchantReference,
+    });
     return { completed: true, failed: false, status: "COMPLETED", receiptToken: typeof pending.receiptToken === "string" ? pending.receiptToken : null };
   }
   const token = await accessToken();
@@ -155,7 +165,9 @@ export async function settlePesapalPayment(input: { trackingId: string; merchant
     prisma.order.update({ where: { id: order.id }, data: {
       paidAmount: paidAfter,
       paymentStatus: paidAfter >= Number(order.totalAmount) ? "PAID" : paidAfter > 0 ? "PARTIAL" : order.paymentStatus,
-      status: completed && paidAfter >= Number(order.totalAmount) ? "PROCESSING" : order.status,
+      // A Pesapal result is verified directly with Pesapal before this write.
+      // It is therefore a completed payment, not merely a payment attempt.
+      status: completed && paidAfter >= Number(order.totalAmount) ? "COMPLETED" : order.status,
       metadata: { ...metadata, pesapal: { ...pending, trackingId: input.trackingId, status: completed ? "COMPLETED" : failed ? "FAILED" : "PENDING", verifiedAt: paidAt.toISOString(), providerStatus: body } },
     } }),
     prisma.receipt.update({ where: { id: order.receipt.id }, data: { data: {
@@ -163,5 +175,50 @@ export async function settlePesapalPayment(input: { trackingId: string; merchant
       ...(completed ? { paymentDate: paidAt.toISOString(), lastPesapalPaymentAt: paidAt.toISOString(), lastPesapalTrackingId: input.trackingId, lastPesapalReference: input.merchantReference } : {}),
     } } }),
   ]);
+  if (completed) {
+    await sendPesapalOfficeConfirmation({
+      order,
+      pending,
+      trackingId: input.trackingId,
+      merchantReference: input.merchantReference,
+    });
+  }
   return { completed, failed, status, receiptToken: typeof pending.receiptToken === "string" ? pending.receiptToken : null };
+}
+
+async function sendPesapalOfficeConfirmation(input: {
+  order: Awaited<ReturnType<typeof prisma.order.findUnique>> & { receipt: { id: string; receiptNumber: string | null; data: unknown } | null };
+  pending: JsonRecord;
+  trackingId: string;
+  merchantReference: string;
+}) {
+  if (!input.order?.receipt || input.pending.officeNotificationSentAt) return;
+  const officePhone = process.env.BETECH_OFFICE_PHONE?.trim() || "0722151083";
+  const amount = Number(input.pending.amount || input.order.totalAmount || 0);
+  const receiptNumber = input.order.receipt.receiptNumber || input.order.orderNumber;
+  try {
+    await sendTransactionalSms(
+      officePhone,
+      `Pesapal payment received: KSh ${amount.toLocaleString("en-KE")} from ${input.order.customerName || "Customer"} for receipt ${receiptNumber}. Reference: ${input.merchantReference}. Tracking: ${input.trackingId}. Status: completed.`,
+    );
+    const metadata = record(input.order.metadata);
+    const pesapal = record(metadata.pesapal);
+    await prisma.order.update({
+      where: { id: input.order.id },
+      data: {
+        metadata: {
+          ...metadata,
+          pesapal: {
+            ...pesapal,
+            officeNotificationSentAt: new Date().toISOString(),
+            officeNotificationPhone: officePhone,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    // Payment settlement is authoritative and must not be rolled back because
+    // an SMS provider is temporarily unavailable. A later callback can retry.
+    console.error("[pesapal] office payment confirmation SMS failed", error);
+  }
 }
