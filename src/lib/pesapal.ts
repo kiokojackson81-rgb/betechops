@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalSms } from "@/lib/africasTalking";
+import { notifyWebsiteOrderCustomer } from "@/lib/customerOrderNotifications";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -128,7 +129,54 @@ export async function createPesapalCheckout(input: {
   return { merchantReference, trackingId, redirectUrl };
 }
 
+/** Starts a hosted checkout for a website order. Card and Airtel details stay
+ * entirely on Pesapal; Betech only receives the verified result callback. */
+export async function createWebsiteOrderPesapalCheckout(input: {
+  websiteOrderId: string;
+  orderRef: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string | null;
+  amount: number;
+}) {
+  if (!Number.isInteger(input.amount) || input.amount < 1) throw new Error("Enter a whole-KES amount to pay.");
+  const settings = config();
+  const merchantReference = `PSPW-${input.websiteOrderId.replace(/-/g, "")}-${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  const order = await prisma.websiteOrder.findUniqueOrThrow({ where: { id: input.websiteOrderId }, select: { metadata: true } });
+  const metadata = record(order.metadata);
+  const createdAt = new Date().toISOString();
+  const pending = { kind: "WEBSITE_ORDER", merchantReference, amount: input.amount, status: "PENDING", createdAt };
+  await prisma.websiteOrder.update({ where: { id: input.websiteOrderId }, data: { metadata: { ...metadata, pesapal: pending } } });
+  const token = await accessToken();
+  const notificationId = await ipnId();
+  const name = splitName(input.customerName);
+  const callback = `${settings.siteUrl}/api/payments/pesapal/callback`;
+  const response = await fetch(`${settings.baseUrl}/api/Transactions/SubmitOrderRequest`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      id: merchantReference,
+      currency: "KES",
+      amount: input.amount,
+      description: `Betech shop order ${input.orderRef}`.slice(0, 100),
+      callback_url: callback,
+      cancellation_url: `${settings.siteUrl}/order-success?ref=${encodeURIComponent(input.orderRef)}`,
+      notification_id: notificationId,
+      redirect_mode: "TOP_WINDOW",
+      billing_address: { email_address: input.customerEmail || "payments@betech.co.ke", phone_number: input.customerPhone, country_code: "KE", first_name: name.first, middle_name: "", last_name: name.last, line_1: "Betech Solar Solutions", line_2: "", city: "", state: "", postal_code: "", zip_code: "" },
+    }),
+    cache: "no-store",
+  });
+  const body = await response.json().catch(() => ({}));
+  const redirectUrl = typeof body.redirect_url === "string" ? body.redirect_url : "";
+  const trackingId = typeof body.order_tracking_id === "string" ? body.order_tracking_id : null;
+  if (!response.ok || !redirectUrl) throw new Error(body?.error?.message || body?.message || "Pesapal could not start checkout.");
+  await prisma.websiteOrder.update({ where: { id: input.websiteOrderId }, data: { metadata: { ...metadata, pesapal: { ...pending, trackingId, redirectUrl } } } });
+  return { merchantReference, trackingId, redirectUrl };
+}
+
 export async function settlePesapalPayment(input: { trackingId: string; merchantReference: string }) {
+  if (input.merchantReference.startsWith("PSPW-")) return settleWebsiteOrderPesapalPayment(input);
   const match = /^PSP-([A-Za-z0-9]+)-[A-Za-z0-9]+$/.exec(input.merchantReference);
   if (!match) throw new Error("Invalid Pesapal merchant reference.");
   const order = await prisma.order.findUnique({ where: { id: match[1] }, include: { receipt: true } });
@@ -184,6 +232,42 @@ export async function settlePesapalPayment(input: { trackingId: string; merchant
     });
   }
   return { completed, failed, status, receiptToken: typeof pending.receiptToken === "string" ? pending.receiptToken : null };
+}
+
+async function settleWebsiteOrderPesapalPayment(input: { trackingId: string; merchantReference: string }) {
+  const order = await prisma.websiteOrder.findFirst({
+    where: { metadata: { path: ["pesapal", "merchantReference"], equals: input.merchantReference } },
+    select: { id: true, orderRef: true, customerName: true, total: true, status: true, metadata: true },
+  });
+  if (!order) throw new Error("Pesapal website order was not found.");
+  const metadata = record(order.metadata);
+  const pending = record(metadata.pesapal);
+  if (pending.status === "COMPLETED") return { completed: true, failed: false, status: "COMPLETED", websiteOrderRef: order.orderRef };
+  const token = await accessToken();
+  const settings = config();
+  const response = await fetch(`${settings.baseUrl}/api/Transactions/GetTransactionStatus?orderTrackingId=${encodeURIComponent(input.trackingId)}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, cache: "no-store" });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error?.message || "Unable to verify the Pesapal payment.");
+  const status = String(body.payment_status_description || body.status || "PENDING").trim().toUpperCase();
+  const completed = ["COMPLETED", "PAID", "SUCCESS"].includes(status);
+  const failed = ["FAILED", "CANCELLED", "INVALID"].includes(status);
+  const amount = Number(pending.amount || 0);
+  const paid = Number(metadata.amountPaid || metadata.amountPaidNow || 0);
+  const paidAfter = completed ? Math.min(Number(order.total), paid + amount) : paid;
+  await prisma.websiteOrder.update({
+    where: { id: order.id },
+    data: {
+      status: completed ? "PAYMENT_CONFIRMED" : order.status,
+      metadata: { ...metadata, amountPaid: paidAfter, amountPaidNow: paidAfter, totalOutstanding: Math.max(0, Number(order.total) - paidAfter), pesapal: { ...pending, trackingId: input.trackingId, status: completed ? "COMPLETED" : failed ? "FAILED" : "PENDING", verifiedAt: new Date().toISOString(), providerStatus: body } },
+    },
+  });
+  if (completed) {
+    await Promise.allSettled([
+      notifyWebsiteOrderCustomer({ websiteOrderId: order.id, event: "PAYMENT_CONFIRMED" }),
+      sendTransactionalSms(process.env.BETECH_OFFICE_PHONE?.trim() || "0722151083", `Pesapal payment received: KSh ${amount.toLocaleString("en-KE")} from ${order.customerName || "Customer"} for website order ${order.orderRef}. Reference: ${input.merchantReference}. Status: completed.`),
+    ]);
+  }
+  return { completed, failed, status, websiteOrderRef: order.orderRef };
 }
 
 async function sendPesapalOfficeConfirmation(input: {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { MessageCircle } from "lucide-react";
+import { CreditCard, MessageCircle, Smartphone } from "lucide-react";
 import { buildDetailedCart, useShopCart } from "@/app/shop/cartStore";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { createShopOrder } from "@/app/shop/shopSubmitApi";
@@ -137,6 +137,7 @@ export default function CheckoutClient() {
     : null;
   const [submitting, setSubmitting] = useState(false);
   const [pendingPaymentOrder, setPendingPaymentOrder] = useState<PendingPaymentOrder | null>(null);
+  const [paymentChannel, setPaymentChannel] = useState<"MPESA" | "PESAPAL">("MPESA");
   const [error, setError] = useState<string | null>(null);
   const [payerPhone, setPayerPhone] = useState("");
   const [editingPayerPhone, setEditingPayerPhone] = useState(false);
@@ -470,7 +471,7 @@ export default function CheckoutClient() {
               deliveryTown: effectiveTown,
               townSource: resolvedTown?.townSource,
               nearestMajorTown: isManualTown ? form.nearestMajorTown.trim() || undefined : undefined,
-              paymentMethod: paymentPlan?.label || form.paymentPreference,
+              paymentMethod: paymentPlan ? `${paymentPlan.label} via ${paymentChannel === "PESAPAL" ? "Pesapal" : "M-Pesa"}` : form.paymentPreference,
               paymentOption: selectedPaymentOption || undefined,
               notes: [form.locationNotes.trim(), `WhatsApp: ${form.whatsappNumber.trim()}`, form.email.trim() ? `Email: ${form.email.trim()}` : ""]
                 .filter(Boolean)
@@ -482,6 +483,19 @@ export default function CheckoutClient() {
             // callback confirms it. Keep the cart intact for cancellation or
             // retry and render the shared STK panel in this checkout.
             if (orderResponse.requiresImmediatePayment) {
+              if (paymentChannel === "PESAPAL") {
+                const pesapalResponse = await fetch(`/api/shop/orders/${encodeURIComponent(orderResponse.orderRef)}/pesapal`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ paymentAccessToken: orderResponse.paymentAccessToken }),
+                });
+                const pesapal = await pesapalResponse.json().catch(() => ({}));
+                if (!pesapalResponse.ok || !pesapal?.redirectUrl) {
+                  throw new Error(pesapal?.error || "Unable to open Pesapal checkout.");
+                }
+                window.location.assign(pesapal.redirectUrl);
+                return;
+              }
               const pending: PendingPaymentOrder = {
                 orderRef: orderResponse.orderRef,
                 amountDueNow: orderResponse.amountDueNow,
@@ -698,6 +712,14 @@ export default function CheckoutClient() {
               </div>
               {fieldErrors.paymentPreference ? <span className="mt-2 block text-xs font-semibold text-red-600">{fieldErrors.paymentPreference}</span> : null}
               {paymentPlan ? <div className="mt-3 rounded-[16px] border border-emerald-300/40 bg-emerald-50 p-3 text-sm text-slate-700"><div className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-800">Payment Summary</div><div className="mt-2 grid gap-1"><div className="flex justify-between"><span>Products</span><b>{formatCurrency(subtotal)}</b></div><div className="flex justify-between"><span>Delivery / transport</span><b>{formatCurrency(orderDeliveryFee)}</b></div><div className="flex justify-between border-t border-emerald-900/10 pt-2 text-base"><span>Amount due now</span><b className="text-emerald-900">{formatCurrency(paymentPlan.amountDueNow)}</b></div><div className="flex justify-between"><span>Remaining product balance</span><b>{formatCurrency(paymentPlan.remainingProductBalance)}</b></div><div className="flex justify-between"><span>Remaining delivery balance</span><b>{formatCurrency(paymentPlan.remainingDeliveryBalance)}</b></div></div></div> : null}
+              {paymentPlan?.amountDueNow ? <div className="mt-3 rounded-[16px] border border-indigo-200 bg-indigo-50 p-3">
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-indigo-800">Pay securely with</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <button type="button" onClick={() => setPaymentChannel("MPESA")} className={`rounded-xl border p-3 text-left transition ${paymentChannel === "MPESA" ? "border-[#7a0000] bg-white ring-2 ring-[#7a0000]/10" : "border-indigo-200 bg-white/70"}`}><span className="flex items-center gap-2 font-bold text-slate-950"><Smartphone className="h-4 w-4 text-[#0d8f53]" />M-Pesa Express</span><span className="mt-1 block text-xs leading-5 text-slate-600">Receive an M-Pesa prompt on your phone.</span></button>
+                  <button type="button" onClick={() => setPaymentChannel("PESAPAL")} className={`rounded-xl border p-3 text-left transition ${paymentChannel === "PESAPAL" ? "border-indigo-600 bg-white ring-2 ring-indigo-600/15" : "border-indigo-200 bg-white/70"}`}><span className="flex items-center gap-2 font-bold text-slate-950"><CreditCard className="h-4 w-4 text-indigo-700" />Pesapal</span><span className="mt-1 block text-xs leading-5 text-slate-600">Airtel Money, Visa, Mastercard and other secure options.</span></button>
+                </div>
+                {paymentChannel === "PESAPAL" ? <p className="mt-2 text-xs leading-5 text-indigo-900">You will be taken to Pesapal&apos;s secure payment page to choose Airtel Money, Visa, Mastercard, or another available payment method.</p> : null}
+              </div> : null}
               {paymentPlan && paymentPlan.amountDueNow > 0 ? <div className="mt-3 rounded-[16px] border border-[#7a0000]/10 bg-white p-3 text-sm text-slate-700"><div className="font-bold text-slate-950">Secure M-PESA payment</div><div className="mt-1">STK prompt will be sent to <strong>{payerPhone || form.phoneNumber || "your M-PESA number"}</strong>.</div><button type="button" onClick={() => setEditingPayerPhone((open) => !open)} className="mt-2 text-xs font-bold text-[#7a0000] underline">{editingPayerPhone ? "Use this M-PESA number" : "Change M-PESA number"}</button>{editingPayerPhone ? <input value={payerPhone || form.phoneNumber} onChange={(event) => setPayerPhone(event.target.value)} inputMode="tel" placeholder="07XXXXXXXX" className="mt-2 min-h-11 w-full rounded-xl border border-[#7a0000]/15 bg-white px-3" /> : null}<div className="mt-2 text-xs text-slate-500">Enter your PIN only in Safaricom’s prompt. Betech never asks for or stores your PIN.</div></div> : null}
             </>}
             <div className="mt-5 grid gap-2.5 xl:hidden">
@@ -706,7 +728,7 @@ export default function CheckoutClient() {
                 disabled={submitting || Boolean(pendingPaymentOrder)}
                 className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]"
               >
-                {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with M-Pesa` : "Place Order"}
+                {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with ${paymentChannel === "PESAPAL" ? "Pesapal" : "M-Pesa"}` : "Place Order"}
               </button>
               <TrackedWhatsAppLink
                 href={summaryWhatsappHref}
@@ -731,7 +753,7 @@ export default function CheckoutClient() {
 
         <div className="mt-5 hidden flex-col gap-2.5 xl:flex xl:flex-row">
           <button type="submit" disabled={submitting || Boolean(pendingPaymentOrder)} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
-            {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with M-Pesa` : "Place Order"}
+            {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with ${paymentChannel === "PESAPAL" ? "Pesapal" : "M-Pesa"}` : "Place Order"}
           </button>
           <Link href={SHOP_CART_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
             Back to Cart
@@ -784,7 +806,7 @@ export default function CheckoutClient() {
             disabled={submitting || Boolean(pendingPaymentOrder)}
             className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)]"
           >
-            {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with M-Pesa` : "Place Order"}
+            {submitting ? "Preparing secure payment..." : pendingPaymentOrder ? "Waiting for M-Pesa payment" : paymentPlan && paymentPlan.amountDueNow > 0 ? `Pay ${formatCurrency(paymentPlan.amountDueNow)} with ${paymentChannel === "PESAPAL" ? "Pesapal" : "M-Pesa"}` : "Place Order"}
           </button>
           <TrackedWhatsAppLink
             href={summaryWhatsappHref}
