@@ -77,7 +77,7 @@ type ReceiptFormProps = {
 
 type PaymentChoice = "MPESA" | "CASH" | "MPESA_EXPRESS" | "PESAPAL";
 type PaybillCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "DTB_PAYBILL" | "ABSA_PAYBILL";
-type ManualMpesaCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "MPESA_TO_PHONE";
+type ManualMpesaCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "MPESA_TO_PHONE" | "SPEEDAF_PAYBILL";
 type ExpressPayment = {
   receiptId: string;
   reference: string;
@@ -100,6 +100,12 @@ const MANUAL_MPESA_COLLECTION_OPTIONS: Array<{ value: ManualMpesaCollectionMetho
   { value: "EQUITY_PAYBILL", label: "Equity Paybill", detail: "Customer paid through the Equity Paybill channel." },
   { value: "MPESA_TO_PHONE", label: "M-Pesa to Phone", detail: "Customer sent M-Pesa directly to a Betech phone number." },
 ];
+
+const SPEEDAF_PAYBILL_OPTION: { value: ManualMpesaCollectionMethod; label: string; detail: string } = {
+  value: "SPEEDAF_PAYBILL",
+  label: "Speedaf Paybill",
+  detail: "Default collection source for Speedaf POD orders.",
+};
 
 type ProjectDraft = {
   paymentTerm: ReceiptProjectPaymentTerm;
@@ -193,6 +199,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [addressLoading, setAddressLoading] = useState(false);
   const [showAddressInput, setShowAddressInput] = useState<boolean>(false);
   const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "pod" | "project" | "">("");
+  const manualMpesaCollectionOptions = customerType === "pod" ? [SPEEDAF_PAYBILL_OPTION] : MANUAL_MPESA_COLLECTION_OPTIONS;
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
   const [deliveryPaymentTerm, setDeliveryPaymentTerm] = useState<"PAY_BEFORE_DELIVERY" | "PAY_ON_DELIVERY">("PAY_ON_DELIVERY");
   const [podNote, setPodNote] = useState<string>("");
@@ -371,7 +378,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         setSelectedPaymentMethods({ MPESA: true, CASH: false });
       }
       const prefilledCollectionMethod = String(parsed.metadata?.paymentCollectionMethod || "").trim().toUpperCase();
-      if (["MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE"].includes(prefilledCollectionMethod)) {
+      if (["MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE", "SPEEDAF_PAYBILL"].includes(prefilledCollectionMethod)) {
         setManualMpesaCollectionMethod(prefilledCollectionMethod as ManualMpesaCollectionMethod);
       }
       if (Array.isArray(parsed.items) && parsed.items.length) {
@@ -1069,6 +1076,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery" | "pod" | "project") => {
     setCustomerType(type);
+    setManualMpesaCollectionMethod((current) => {
+      if (type === "pod") return "SPEEDAF_PAYBILL";
+      return current === "SPEEDAF_PAYBILL" ? "" : current;
+    });
     if (type === "project") {
       setDocType("RECEIPT");
     }
@@ -2245,7 +2256,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               <label className="text-xs font-semibold uppercase tracking-wide text-slate-300">M-Pesa received via</label>
               <select value={manualMpesaCollectionMethod} onChange={(event) => setManualMpesaCollectionMethod(event.target.value as ManualMpesaCollectionMethod | "")} className="min-w-52 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
                 <option value="">Select M-Pesa collection source</option>
-                {MANUAL_MPESA_COLLECTION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                {manualMpesaCollectionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
           </div> : null}

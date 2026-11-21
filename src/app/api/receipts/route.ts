@@ -744,7 +744,7 @@ export async function GET(req: NextRequest) {
     ).trim().toUpperCase() || null;
     const completedCounterSale =
       effectivePaymentStatus === "PAID" &&
-      ["MPESA_EXPRESS", "MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE", "DTB_PAYBILL", "ABSA_PAYBILL"].includes(paymentCollectionMethod || "");
+      ["MPESA_EXPRESS", "MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE", "SPEEDAF_PAYBILL", "DTB_PAYBILL", "ABSA_PAYBILL"].includes(paymentCollectionMethod || "");
 
     const recognitionDate =
       getReceiptRecognitionDate(r) ??
@@ -1250,7 +1250,7 @@ export async function POST(req: NextRequest) {
   const isMpesaExpress = String(payload?.paymentMethod || "").trim().toUpperCase() === "MPESA_EXPRESS";
   const isPesapal = String(payload?.metadata?.paymentCollectionMethod || "").trim().toUpperCase() === "PESAPAL";
   const manualMpesaCollectionMethod = String(payload?.metadata?.paymentCollectionMethod || "").trim().toUpperCase();
-  const isManualMpesaCollection = ["MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE"].includes(manualMpesaCollectionMethod);
+  const isManualMpesaCollection = ["MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE", "SPEEDAF_PAYBILL"].includes(manualMpesaCollectionMethod);
   const normalizedDeliveryAddress =
     typeof payload?.deliveryAddress === "string" ? payload.deliveryAddress.trim() : "";
   const requestId = randomUUID();
