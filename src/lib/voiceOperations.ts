@@ -1496,7 +1496,21 @@ async function getVoiceRoutingConfig() {
 
 function buildCallWhere(viewer: VoiceViewer, scope: "all" | "mine" = "all") {
   if (viewer.isAdmin && scope !== "mine") return {};
-  return { assignedToId: viewer.targetUserId };
+  // A staff member's history must include every call they worked: calls routed
+  // to them, calls they actually answered after another route hop, and calls
+  // where they own the resulting callback. Keep this inside AND so callers can
+  // safely add their own OR conditions for statuses and phone searches.
+  return {
+    AND: [
+      {
+        OR: [
+          { assignedToId: viewer.targetUserId },
+          { answeredById: viewer.targetUserId },
+          { followUps: { some: { assignedToId: viewer.targetUserId } } },
+        ],
+      },
+    ],
+  };
 }
 
 function buildFollowUpWhere(
