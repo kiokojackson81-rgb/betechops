@@ -16,6 +16,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ to
   if (!input.success) return NextResponse.json({ error: "Enter a valid whole-KES amount." }, { status: 400 });
   const receipt = await prisma.receipt.findUnique({ where: { id: document.receiptId }, include: { order: true } });
   if (!receipt?.order || receipt.order.status === "CANCELED") return NextResponse.json({ error: "This order cannot receive a payment." }, { status: 409 });
+  const receiptData = receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+    ? receipt.data as Record<string, unknown>
+    : {};
+  const podDelivery = receiptData.podDelivery && typeof receiptData.podDelivery === "object" && !Array.isArray(receiptData.podDelivery)
+    ? receiptData.podDelivery as Record<string, unknown>
+    : null;
+  const isSpeedafCollection = String(receiptData.customerType || "").trim().toLowerCase() === "pod" || Boolean(podDelivery && !podDelivery.directDelivery);
+  if (isSpeedafCollection) return NextResponse.json({ error: "Pesapal is not available for Speedaf collection orders. Pay when you collect your order." }, { status: 409 });
   const balance = Math.max(0, Number(receipt.order.totalAmount) - Number(receipt.order.paidAmount));
   if (input.data.amount > balance || balance < 1) return NextResponse.json({ error: "This receipt has no payable outstanding balance." }, { status: 409 });
   try {

@@ -53,7 +53,7 @@ export default function ReceiptLandingPage({ receipt, token, reviewUrl, offers, 
         {receipt.delivery?.isRiderDelivery && receipt.delivery.paymentLabel === "Pay on delivery" && receipt.balance > 0 ? (
           <ProjectPaymentOptions token={token} balance={receipt.balance} initialPhone={receipt.customerPhone} customerName={receipt.customerName} paymentMode="delivery" />
         ) : null}
-        {!receipt.project && !(receipt.delivery?.isRiderDelivery && receipt.delivery.paymentLabel === "Pay on delivery") && receipt.balance > 0 ? (
+        {!receipt.project && !(receipt.delivery && !receipt.delivery.isRiderDelivery) && !(receipt.delivery?.isRiderDelivery && receipt.delivery.paymentLabel === "Pay on delivery") && receipt.balance > 0 ? (
           <PesapalPaymentButton token={token} balance={receipt.balance} />
         ) : null}
         {receipt.project ? <ProjectDocumentsCard project={receipt.project} token={token} documentsReady={projectDocumentsReady} /> : null}
