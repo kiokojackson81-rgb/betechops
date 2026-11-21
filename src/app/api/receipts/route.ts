@@ -744,7 +744,7 @@ export async function GET(req: NextRequest) {
     ).trim().toUpperCase() || null;
     const completedCounterSale =
       effectivePaymentStatus === "PAID" &&
-      ["MPESA_EXPRESS", "MPESA_PAYBILL", "EQUITY_PAYBILL", "DTB_PAYBILL", "ABSA_PAYBILL"].includes(paymentCollectionMethod || "");
+      ["MPESA_EXPRESS", "MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE", "DTB_PAYBILL", "ABSA_PAYBILL"].includes(paymentCollectionMethod || "");
 
     const recognitionDate =
       getReceiptRecognitionDate(r) ??
@@ -784,6 +784,8 @@ export async function GET(req: NextRequest) {
       items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
       paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
       paymentCollectionMethod,
+      manualPaymentReference: typeof rawData.manualPaymentReference === "string" ? rawData.manualPaymentReference.trim() || null : null,
+      mpesaRecipientPhone: typeof rawData.mpesaRecipientPhone === "string" ? rawData.mpesaRecipientPhone.trim() || null : null,
       paymentStatus: effectivePaymentStatus,
       detailUrl: `/receipts/${r.id}`,
       publicReceiptToken:
@@ -1247,6 +1249,8 @@ export async function POST(req: NextRequest) {
   const isDeliveryRecognizedOnCreation = !isPodDelivery && !isPayOnDelivery && isCompletedStandardDelivery;
   const isMpesaExpress = String(payload?.paymentMethod || "").trim().toUpperCase() === "MPESA_EXPRESS";
   const isPesapal = String(payload?.metadata?.paymentCollectionMethod || "").trim().toUpperCase() === "PESAPAL";
+  const manualMpesaCollectionMethod = String(payload?.metadata?.paymentCollectionMethod || "").trim().toUpperCase();
+  const isManualMpesaCollection = ["MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE"].includes(manualMpesaCollectionMethod);
   const normalizedDeliveryAddress =
     typeof payload?.deliveryAddress === "string" ? payload.deliveryAddress.trim() : "";
   const requestId = randomUUID();
@@ -1731,7 +1735,21 @@ export async function POST(req: NextRequest) {
         data: {
           ...payload,
           paymentBreakdown: normalizedPaymentBreakdown,
-          ...(isMpesaExpress ? { paymentCollectionMethod: "MPESA_EXPRESS" } : isPesapal ? { paymentCollectionMethod: "PESAPAL" } : {}),
+          ...(isMpesaExpress
+            ? { paymentCollectionMethod: "MPESA_EXPRESS" }
+            : isPesapal
+              ? { paymentCollectionMethod: "PESAPAL" }
+              : isManualMpesaCollection
+                ? {
+                    paymentCollectionMethod: manualMpesaCollectionMethod,
+                    manualPaymentReference: typeof payload?.metadata?.manualPaymentReference === "string"
+                      ? payload.metadata.manualPaymentReference.trim() || null
+                      : null,
+                    mpesaRecipientPhone: typeof payload?.metadata?.mpesaRecipientPhone === "string"
+                      ? payload.metadata.mpesaRecipientPhone.trim() || null
+                      : null,
+                  }
+                : {}),
           orderRef: serial,
           needsPricing: hasVariableCostItems,
           totals: {

@@ -46,6 +46,8 @@ type ReceiptRow = {
   items?: Array<{ id: string }> | null;
   paymentMethod?: "MPESA" | "CASH" | null;
   paymentCollectionMethod?: string | null;
+  manualPaymentReference?: string | null;
+  mpesaRecipientPhone?: string | null;
   paymentStatus?: string | null;
   source?: "pos" | "marketing" | "support";
   detailUrl?: string | null;
@@ -443,8 +445,9 @@ const formatBadgeLabel = (value?: string | null) =>
 const paymentCollectionLabel = (paymentCollectionMethod?: string | null, paymentMethod?: string | null) => {
   switch (paymentCollectionMethod) {
     case "MPESA_EXPRESS": return "M-Pesa Express";
-    case "MPESA_PAYBILL": return "Betech Paybill";
+    case "MPESA_PAYBILL": return "M-Pesa Paybill";
     case "EQUITY_PAYBILL": return "Equity Paybill";
+    case "MPESA_TO_PHONE": return "M-Pesa to Phone";
     case "DTB_PAYBILL": return "DTB Paybill";
     case "ABSA_PAYBILL": return "Absa Paybill";
     case "PESAPAL": return "Pesapal";
@@ -2956,6 +2959,8 @@ export default function ReceiptsAdminClient({
                         >
                           {formatBadgeLabel(paymentCollectionLabel(row.paymentCollectionMethod, row.paymentMethod))}
                         </span>
+                        {row.manualPaymentReference ? <p className="mt-1 max-w-40 truncate text-[10px] text-slate-400" title={row.manualPaymentReference}>Ref: {row.manualPaymentReference}</p> : null}
+                        {row.mpesaRecipientPhone ? <p className="mt-1 text-[10px] text-slate-400">To: {row.mpesaRecipientPhone}</p> : null}
                       </td>
                       <td className="px-3 py-3">
                         <span

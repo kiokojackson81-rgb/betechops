@@ -77,6 +77,7 @@ type ReceiptFormProps = {
 
 type PaymentChoice = "MPESA" | "CASH" | "MPESA_EXPRESS" | "PESAPAL";
 type PaybillCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "DTB_PAYBILL" | "ABSA_PAYBILL";
+type ManualMpesaCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "MPESA_TO_PHONE";
 type ExpressPayment = {
   receiptId: string;
   reference: string;
@@ -92,6 +93,12 @@ const PAYBILL_OPTIONS: Array<{ value: PaybillCollectionMethod; label: string; de
   { value: "EQUITY_PAYBILL", label: "Equity Paybill", detail: "External Equity payment channel", external: true },
   { value: "DTB_PAYBILL", label: "DTB Paybill", detail: "External DTB payment channel", external: true },
   { value: "ABSA_PAYBILL", label: "ABSA Paybill", detail: "External ABSA payment channel", external: true },
+];
+
+const MANUAL_MPESA_COLLECTION_OPTIONS: Array<{ value: ManualMpesaCollectionMethod; label: string; detail: string }> = [
+  { value: "MPESA_PAYBILL", label: "M-Pesa Paybill", detail: "Customer paid through the Betech M-Pesa Paybill." },
+  { value: "EQUITY_PAYBILL", label: "Equity Paybill", detail: "Customer paid through the Equity Paybill channel." },
+  { value: "MPESA_TO_PHONE", label: "M-Pesa to Phone", detail: "Customer sent M-Pesa directly to a Betech phone number." },
 ];
 
 type ProjectDraft = {
@@ -168,6 +175,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState({ MPESA: true, CASH: false });
   const [isMpesaExpress, setIsMpesaExpress] = useState(false);
   const [isPesapal, setIsPesapal] = useState(false);
+  const [manualMpesaCollectionMethod, setManualMpesaCollectionMethod] = useState<ManualMpesaCollectionMethod | "">("");
+  const [manualMpesaReference, setManualMpesaReference] = useState("");
+  const [manualMpesaRecipientPhone, setManualMpesaRecipientPhone] = useState("");
   const [cashWithMpesaExpress, setCashWithMpesaExpress] = useState(false);
   const [mpesaPayerPhone, setMpesaPayerPhone] = useState("");
   const [editingMpesaPayerPhone, setEditingMpesaPayerPhone] = useState(false);
@@ -177,6 +187,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const completedExpressCheckoutIds = useRef(new Set<string>());
   const hasPaymentMethodSelection = isMpesaExpress || isPesapal || selectedPaymentMethods.MPESA || selectedPaymentMethods.CASH;
   const primaryPaymentMethod: PaymentChoice = isMpesaExpress ? "MPESA_EXPRESS" : isPesapal ? "PESAPAL" : selectedPaymentMethods.MPESA ? "MPESA" : "CASH";
+  const isManualMpesaSelected = !isMpesaExpress && !isPesapal && selectedPaymentMethods.MPESA;
   const paymentDetailsShown = true;
   // Paper size is fixed to A5 by default; remove runtime selector
   const [notes, setNotes] = useState<string>("");
@@ -360,6 +371,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         setIsMpesaExpress(false);
         setIsPesapal(false);
         setSelectedPaymentMethods({ MPESA: true, CASH: false });
+      }
+      const prefilledCollectionMethod = String(parsed.metadata?.paymentCollectionMethod || "").trim().toUpperCase();
+      if (["MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE"].includes(prefilledCollectionMethod)) {
+        setManualMpesaCollectionMethod(prefilledCollectionMethod as ManualMpesaCollectionMethod);
+        setManualMpesaReference(String(parsed.metadata?.manualPaymentReference || ""));
+        setManualMpesaRecipientPhone(String(parsed.metadata?.mpesaRecipientPhone || ""));
       }
       if (Array.isArray(parsed.items) && parsed.items.length) {
         const prefilledItems = parsed.items.map((item: any) => ({
@@ -763,6 +780,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       mpesa: normalizedPaymentBreakdown.mpesa,
     },
     paymentMethods: { ...selectedPaymentMethods, CASH: selectedPaymentMethods.CASH || (isMpesaExpress && cashWithMpesaExpress), MPESA_EXPRESS: isMpesaExpress, PESAPAL: isPesapal },
+    paymentCollectionMethod: isManualMpesaSelected ? manualMpesaCollectionMethod || undefined : undefined,
+    manualPaymentReference: isManualMpesaSelected ? manualMpesaReference.trim() || undefined : undefined,
+    mpesaRecipientPhone: isManualMpesaSelected ? manualMpesaRecipientPhone.trim() || undefined : undefined,
   });
 
   const [lastSavedPrintableUrl, setLastSavedPrintableUrl] = useState<string | null>(null);
@@ -1152,6 +1172,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setStaffId(defaultStaffId);
     setIsMpesaExpress(false);
     setIsPesapal(false);
+    setManualMpesaCollectionMethod("");
+    setManualMpesaReference("");
+    setManualMpesaRecipientPhone("");
     setMpesaPayerPhone("");
     setEditingMpesaPayerPhone(false);
     setExternalPaymentReference("");
@@ -1348,6 +1371,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
     if (total <= 0) return showToast("Total must be greater than zero", "error");
     const resolvedPaymentMethod = primaryPaymentMethod;
+    if (isManualMpesaSelected && !manualMpesaCollectionMethod) {
+      return showToast("Select where the M-Pesa payment was received for reconciliation", "error");
+    }
+    if (isManualMpesaSelected && manualMpesaCollectionMethod === "MPESA_TO_PHONE" && !manualMpesaRecipientPhone.trim()) {
+      return showToast("Enter the Betech phone number that received the M-Pesa payment", "error");
+    }
     if (resolvedPaymentMethod === "MPESA_EXPRESS") {
       const cashPortion = normalizedPaymentBreakdown.cash;
       const mpesaBalance = normalizedPaymentBreakdown.mpesa;
@@ -1444,7 +1473,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             mpesa: normalizedPaymentBreakdown.mpesa,
           },
           metadata:
-            websiteOrderId || prefillMetadata || resolvedPaymentMethod === "MPESA_EXPRESS" || resolvedPaymentMethod === "PESAPAL"
+            websiteOrderId || prefillMetadata || resolvedPaymentMethod === "MPESA_EXPRESS" || resolvedPaymentMethod === "PESAPAL" || isManualMpesaSelected
               ? {
                   ...(prefillMetadata ?? {}),
                   ...(resolvedPaymentMethod === "MPESA_EXPRESS"
@@ -1460,6 +1489,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                     ? {
                         paymentCollectionMethod: "PESAPAL",
                         pesapalPaymentLinkSentAt: new Date().toISOString(),
+                      }
+                    : {}),
+                  ...(isManualMpesaSelected
+                    ? {
+                        paymentCollectionMethod: manualMpesaCollectionMethod,
+                        manualPaymentReference: manualMpesaReference.trim() || null,
+                        mpesaRecipientPhone: manualMpesaCollectionMethod === "MPESA_TO_PHONE"
+                          ? manualMpesaRecipientPhone.trim()
+                          : null,
+                        manualMpesaRecordedAt: new Date().toISOString(),
                       }
                     : {}),
                   ...(websiteOrderId
@@ -2211,6 +2250,26 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           {isPesapal ? <div className="mt-3 rounded-xl border border-indigo-400/25 bg-indigo-400/5 p-3 text-xs leading-5 text-indigo-100">
             <p className="font-semibold text-indigo-50">Secure Airtel and card payment link</p>
             <p className="mt-1">The customer will receive an SMS with their secure receipt link. On that page they can choose Airtel Money, Visa, Mastercard, or any other option enabled in Pesapal. Do not collect card details in Betech.</p>
+          </div> : null}
+          {isManualMpesaSelected ? <div className="mt-3 space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-3">
+            <div>
+              <label className={labelClass}>Where was the M-Pesa portion received?</label>
+              <select value={manualMpesaCollectionMethod} onChange={(event) => setManualMpesaCollectionMethod(event.target.value as ManualMpesaCollectionMethod | "")} className={`${fieldClass} mt-1`}>
+                <option value="">Select M-Pesa collection source</option>
+                {MANUAL_MPESA_COLLECTION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              {manualMpesaCollectionMethod ? <p className="mt-1 text-xs text-emerald-100">{MANUAL_MPESA_COLLECTION_OPTIONS.find((option) => option.value === manualMpesaCollectionMethod)?.detail}</p> : <p className="mt-1 text-xs text-amber-200">Required so Finance can reconcile this payment accurately.</p>}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Payment / transaction reference <span className="font-normal text-slate-400">(optional)</span></label>
+                <input value={manualMpesaReference} onChange={(event) => setManualMpesaReference(event.target.value)} placeholder="M-Pesa code or bank reference" className={`${fieldClass} mt-1`} />
+              </div>
+              {manualMpesaCollectionMethod === "MPESA_TO_PHONE" ? <div>
+                <label className={labelClass}>Betech receiving phone number</label>
+                <input type="tel" inputMode="tel" value={manualMpesaRecipientPhone} onChange={(event) => setManualMpesaRecipientPhone(event.target.value)} placeholder="07XX XXX XXX" className={`${fieldClass} mt-1`} />
+              </div> : null}
+            </div>
           </div> : null}
           {docType === "LAYAWAY" && (
             <div className="mt-3 space-y-1">
