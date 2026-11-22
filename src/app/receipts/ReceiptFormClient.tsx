@@ -675,15 +675,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       };
     }
 
+    // A manual Cash + M-Pesa split must reflect the two amounts the cashier
+    // actually received. Never silently allocate a missing amount to M-Pesa.
     const safeCash = Math.max(0, Math.min(total, numericCashPaid));
-    const remainderAfterCash = Math.max(0, total - safeCash);
-    const safeMpesa = Math.max(0, Math.min(remainderAfterCash, numericMpesaPaid));
-    const shortfall = total - (safeCash + safeMpesa);
-
-    return {
-      cash: safeCash,
-      mpesa: Math.max(0, safeMpesa + shortfall),
-    };
+    const safeMpesa = Math.max(0, Math.min(total, numericMpesaPaid));
+    return { cash: safeCash, mpesa: safeMpesa };
   }, [isMpesaExpress, cashWithMpesaExpress, showSplitPaymentInputs, primaryPaymentMethod, total, numericCashPaid, numericMpesaPaid]);
 
   const previewProjectFlow = useMemo(
@@ -724,6 +720,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       }
       return;
     }
+    // Do not turn a manually entered Cash + M-Pesa split back into an
+    // automatic split when the receipt total changes. Each amount is recorded
+    // exactly as entered and save/preview verifies that they total correctly.
+    if (showSplitPaymentInputs) {
+      if (cash > total) setCashPaid(total);
+      if (mpesa > total) setMpesaPaid(total);
+      return;
+    }
     if (cash > total) {
       setCashPaid(total);
       setMpesaPaid(0);
@@ -732,7 +736,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (Math.abs(cash + mpesa - total) > 0.1) {
       setMpesaPaid(Math.max(0, total - cash));
     }
-  }, [total, cashPaid, mpesaPaid, isMpesaExpress]);
+  }, [total, cashPaid, mpesaPaid, isMpesaExpress, showSplitPaymentInputs]);
 
   const buildDraft = (resolvedPaymentMethod: PaymentChoice) => ({
     items,
@@ -1104,7 +1108,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const handleCashPaidChange = (rawValue: string) => {
     if (rawValue === "") {
       setCashPaid("");
-      setMpesaPaid(Math.max(0, total));
+      if (isMpesaExpress) setMpesaPaid(Math.max(0, total));
       return;
     }
     const parsed = Number(rawValue);
@@ -1119,20 +1123,18 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
     const clamped = Math.max(0, Math.min(total, parsed));
     setCashPaid(clamped);
-    setMpesaPaid(Math.max(0, total - clamped));
+    if (isMpesaExpress) setMpesaPaid(Math.max(0, total - clamped));
   };
 
   const handleMpesaPaidChange = (rawValue: string) => {
     if (rawValue === "") {
       setMpesaPaid("");
-      setCashPaid(Math.max(0, total));
       return;
     }
     const parsed = Number(rawValue);
     if (Number.isNaN(parsed)) return;
     const clamped = Math.max(0, Math.min(total, parsed));
     setMpesaPaid(clamped);
-    setCashPaid(Math.max(0, total - clamped));
   };
 
   const handlePreview = (autoPrint = false) => {
@@ -1146,6 +1148,13 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
     if (isManualMpesaSelected && !manualMpesaCollectionMethod) {
       showToast("Select where the M-Pesa payment was received before previewing", "error");
+      return;
+    }
+    if (showSplitPaymentInputs && !isMpesaExpress && (
+      cashPaid === "" || mpesaPaid === "" || numericCashPaid <= 0 || numericMpesaPaid <= 0 ||
+      Math.round((numericCashPaid + numericMpesaPaid) * 100) !== Math.round(total * 100)
+    )) {
+      showToast("Enter positive cash and M-Pesa amounts that add up exactly to the receipt total", "error");
       return;
     }
     if (!customerType) {
@@ -1380,6 +1389,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     const resolvedPaymentMethod = primaryPaymentMethod;
     if (isManualMpesaSelected && !manualMpesaCollectionMethod) {
       return showToast("Select where the M-Pesa payment was received for reconciliation", "error");
+    }
+    if (showSplitPaymentInputs && !isMpesaExpress && (
+      cashPaid === "" || mpesaPaid === "" || numericCashPaid <= 0 || numericMpesaPaid <= 0 ||
+      Math.round((numericCashPaid + numericMpesaPaid) * 100) !== Math.round(total * 100)
+    )) {
+      return showToast("Enter positive cash and M-Pesa amounts that add up exactly to the receipt total", "error");
     }
     if (resolvedPaymentMethod === "MPESA_EXPRESS") {
       const cashPortion = normalizedPaymentBreakdown.cash;
@@ -2288,9 +2303,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               onChange={(e) => handleCashPaidChange(e.target.value)}
               className={fieldClass}
             />
-            <p className="text-xs text-slate-400">
-              Automatic MPESA value: KES {(total - numericCashPaid).toLocaleString()}
-            </p>
+            <p className="text-xs text-slate-400">Enter the actual cash amount received.</p>
           </div>
           <div>
             <label className={labelClass}>MPESA paid (KES)</label>
@@ -2303,10 +2316,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               onChange={(e) => handleMpesaPaidChange(e.target.value)}
               className={fieldClass}
             />
-            <p className="text-xs text-slate-400">
-              Cash portion: KES {(total - numericMpesaPaid).toLocaleString()}
-            </p>
+            <p className="text-xs text-slate-400">Enter the actual M-Pesa amount received.</p>
           </div>
+          <p className={`md:col-span-2 text-sm ${Math.round((numericCashPaid + numericMpesaPaid) * 100) === Math.round(total * 100) && numericCashPaid > 0 && numericMpesaPaid > 0 ? "text-emerald-300" : "text-amber-200"}`}>
+            Total entered: <strong>KES {(numericCashPaid + numericMpesaPaid).toLocaleString()}</strong> · Receipt total: <strong>KES {total.toLocaleString()}</strong>
+          </p>
         </div>
       )}
 

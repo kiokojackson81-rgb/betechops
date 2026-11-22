@@ -15,6 +15,7 @@ type RecipientContext = {
   reference: string;
   total: number;
   paid: number;
+  paymentAmount?: number | null;
   deliveryMethod?: string | null;
   receiptLink?: string | null;
   podDeliveryFee?: number | null;
@@ -39,7 +40,11 @@ function messageFor(event: NotificationEvent, context: RecipientContext) {
     case "DISPATCHED": return context.deliveryMethod === "Pay on Delivery"
       ? `Hello ${name}, your Pay on Delivery order ${context.reference} has been dispatched. Expect it within 1-3 days. Pickup: ${context.pickupStation || "Speedaf collection point"}${context.pickupAddress ? `, ${context.pickupAddress}` : ""}. View pickup information, receipt and order status here: ${context.receiptLink || "contact Betech"}. For help call ${context.agentName || "Betech Customer Care"}${context.agentPhone ? ` on ${context.agentPhone}` : ""}.`
       : `Hello ${name}, your Betech order ${context.reference} has been dispatched. Delivery method: ${context.deliveryMethod || "delivery"}. Amount due: ${money(balance)}. We will contact you with delivery details.`;
-    case "PAYMENT_CONFIRMED": return `Hello ${name}, we have received ${money(context.paid)} for Betech order ${context.reference}. Remaining balance: ${money(balance)}.${link}`;
+    case "PAYMENT_CONFIRMED": {
+      const received = Number(context.paymentAmount) > 0 ? Number(context.paymentAmount) : context.paid;
+      const paymentLink = context.receiptLink ? ` View your receipt and pay the balance: ${context.receiptLink}` : "";
+      return `Hello ${name}, we have received ${money(received)} for Betech order ${context.reference}. Remaining balance: ${money(balance)}.${paymentLink}`;
+    }
     case "DELIVERED": return `Hello ${name}, your Betech order ${context.reference} has been marked delivered. Thank you for choosing Betech Solar Solutions.${link}`;
     case "DELIVERY_FAILED": return `Hello ${name}, we could not complete delivery for Betech order ${context.reference}. Please contact us to arrange a new delivery time.`;
     case "CANCELLED": return `Hello ${name}, Betech order ${context.reference} has been cancelled. If you made a payment, our team will contact you about the refund or credit process.`;
@@ -52,11 +57,14 @@ function messageFor(event: NotificationEvent, context: RecipientContext) {
 async function sendOne(input: { context: RecipientContext; event: NotificationEvent; channel: CustomerOrderNotificationChannel; force?: boolean }) {
   const { context, event, channel, force } = input;
   const recipient = channel === "EMAIL" ? clean(context.customerEmail) : clean(context.customerPhone);
-  const baseKey = `${context.websiteOrderId || context.receiptId}:${event}:${channel}`;
+  const paymentMarker = event === "PAYMENT_CONFIRMED"
+    ? `:${Number(context.paymentAmount) > 0 ? Number(context.paymentAmount) : context.paid}:${context.paid}`
+    : "";
+  const baseKey = `${context.websiteOrderId || context.receiptId}:${event}${paymentMarker}:${channel}`;
   const idempotencyKey = force ? `${baseKey}:manual:${Date.now()}` : baseKey;
   if (!recipient) return { channel, status: "SKIPPED" as const, reason: "missing_recipient" };
 
-  const payload = { event, reference: context.reference, total: context.total, paid: context.paid, receiptLink: context.receiptLink };
+  const payload = { event, reference: context.reference, total: context.total, paid: context.paid, paymentAmount: context.paymentAmount ?? null, receiptLink: context.receiptLink };
   const log = await prisma.customerOrderNotificationLog.upsert({
     where: { idempotencyKey },
     create: { websiteOrderId: context.websiteOrderId || null, receiptId: context.receiptId || null, eventType: event as CustomerOrderNotificationEventType, channel, recipientName: context.customerName, recipientAddress: recipient, idempotencyKey, status: ProjectNotificationStatus.PENDING, payloadSnapshot: payload },
@@ -100,13 +108,13 @@ async function publish(context: RecipientContext, event: NotificationEvent, forc
   return { event, results };
 }
 
-export async function notifyWebsiteOrderCustomer(input: { websiteOrderId: string; event: NotificationEvent; force?: boolean }) {
+export async function notifyWebsiteOrderCustomer(input: { websiteOrderId: string; event: NotificationEvent; force?: boolean; paymentAmount?: number | null }) {
   const order = await prisma.websiteOrder.findUnique({ where: { id: input.websiteOrderId }, select: { id: true, orderRef: true, customerName: true, customerPhone: true, customerEmail: true, total: true, deliveryMethod: true, receiptId: true, metadata: true, receipt: { select: { data: true } } } });
   if (!order) return null;
   const metadata = asRecord(order.metadata);
   const receiptData = asRecord(order.receipt?.data);
   const token = clean(receiptData.publicReceiptToken);
-  return publish({ websiteOrderId: order.id, receiptId: order.receiptId, customerName: order.customerName, customerPhone: order.customerPhone, customerEmail: order.customerEmail, reference: order.orderRef, total: Number(order.total), paid: Number(metadata.amountPaid ?? metadata.amountPaidNow ?? 0), deliveryMethod: order.deliveryMethod, receiptLink: token ? `https://www.betech.co.ke/r/${token}/view` : null }, input.event, input.force);
+  return publish({ websiteOrderId: order.id, receiptId: order.receiptId, customerName: order.customerName, customerPhone: order.customerPhone, customerEmail: order.customerEmail, reference: order.orderRef, total: Number(order.total), paid: Number(metadata.amountPaid ?? metadata.amountPaidNow ?? 0), paymentAmount: input.paymentAmount, deliveryMethod: order.deliveryMethod, receiptLink: token ? `https://www.betech.co.ke/r/${token}/view` : null }, input.event, input.force);
 }
 
 export async function notifyPodCustomer(input: { receiptId: string; event: Extract<NotificationEvent, "POD_ORDER_RECEIVED" | "POD_PAID" | "POD_DELIVERED" | "DELIVERY_FAILED" | "DISPATCHED">; force?: boolean }) {

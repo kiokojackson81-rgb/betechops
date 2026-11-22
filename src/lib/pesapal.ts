@@ -263,7 +263,7 @@ async function settleWebsiteOrderPesapalPayment(input: { trackingId: string; mer
   });
   if (completed) {
     await Promise.allSettled([
-      notifyWebsiteOrderCustomer({ websiteOrderId: order.id, event: "PAYMENT_CONFIRMED" }),
+      notifyWebsiteOrderCustomer({ websiteOrderId: order.id, event: "PAYMENT_CONFIRMED", paymentAmount: amount }),
       sendTransactionalSms(process.env.BETECH_OFFICE_PHONE?.trim() || "0722151083", `Pesapal payment received: KSh ${amount.toLocaleString("en-KE")} from ${order.customerName || "Customer"} for website order ${order.orderRef}. Reference: ${input.merchantReference}. Status: completed.`),
     ]);
   }

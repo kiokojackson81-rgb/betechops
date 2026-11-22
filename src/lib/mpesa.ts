@@ -904,7 +904,7 @@ async function notifyConfirmedWebsiteOrder(input: {
     actionPath: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(order.id)}`,
     payload: { orderRef: order.orderRef, receiptNumber: receipt, paid, total },
   });
-  await notifyWebsiteOrderCustomer({ websiteOrderId: order.id, event: "PAYMENT_CONFIRMED" }).catch((error) => console.error("[customer notifications] website payment", error));
+  await notifyWebsiteOrderCustomer({ websiteOrderId: order.id, event: "PAYMENT_CONFIRMED", paymentAmount: input.paymentAmount }).catch((error) => console.error("[customer notifications] website payment", error));
 }
 
 async function notifyConfirmedSiteVisit(siteVisitId: string) {
