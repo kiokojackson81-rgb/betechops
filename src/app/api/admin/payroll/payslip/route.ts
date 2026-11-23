@@ -32,6 +32,12 @@ export async function GET(req: Request) {
   if (!attendant) {
     return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
   }
+  if (!attendant.isActive) {
+    return NextResponse.json(
+      { error: "This staff member is inactive and is excluded from payroll for this period." },
+      { status: 409 },
+    );
+  }
 
   const [row, branding] = await Promise.all([
     calculatePayrollForAttendant(attendant, period),

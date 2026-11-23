@@ -358,6 +358,9 @@ export async function sendPayrollNotificationForAttendant(args: {
   if (!attendant) {
     throw new Error("Attendant not found");
   }
+  if (!attendant.isActive) {
+    throw new Error("Inactive staff are excluded from payroll notifications.");
+  }
 
   const { row, pdfBuffer, filename } = await buildPayslipPdfBuffer(attendant, args.period);
   const channels = await Promise.all([
@@ -379,7 +382,7 @@ export async function sendPayrollNotificationsForPeriod(args: {
 }) {
   const attendants = await prisma.user.findMany({
     where: args.attendantIds?.length
-      ? { id: { in: args.attendantIds } }
+      ? { id: { in: args.attendantIds }, isActive: true }
       : {
           isActive: true,
           role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] },

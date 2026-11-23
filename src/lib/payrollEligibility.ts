@@ -15,5 +15,9 @@ export function payrollEligibleUserWhere(extra: Prisma.UserWhereInput = {}): Pri
     role: { in: ["ATTENDANT", "SUPERVISOR"] },
     attendantCategory: { in: [...PAYROLL_ATTENDANT_CATEGORIES] },
     ...extra,
+    // Deactivation takes effect immediately for the current payroll period:
+    // do not include the user in payroll totals, generated payslips or bulk
+    // payroll notifications, even if a caller passes an ID explicitly.
+    isActive: true,
   };
 }
