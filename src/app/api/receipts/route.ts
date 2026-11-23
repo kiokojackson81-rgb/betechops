@@ -229,6 +229,10 @@ export async function GET(req: NextRequest) {
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
   const requestedCustomerType = (url.searchParams.get("customerType") || "").toLowerCase().trim();
+  const requestedOrderStatus = (url.searchParams.get("orderStatus") || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
   const isProjectOnlyView = requestedCustomerType === "project";
   // POD is operational delivery work. Every delivery status remains visible
   // across reporting periods in the POD desk.
@@ -1122,9 +1126,31 @@ export async function GET(req: NextRequest) {
   // must remain visible across periods rather than disappearing with sales
   // reporting dates.
   const includePodAcrossPeriods = customerType === "pod";
+  // This is intentionally applied after every source has been normalized: the
+  // list combines POS, marketing and support documents, while POS rows also
+  // derive operational states such as POD delivery failed.
+  const statusFiltered = requestedOrderStatus
+    ? deduped.filter((row) => {
+        const rowStatus = String((row as any).status ?? "")
+          .trim()
+          .toUpperCase()
+          .replace(/[\s-]+/g, "_");
+        if (requestedOrderStatus === "CANCELLED") {
+          return rowStatus === "CANCELLED" || rowStatus === "CANCELED";
+        }
+        if (["PAID", "PARTIAL"].includes(requestedOrderStatus)) {
+          const paymentStatus = String((row as any).paymentStatus ?? "")
+            .trim()
+            .toUpperCase()
+            .replace(/[\s-]+/g, "_");
+          return rowStatus === requestedOrderStatus || paymentStatus === requestedOrderStatus;
+        }
+        return rowStatus === requestedOrderStatus;
+      })
+    : deduped;
   const filteredByEffectiveDate = isProjectOnlyView
-    ? deduped
-    : deduped.filter((row) => {
+    ? statusFiltered
+    : statusFiltered.filter((row) => {
         if (
           includePodAcrossPeriods &&
           Boolean((row as any).isPodDelivery)
@@ -1172,7 +1198,7 @@ export async function GET(req: NextRequest) {
   });
 
   filteredByEffectiveDate.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const totalCount = summaryRows.length;
+  const totalCount = requestedOrderStatus ? filteredByEffectiveDate.length : summaryRows.length;
   const totalSales = summaryRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
   const totalProfit = summaryRows.reduce((sum, row) => sum + Number((row as any).profit ?? 0), 0);
   const podReceipts = summaryRows.filter((row) => Boolean((row as any).isPodDelivery)).length;

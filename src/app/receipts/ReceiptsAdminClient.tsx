@@ -74,6 +74,7 @@ type ReceiptSummary = {
 type FilterState = {
   q: string;
   docType: string;
+  orderStatus?: string;
   start: string;
   end: string;
   attendantId: string;
@@ -345,6 +346,7 @@ const makeDefaultFilters = (): FilterState => {
     end: formatDateInput(end),
     attendantId: "",
     paymentMethod: "",
+    orderStatus: undefined,
     customerType: undefined,
     podStatus: undefined,
   };
@@ -775,6 +777,7 @@ export default function ReceiptsAdminClient({
         params.set("includeItems", "false");
         if (activeFilters.q.trim()) params.set("q", activeFilters.q.trim());
         if (activeFilters.docType) params.set("docType", activeFilters.docType);
+        if (activeFilters.orderStatus) params.set("orderStatus", activeFilters.orderStatus);
         if (activeFilters.attendantId)
           params.set("attendantId", activeFilters.attendantId);
         if (activeFilters.paymentMethod)
@@ -2710,7 +2713,7 @@ export default function ReceiptsAdminClient({
             />
           </label>
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr]">
           <label className="text-xs uppercase tracking-wide text-slate-400">
             Staff
             <select
@@ -2726,6 +2729,28 @@ export default function ReceiptsAdminClient({
                   {a.name}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Order status
+            <select
+              value={filters.orderStatus ?? ""}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, orderStatus: e.target.value || undefined }))
+              }
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">All statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="PARTIAL">Partially paid</option>
+              <option value="PAID">Paid</option>
+              <option value="PROCESSING">Processing</option>
+              <option value="DISPATCHED">Dispatched</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="POD_DELIVERY_FAILED">POD delivery failed</option>
+              <option value="FAILED">Failed</option>
+              <option value="CANCELLED">Cancelled</option>
             </select>
           </label>
           <div className="flex flex-wrap items-end gap-2">
