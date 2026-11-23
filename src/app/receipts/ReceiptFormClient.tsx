@@ -77,7 +77,7 @@ type ReceiptFormProps = {
 
 type PaymentChoice = "MPESA" | "CASH" | "MPESA_EXPRESS" | "PESAPAL";
 type PaybillCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "DTB_PAYBILL" | "ABSA_PAYBILL";
-type ManualMpesaCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "MPESA_TO_PHONE" | "SPEEDAF_PAYBILL";
+type ManualMpesaCollectionMethod = "MPESA_PAYBILL" | "EQUITY_PAYBILL" | "MPESA_TO_PHONE" | "SPEEDAF_PAYBILL" | "PESAPAL_PDQ";
 type ExpressPayment = {
   receiptId: string;
   reference: string;
@@ -99,6 +99,7 @@ const MANUAL_MPESA_COLLECTION_OPTIONS: Array<{ value: ManualMpesaCollectionMetho
   { value: "MPESA_PAYBILL", label: "M-Pesa Paybill", detail: "Customer paid through the Betech M-Pesa Paybill." },
   { value: "EQUITY_PAYBILL", label: "Equity Paybill", detail: "Customer paid through the Equity Paybill channel." },
   { value: "MPESA_TO_PHONE", label: "M-Pesa to Phone", detail: "Customer sent M-Pesa directly to a Betech phone number." },
+  { value: "PESAPAL_PDQ", label: "Pesapal PDQ", detail: "Customer paid at the physical Pesapal card/POS terminal." },
 ];
 
 const SPEEDAF_PAYBILL_OPTION: { value: ManualMpesaCollectionMethod; label: string; detail: string } = {
@@ -378,7 +379,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         setSelectedPaymentMethods({ MPESA: true, CASH: false });
       }
       const prefilledCollectionMethod = String(parsed.metadata?.paymentCollectionMethod || "").trim().toUpperCase();
-      if (["MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE", "SPEEDAF_PAYBILL"].includes(prefilledCollectionMethod)) {
+      if (["MPESA_PAYBILL", "EQUITY_PAYBILL", "MPESA_TO_PHONE", "SPEEDAF_PAYBILL", "PESAPAL_PDQ"].includes(prefilledCollectionMethod)) {
         setManualMpesaCollectionMethod(prefilledCollectionMethod as ManualMpesaCollectionMethod);
       }
       if (Array.isArray(parsed.items) && parsed.items.length) {
@@ -1147,7 +1148,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       return;
     }
     if (isManualMpesaSelected && !manualMpesaCollectionMethod) {
-      showToast("Select where the M-Pesa payment was received before previewing", "error");
+      showToast("Select the payment collection source before previewing", "error");
       return;
     }
     if (showSplitPaymentInputs && !isMpesaExpress && (
@@ -1388,7 +1389,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (total <= 0) return showToast("Total must be greater than zero", "error");
     const resolvedPaymentMethod = primaryPaymentMethod;
     if (isManualMpesaSelected && !manualMpesaCollectionMethod) {
-      return showToast("Select where the M-Pesa payment was received for reconciliation", "error");
+      return showToast("Select the payment collection source for reconciliation", "error");
     }
     if (showSplitPaymentInputs && !isMpesaExpress && (
       cashPaid === "" || mpesaPaid === "" || numericCashPaid <= 0 || numericMpesaPaid <= 0 ||
@@ -2268,9 +2269,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           </div> : null}
           {isManualMpesaSelected ? <div className="mt-3 rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-2">
             <div className="flex flex-wrap items-center gap-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-300">M-Pesa received via</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-300">Payment received via</label>
               <select value={manualMpesaCollectionMethod} onChange={(event) => setManualMpesaCollectionMethod(event.target.value as ManualMpesaCollectionMethod | "")} className="min-w-52 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
-                <option value="">Select M-Pesa collection source</option>
+                <option value="">Select payment collection source</option>
                 {manualMpesaCollectionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>

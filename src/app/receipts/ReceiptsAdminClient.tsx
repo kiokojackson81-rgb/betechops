@@ -451,6 +451,7 @@ const paymentCollectionLabel = (paymentCollectionMethod?: string | null, payment
     case "EQUITY_PAYBILL": return "Equity Paybill";
     case "MPESA_TO_PHONE": return "M-Pesa to Phone";
     case "SPEEDAF_PAYBILL": return "Speedaf Paybill";
+    case "PESAPAL_PDQ": return "Pesapal PDQ";
     case "DTB_PAYBILL": return "DTB Paybill";
     case "ABSA_PAYBILL": return "Absa Paybill";
     case "PESAPAL": return "Pesapal";
