@@ -11,7 +11,12 @@ import {
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams?: Promise<{ impersonateId?: string; selectedCallId?: string; selectedPhone?: string }>;
+  searchParams?: Promise<{
+    impersonateId?: string;
+    selectedCallId?: string;
+    selectedPhone?: string;
+    range?: string;
+  }>;
 };
 
 export default async function AttendantVoicePage({ searchParams }: PageProps) {
@@ -32,6 +37,7 @@ export default async function AttendantVoicePage({ searchParams }: PageProps) {
       viewer,
       selectedCallId: params.selectedCallId,
       selectedPhone: params.selectedPhone,
+      historyRange: params.range,
     });
     const pollBaseHref = withImpersonateId("/api/voice/live", viewer.impersonateId);
 
