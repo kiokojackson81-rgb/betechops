@@ -67,9 +67,15 @@ export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
       showToast("Name is required", "warn");
       return;
     }
-    if (platform !== "POS" && !parsed.valid) {
-      showToast(`Fix JSON: ${parsed.error}`, "error");
-      return;
+    let credentialsPayload: unknown | undefined;
+    if (platform === "POS") {
+      credentialsPayload = undefined;
+    } else {
+      if (!parsed.valid) {
+        showToast(`Fix JSON: ${parsed.error}`, "error");
+        return;
+      }
+      credentialsPayload = parsed.value ?? {};
     }
     try {
       const res = await fetch("/api/shops", {
@@ -78,7 +84,7 @@ export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
         body: JSON.stringify({
           name: name.trim(),
           platform,
-          credentials: platform === "POS" ? undefined : (parsed.value ?? {}),
+          credentials: credentialsPayload,
           location,
           phone,
           email,
