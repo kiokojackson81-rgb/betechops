@@ -60,7 +60,7 @@ async function loadOnlineShopsForSummary(): Promise<ShopPayload[]> {
   const now = new Date();
   const [accounts, shops] = await Promise.all([
     prisma.marketplaceAccount.findMany({
-      where: { isActive: true },
+      where: { isActive: true, platform: { in: [Platform.JUMIA, Platform.KILIMALL] } },
       orderBy: { displayName: "asc" },
       select: {
         id: true,
@@ -81,7 +81,7 @@ async function loadOnlineShopsForSummary(): Promise<ShopPayload[]> {
       },
     }),
     prisma.shop.findMany({
-      where: { isActive: true },
+      where: { isActive: true, platform: { in: [Platform.JUMIA, Platform.KILIMALL] } },
       select: { id: true, name: true, platform: true, apiConfig: { select: { apiKey: true } } },
     }),
   ]);
@@ -199,6 +199,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
       where: {
         source: "MANUAL",
         status: { not: "REJECTED" },
+        platform: { in: [Platform.JUMIA, Platform.KILIMALL] },
         weekStart: { in: last4WeekStarts },
       },
       include: {
@@ -276,6 +277,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
         where: {
           source: "MANUAL",
           status: { not: "REJECTED" },
+          platform: { in: [Platform.JUMIA, Platform.KILIMALL] },
           weekStart: selectedWeekWindow.weekStart,
           weekEnd: selectedWeekWindow.weekEnd,
         },
@@ -289,7 +291,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
   const weekEntries = (weekRowsForSelectedWeek as any[]).map((row) => ({
     id: String(row.id),
     shopId: row.shopId ? String(row.shopId) : null,
-    platform: row.platform as Platform,
+    platform: row.platform as "JUMIA" | "KILIMALL",
     amount: Number(row.amount ?? 0),
     status: row.status as any,
     source: row.source as any,
@@ -522,7 +524,7 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
               id: shop.id,
               shopName: shop.shopName,
               displayName: shop.displayName,
-              platform: shop.platform,
+              platform: shop.platform as "JUMIA" | "KILIMALL",
               primaryAttendant: shop.primaryAttendant,
             }))}
             entries={weekEntries}
