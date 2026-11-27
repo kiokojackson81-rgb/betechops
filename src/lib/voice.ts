@@ -2475,6 +2475,10 @@ export async function upsertVoiceCallFromPayload(
       status: true,
       routeType: true,
       routedTo: true,
+      assignedToId: true,
+      answeredById: true,
+      answeredNumber: true,
+      answeredAt: true,
     },
   });
 
@@ -2500,6 +2504,22 @@ export async function upsertVoiceCallFromPayload(
     input?.assignedToId == null
       ? await resolveAnsweredAgentAssignment(destinationNumber)
       : null;
+  // Terminal provider events arrive later without the original route plan.
+  // Preserve the established route owner and answer audit fields so a final
+  // event cannot move a completed call out of the agent's own call history.
+  const assignedToId =
+    input?.assignedToId ??
+    existingCall?.assignedToId ??
+    answeredAgentAssignment ??
+    null;
+  const answeredById = input?.answeredById ?? existingCall?.answeredById ?? null;
+  const answeredNumber =
+    normalizeVoiceNumber(input?.answeredNumber || "") ||
+    existingCall?.answeredNumber ||
+    null;
+  const answeredAt = input?.answeredAt ?? existingCall?.answeredAt ?? null;
+  const routedTo = input?.routedTo ?? existingCall?.routedTo ?? null;
+  const routeType = input?.routeType ?? existingCall?.routeType ?? null;
 
   const voiceCall = await prisma.voiceCall.upsert({
     where: { sessionId },
@@ -2514,12 +2534,12 @@ export async function upsertVoiceCallFromPayload(
       destinationNumber: destinationNumber || null,
       isActive,
       status,
-      routedTo: input?.routedTo ?? null,
-      routeType: input?.routeType ?? null,
-      assignedToId: input?.assignedToId ?? answeredAgentAssignment ?? null,
-      answeredById: input?.answeredById ?? null,
-      answeredNumber: normalizeVoiceNumber(input?.answeredNumber || "") || null,
-      answeredAt: input?.answeredAt ?? null,
+      routedTo,
+      routeType,
+      assignedToId,
+      answeredById,
+      answeredNumber,
+      answeredAt,
       customerId,
       startedAt: parseDate(payload.startTime) ?? new Date(),
       endedAt: parseDate(payload.endTime),
@@ -2543,13 +2563,12 @@ export async function upsertVoiceCallFromPayload(
       destinationNumber: destinationNumber || null,
       isActive,
       status,
-      routedTo: input?.routedTo ?? undefined,
-      routeType: input?.routeType ?? undefined,
-      assignedToId: input?.assignedToId ?? answeredAgentAssignment ?? undefined,
-      answeredById: input?.answeredById ?? undefined,
-      answeredNumber:
-        normalizeVoiceNumber(input?.answeredNumber || "") || undefined,
-      answeredAt: input?.answeredAt ?? undefined,
+      routedTo,
+      routeType,
+      assignedToId,
+      answeredById,
+      answeredNumber,
+      answeredAt,
       customerId: customerId ?? undefined,
       endedAt: parseDate(payload.endTime) ?? undefined,
       durationInSeconds:
