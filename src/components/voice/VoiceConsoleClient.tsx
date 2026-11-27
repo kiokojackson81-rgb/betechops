@@ -47,6 +47,7 @@ type VoiceConsoleClientProps = {
   title: string;
   badge: string;
   subtitle: string;
+  defaultHistoryRange?: VoiceHistoryRange;
 };
 
 const MANUAL_PRESENCE_STATUSES = ["AVAILABLE", "OFFLINE"] as const;
@@ -558,6 +559,7 @@ export default function VoiceConsoleClient({
   title,
   badge,
   subtitle,
+  defaultHistoryRange = "today",
 }: VoiceConsoleClientProps) {
   const softphone = useSoftphone();
   const pathname = usePathname();
@@ -609,7 +611,9 @@ export default function VoiceConsoleClient({
     return mode === "admin" || nextTab !== "agents" ? nextTab : "operations";
   });
   const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() =>
-    normalizeVoiceHistoryRange(searchParams.get("range")),
+    normalizeVoiceHistoryRange(
+      searchParams.get("range") ?? defaultHistoryRange,
+    ),
   );
   const [queueView, setQueueView] = useState<VoiceQueueView>(() =>
     normalizeQueueView(searchParams.get("queue")),
@@ -790,9 +794,13 @@ export default function VoiceConsoleClient({
     setActiveTab(
       mode === "admin" || nextTab !== "agents" ? nextTab : "operations",
     );
-    setDateFilter(normalizeVoiceHistoryRange(searchParams.get("range")));
+    setDateFilter(
+      normalizeVoiceHistoryRange(
+        searchParams.get("range") ?? defaultHistoryRange,
+      ),
+    );
     setQueueView(normalizeQueueView(searchParams.get("queue")));
-  }, [mode, searchParams]);
+  }, [defaultHistoryRange, mode, searchParams]);
 
   useEffect(() => {
     if (activeTab !== "operations") {
