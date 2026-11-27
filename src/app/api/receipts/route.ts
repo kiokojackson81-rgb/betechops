@@ -193,6 +193,7 @@ export async function GET(req: NextRequest) {
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
   const attendantFilterParam = (url.searchParams.get("attendantId") || "").trim() || undefined;
+  const requestedShopId = (url.searchParams.get("shopId") || "").trim() || undefined;
   const onlyPos = ["1", "true", "yes"].includes((url.searchParams.get("onlyPos") || "").toLowerCase());
   const summaryView = (url.searchParams.get("summaryView") || "all").toLowerCase();
   const isProfitSummaryView = summaryView === "profit";
@@ -335,6 +336,20 @@ export async function GET(req: NextRequest) {
   // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
   const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
+
+  // Branch attendants only see sales from branches assigned to them. Admins
+  // and supervisors retain the full desk and can filter any physical branch.
+  const assignedShopIds = canGlobal || !identity.resolvedUserId
+    ? []
+    : (await prisma.userShop.findMany({
+        where: { userId: identity.resolvedUserId },
+        select: { shopId: true },
+      })).map((assignment) => assignment.shopId);
+  if (!canGlobal && requestedShopId && assignedShopIds.length && !assignedShopIds.includes(requestedShopId)) {
+    return NextResponse.json({ error: "This branch is not assigned to you" }, { status: 403 });
+  }
+  const effectiveShopIds = requestedShopId ? [requestedShopId] : (!canGlobal ? assignedShopIds : []);
+  if (effectiveShopIds.length) and.push({ order: { shopId: { in: effectiveShopIds } } });
 
   const customerType = requestedCustomerType || undefined;
   const rawPodStatus = url.searchParams.get('status') || undefined;
@@ -1300,6 +1315,16 @@ export async function POST(req: NextRequest) {
   // issuedById MUST be the logged-in user (who clicked Save). Do not trust payload. This prevents
   // admins or impersonation sessions from altering the recorded creator/issuer of a receipt.
   const issuedById = resolvedUserId;
+  const requestedShopId = typeof payload?.shopId === "string" ? payload.shopId.trim() : "";
+  // Branch assignment is enforced by the server, so an attendant cannot
+  // record a Mombasa sale under another branch by altering the browser request.
+  const assignedShopIds = resolvedUserId && !canCreateUnassigned
+    ? (await prisma.userShop.findMany({ where: { userId: resolvedUserId }, select: { shopId: true } })).map((row) => row.shopId)
+    : [];
+  if (assignedShopIds.length && requestedShopId && !assignedShopIds.includes(requestedShopId)) {
+    return NextResponse.json({ error: "This branch is not assigned to you" }, { status: 403 });
+  }
+  const enforcedShopId = assignedShopIds.length ? (requestedShopId || assignedShopIds[0]) : requestedShopId || null;
 
   // Diagnostic logging: capture incoming attribution candidates to help debug misattributed sales
   try {
@@ -1490,7 +1515,7 @@ export async function POST(req: NextRequest) {
               : "PAID";
       const paidAmountValue = isProjectReceipt ? projectPaidAmount : docType === "LAYAWAY" ? deposit : (isPodDelivery || isPayOnDelivery || isPesapal) ? 0 : isMpesaExpress ? expressCashAmount : Number(total) || 0;
       // choose shop: provided or first active
-      let shopId = payload?.shopId;
+      let shopId = enforcedShopId;
       if (!shopId) {
         const shop = await tx.shop.findFirst({ where: { isActive: true }, select: { id: true } });
         shopId = shop?.id ?? null;

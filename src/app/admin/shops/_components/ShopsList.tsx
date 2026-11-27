@@ -61,6 +61,7 @@ export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
     (async () => {
       const list = shops || [];
       for (const s of list) {
+        if (s.platform === "POS") continue;
         try {
           const r = await fetch(`/api/debug/jumia/products-count?shopId=${encodeURIComponent(s.id)}&size=1`, { cache: 'no-store' });
           const j = await r.json();
@@ -99,7 +100,7 @@ export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
             </div>
             <div className="text-sm text-slate-500">{s.platform}</div>
             <div className="text-sm text-slate-400">
-              Products: {prodTotals[s.id]?.total ?? '…'}{prodTotals[s.id]?.approx ? ' (approx)' : ''}
+              {s.platform === "POS" ? "Physical branch sales ledger" : <>Products: {prodTotals[s.id]?.total ?? '…'}{prodTotals[s.id]?.approx ? ' (approx)' : ''}</>}
             </div>
             {s.assignedUser && (
               <div className="text-sm text-slate-600">
@@ -111,14 +112,14 @@ export default function ShopsList({ initial }: { initial: ShopSummary[] }) {
             <button className="px-2 py-1 border" onClick={() => setOpenAssign(s.id)}>Assign</button>
             <button className="px-2 py-1 border" onClick={() => setOpenManage(s.id)}>Manage</button>
             {/* NEW: Test Auth */}
-            <button
+            {s.platform !== "POS" && <button
               className="px-2 py-1 border bg-white/5 hover:bg-white/10"
               onClick={() => testAuth(s.id)}
               disabled={probe[s.id]?.status === "loading"}
               title="Mint a token and show whether SHOP or ENV credentials are used"
             >
               Test Auth
-            </button>
+            </button>}
           </div>
         </div>
       ))}

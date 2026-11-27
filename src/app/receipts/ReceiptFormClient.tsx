@@ -164,6 +164,8 @@ const PROJECT_PAYMENT_METHOD_OPTIONS: ReceiptProjectPaymentMethod[] = [
 ];
 
 export default function ReceiptFormClient({ onCreated, showHero = true }: ReceiptFormProps) {  
+  const [branchList, setBranchList] = useState<Array<{ id: string; name: string; location?: string | null }>>([]);
+  const [shopId, setShopId] = useState("");
   const [staffMembers, setStaffMembers] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
   const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
@@ -252,6 +254,25 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/shops", { cache: "no-store" });
+        const shops = await res.json().catch(() => []);
+        const branches = (Array.isArray(shops) ? shops : [])
+          .filter((shop: any) => shop?.id && shop?.platform === "POS" && shop?.isActive !== false)
+          .map((shop: any) => ({ id: String(shop.id), name: String(shop.name), location: shop.location ?? null }));
+        if (cancelled) return;
+        setBranchList(branches);
+        if (branches.length === 1) setShopId(branches[0].id);
+      } catch {
+        // Existing receipt flow remains available when the directory is unavailable.
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -1466,6 +1487,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         customerName,
         customerPhone,
         customerEmail: customerEmail || undefined,
+        shopId: shopId || undefined,
         deliveryAddress: deliveryAddress || undefined,
         attendantId: staffId,
         issuedById: staffId,
@@ -1655,6 +1677,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             ))}
           </select>
         </div>
+        {branchList.length > 0 ? <div>
+          <label className={labelClass}>Sales branch</label>
+          <select value={shopId} onChange={(e) => setShopId(e.target.value)} className={`${fieldClass} appearance-none`}>
+            <option value="">Default branch</option>
+            {branchList.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}{branch.location ? ` — ${branch.location}` : ""}</option>)}
+          </select>
+          <p className="mt-1 text-xs text-slate-400">Recorded with this sale for branch reporting and commission.</p>
+        </div> : null}
         <div>
           <label className={labelClass}>Document Type</label>
           <select

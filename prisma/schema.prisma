@@ -3201,6 +3201,9 @@ enum AttendantCategory {
 enum Platform {
   JUMIA
   KILIMALL
+  /// A physical Betech branch. It uses the normal sales and commission ledger
+  /// but is never included in marketplace synchronisation.
+  POS
 }
 
 enum WeeklySaleSource {

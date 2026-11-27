@@ -5,7 +5,7 @@ import { showToast } from "@/lib/ui/toast";
 import { useShopsActionsSafe } from './ShopsActionsContext';
 
 type Props = {
-  defaultPlatform?: "JUMIA" | "KILIMALL";
+  defaultPlatform?: "JUMIA" | "KILIMALL" | "POS";
 };
 
 type JsonState =
@@ -27,7 +27,10 @@ function parseJsonWithPosition(input: string): JsonState {
 
 export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
   const [name, setName] = useState("");
-  const [platform, setPlatform] = useState<"JUMIA" | "KILIMALL">(defaultPlatform);
+  const [platform, setPlatform] = useState<"JUMIA" | "KILIMALL" | "POS">(defaultPlatform);
+  const [location, setLocation] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [credentials, setCredentials] = useState(`{
   "platform": "JUMIA",
   "apiBase": "https://vendor-api.jumia.com",
@@ -64,7 +67,7 @@ export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
       showToast("Name is required", "warn");
       return;
     }
-    if (!parsed.valid) {
+    if (platform !== "POS" && !parsed.valid) {
       showToast(`Fix JSON: ${parsed.error}`, "error");
       return;
     }
@@ -75,7 +78,10 @@ export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
         body: JSON.stringify({
           name: name.trim(),
           platform,
-          credentials: parsed.value ?? {},
+          credentials: platform === "POS" ? undefined : (parsed.value ?? {}),
+          location,
+          phone,
+          email,
         }),
       });
       async function readResponseSafely(res: Response) {
@@ -112,7 +118,7 @@ export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
       const payloadObj = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
       const shopCandidate = payloadObj ? (('shop' in payloadObj ? payloadObj['shop'] : payloadObj) as unknown) : null;
       showToast(`Shop created: ${(shopCandidate && typeof shopCandidate === 'object' && 'name' in (shopCandidate as Record<string, unknown>) ? String((shopCandidate as Record<string, unknown>)['name']) : name)}`, "success");
-      setName("");
+      setName(""); setLocation(""); setPhone(""); setEmail("");
       if (shopCandidate && typeof shopCandidate === 'object' && 'id' in (shopCandidate as Record<string, unknown>)) {
         const created = shopCandidate as { id: string; name: string; platform?: string };
         actions.onShopCreated(created);
@@ -151,15 +157,29 @@ export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
         <label className="block text-sm font-medium">Platform</label>
         <select
           value={platform}
-          onChange={(e) => setPlatform(e.target.value as "JUMIA" | "KILIMALL")}
+          onChange={(e) => setPlatform(e.target.value as "JUMIA" | "KILIMALL" | "POS")}
           className="border border-white/15 bg-white/5 rounded px-2 py-1"
         >
           <option value="JUMIA">JUMIA</option>
           <option value="KILIMALL">KILIMALL</option>
+          <option value="POS">Physical branch (POS)</option>
         </select>
       </div>
 
-      <div>
+      {platform === "POS" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm font-medium">Branch location
+            <input value={location} onChange={(e) => setLocation(e.target.value)} className="mt-1 border border-white/15 bg-white/5 rounded px-2 py-1 w-full" placeholder="e.g., Mombasa" required />
+          </label>
+          <label className="block text-sm font-medium">Branch phone
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 border border-white/15 bg-white/5 rounded px-2 py-1 w-full" placeholder="Optional" />
+          </label>
+          <label className="block text-sm font-medium sm:col-span-2">Branch email
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 border border-white/15 bg-white/5 rounded px-2 py-1 w-full" placeholder="Optional" />
+          </label>
+          <p className="text-xs text-slate-400 sm:col-span-2">Physical branch sales use the normal receipt, commission and payroll ledger. Marketplace synchronisation is disabled.</p>
+        </div>
+      ) : <div>
         <div className="flex items-center">
           <label className="block text-sm font-medium">Credentials (JSON)</label>
           {badge}
@@ -182,14 +202,14 @@ export default function ShopForm({ defaultPlatform = "JUMIA" }: Props) {
             {parsed.error}
           </div>
         )}
-      </div>
+      </div>}
 
       <button
         type="submit"
-        disabled={!parsed.valid}
+        disabled={platform !== "POS" && !parsed.valid}
         className="px-3 py-2 rounded-xl bg-blue-600 disabled:bg-blue-600/40 text-white"
       >
-        Create Shop
+        Create {platform === "POS" ? "Physical Branch" : "Shop"}
       </button>
 
       <div className="text-xs text-slate-400">

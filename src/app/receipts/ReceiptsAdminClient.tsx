@@ -81,7 +81,10 @@ type FilterState = {
   paymentMethod: "MPESA" | "CASH" | "";
   customerType?: string;
   podStatus?: string;
+  shopId?: string;
 };
+
+type BranchOption = { id: string; name: string; location?: string | null };
 
 type PaymentTotals = {
   mpesa: { totalSales: number; count: number };
@@ -595,6 +598,7 @@ export default function ReceiptsAdminClient({
     makeDefaultFilters(),
   );
   const [staffList, setStaffList] = useState<StaffOption[]>([]);
+  const [branchList, setBranchList] = useState<BranchOption[]>([]);
   const [ownerEditReceiptId, setOwnerEditReceiptId] = useState<string | null>(null);
   const [ownerSavingReceiptId, setOwnerSavingReceiptId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -715,6 +719,22 @@ export default function ReceiptsAdminClient({
       // ignore storage errors
     }
   }, []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/shops", { cache: "no-store" });
+        const shops = await res.json().catch(() => []);
+        if (!res.ok || cancelled) return;
+        setBranchList((Array.isArray(shops) ? shops : [])
+          .filter((shop: any) => shop?.id && shop?.platform === "POS" && shop?.isActive !== false)
+          .map((shop: any) => ({ id: shop.id, name: shop.name, location: shop.location ?? null })));
+      } catch {
+        // The desk remains usable if the branch directory is temporarily unavailable.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     setRows(initial);
@@ -787,6 +807,7 @@ export default function ReceiptsAdminClient({
           params.set("customerType", activeFilters.customerType);
         if (activeFilters.podStatus)
           params.set("status", activeFilters.podStatus);
+        if (activeFilters.shopId) params.set("shopId", activeFilters.shopId);
         const isAllPeriodPodQueue = activeFilters.customerType === "pod";
         const startParam = buildDateParam(activeFilters.start, false);
         const endParam = buildDateParam(activeFilters.end, true);
@@ -2714,7 +2735,7 @@ export default function ReceiptsAdminClient({
             />
           </label>
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <label className="text-xs uppercase tracking-wide text-slate-400">
             Staff
             <select
@@ -2730,6 +2751,17 @@ export default function ReceiptsAdminClient({
                   {a.name}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Branch
+            <select
+              value={filters.shopId ?? ""}
+              onChange={(e) => setFilters((prev) => ({ ...prev, shopId: e.target.value || undefined }))}
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">All branches</option>
+              {branchList.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}{branch.location ? ` — ${branch.location}` : ""}</option>)}
             </select>
           </label>
           <label className="text-xs uppercase tracking-wide text-slate-400">
