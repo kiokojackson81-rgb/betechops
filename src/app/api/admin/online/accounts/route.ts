@@ -25,6 +25,7 @@ export async function GET() {
   if (!auth.ok) return auth.res;
 
   const accounts = await prisma.marketplaceAccount.findMany({
+    where: { platform: { in: [Platform.JUMIA, Platform.KILIMALL] } },
     orderBy: [{ createdAt: "desc" }],
     select: {
       id: true,
@@ -63,6 +64,9 @@ export async function POST(req: Request) {
 
   if (!payload?.displayName || !payload.platform || !payload.countryCode) {
     return NextResponse.json({ error: "platform, displayName and countryCode are required" }, { status: 400 });
+  }
+  if (payload.platform !== Platform.JUMIA && payload.platform !== Platform.KILIMALL) {
+    return NextResponse.json({ error: "Only Jumia and Kilimall are marketplace accounts" }, { status: 400 });
   }
 
   const data = {

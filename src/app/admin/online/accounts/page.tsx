@@ -53,6 +53,9 @@ export default async function AdminOnlineAccountsPage() {
   let rows: AccountRow[] | null = null;
   try {
     const accounts = (await prisma.marketplaceAccount.findMany({
+      // Physical branches use the same Platform enum for receipt attribution,
+      // but they are not marketplace accounts and must not enter this desk.
+      where: { platform: { in: [Platform.JUMIA, Platform.KILIMALL] } },
       orderBy: [{ createdAt: "desc" }],
       select: {
         id: true,
