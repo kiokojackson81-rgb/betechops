@@ -148,7 +148,12 @@ export default async function AdminOnlineAccountsPage() {
       </header>
 
       <AccountAdminPanel
-        accounts={rows.map((row) => ({ id: row.id, displayName: row.displayName, platform: row.platform }))}
+        accounts={rows.map((row) => ({
+          id: row.id,
+          displayName: row.displayName,
+          // The query above limits this screen to marketplace platforms.
+          platform: row.platform as "JUMIA" | "KILIMALL",
+        }))}
         attendants={attendants}
       />
 
