@@ -37,9 +37,9 @@ export default async function AttendantVoicePage({ searchParams }: PageProps) {
       viewer,
       selectedCallId: params.selectedCallId,
       selectedPhone: params.selectedPhone,
-      // An attendant should land on meaningful recent history, rather than an
-      // empty "today" list after reconnecting to a previously used link.
-      historyRange: params.range ?? "week",
+      // Start on today. The selected range is passed through to the server so
+      // Yesterday, This Week, and Trading Period each fetch their own history.
+      historyRange: params.range ?? "today",
     });
     const pollBaseHref = withImpersonateId("/api/voice/live", viewer.impersonateId);
 
@@ -52,7 +52,7 @@ export default async function AttendantVoicePage({ searchParams }: PageProps) {
         badge="Voice Calls"
         title="Agent Voice Console"
         subtitle="See only the calls, follow-ups, and customer context assigned to you, then turn each voice session into a quote, receipt, or resolved task."
-        defaultHistoryRange="week"
+        defaultHistoryRange="today"
       />
     );
   } catch (error) {

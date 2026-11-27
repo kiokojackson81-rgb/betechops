@@ -1494,8 +1494,51 @@ async function getVoiceRoutingConfig() {
   });
 }
 
-function buildCallWhere(viewer: VoiceViewer, scope: "all" | "mine" = "all") {
+/**
+ * Provider callbacks do not always identify the individual staff member who
+ * answered a sequential dial.  The call is still a part of an agent's work
+ * when the provider was instructed to route it to that agent's line.  Keep
+ * that route evidence in the attendant's history instead of hiding the call
+ * merely because `answeredById` was omitted by the provider.
+ */
+async function buildCallWhere(
+  viewer: VoiceViewer,
+  scope: "all" | "mine" = "all",
+): Promise<Prisma.VoiceCallWhereInput> {
   if (viewer.isAdmin && scope !== "mine") return {};
+
+  const targetUser = await prisma.user.findUnique({
+    where: { id: viewer.targetUserId },
+    select: {
+      name: true,
+      email: true,
+      role: true,
+      attendantCategory: true,
+      phone: true,
+      notificationPhoneNumber: true,
+      mobileMoneyPhoneNumber: true,
+      oneVoiceCustomerNumber: true,
+    },
+  });
+  const routingDefinition = targetUser
+    ? buildRoutingAgentDefinitions().find((definition) =>
+        definition.match(targetUser),
+      )
+    : null;
+  const routedNumbers = Array.from(
+    new Set(
+      [
+        routingDefinition?.phone,
+        targetUser?.phone,
+        targetUser?.notificationPhoneNumber,
+        targetUser?.mobileMoneyPhoneNumber,
+        targetUser?.oneVoiceCustomerNumber,
+      ]
+        .map((value) => normalizeKenyanPhone(String(value || "").trim()))
+        .filter(Boolean),
+    ),
+  );
+
   // A staff member's history must include every call they worked: calls routed
   // to them, calls they actually answered after another route hop, and calls
   // where they own the resulting callback. Keep this inside AND so callers can
@@ -1507,6 +1550,12 @@ function buildCallWhere(viewer: VoiceViewer, scope: "all" | "mine" = "all") {
           { assignedToId: viewer.targetUserId },
           { answeredById: viewer.targetUserId },
           { followUps: { some: { assignedToId: viewer.targetUserId } } },
+          // `routedTo` is the provider dial instruction, persisted even when
+          // Africa's Talking sends no per-hop answer identity. It is an
+          // explicit route to this staff member, not a broad customer search.
+          ...routedNumbers.map((phoneNumber) => ({
+            routedTo: { contains: phoneNumber },
+          })),
         ],
       },
     ],
@@ -1730,7 +1779,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   );
   const scope = input.scope === "mine" ? "mine" : "all";
 
-  const callWhere = buildCallWhere(viewer, scope);
+  const callWhere = await buildCallWhere(viewer, scope);
   const followUpWhere = buildFollowUpWhere(viewer, scope);
   const leadWhere = buildLeadWhere(viewer, scope);
 

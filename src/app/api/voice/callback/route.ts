@@ -335,6 +335,7 @@ export async function POST(request: Request) {
               hopIndex: String(index),
               hopLabel: hop.label,
               dialValue: hop.dialValue,
+              targetUserId: hop.targetUserId || "",
               routeReason: effectiveRoutePlan.routeReason || "",
             },
             voiceCall.id,
