@@ -6,7 +6,7 @@ import { getPreviousTradingPeriod, getTradingPeriodFor, parseTradingPeriodKey, t
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import PerformanceFiltersClient from "@/app/admin/online/performance/_components/PerformanceFilters.client";
 import PricingWeekWhatsappButton from "@/app/admin/online/performance/_components/PricingWeekWhatsappButton.client";
-import { WeeklySaleStatus } from "@prisma/client";
+import { Platform, WeeklySaleStatus } from "@prisma/client";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 import { getPricingWeekSummary, PRICING_WEEK_ENTITY, PRICING_WEEK_SUCCESS_ACTION } from "@/lib/pricingWeekWhatsapp";
 import { getOperatingCapitalSummary, resolveOperatingCapitalSummaryInputs } from "@/lib/operatingCapital";
@@ -46,7 +46,7 @@ export default async function OnlinePerformancePage({
   const weekStarts = weeks.map((w) => w.weekStart);
 
   const accounts = await prisma.marketplaceAccount.findMany({
-    where: { isActive: true },
+    where: { isActive: true, platform: { in: [Platform.JUMIA, Platform.KILIMALL] } },
     select: { id: true, platform: true, displayName: true },
     orderBy: [{ platform: "asc" }, { displayName: "asc" }],
   });
@@ -297,7 +297,7 @@ export default async function OnlinePerformancePage({
         </div>
 
         <div className="mt-4">
-          <PerformanceFiltersClient accounts={accounts} />
+          <PerformanceFiltersClient accounts={accounts.map((account) => ({ ...account, platform: account.platform as "JUMIA" | "KILIMALL" }))} />
         </div>
 
         {!dbReady && (

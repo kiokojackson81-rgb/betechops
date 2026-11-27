@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ProfitCaptureFormClient from "@/app/admin/online/performance/_components/ProfitCaptureForm.client";
 import { prisma } from "@/lib/prisma";
+import { Platform } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function OnlinePerformanceCapturePage() {
   }
 
   const accounts = await prisma.marketplaceAccount.findMany({
-    where: { isActive: true },
+    where: { isActive: true, platform: { in: [Platform.JUMIA, Platform.KILIMALL] } },
     select: { id: true, platform: true, displayName: true },
     orderBy: [{ platform: "asc" }, { displayName: "asc" }],
   });
@@ -33,9 +34,9 @@ export default async function OnlinePerformanceCapturePage() {
       </header>
 
       {limitedView ? (
-        <ProfitCaptureFormClient accounts={accounts} limitedView />
+        <ProfitCaptureFormClient accounts={accounts.map((account) => ({ ...account, platform: account.platform as "JUMIA" | "KILIMALL" }))} limitedView />
       ) : (
-        <ProfitCaptureFormClient accounts={accounts} />
+        <ProfitCaptureFormClient accounts={accounts.map((account) => ({ ...account, platform: account.platform as "JUMIA" | "KILIMALL" }))} />
       )}
     </div>
   );
